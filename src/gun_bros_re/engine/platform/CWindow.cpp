@@ -11,11 +11,30 @@
 
 #include <cstdio>
 
+namespace {
+
+/** Map an SDL keycode onto the platform-independent enum. */
+KeyCode TranslateKey(SDL_Keycode key) {
+    switch (key) {
+        case SDLK_LEFT:  return KeyCode::Left;
+        case SDLK_RIGHT: return KeyCode::Right;
+        case SDLK_UP:    return KeyCode::Up;
+        case SDLK_DOWN:  return KeyCode::Down;
+        case SDLK_HOME:  return KeyCode::Home;
+        default:         return KeyCode::None;
+    }
+}
+
+}  // namespace
+
 CWindow::CWindow()
     : m_window(nullptr),
       m_context(nullptr),
       m_sdlInitialised(false),
-      m_quitRequested(false) {}
+      m_quitRequested(false),
+      m_dragDeltaX(0),
+      m_dragDeltaY(0),
+      m_wheelDelta(0.0f) {}
 
 CWindow::~CWindow() {
     Close();
@@ -93,12 +112,49 @@ bool CWindow::PumpEvents() {
     while (SDL_PollEvent(&event)) {
         if (event.type == SDL_EVENT_QUIT) {
             m_quitRequested = true;
-        } else if (event.type == SDL_EVENT_KEY_DOWN &&
-                   event.key.key == SDLK_ESCAPE) {
-            m_quitRequested = true;
+        } else if (event.type == SDL_EVENT_KEY_DOWN) {
+            if (event.key.key == SDLK_ESCAPE) {
+                m_quitRequested = true;
+            } else {
+                const KeyCode code = TranslateKey(event.key.key);
+                if (code != KeyCode::None) {
+                    m_keyPresses.push_back(code);
+                }
+            }
+        } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+            // SDL reports the button state with the motion, so there is no
+            // need to track presses and releases separately.
+            if ((event.motion.state & SDL_BUTTON_LMASK) != 0) {
+                m_dragDeltaX += static_cast<int>(event.motion.xrel);
+                m_dragDeltaY += static_cast<int>(event.motion.yrel);
+            }
+        } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+            m_wheelDelta += event.wheel.y;
         }
     }
     return !m_quitRequested;
+}
+
+void CWindow::TakeDragDelta(int &deltaX, int &deltaY) {
+    deltaX = m_dragDeltaX;
+    deltaY = m_dragDeltaY;
+    m_dragDeltaX = 0;
+    m_dragDeltaY = 0;
+}
+
+float CWindow::TakeWheelDelta() {
+    const float delta = m_wheelDelta;
+    m_wheelDelta = 0.0f;
+    return delta;
+}
+
+KeyCode CWindow::TakeKeyPress() {
+    if (m_keyPresses.empty()) {
+        return KeyCode::None;
+    }
+    const KeyCode code = m_keyPresses.front();
+    m_keyPresses.erase(m_keyPresses.begin());
+    return code;
 }
 
 void CWindow::Present() {

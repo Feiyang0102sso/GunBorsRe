@@ -7,14 +7,6 @@
        defined below.
        ========================================================== -->
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -32,19 +24,6 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -110,22 +89,6 @@
     </Manifest>
   </ItemDefinitionGroup>
   <!-- Per-configuration differences -->
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <PreprocessorDefinitions>WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ClCompile>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <PreprocessorDefinitions>WIN32;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-    </ClCompile>
-    <Link>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -145,6 +108,16 @@
   <!-- ==== Project sources ==== -->
   <ItemGroup>
     <ClCompile Include="src\gun_bros_re\main.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CArrayInputStream.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CMatrix4d.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CTexture.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CQuadBatch.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CGameAssetRef.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CGameObjectPack.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\TileSet.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CLayerTile.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMap.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\platform\GLLoader.cpp" />
@@ -159,6 +132,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\engine\CBigFileReader.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CArrayInputStream.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CMatrix4d.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CTexture.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CQuadBatch.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CGameAssetRef.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CGameObjectPack.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\TileSet.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CLayerTile.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMap.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
     <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />
     <ClInclude Include="src\gun_bros_re\engine\CShaderProgram.h" />
     <ClInclude Include="src\gun_bros_re\engine\platform\GLLoader.h" />

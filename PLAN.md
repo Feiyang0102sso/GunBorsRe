@@ -174,6 +174,17 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 
 > **验收**：完整显示一关静态地图，鼠标可拖动查看，图块无错位。
 
+> 实测：22 张地图里 20 张正常画出，图块无错位。默认缩放到适应窗口（能一眼看完整关），
+> 鼠标拖动平移、滚轮缩放。`--maps` 列出含地图的包，`--map <pack> <n>` 选图。
+> 环绕平铺在 pack2 map 4 上验证：12x5 的岩浆层铺满 13x5 画布。
+>
+> **pack7 的 map 0~4 画出来是空的，这不是缺陷**——它们的图块层数据本身全是 255。
+> map 1 和 map 2 已完整解析所有图层仍是 0 个图块，可以确证。这几关的视觉内容全在 PROP 里，
+> pack7 有 69 个 PROP 模板，是所有包里最多的。
+>
+> **缩小查看时图块边缘有淡接缝**，是无 mipmap 的缩小走样，不是拼接错位——
+> 1:1 查看时干净。原版同样没有 mipmap，所以保持一致，没有加。
+
 ### M4 — 动得起来
 
 资源模板系统（`gameObject` / `gameObjectPack` / 各 `Template::Init`）+ `brother` + `moveSet` + 精灵动画 + `input`。
@@ -205,8 +216,9 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 |---|---|---|
 | ~~**体系外资源寻址未解**~~：已解。所谓"不在 Section 表内"的资源住在**聚合资源**里，handle bit29 标记，走 `CAggregateResource` | 已消除 | M1 实测：5659 个条目解析 5594，41 个空引用，21 个未解（仅两个 name key，疑为引擎元数据） |
 | **`gluScript` 脚本系统**（11 文件 + `CScriptInterpreter`） | 若逻辑大量走脚本则绕不开 | M4 前先探调用密度 |
-| **`spriteGlu3`** 只有 3 个文件但可能是关键 | `CGameSpriteGluRef` 是装饰物/特效的寻址入口 | M3 时一并读 |
+| **`spriteGlu3`** 只有 3 个文件但可能是关键 | `CGameSpriteGluRef` 是装饰物/特效的寻址入口；地图上的石堆、管道、传送门全走这条路，不画它们地图会明显偏空 | M3 只做了图块地形，PROP 单独一步：需要 `CLayerObject` + `CProp::Template` + SpriteGlu 五级间接 |
 | **3D mesh 格式未完全解出**（Section 31） | 影响角色模型 | 推到 M5 之后，先用精灵占位 |
+| **寻路图层格式未解**（`CLayerPathLink` type 5 / `CLayerPathMesh` type 6） | 解析到它们就无法继续，其后的图层读不到 | 不影响地形（图块层都在它们之前）；M4 做 AI 寻路时再啃 |
 
 ---
 
@@ -215,6 +227,6 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 - [x] M0 骨架 —— 2026-09-05 完成
 - [x] M1 读得到资源 —— 2026-09-05 完成
 - [x] M2 看得到贴图 —— 2026-09-05 完成
-- [ ] M3 画得出地图
+- [x] M3 画得出地图 —— 2026-09-05 完成
 - [ ] M4 动得起来
 - [ ] M5 打得起来

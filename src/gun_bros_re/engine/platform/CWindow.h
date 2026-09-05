@@ -14,9 +14,25 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 struct SDL_Window;
 typedef struct SDL_GLContextState *SDL_GLContext;
+
+/**
+ * The keys the harnesses care about.
+ *
+ * Deliberately not SDL's keycodes: callers above the platform layer should not
+ * have to include SDL to read input. Extended as new keys are needed.
+ */
+enum class KeyCode {
+    None,
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+};
 
 // The art set we run: the original xga assets are authored for this size.
 constexpr int kDefaultWindowWidth = 1024;
@@ -67,11 +83,34 @@ public:
     /** Milliseconds since platform start-up. */
     std::uint64_t GetTicksMs() const;
 
+    /**
+     * Mouse movement accumulated while the left button was held, in pixels,
+     * and reset by the call. Lets a caller drag a view around without
+     * tracking button state itself.
+     */
+    void TakeDragDelta(int &deltaX, int &deltaY);
+
+    /** Wheel notches since the last call, positive away from the user. */
+    float TakeWheelDelta();
+
+    /**
+     * Oldest key press not yet handled, removing it from the queue.
+     * Returns KeyCode::None when nothing is queued, so callers can drain it
+     * with a while loop.
+     */
+    KeyCode TakeKeyPress();
+
 private:
     SDL_Window *m_window;
     SDL_GLContext m_context;
     bool m_sdlInitialised;
     bool m_quitRequested;
+
+    // Input accumulators, drained by the Take* methods.
+    int m_dragDeltaX;
+    int m_dragDeltaY;
+    float m_wheelDelta;
+    std::vector<KeyCode> m_keyPresses;
 };
 
 #endif  // GUN_BROS_RE_ENGINE_PLATFORM_CWINDOW_H

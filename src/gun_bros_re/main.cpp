@@ -9,6 +9,7 @@
 
 #include "milestones/M1Resources.h"
 #include "milestones/M2Texture.h"
+#include "milestones/M3Map.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -21,19 +22,27 @@ namespace {
 const char *const kDefaultImagePack = "pack0_core";
 constexpr std::uint32_t kDefaultImageResourceId = 313;
 
+// Defaults for the M3 map: the first of pack2's nine.
+const char *const kDefaultMapPack = "pack2";
+constexpr std::uint32_t kDefaultMapIndex = 0;
+
 void PrintUsage() {
     std::printf(
         "usage: gun_bros_re [options]\n"
         "\n"
-        "  (no options)              M2: show a PNG from a .big in a window\n"
+        "  (no options)              M3: show a level's terrain in a window\n"
         "  --m1                      M1: verify cross-pack resource addressing\n"
+        "  --m2                      M2: show a single PNG from a .big\n"
         "  --dump <pack>             list one pack's resource table\n"
+        "  --maps                    list the packs that contain maps\n"
+        "  --map <pack> <n>          which map M3 should draw\n"
+        "                            (default: %s %u)\n"
         "  --image <pack> <id>       which PNG M2 should display\n"
         "                            (default: %s %u)\n"
         "  --big <directory>         where the .big files are\n"
         "                            (default: ASSET_ROOT/big)\n"
         "  --screenshot <file.png>   save the first frame and exit\n",
-        kDefaultImagePack, kDefaultImageResourceId);
+        kDefaultMapPack, kDefaultMapIndex, kDefaultImagePack, kDefaultImageResourceId);
 }
 
 }  // namespace
@@ -41,19 +50,34 @@ void PrintUsage() {
 int main(int argc, char **argv) {
     std::string bigDirectory = std::string(ASSET_ROOT) + "/big";
     std::string dumpPackName;
+    std::string screenshotPath;
+
     std::string imagePackName = kDefaultImagePack;
     std::uint32_t imageResourceId = kDefaultImageResourceId;
-    std::string screenshotPath;
+
+    std::string mapPackName = kDefaultMapPack;
+    std::uint32_t mapIndex = kDefaultMapIndex;
+
     bool runM1 = false;
+    bool runM2 = false;
+    bool listMaps = false;
 
     for (int i = 1; i < argc; ++i) {
         const char *argument = argv[i];
 
         if (std::strcmp(argument, "--m1") == 0) {
             runM1 = true;
+        } else if (std::strcmp(argument, "--m2") == 0) {
+            runM2 = true;
+        } else if (std::strcmp(argument, "--maps") == 0) {
+            listMaps = true;
         } else if (std::strcmp(argument, "--dump") == 0 && i + 1 < argc) {
             dumpPackName = argv[++i];
+        } else if (std::strcmp(argument, "--map") == 0 && i + 2 < argc) {
+            mapPackName = argv[++i];
+            mapIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--image") == 0 && i + 2 < argc) {
+            runM2 = true;
             imagePackName = argv[++i];
             imageResourceId = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--big") == 0 && i + 1 < argc) {
@@ -69,8 +93,14 @@ int main(int argc, char **argv) {
     if (!dumpPackName.empty()) {
         return RunPackDump(bigDirectory, dumpPackName);
     }
+    if (listMaps) {
+        return RunMapList(bigDirectory);
+    }
     if (runM1) {
         return RunM1Resources(bigDirectory);
     }
-    return RunM2Texture(bigDirectory, imagePackName, imageResourceId, screenshotPath);
+    if (runM2) {
+        return RunM2Texture(bigDirectory, imagePackName, imageResourceId, screenshotPath);
+    }
+    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath);
 }

@@ -1,7 +1,10 @@
 <Solution>
   <Configurations>
+    <!-- x64 only. SDL3 is vendored for x64 and PLAN.md scopes the project
+         to it; a Win32 configuration could never link. The platform name
+         must match the vcxproj exactly, or VS silently builds a different
+         configuration than the toolbar shows. -->
     <Platform Name="x64" />
-    <Platform Name="x86" />
   </Configurations>
-  <Project Path="gun_bro_re.vcxproj" />
+  <Project Path="gun_bro_re.vcxproj" Id="1286f032-5e38-4e0d-a240-9e36ae2fdc4c" />
 </Solution>
