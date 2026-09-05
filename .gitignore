@@ -1,0 +1,65 @@
+# ============================================================
+#  gun_bro_re -- Visual Studio / MSBuild project
+# ============================================================
+
+# ---------- Build output ----------
+bin/
+obj/
+build/
+out/
+Debug/
+Release/
+x64/
+Win32/
+
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+*.idb
+*.iobj
+*.ipdb
+*.res
+*.tlog
+*.log
+*.lastbuildstate
+*.recipe
+
+# ---------- Visual Studio local state ----------
+.vs/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.aps
+ipch/
+
+# ---------- CLion / CMake leftovers ----------
+.idea/
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# ---------- Python (_Big_tool reverse-engineering toolchain) ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ============================================================
+#  Original game assets -- Glu Mobile copyrighted material, never committed.
+#  Unpack them from a Gun Bros 3.6.0 IPA yourself and drop them back at
+#  the project root: big/  png/  mp3/  glu_logo/  gunbros  _junk/
+# ============================================================
+big/
+png/
+mp3/
+glu_logo/
+gunbros
+_junk/
+_Big_tool/
