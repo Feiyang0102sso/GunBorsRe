@@ -5,7 +5,7 @@
 参考资料：
 - [`_IDA_OUT/gunbros_3.6.0_IOS.c`](_IDA_OUT/gunbros_3.6.0_IOS.c) — 反编译产物，**唯一真相来源**
 - [`_IDA_OUT/source_tree.md`](_IDA_OUT/source_tree.md) — 还原出的原始源码树 + P0~P3 优先级
-- [`_Big_tool/`](_Big_tool/) — `.big` 格式逆向笔记，**仅供参考，不保证正确**
+- [`_Big_tool/`](_Big_tool/) — `.big` 格式逆向笔记，**仅供参考，不保证正确**（本地文件，不入库）
 - [`_IDA_OUT/CVector.inl`](_IDA_OUT/CVector.inl) — 误打包进 IPA 的一手引擎源码
 
 ---
@@ -30,11 +30,20 @@
 |---|---|
 | 语言 | C++17 |
 | 窗口 / 输入 / 音频 | SDL3 |
-| 渲染 | OpenGL 3.3 Core + glad |
-| 图像 | stb_image |
-| 解压 | zlib（只需 `inflate`） |
-| 构建 | Visual Studio / MSBuild（`gun_bro_re.slnx`，工具集 v145） |
-| 第三方库 | 源码内置于 `src/third_party/`，不用包管理器 |
+| 渲染 | OpenGL 3.3 Core，加载器自己写（~30 个函数，`engine/platform/GLLoader.h`） |
+| 图像 | PNG 编解码自己写（`engine/CPNG.cpp`），不用 stb_image |
+| 解压 | zlib（`inflate` 给资源和 PNG，`deflate` 只给截图） |
+| 构建 | Visual Studio / MSBuild（`gun_bro_re.slnx`，工具集 v145），只支持 x64 |
+| 第三方库 | 只有 zlib（源码内置）和 SDL3（官方预编译包），不用包管理器 |
+
+**glad 和 stb_image 最终都没用**（M2 时决定）。原因是成本账反了：我们只会用到几十个 GL
+函数，glad 生成的是 4000+ 行；而全部 1534 张 PNG 只有 3 种变体（8-bit，非隔行，
+colortype 6/2/3），自己写解码器约 180 行，且出问题能直接调。引入外部代码要省的那
+260 行，抵不上多出来的 4300 行怀疑对象。
+
+**SDL3 用官方预编译 VC 包**（`src/third_party/SDL3/`，include + x64 的 lib/dll），
+而不是源码内置——源码内置意味着往 vcxproj 里塞几千个文件，或者被迫引入 CMake，
+两条路都和"简洁"背道而驰。
 
 ### 关键决策与理由
 
@@ -43,6 +52,9 @@
 **为什么直接用 VS 工程而不是 CMake** — 只跑 Windows、只有一个可执行目标、第三方库全部源码内置。CMake 的三个卖点（跨平台、依赖发现、多生成器）在这里一条都用不上，留着只是在 IDE 和编译器中间多垫一层间接。工程交给 VS 自己维护，加文件右键就完事，不用记 `add_executable` 的语法。代价是日后要上 Linux 得重新配一套——`_IDA_OUT` 里的东西还够啃一年，那天很远。
 
 **为什么第三方库源码内置而不是 vcpkg** — 依赖只有 zlib 一个，而且只用 `uncompress` 一个函数。为它装一整套包管理器、维护 manifest、在每台机器上先跑 bootstrap，成本远大于把 15 个 .c 文件拖进工程。等 SDL3 进来时再重新评估。
+
+> M2 时已重新评估：SDL3 用官方预编译包，只有 include/ + lib/x64/ 两样东西，
+> 结论不变——仍然不需要包管理器。这批二进制入库，见第三节版本控制。
 
 **为什么 GL 3.3 Core 而不是 bgfx / SDL_GPU** — 原引擎的渲染能力集小到极点（纯色 / 纯纹理 / 纹理×顶点色，一个 mvp 矩阵，alpha blend + alpha test + 深度测试，无纹理压缩、无光照、无后处理），任何现代 API 都绰绰有余，选型依据只能是**翻译成本**。GL 3.3 与 ES2.0 是同一心智模型，`CGraphics_OGLES2` 的每个方法基本一一对应，原 shader 改几个关键字就能用。多一层框架抽象就多一个怀疑对象，会干扰"对着反编译逐行验证"。
 
@@ -59,11 +71,14 @@ gun_bro_re/
 ├── PLAN.md
 ├── src/
 │   ├── gun_bros_re/
+│   │   ├── main.cpp      ← 只做参数解析和里程碑分发
 │   │   ├── engine/       ← platform/shared 保留的 ~95 个
-│   │   │   └── platform/ ← SDL3 + GL 上下文（原 platform/shared/cocoa 的角色）
+│   │   │   └── platform/ ← SDL3 窗口 / GL 上下文 / GL 加载器
+│   │   │                   （原 platform/shared/cocoa 的角色）
 │   │   ├── gun_bros/     ← src/gunbros 保留的 ~160 个
-│   │   └── shaders/      ← 还原出的 7 个，改写为 GL 3.3
-│   └── third_party/      ← zlib / glad / stb_image（与项目平级，不混进自己代码）
+│   │   ├── milestones/   ← 每个里程碑一个验收台，main 保持薄
+│   │   └── shaders/      ← 7 个，从反编译里的 GLSL 原文改写为 GL 3.3
+│   └── third_party/      ← zlib（源码）/ SDL3（预编译）
 │
 ├── big/                  26 个 .big + packTOC（运行时直接读，不解包）
 ├── png/  mp3/  glu_logo/ 散资源
@@ -92,7 +107,18 @@ bin/  obj/                构建输出，按 $(Platform)\$(Configuration) 分开
 ```
 
 **版本控制**：原版资源（`big/ png/ mp3/ glu_logo/ gunbros _junk/`）是 Glu Mobile 的版权素材，
-体积也有 220M，一律不入库；逆向资料 `_IDA_OUT/ _Big_tool/` 入库。
+体积也有 220M，一律不入库。逆向资料里 **`_IDA_OUT/` 入库，`_Big_tool/` 不入库**——
+后者是本地笔记和一次性脚本，结论一旦确认就应该搬进代码注释或 PLAN，
+留在库外反而少一处需要同步的真相。
+
+> M1 对 `.big` 格式的校正记录写在 `_Big_tool/refs.md` 和 `tocs.md` 里，只存在于本地。
+> 关键结论（handle 位域、聚合寻址、包哈希算法）已经落到
+> `CBigFileReader.h` 和 `CAggregateResource.h` 的注释里，不依赖那两份笔记。
+
+**第三方二进制**：`src/third_party/SDL3/lib/x64/` 的 `.lib` 和 `.dll` **入库**，
+否则 clone 下来链接不了。`.gitignore` 里为此开了例外——`x64/` 和 `*.lib` 两条规则
+本来会吞掉它们，而 git 不允许在父目录被排除的情况下恢复其中的文件，
+所以要先恢复目录再恢复文件。
 
 ---
 
@@ -105,6 +131,9 @@ bin/  obj/                构建输出，按 $(Platform)\$(Configuration) 分开
 VS 工程 + SDL3 窗口 + glad 加载 + 主循环。
 
 > **验收**：能开关的黑窗口，稳定 60fps，`glGetString(GL_VERSION)` 打出 3.3。
+
+> 实测：`GL 3.3.0 NVIDIA 546.92`，开 vsync 后稳定 165fps（锁在显示器刷新率）。
+> M0 与 M2 合并实现——单独的黑窗口没有信息量。
 
 ### M1 — 读得到资源 ★第一块地基
 
@@ -131,6 +160,11 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 **必须原样照抄**：UV 缩放 `0.0002441406255`（= 1/4096）。贴图坐标在美术数据里是整数存的，改了全部错位。
 
 > **验收**：窗口里显示一张从 `.big` 取出的 PNG，尺寸和颜色正确。
+
+> 实测：三种 colortype 各验一张——`pack0_core` 313（512x512 RGB，角色贴图集）、
+> 316（136x114 RGBA，武器图标，alpha 混合正确）、`pack1` 467（512x512 调色板，敌人贴图集）。
+> UV 缩放常量随之验证：错了图会整体错位。
+> `--screenshot <file.png>` 存下首帧后退出，里程碑不需要人盯着也能验收。
 
 ### M3 — 画得出地图
 
@@ -169,7 +203,7 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 
 | 风险 | 影响 | 应对 |
 |---|---|---|
-| **体系外资源寻址未解**：pack1 有 442 个、pack5 有 684 个资源不在 Section 表内 | M3/M4 可能取不到特效贴图和音效 | 撞上再攻，先用内容嗅探兜底 |
+| ~~**体系外资源寻址未解**~~：已解。所谓"不在 Section 表内"的资源住在**聚合资源**里，handle bit29 标记，走 `CAggregateResource` | 已消除 | M1 实测：5659 个条目解析 5594，41 个空引用，21 个未解（仅两个 name key，疑为引擎元数据） |
 | **`gluScript` 脚本系统**（11 文件 + `CScriptInterpreter`） | 若逻辑大量走脚本则绕不开 | M4 前先探调用密度 |
 | **`spriteGlu3`** 只有 3 个文件但可能是关键 | `CGameSpriteGluRef` 是装饰物/特效的寻址入口 | M3 时一并读 |
 | **3D mesh 格式未完全解出**（Section 31） | 影响角色模型 | 推到 M5 之后，先用精灵占位 |
@@ -178,9 +212,9 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 
 ## 七、进度
 
-- [ ] M0 骨架
-- [ ] M1 读得到资源
-- [ ] M2 看得到贴图
+- [x] M0 骨架 —— 2026-09-05 完成
+- [x] M1 读得到资源 —— 2026-09-05 完成
+- [x] M2 看得到贴图 —— 2026-09-05 完成
 - [ ] M3 画得出地图
 - [ ] M4 动得起来
 - [ ] M5 打得起来

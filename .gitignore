@@ -63,3 +63,14 @@ glu_logo/
 gunbros
 _junk/
 _Big_tool/
+
+# ============================================================
+#  Third-party binaries we DO commit
+# ============================================================
+#  SDL3 ships as an official prebuilt VC package rather than source (see
+#  PLAN.md section 2), so its .lib and .dll have to be in the repo or a fresh
+#  clone will not link. Three rules above would otherwise swallow them:
+#  "x64/" and "*.lib" -- and a file cannot be re-included while its parent
+#  directory is excluded, so the directory has to be un-ignored first.
+!src/third_party/SDL3/lib/x64/
+!src/third_party/SDL3/lib/x64/*.lib

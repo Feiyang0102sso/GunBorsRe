@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <!-- ==========================================================
        gun_bro_re: Gun Bros engine rewrite.
@@ -90,13 +90,21 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\gun_bros_re;$(ProjectDir)src\third_party\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\gun_bros_re;$(ProjectDir)src\third_party\zlib;$(ProjectDir)src\third_party\SDL3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>ASSET_ROOT="$(AssetRoot)";_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
+      <!-- Console stays on: the milestone harnesses print to stdout. -->
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)src\third_party\SDL3\lib\$(Platform);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <!-- SDL3 is a DLL; it has to sit next to the .exe to run. -->
+    <PostBuildEvent>
+      <Command>xcopy /D /Y "$(ProjectDir)src\third_party\SDL3\lib\$(Platform)\SDL3.dll" "$(OutDir)"</Command>
+      <Message>Copying SDL3.dll to output</Message>
+    </PostBuildEvent>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
@@ -137,10 +145,30 @@
   <!-- ==== Project sources ==== -->
   <ItemGroup>
     <ClCompile Include="src\gun_bros_re\main.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\platform\GLLoader.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\platform\CWindow.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\M1Resources.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\M2Texture.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CBigFileReader.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CAggregateResource.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CStringToKey.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CResPackTOC.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CResTOCManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\engine\CBigFileReader.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CShaderProgram.h" />
+    <ClInclude Include="src\gun_bros_re\engine\platform\GLLoader.h" />
+    <ClInclude Include="src\gun_bros_re\engine\platform\CWindow.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\M1Resources.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\M2Texture.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CAggregateResource.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CStringToKey.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CResPackTOC.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CResTOCManager.h" />
   </ItemGroup>
   <!-- ==== Third party: zlib, vendored source ====
        Only the uncompress path is used today, but the whole package is

@@ -1,0 +1,77 @@
+/**
+ * @file CWindow.h
+ * @brief Window and OpenGL context, on SDL3.
+ *
+ * Fills the role platform/shared/cocoa/ played on iOS -- CCore_Cocoa plus
+ * CRenderSurface_OGLES_Window_Cocoa -- without inheriting their shape. The
+ * original had to juggle EAGL layers and view controllers; SDL3 collapses all
+ * of that into a handful of calls, so this stays a thin wrapper rather than a
+ * port.
+ */
+
+#ifndef GUN_BROS_RE_ENGINE_PLATFORM_CWINDOW_H
+#define GUN_BROS_RE_ENGINE_PLATFORM_CWINDOW_H
+
+#include <cstdint>
+#include <string>
+
+struct SDL_Window;
+typedef struct SDL_GLContextState *SDL_GLContext;
+
+// The art set we run: the original xga assets are authored for this size.
+constexpr int kDefaultWindowWidth = 1024;
+constexpr int kDefaultWindowHeight = 768;
+
+// GL 3.3 Core is the target: same mental model as the ES 2.0 the engine was
+// written against, so the shaders port across with a change of keywords.
+constexpr int kRequiredGLMajor = 3;
+constexpr int kRequiredGLMinor = 3;
+
+/**
+ * An open window with a current GL context.
+ *
+ * Owns SDL initialisation as well, so constructing one is the whole of
+ * platform start-up.
+ */
+class CWindow {
+public:
+    CWindow();
+    ~CWindow();
+
+    CWindow(const CWindow &) = delete;
+    CWindow &operator=(const CWindow &) = delete;
+
+    /**
+     * Open the window, create the GL context, and resolve the GL entry points.
+     * Returns false with a printed reason if any step fails.
+     */
+    bool Open(const std::string &title, int width, int height);
+
+    /** Tear everything down. Safe to call when not open. */
+    void Close();
+
+    bool IsOpen() const { return m_window != nullptr; }
+
+    /**
+     * Drain the event queue.
+     * @return false once the user has asked to quit.
+     */
+    bool PumpEvents();
+
+    /** Present the back buffer. */
+    void Present();
+
+    /** Current drawable size in pixels, which is what glViewport wants. */
+    void GetDrawableSize(int &width, int &height) const;
+
+    /** Milliseconds since platform start-up. */
+    std::uint64_t GetTicksMs() const;
+
+private:
+    SDL_Window *m_window;
+    SDL_GLContext m_context;
+    bool m_sdlInitialised;
+    bool m_quitRequested;
+};
+
+#endif  // GUN_BROS_RE_ENGINE_PLATFORM_CWINDOW_H

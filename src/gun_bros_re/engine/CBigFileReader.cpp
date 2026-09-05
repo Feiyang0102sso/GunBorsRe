@@ -38,7 +38,9 @@ CBigFileReader::CBigFileReader()
       m_table2EntryCount(0),
       m_table1Offset(0),
       m_table2Offset(0),
-      m_dataEndOffset(0) {}
+      m_dataEndOffset(0),
+      m_localeIndex(0),
+      m_loadedAggregateId(0) {}
 
 CBigFileReader::~CBigFileReader() {
     Close();
@@ -60,6 +62,12 @@ void CBigFileReader::Close() {
 
     m_table1.clear();
     m_table2.clear();
+
+    m_localeIds.clear();
+    m_aggregateIds.clear();
+    m_localeIndex = 0;
+    m_aggregate.Destroy();
+    m_loadedAggregateId = 0;
 }
 
 bool CBigFileReader::Open(const std::string &path) {
@@ -197,6 +205,17 @@ std::uint32_t CBigFileReader::GetBlockSize(std::uint32_t table2Index) const {
     return end - start;
 }
 
+std::uint8_t CBigFileReader::GetCompressionFlag(std::uint32_t table2Index) {
+    if (table2Index >= m_table2.size()) {
+        return kResourceUncompressed;
+    }
+    std::uint8_t blockHeader[4];
+    if (!ReadAt(m_table2[table2Index].resourceOffset, blockHeader, sizeof(blockHeader))) {
+        return kResourceUncompressed;
+    }
+    return blockHeader[2];
+}
+
 bool CBigFileReader::ResolveResourceId(std::uint32_t resourceId,
                                        std::uint32_t &table2Index) const {
     // Logical IDs are sparse; table1 stores them as runs.
@@ -213,13 +232,6 @@ bool CBigFileReader::ResolveResourceId(std::uint32_t resourceId,
 
 bool CBigFileReader::GetResourceById(std::uint32_t resourceId,
                                      std::vector<std::uint8_t> &out) {
-    // TODO: aggregate handles (kHandleAggregateFlag) address entries *inside*
-    // a string pack and need SetupAggregateForResourceId. Not needed yet.
-    if ((resourceId & kHandleAggregateFlag) != 0) {
-        std::printf("[big] aggregate handle 0x%08X not supported yet\n", resourceId);
-        return false;
-    }
-
     std::uint32_t table2Index = 0;
     if (!ResolveResourceId(resourceId, table2Index)) {
         return false;
@@ -315,6 +327,81 @@ bool CBigFileReader::GetResourceByIndex(std::uint32_t table2Index,
         out.resize(destLen);
     }
     return true;
+}
+
+bool CBigFileReader::FindAggregateResourceId(std::uint32_t handle,
+                                             std::uint32_t &aggregateId) const {
+    const std::uint32_t selector =
+        (handle >> kHandleSelectorShift) & kHandleSelectorMask;
+
+    if (selector == kHandleSelectorLocale) {
+        // The common case: the aggregate holding this locale's resources.
+        if (m_localeIndex >= m_localeIds.size()) {
+            std::printf("[big] locale %u has no aggregate (table holds %zu)\n",
+                        m_localeIndex, m_localeIds.size());
+            return false;
+        }
+        aggregateId = m_localeIds[m_localeIndex];
+        return true;
+    }
+
+    // Otherwise match the selector against the aggregate IDs, low bits only.
+    for (std::size_t i = 0; i < m_aggregateIds.size(); ++i) {
+        if ((m_aggregateIds[i] & kHandleIdMask) == selector) {
+            aggregateId = m_aggregateIds[i];
+            return true;
+        }
+    }
+
+    std::printf("[big] no aggregate for selector %u\n", selector);
+    return false;
+}
+
+bool CBigFileReader::SetupAggregateForHandle(std::uint32_t handle) {
+    std::uint32_t aggregateId = 0;
+    if (!FindAggregateResourceId(handle, aggregateId)) {
+        return false;
+    }
+
+    if (m_loadedAggregateId == aggregateId && m_aggregate.IsLoaded()) {
+        return true;
+    }
+
+    m_aggregate.Destroy();
+    m_loadedAggregateId = 0;
+
+    // The aggregate is itself an ordinary resource; its ID is in the low bits.
+    std::vector<std::uint8_t> payload;
+    if (!GetResourceById(aggregateId & kHandleIdMask, payload)) {
+        std::printf("[big] aggregate resource %u not found\n",
+                    aggregateId & kHandleIdMask);
+        return false;
+    }
+
+    if (!m_aggregate.LoadTOC(std::move(payload))) {
+        return false;
+    }
+
+    m_loadedAggregateId = aggregateId;
+    std::printf("[big] aggregate %u loaded: %u sub-resources\n",
+                aggregateId & kHandleIdMask, m_aggregate.GetSubResourceCount());
+    return true;
+}
+
+bool CBigFileReader::GetResourceByHandle(std::uint32_t handle,
+                                         std::vector<std::uint8_t> &out) {
+    out.clear();
+
+    if ((handle & kHandleAggregateFlag) != 0) {
+        if (!SetupAggregateForHandle(handle)) {
+            return false;
+        }
+        return m_aggregate.GetSubResource(handle & kHandleIdMask, out);
+    }
+
+    // A plain handle carries the logical resource ID in its low bits; the rest
+    // is a type tag the engine never reads.
+    return GetResourceById(handle & kHandleIdMask, out);
 }
 
 const char *BigGroupName(std::uint32_t groupHash) {
