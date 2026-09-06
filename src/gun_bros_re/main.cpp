@@ -35,6 +35,7 @@ void PrintUsage() {
         "  --m2                      M2: show a single PNG from a .big\n"
         "  --dump <pack>             list one pack's resource table\n"
         "  --maps                    list every map, in the viewer's order\n"
+        "  --levels                  list which levels scroll a tile layer\n"
         "  --map <pack> <n>          which map M3 should START on; the arrow\n"
         "                            keys reach every other one\n"
         "                            (default: %s %u)\n"
@@ -65,6 +66,7 @@ int main(int argc, char **argv) {
     bool runM1 = false;
     bool runM2 = false;
     bool listMaps = false;
+    bool surveyLevels = false;
 
     for (int i = 1; i < argc; ++i) {
         const char *argument = argv[i];
@@ -75,6 +77,8 @@ int main(int argc, char **argv) {
             runM2 = true;
         } else if (std::strcmp(argument, "--maps") == 0) {
             listMaps = true;
+        } else if (std::strcmp(argument, "--levels") == 0) {
+            surveyLevels = true;
         } else if (std::strcmp(argument, "--dump") == 0 && i + 1 < argc) {
             dumpPackName = argv[++i];
         } else if (std::strcmp(argument, "--map") == 0 && i + 2 < argc) {
@@ -101,6 +105,9 @@ int main(int argc, char **argv) {
     }
     if (listMaps) {
         return RunMapList(bigDirectory);
+    }
+    if (surveyLevels) {
+        return RunLevelSurvey(bigDirectory);
     }
     if (runM1) {
         return RunM1Resources(bigDirectory);

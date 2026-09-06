@@ -11,7 +11,30 @@
 
 const TileCell CLayerTile::s_emptyCell = {kEmptyTileId, 0};
 
-CLayerTile::CLayerTile() : m_width(0), m_height(0) {}
+CLayerTile::CLayerTile()
+    : m_width(0),
+      m_height(0),
+      m_speedX(0.0f),
+      m_speedY(0.0f),
+      m_offsetX(0.0f),
+      m_offsetY(0.0f) {}
+
+void CLayerTile::SetSpeed(float speedX, float speedY) {
+    m_speedX = speedX * kLayerSpeedScale;
+    m_speedY = speedY * kLayerSpeedScale;
+}
+
+void CLayerTile::Update(std::uint16_t deltaMs) {
+    const float seconds = deltaMs * 0.001f;
+
+    // Truncation towards zero, which is what the original's float-to-int-to-
+    // float round trip does -- so a negative offset keeps its negative
+    // fraction rather than stepping down a whole tile.
+    const float movedX = m_offsetX + m_speedX * seconds;
+    const float movedY = m_offsetY + m_speedY * seconds;
+    m_offsetX = movedX - static_cast<float>(static_cast<int>(movedX));
+    m_offsetY = movedY - static_cast<float>(static_cast<int>(movedY));
+}
 
 bool CLayerTile::Init(CArrayInputStream &stream) {
     m_cells.clear();

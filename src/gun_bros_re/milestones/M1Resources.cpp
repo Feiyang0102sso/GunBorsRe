@@ -12,7 +12,10 @@
 #include "milestones/M1Resources.h"
 
 #include "engine/CStringToKey.h"
+#include "gun_bros/CGameAssetRef.h"
+#include "gun_bros/CGameObjectPack.h"
 #include "gun_bros/CResTOCManager.h"
+#include "gun_bros/CLevel.h"
 
 #include <cstdio>
 #include <cstring>
@@ -214,7 +217,117 @@ void DumpPack(CResPackTOC &pack) {
     }
 }
 
+/**
+ * Walk every pack's LEVEL section, reporting script use and layer scrolling.
+ *
+ * Two questions at once. How many levels carry a script at all -- CScript's
+ * first byte is a flag and a zero there means the rest is not even written --
+ * which is the gluScript density PLAN wanted measured before M4, and how much
+ * of a script each one carries.
+ *
+ * Parsing the whole template rather than sniffing at its bytes is also the
+ * check that CScript::Load reads the format correctly: a level template has to
+ * end on the last byte of its resource. Anything left over, in any pack, means
+ * one of the seven tables was read wrong.
+ */
+void SurveyLevels(CResTOCManager &tocManager) {
+    std::printf("\n=== LEVEL section: templates and scripts ===\n");
+
+    std::uint32_t totalLevels = 0;
+    std::uint32_t totalScripted = 0;
+    std::uint32_t totalUnreadable = 0;
+    std::uint32_t totalWithLeftovers = 0;
+
+    for (std::uint32_t packIndex = 0; packIndex < tocManager.GetPackCount();
+         ++packIndex) {
+        CResPackTOC *pack = tocManager.GetPack(static_cast<int>(packIndex));
+        if (pack == nullptr) {
+            continue;
+        }
+
+        CGameObjectPack objectPack;
+        if (!objectPack.Init(*pack)) {
+            continue;
+        }
+
+        const std::uint32_t levelCount =
+            objectPack.GetObjectCount(GameSection::Level);
+        if (levelCount == 0) {
+            continue;
+        }
+
+        std::printf("\n%s: %u levels\n", pack->GetShortName().c_str(), levelCount);
+
+        for (std::uint32_t i = 0; i < levelCount; ++i) {
+            const std::uint32_t handle = objectPack.GetHandle(GameSection::Level, i);
+            std::vector<std::uint8_t> payload;
+            if (handle == 0 || !pack->GetResource(handle, payload)) {
+                std::printf("  level %u unreadable\n", i);
+                totalUnreadable++;
+                continue;
+            }
+
+            totalLevels++;
+
+            CArrayInputStream stream(payload);
+            CLevel::Template levelTemplate;
+            if (!levelTemplate.Init(stream)) {
+                std::printf("  level %u: template runs past the end of the resource\n",
+                            i);
+                totalUnreadable++;
+                continue;
+            }
+
+            char mapText[48] = "no map";
+            if (!levelTemplate.mapRef.IsNull()) {
+                CResPackTOC *mapPack = tocManager.GetPack(
+                    tocManager.GetPackIndexFromHash(levelTemplate.mapRef.packHash));
+                std::snprintf(mapText, sizeof(mapText), "%s map %u",
+                              (mapPack != nullptr) ? mapPack->GetShortName().c_str()
+                                                   : "?",
+                              levelTemplate.mapRef.localIndex);
+            }
+
+            if (!levelTemplate.script.IsPresent()) {
+                std::printf("  level %u (%s): no script\n", i, mapText);
+                continue;
+            }
+
+            totalScripted++;
+            const CScript &script = levelTemplate.script;
+            std::printf("  level %u (%s): %u states, %u functions, %u exports, "
+                        "%u variables, %u resources\n",
+                        i, mapText,
+                        static_cast<unsigned>(script.GetStates().size()),
+                        static_cast<unsigned>(script.GetFunctions().size()),
+                        static_cast<unsigned>(script.GetExportFunctions().size()),
+                        static_cast<unsigned>(script.GetVariableInitialValues().size()),
+                        static_cast<unsigned>(script.GetResources().size()));
+
+            // The one number that decides whether the format is understood.
+            if (stream.Available() != 0) {
+                std::printf("    %u bytes left over\n",
+                            static_cast<unsigned>(stream.Available()));
+                totalWithLeftovers++;
+            }
+        }
+    }
+
+    std::printf("\n%u levels, %u carry a script, %u unreadable, "
+                "%u with bytes left over\n",
+                totalLevels, totalScripted, totalUnreadable, totalWithLeftovers);
+}
+
 }  // namespace
+
+int RunLevelSurvey(const std::string &bigDirectory) {
+    CResTOCManager tocManager;
+    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+        return 1;
+    }
+    SurveyLevels(tocManager);
+    return 0;
+}
 
 int RunM1Resources(const std::string &bigDirectory) {
     std::printf("=== M1: resource addressing ===\n\n");

@@ -18,6 +18,7 @@
 #define GUN_BROS_RE_GUN_BROS_CMAP_H
 
 #include "gun_bros/CGameAssetRef.h"
+#include "gun_bros/CLayerCamera.h"
 #include "gun_bros/CLayerObject.h"
 #include "gun_bros/CLayerTile.h"
 
@@ -36,13 +37,14 @@ enum class MapLayerType : std::uint8_t {
 };
 
 /**
- * A map: its tile layers, its object layers, and the rest walked past.
+ * A map: its tile layers, its object layers, its camera bounds, and the rest
+ * walked past.
  *
  * Every layer type has a parser now, so the whole stack is read rather than
- * abandoned at the first layer whose size is unknown. Collision, movie, camera
- * and the two path layers are stepped over without being kept -- nothing draws
- * them yet -- but they no longer block the layers behind them, which is how
- * pack11's object layers were being missed.
+ * abandoned at the first layer whose size is unknown. Collision, movie and the
+ * two path layers are stepped over without being kept -- nothing uses them yet
+ * -- but they no longer block the layers behind them, which is how pack11's
+ * object layers were being missed.
  */
 class CMap {
 public:
@@ -59,12 +61,58 @@ public:
         return m_tileLayers[index];
     }
 
+    /** Same layer, for the caller that sets its scroll speed or ticks it. */
+    CLayerTile &GetTileLayer(std::uint32_t index) { return m_tileLayers[index]; }
+
     std::uint32_t GetObjectLayerCount() const {
         return static_cast<std::uint32_t>(m_objectLayers.size());
     }
     const CLayerObject &GetObjectLayer(std::uint32_t index) const {
         return m_objectLayers[index];
     }
+
+    std::uint32_t GetCameraLayerCount() const {
+        return static_cast<std::uint32_t>(m_cameraLayers.size());
+    }
+    const CLayerCamera &GetCameraLayer(std::uint32_t index) const {
+        return m_cameraLayers[index];
+    }
+
+    /**
+     * Choose the current camera layer by its index in the layer stack -- the
+     * number setCameraLayer passes, counting every layer and not just the
+     * camera ones.
+     * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:92289 (SetCameraLayer),
+     *            :117499 (the resolver case that calls it)
+     *
+     * @return false when that index is not a camera layer, and the current one
+     *         is left alone.
+     */
+    bool SetCameraLayer(std::uint32_t layerIndex);
+
+    /**
+     * The rectangle the game can actually show, in world pixels.
+     *
+     * Whichever camera layer the level's script chose, or the first one until
+     * it does -- a map with several only reveals which it means once its
+     * script runs. Empty when the map has no camera layer at all, and then the
+     * whole canvas is on show.
+     */
+    MapRectangle GetVisibleBounds() const;
+
+    /**
+     * Every camera rectangle merged into one, in world pixels.
+     *
+     * A level moves its camera between these as it progresses -- setCameraLayer
+     * is called at the start and again at each stage -- so no single rectangle
+     * is "the map". Their union is everything the game can ever show, which is
+     * what a whole-map viewer wants: still tight enough to exclude the canvas
+     * edge no camera reaches, but not cropped to whichever corner the level
+     * happens to open on.
+     *
+     * Empty when the map has no camera layer.
+     */
+    MapRectangle GetCameraExtent() const;
 
     /** Canvas size in tiles: the largest extent over all tile layers. */
     std::uint16_t GetCanvasWidth() const { return m_canvasWidth; }
@@ -85,6 +133,11 @@ private:
     std::uint32_t m_layersRead;  // includes the ones only stepped over
     std::vector<CLayerTile> m_tileLayers;
     std::vector<CLayerObject> m_objectLayers;
+    std::vector<CLayerCamera> m_cameraLayers;
+
+    // Index into m_cameraLayers, not into the layer stack. Stays at zero until
+    // a script calls setCameraLayer.
+    std::uint32_t m_currentCameraLayer;
 
     std::uint16_t m_canvasWidth;
     std::uint16_t m_canvasHeight;

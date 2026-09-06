@@ -47,16 +47,6 @@ void SkipMovieLayer(CArrayInputStream &stream) {
 }
 
 /**
- * CLayerCamera: two rectangles.
- * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:127663
- */
-void SkipCameraLayer(CArrayInputStream &stream) {
-    for (int i = 0; i < 8; ++i) {
-        stream.ReadInt16();
-    }
-}
-
-/**
  * CLayerPathLink: the node-and-link navigation graph.
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:166451
  *
@@ -114,11 +104,17 @@ void SkipPathMeshLayer(CArrayInputStream &stream) {
 }  // namespace
 
 CMap::CMap()
-    : m_declaredLayerCount(0), m_layersRead(0), m_canvasWidth(0), m_canvasHeight(0) {}
+    : m_declaredLayerCount(0),
+      m_layersRead(0),
+      m_currentCameraLayer(0),
+      m_canvasWidth(0),
+      m_canvasHeight(0) {}
 
 bool CMap::Init(CArrayInputStream &stream) {
     m_tileLayers.clear();
     m_objectLayers.clear();
+    m_cameraLayers.clear();
+    m_currentCameraLayer = 0;
     m_canvasWidth = 0;
     m_canvasHeight = 0;
 
@@ -161,7 +157,12 @@ bool CMap::Init(CArrayInputStream &stream) {
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Movie)) {
             SkipMovieLayer(stream);
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Camera)) {
-            SkipCameraLayer(stream);
+            CLayerCamera layer;
+            if (!layer.Init(stream)) {
+                return false;
+            }
+            layer.SetLayerIndex(i);
+            m_cameraLayers.push_back(layer);
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::PathLink)) {
             SkipPathLinkLayer(stream);
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::PathMesh)) {
@@ -198,6 +199,64 @@ bool CMap::Init(CArrayInputStream &stream) {
     }
 
     return true;
+}
+
+bool CMap::SetCameraLayer(std::uint32_t layerIndex) {
+    for (std::size_t i = 0; i < m_cameraLayers.size(); ++i) {
+        if (m_cameraLayers[i].GetLayerIndex() == layerIndex) {
+            m_currentCameraLayer = static_cast<std::uint32_t>(i);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+MapRectangle CMap::GetCameraExtent() const {
+    if (m_cameraLayers.empty()) {
+        return MapRectangle();
+    }
+
+    const MapRectangle &first = m_cameraLayers[0].GetPrimaryBounds();
+    int left = first.x;
+    int top = first.y;
+    int right = first.x + first.width;
+    int bottom = first.y + first.height;
+
+    for (std::size_t i = 1; i < m_cameraLayers.size(); ++i) {
+        const MapRectangle &bounds = m_cameraLayers[i].GetPrimaryBounds();
+        if (bounds.IsEmpty()) {
+            continue;
+        }
+
+        if (bounds.x < left) {
+            left = bounds.x;
+        }
+        if (bounds.y < top) {
+            top = bounds.y;
+        }
+        if (bounds.x + bounds.width > right) {
+            right = bounds.x + bounds.width;
+        }
+        if (bounds.y + bounds.height > bottom) {
+            bottom = bounds.y + bounds.height;
+        }
+    }
+
+    MapRectangle extent;
+    extent.x = static_cast<std::int16_t>(left);
+    extent.y = static_cast<std::int16_t>(top);
+    extent.width = static_cast<std::int16_t>(right - left);
+    extent.height = static_cast<std::int16_t>(bottom - top);
+    return extent;
+}
+
+MapRectangle CMap::GetVisibleBounds() const {
+    if (m_currentCameraLayer >= m_cameraLayers.size()) {
+        return MapRectangle();
+    }
+
+    return m_cameraLayers[m_currentCameraLayer].GetPrimaryBounds();
 }
 
 std::uint32_t CMap::GetUnparsedLayerCount() const {

@@ -64,6 +64,11 @@ gunbros
 _junk/
 _Big_tool/
 
+#  A pile of gluScript text of unknown origin. Not ours to redistribute, and
+#  nothing in the project reads it -- the interpreter works off the compiled
+#  bytecode in big/, per PLAN.md M3.4.
+flow scripts/
+
 # ============================================================
 #  Third-party binaries we DO commit
 # ============================================================

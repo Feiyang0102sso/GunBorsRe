@@ -36,6 +36,7 @@
 #include "gun_bros/CGameObjectPack.h"
 #include "gun_bros/CLayerObject.h"
 #include "gun_bros/CLayerTile.h"
+#include "gun_bros/CLevel.h"
 #include "gun_bros/CMap.h"
 #include "gun_bros/CProp.h"
 #include "gun_bros/CResTOCManager.h"
@@ -233,6 +234,71 @@ bool ReadSectionResource(CResTOCManager &tocManager, LoadedMap &loaded,
 }
 
 /**
+ * Run the scripts of whichever levels use this map.
+ *
+ * Scroll speeds are not in the map. A level script sets them when the level
+ * starts -- CLevel::Init binds the script, binds the map, then calls export 0
+ * (:120988) -- so getting them means running that script, which is what this
+ * does. Levels are walked in section order and the ones naming this map are
+ * bound and started; a map with no level, or a level that asks for no
+ * scrolling, leaves every layer at rest. That is sixteen of the twenty-two.
+ *
+ * Every level template is parsed, not just the matching ones, and each is
+ * checked for leftover bytes -- the whole-archive check that the script format
+ * is read correctly.
+ *
+ * The CLevel is local because nothing outlives the call yet: the script runs
+ * once, at load, and what it changes it changes in the map. M4a gives levels
+ * a lifetime.
+ */
+void ApplyLevelScripts(CResTOCManager &tocManager, LoadedMap &out,
+                       std::uint32_t mapPackHash, std::uint32_t mapIndex) {
+    const int packIndex = tocManager.GetPackIndexFromHash(mapPackHash);
+    PackResources *resources = GetPackResources(tocManager, out, packIndex);
+    CResPackTOC *pack = tocManager.GetPack(packIndex);
+    if (resources == nullptr || !resources->objectPackReady || pack == nullptr) {
+        return;
+    }
+
+    const std::uint32_t levelCount =
+        resources->objectPack.GetObjectCount(GameSection::Level);
+    std::vector<std::uint8_t> payload;
+
+    for (std::uint32_t i = 0; i < levelCount; ++i) {
+        const std::uint32_t handle =
+            resources->objectPack.GetHandle(GameSection::Level, i);
+        if (handle == 0 || !pack->GetResource(handle, payload)) {
+            continue;
+        }
+
+        CArrayInputStream stream(payload);
+        CLevel::Template levelTemplate;
+        if (!levelTemplate.Init(stream)) {
+            std::printf("[m3] level %u: template runs past the end of the resource\n", i);
+            continue;
+        }
+        if (stream.Available() != 0) {
+            std::printf("[m3] level %u: %u bytes left over after the template\n", i,
+                        static_cast<unsigned>(stream.Available()));
+        }
+
+        if (levelTemplate.mapRef.packHash != mapPackHash ||
+            levelTemplate.mapRef.localIndex != mapIndex) {
+            continue;
+        }
+
+        CLevel level;
+        level.Bind(levelTemplate, out.map);
+        // The count covers CLevel's own functions. Calls aimed at the other
+        // eleven classes are logged by ScriptResolver, which has no level to
+        // count them against.
+        std::printf("[m3]   level %u ran; %u level functions it wanted are not "
+                    "implemented\n",
+                    i, level.GetUnimplementedCallCount());
+    }
+}
+
+/**
  * Load a map, its tile set and the atlases the tile set names.
  *
  * @param mapPackIndex Which pack the map itself lives in. Everything it
@@ -280,6 +346,18 @@ bool LoadMap(CResTOCManager &tocManager, int mapPackIndex, std::uint32_t mapInde
                     out.map.GetUnparsedLayerCount());
     }
     std::printf("\n");
+
+    ApplyLevelScripts(tocManager, out, mapPack->GetPackHash(), mapIndex);
+
+    // After the scripts, because setCameraLayer is one of the first things a
+    // level does and it decides which of these rectangles is the live one.
+    const MapRectangle visibleBounds = out.map.GetVisibleBounds();
+    const MapRectangle extent = out.map.GetCameraExtent();
+    std::printf("[m3]   %u camera layers; level opens on (%d, %d) %d x %d px, "
+                "showing all of (%d, %d) %d x %d px\n",
+                out.map.GetCameraLayerCount(), visibleBounds.x, visibleBounds.y,
+                visibleBounds.width, visibleBounds.height, extent.x, extent.y,
+                extent.width, extent.height);
 
     // --- the tile set ---
     const GameObjectRef &tileSetRef = out.map.GetTileSetRef();
@@ -595,6 +673,17 @@ void AdvanceProps(std::vector<PlacedProp> &props, std::uint16_t deltaMs) {
     }
 }
 
+/** Move every drifting tile layer on by one frame's worth of time. */
+void AdvanceTileLayers(CMap &map, std::uint16_t deltaMs) {
+    for (std::uint32_t i = 0; i < map.GetTileLayerCount(); ++i) {
+        CLayerTile &layer = map.GetTileLayer(i);
+        if (!layer.IsScrolling()) {
+            continue;
+        }
+        layer.Update(deltaMs);
+    }
+}
+
 /**
  * Run the animation clock forward, in the bites playback would use.
  *
@@ -602,9 +691,10 @@ void AdvanceProps(std::vector<PlacedProp> &props, std::uint16_t deltaMs) {
  * the same map at two different times and diff them. Deterministic, because
  * the bite size is fixed rather than taken from the wall clock.
  */
-void WarmUpProps(std::vector<PlacedProp> &props, std::uint32_t totalMs) {
+void WarmUp(LoadedMap &loaded, std::uint32_t totalMs) {
     for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
-        AdvanceProps(props, kWarmUpFrameMs);
+        AdvanceProps(loaded.props, kWarmUpFrameMs);
+        AdvanceTileLayers(loaded.map, kWarmUpFrameMs);
     }
 }
 
@@ -677,9 +767,39 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
              ++layerIndex) {
             const CLayerTile &layer = map.GetTileLayer(layerIndex);
 
-            for (std::uint32_t row = 0; row < map.GetCanvasHeight(); ++row) {
-                for (std::uint32_t column = 0; column < map.GetCanvasWidth(); ++column) {
-                    const TileCell &cell = layer.GetCell(column, row);
+            // A drifted layer leaves a strip of canvas uncovered at the edge it
+            // has moved away from, so it needs one more cell on that side --
+            // and only that side, which is what keeps the extra cells from
+            // showing up as a border on all four. A layer at rest, or one
+            // exactly on a tile boundary, uncovers nothing and draws the same
+            // range M3 drew.
+            int firstColumn = 0;
+            int firstRow = 0;
+            int lastColumn = static_cast<int>(map.GetCanvasWidth());
+            int lastRow = static_cast<int>(map.GetCanvasHeight());
+            if (layer.GetOffsetX() > 0.0f) {
+                firstColumn = -1;
+            }
+            if (layer.GetOffsetX() < 0.0f) {
+                lastColumn = lastColumn + 1;
+            }
+            if (layer.GetOffsetY() > 0.0f) {
+                firstRow = -1;
+            }
+            if (layer.GetOffsetY() < 0.0f) {
+                lastRow = lastRow + 1;
+            }
+
+            for (int row = firstRow; row < lastRow; ++row) {
+                for (int column = firstColumn; column < lastColumn; ++column) {
+                    // GetCell wraps by modulo and takes an unsigned index, so
+                    // the ring's -1 is lifted past zero first. Adding a whole
+                    // layer width or height leaves the wrapped result alone.
+                    const std::uint32_t cellColumn =
+                        static_cast<std::uint32_t>(column + layer.GetWidth());
+                    const std::uint32_t cellRow =
+                        static_cast<std::uint32_t>(row + layer.GetHeight());
+                    const TileCell &cell = layer.GetCell(cellColumn, cellRow);
 
                     // 255 means nothing here; the layer below shows through.
                     if (cell.tileId == kEmptyTileId) {
@@ -704,8 +824,8 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
                     source.height = tile.height;
 
                     batch.AddQuad(*loaded.textures[tile.imageIndex],
-                                  static_cast<float>(column) * drawSize,
-                                  static_cast<float>(row) * drawSize,
+                                  (column + layer.GetOffsetX()) * drawSize,
+                                  (row + layer.GetOffsetY()) * drawSize,
                                   drawSize, drawSize, source,
                                   (cell.flags & kTileFlagFlipHorizontal) != 0,
                                   (cell.flags & kTileFlagFlipVertical) != 0,
@@ -857,27 +977,111 @@ struct Camera {
     float zoom;
 };
 
-/** Zoom out far enough to see a whole map, and centre it. */
-Camera FitCamera(const LoadedMap &loaded, int viewWidth, int viewHeight) {
+/**
+ * The rectangle worth looking at, in world pixels.
+ *
+ * The map's camera layer when it has one, and the whole canvas when it does
+ * not. Two of the twenty-two maps declare no camera layer.
+ */
+MapRectangle ViewedRegion(const LoadedMap &loaded) {
+    const MapRectangle bounds = loaded.map.GetCameraExtent();
+    if (!bounds.IsEmpty()) {
+        return bounds;
+    }
+
     const float drawSize = static_cast<float>(loaded.tileSet.GetDrawSize());
-    const float mapWidth = loaded.map.GetCanvasWidth() * drawSize;
-    const float mapHeight = loaded.map.GetCanvasHeight() * drawSize;
+
+    MapRectangle canvas;
+    canvas.x = 0;
+    canvas.y = 0;
+    canvas.width = static_cast<std::int16_t>(loaded.map.GetCanvasWidth() * drawSize);
+    canvas.height = static_cast<std::int16_t>(loaded.map.GetCanvasHeight() * drawSize);
+    return canvas;
+}
+
+/** Zoom out far enough to see the whole viewed region, and centre it. */
+Camera FitCamera(const LoadedMap &loaded, int viewWidth, int viewHeight) {
+    const MapRectangle region = ViewedRegion(loaded);
+    const float regionWidth = static_cast<float>(region.width);
+    const float regionHeight = static_cast<float>(region.height);
 
     Camera camera;
     camera.zoom = 1.0f;
     camera.x = 0.0f;
     camera.y = 0.0f;
-    if (mapWidth <= 0.0f || mapHeight <= 0.0f) {
+    if (regionWidth <= 0.0f || regionHeight <= 0.0f) {
         return camera;
     }
 
-    const float fitX = static_cast<float>(viewWidth) / (mapWidth * kFitMargin);
-    const float fitY = static_cast<float>(viewHeight) / (mapHeight * kFitMargin);
+    const float fitX = static_cast<float>(viewWidth) / (regionWidth * kFitMargin);
+    const float fitY = static_cast<float>(viewHeight) / (regionHeight * kFitMargin);
     camera.zoom = (fitX < fitY) ? fitX : fitY;
 
-    camera.x = (mapWidth - static_cast<float>(viewWidth) / camera.zoom) * 0.5f;
-    camera.y = (mapHeight - static_cast<float>(viewHeight) / camera.zoom) * 0.5f;
+    camera.x = static_cast<float>(region.x) +
+               (regionWidth - static_cast<float>(viewWidth) / camera.zoom) * 0.5f;
+    camera.y = static_cast<float>(region.y) +
+               (regionHeight - static_cast<float>(viewHeight) / camera.zoom) * 0.5f;
     return camera;
+}
+
+/**
+ * Where the camera bounds land on the window, as a scissor rectangle.
+ *
+ * A map's tile layers run past the rectangle the game is ever allowed to show:
+ * a lava or starfield layer wraps and keeps filling to the edge of the canvas,
+ * and the terrain layer above it stops short. The engine never reveals that
+ * because the camera stops at these bounds. This viewer fits whole maps on
+ * screen, so it has to clip instead.
+ *
+ * @param scissor Filled with x, y, width, height in window pixels, GL's
+ *                bottom-left origin.
+ * @return false when the map declares no camera layer; nothing is clipped then.
+ */
+bool VisibleBoundsScissor(const LoadedMap &loaded, const Camera &camera,
+                          int drawableWidth, int drawableHeight, int scissor[4]) {
+    const MapRectangle bounds = loaded.map.GetCameraExtent();
+    if (bounds.IsEmpty()) {
+        return false;
+    }
+
+    const float left = (static_cast<float>(bounds.x) - camera.x) * camera.zoom;
+    const float top = (static_cast<float>(bounds.y) - camera.y) * camera.zoom;
+    const float right = left + static_cast<float>(bounds.width) * camera.zoom;
+    const float bottom = top + static_cast<float>(bounds.height) * camera.zoom;
+
+    // Flip to GL's bottom-left origin, then clamp to the window.
+    float x0 = left;
+    float x1 = right;
+    float y0 = static_cast<float>(drawableHeight) - bottom;
+    float y1 = static_cast<float>(drawableHeight) - top;
+
+    if (x0 < 0.0f) {
+        x0 = 0.0f;
+    }
+    if (y0 < 0.0f) {
+        y0 = 0.0f;
+    }
+    if (x1 > static_cast<float>(drawableWidth)) {
+        x1 = static_cast<float>(drawableWidth);
+    }
+    if (y1 > static_cast<float>(drawableHeight)) {
+        y1 = static_cast<float>(drawableHeight);
+    }
+
+    scissor[0] = static_cast<int>(x0);
+    scissor[1] = static_cast<int>(y0);
+    scissor[2] = 0;
+    scissor[3] = 0;
+
+    // Panned fully off screen. Still clipping, with nothing left to draw.
+    if (x1 > x0) {
+        scissor[2] = static_cast<int>(x1 - x0);
+    }
+    if (y1 > y0) {
+        scissor[3] = static_cast<int>(y1 - y0);
+    }
+
+    return true;
 }
 
 /** Open the archives and pick out one pack, already bound. */
@@ -1010,10 +1214,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         return 1;
     }
     LoadProps(tocManager, loaded);
-    WarmUpProps(loaded.props, advanceMs);
+    WarmUp(loaded, advanceMs);
 
-    // Either layer can be hidden, which is how "is that rock in the right
-    // place or is the ground wrong?" gets answered without a debugger.
+    // Either layer can be hidden, which is how "is that rock in the right\n// place or is the ground wrong?" gets answered without a debugger.
     bool showTiles = true;
     bool showProps = true;
 
@@ -1089,7 +1292,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
                         replacement)) {
                 LoadProps(tocManager, replacement);
-                WarmUpProps(replacement.props, advanceMs);
+                WarmUp(replacement, advanceMs);
                 loaded = std::move(replacement);
                 reportGeometry = true;
                 refit = true;
@@ -1120,6 +1323,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         }
 
         AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
+        AdvanceTileLayers(loaded.map, static_cast<std::uint16_t>(elapsedMs));
         BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
         reportGeometry = false;
 
@@ -1169,7 +1373,20 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
                              static_cast<float>(drawableHeight) / camera.zoom, mvp);
         Matrix4dTranslate(mvp, -camera.x, -camera.y);
 
+        int scissor[4];
+        const bool clipping = VisibleBoundsScissor(loaded, camera, drawableWidth,
+                                                   drawableHeight, scissor);
+        if (clipping) {
+            // After the clear, so the background still fills the window.
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+        }
+
         batch.Draw(program, mvp);
+
+        if (clipping) {
+            glDisable(GL_SCISSOR_TEST);
+        }
 
         if (!reportedFirstFrame) {
             GLCheckErrors("first frame");
