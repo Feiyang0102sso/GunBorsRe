@@ -90,6 +90,20 @@ std::uint32_t CGameObjectPack::GetSectionBase(GameSection section) const {
     return m_sectionBases[index];
 }
 
+std::uint32_t CGameObjectPack::GetSectionSpan(GameSection section) const {
+    const std::uint32_t index = static_cast<std::uint32_t>(section) - 1;
+    if (index + 1 >= m_sectionBases.size()) {
+        return 0;
+    }
+
+    const std::uint32_t base = m_sectionBases[index];
+    const std::uint32_t nextBase = m_sectionBases[index + 1];
+    if (nextBase <= base) {
+        return 0;
+    }
+    return nextBase - base;
+}
+
 std::uint32_t CGameObjectPack::GetHandle(GameSection section,
                                          std::uint32_t localIndex) const {
     const std::uint32_t base = GetSectionBase(section);

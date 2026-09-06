@@ -22,7 +22,7 @@ void CTexture::Destroy() {
     m_height = 0;
 }
 
-bool CTexture::Create(const PNGImage &image) {
+bool CTexture::Create(const PNGImage &image, GLenum wrapMode) {
     Destroy();
 
     if (image.width == 0 || image.height == 0) {
@@ -34,9 +34,10 @@ bool CTexture::Create(const PNGImage &image) {
     glBindTexture(GL_TEXTURE_2D, m_handle);
 
     // Sprites come out of atlases, so clamping matters and wrapping would
-    // bleed neighbouring tiles in. No mips: nothing is ever minified far.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // bleed neighbouring tiles in. Models ask for GL_REPEAT instead.
+    // No mips: nothing is ever minified far.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, static_cast<GLint>(wrapMode));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, static_cast<GLint>(wrapMode));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 

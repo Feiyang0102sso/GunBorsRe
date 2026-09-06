@@ -406,6 +406,31 @@ bit15 字面量、高字节非 0 走 `ResolveVariable`、低字节 <0xFA 是脚�
 > 并集才是"游戏里能看到的一切"——22 张图**每一张的并集都小于画布**，
 > 所以外沿照样砍掉，只是不会把查看器裁到关卡开场的一角。日志两个都打。
 
+#### M3.5 — 看得到模型
+
+Section 31 mesh 解析 + 静态模型查看器。**从 M4b 里拆出来前置**，因为它的验收不需要实体——
+解析和渲染对不对，转台上一眼就看得出来，和 M3.x 那批查看器同型。
+
+格式已解出，见 [`mesh.bt`](_Big_tool/binary%20template/big_assets/mesh.bt)（对着 `CMesh::Init` :97705 核过）：
+`magic(1) + indexCount(4) + boneCount(1) + frameCount(2) + vertexCount(2)`，后接长度前缀的骨骼名、
+uint16 索引缓冲、逐顶点静态 UV、逐帧数据。一帧 = `4 + 28 × boneCount + 12 × vertexCount` 字节。
+寻址不用新做：`Mesh = 31` 已经在 `CGameObjectPack.h` 里，走 M3.1 那条 `ReadSectionResource`。
+
+三件事和 2D 那条线不一样：
+
+- **动画是逐帧整份顶点数组**，不是骨骼蒙皮。`BuildTweenFrame`（:98051）在相邻两帧间线性插值；
+  骨骼的 pos + 四元数只是挂点（枪口、手），不参与变形。
+- **索引缓冲是三角带**，靠重复索引造退化三角形，把多条带缝成一条。
+- **贴图不在 mesh 里**。`CMesh::Init` 的第三个参数就是 `CMoveSetMesh`，贴图来自
+  `CMoveSetMesh::Init`（:122930）开头那张表：uint32 packHash + uint8 数量 + 每项 2 字节。
+  这一步只解到这张表为止，动作表留给 M4b。
+
+渲染层要新加静态 VBO / IBO 和深度测试。现在这套 `CQuadBatch` 是为"每帧重填的 2D 四边形"设计的，
+而 mesh 的索引缓冲和 UV 一辈子不变，两条路。
+
+> **验收**：含 mesh 的包，其 Section 31 资源逐个解析到末字节剩 0；转台里模型带正确贴图显示，
+> 逐帧动画能播；沿用 `--advance` + `--screenshot`，动画不用人盯着也能验收。
+
 ### M4 — 动得起来
 
 **这一关拆成两半，因为角色不是精灵。** `CBrother::Template::Init`（:134571）读的是
@@ -414,7 +439,8 @@ bit15 字面量、高字节非 0 走 `ResolveVariable`、低字节 <0xFA 是脚�
 `CMoveSetMesh`。`CMoveSet`（精灵动作集）全项目只有 `CProp` 用——也就是说
 M3.2 已经把精灵动画这条线走完了，角色那条线绕不开 Section 31。
 
-先做地基再补表现：mesh 做完了角色也还是不能动，而时间步、相机、碰撞是 M5 也要踩的。
+**mesh 的格式与渲染已前置到 M3.5**——那部分不需要实体就能验收。剩下的两半是地基和绑定：
+模型画得出来角色也还是不能动，而时间步、相机、碰撞是 M5 也要踩的，所以地基仍在前面。
 
 #### M4a — 关卡与实体骨架
 
@@ -425,7 +451,8 @@ M3.2 已经把精灵动画这条线走完了，角色那条线绕不开 Section 
 不可见标记跳过了。碰撞层同理——有解析器，但只跳过不保留。
 `CLevel::FunctionResolver` 那 82 个 case，按关卡实际用到的补，不照 id 顺序铺。
 
-玩家先用占位：真解析 `CBrother::Template`，画它的影子精灵加一个朝向标记。
+玩家直接用 M3.5 画得出来的模型，朝向和缩放先随便摆——**占位的是姿态，不是资产**，
+省掉一次性的影子精灵占位。
 这一步也该把 `CCamera` / `CRenderQueue` 从 `M3Map.cpp` 里提炼出来——到这时才有
 会移动的实体，队列才真的需要每帧重排。
 
@@ -433,8 +460,11 @@ M3.2 已经把精灵动画这条线走完了，角色那条线绕不开 Section 
 
 #### M4b — 真角色
 
-Section 31 mesh + `CMoveSetMesh` + `CMeshCamera`。需要给渲染层加顶点/索引缓冲和深度测试，
-是独立的一块。
+格式与渲染在 M3.5 做掉了，这里剩**绑定与姿态**：`CMoveSetMesh` 的动作表 +
+`CMoveSetMeshController` + `CMeshCamera::OrientForGame` / `DrawHeirarchy`。
+最难啃的是 `DrawHeirarchy`（:99070）那坨 NEON 矩阵码，还叠了
+`SetWidthAndHeightMappedOrthoProjection`——它要有真实体和游戏相机做参照才验得出对错，
+这也是它留在这里、没跟着 M3.5 走的原因。
 
 > **验收**：角色站在地图上，键盘/手柄能移动，播放行走动画。
 
@@ -444,7 +474,7 @@ Section 31 mesh + `CMoveSetMesh` + `CMeshCamera`。需要给渲染层加顶点/�
 
 > **验收**：能开枪、命中、敌人死亡、有粒子特效。**到这里游戏算"能玩"。**
 
-之后排期：音频 → 菜单（40 个文件）→ 进度存档 → 3D mesh。
+之后排期：音频 → 菜单（40 个文件）→ 进度存档。
 
 ---
 
@@ -464,7 +494,7 @@ Section 31 mesh + `CMoveSetMesh` + `CMeshCamera`。需要给渲染层加顶点/�
 | ~~**体系外资源寻址未解**~~：已解。所谓"不在 Section 表内"的资源住在**聚合资源**里，handle bit29 标记，走 `CAggregateResource` | 已消除 | M1 实测：5659 个条目解析 5594，41 个空引用，21 个未解（仅两个 name key，疑为引擎元数据） |
 | **`gluScript` 脚本系统**（11 文件 + `CScriptInterpreter`） | **绕不开，且比预想的重**；风险已从"格式未知"转成"resolver 面积大" | 密度量出来了（`--levels`）：**23 个关卡里 19 个带脚本**。13 个模板类型有 `CScript` 字段，且脚本不只做剧情——连背景滚动这种纯表现的事都走它（M3.3）。字节码格式**已全部解出**。**内核已在 M3.4 做掉**，`LevelScriptScan` 已删。剩下的面积在 resolver：12 个类约 230 个函数，只能跟着 M4 / M5 各子系统增量长，按关卡实际用到的补 |
 | ~~**`spriteGlu3`** 只有 3 个文件但可能是关键~~：已解。`CGameSpriteGluRef` 走 packHash + archetype，不带资源 ID | 已消除 | M3.1 实测：22 张图 1653 个 PROP 全部画出，0 失败。特效贴图那批"体系外资源"正是走这条路 |
-| **3D mesh 格式未完全解出**（Section 31） | 挡住玩家、敌人、枪——三者都是 `CMoveSetMesh` | 隔离成 M4b。M4a 先用占位跑通关卡骨架，不让表现问题挡住玩法逻辑 |
+| **3D mesh 的渲染与姿态**（Section 31） | 挡住玩家、敌人、枪——三者都是 `CMoveSetMesh` | 风险已从"格式未知"转成"渲染与姿态"：格式对着 `CMesh::Init`（:97705）逐字段解出并写进 `mesh.bt`，寻址链 M3.1 就通了。**解析与静态渲染前置到 M3.5**，不需要实体即可验收；剩下的面积在 `CMeshCamera::DrawHeirarchy`（:99070）那坨矩阵码，隔离在 M4b |
 | ~~**寻路图层格式未解**（`CLayerPathLink` type 5 / `CLayerPathMesh` type 6）~~：已解，见 `_Big_tool` 的 `map.bt` | 已消除 | M3.1 补齐了两者的解析（只跳过不保留）。之前遇到它们就停，藏在后面的对象层读不到 |
 
 ---
@@ -479,5 +509,6 @@ Section 31 mesh + `CMoveSetMesh` + `CMeshCamera`。需要给渲染层加顶点/�
 - [x] M3.2 地图活起来 —— 2026-09-05 完成
 - [x] M3.3 背景流动起来 —— 2026-09-06 完成
 - [x] M3.4 脚本跑起来 —— 2026-09-06 完成
+- [ ] M3.5 看得到模型
 - [ ] M4 动得起来
 - [ ] M5 打得起来

@@ -24,8 +24,15 @@ public:
     CTexture(const CTexture &) = delete;
     CTexture &operator=(const CTexture &) = delete;
 
-    /** Upload an RGBA8 image. Replaces whatever this held before. */
-    bool Create(const PNGImage &image);
+    /**
+     * Upload an RGBA8 image. Replaces whatever this held before.
+     *
+     * @param wrapMode GL_CLAMP_TO_EDGE for sprite atlases, where wrapping
+     *        would bleed the neighbouring sprite in. Models want GL_REPEAT:
+     *        19 of the 334 have UVs outside the unit square, which is how a
+     *        texture gets tiled across a surface.
+     */
+    bool Create(const PNGImage &image, GLenum wrapMode = GL_CLAMP_TO_EDGE);
 
     void Destroy();
 

@@ -34,6 +34,7 @@ enum class KeyCode {
     Home,
     T,
     P,
+    G,
     Space,
     Period,
 };
@@ -80,6 +81,15 @@ public:
 
     /** Present the back buffer. */
     void Present();
+
+    /**
+     * Read the drawn frame back and write it out as a PNG.
+     *
+     * The whole reason the PNG encoder exists: a milestone that saves its
+     * first frame can be signed off without a human at the keyboard. Call it
+     * before Present.
+     */
+    bool SaveFrame(const std::string &path) const;
 
     /** Current drawable size in pixels, which is what glViewport wants. */
     void GetDrawableSize(int &width, int &height) const;

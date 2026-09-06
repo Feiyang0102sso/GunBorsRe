@@ -866,28 +866,6 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
     }
 }
 
-/** Read the current frame back and save it, flipping to top-down. */
-bool SaveFrame(int width, int height, const std::string &path) {
-    PNGImage frame;
-    frame.width = static_cast<std::uint32_t>(width);
-    frame.height = static_cast<std::uint32_t>(height);
-    frame.pixels.resize(static_cast<std::size_t>(width) * height * 4);
-
-    std::vector<std::uint8_t> bottomUp(frame.pixels.size());
-    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, bottomUp.data());
-    if (!GLCheckErrors("glReadPixels")) {
-        return false;
-    }
-
-    const std::size_t rowBytes = static_cast<std::size_t>(width) * 4;
-    for (int y = 0; y < height; ++y) {
-        std::memcpy(&frame.pixels[static_cast<std::size_t>(y) * rowBytes],
-                    &bottomUp[static_cast<std::size_t>(height - 1 - y) * rowBytes],
-                    rowBytes);
-    }
-    return PNGEncode(frame, path);
-}
-
 /** One map, wherever it lives. */
 struct CatalogMap {
     int packIndex;
@@ -1393,7 +1371,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             reportedFirstFrame = true;
 
             if (!screenshotPath.empty()) {
-                if (!SaveFrame(drawableWidth, drawableHeight, screenshotPath)) {
+                if (!window.SaveFrame(screenshotPath)) {
                     return 1;
                 }
                 window.Present();

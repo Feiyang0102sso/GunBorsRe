@@ -112,6 +112,7 @@
     <ClCompile Include="src\gun_bros_re\engine\CMatrix4d.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CTexture.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CQuadBatch.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CMeshBuffer.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CGameAssetRef.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CGameObjectPack.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\TileSet.cpp" />
@@ -120,6 +121,12 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerCamera.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CProp.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMap.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMesh.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMoveSetMesh.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CBrother.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CGun.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CBullet.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CArmor.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CLevel.cpp" />
     <ClCompile Include="src\gun_bros_re\glu_script\CScript.cpp" />
     <ClCompile Include="src\gun_bros_re\glu_script\CScriptCode.cpp" />
@@ -137,6 +144,7 @@
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteIterator.cpp" />
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpritePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\M35Mesh.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\platform\GLLoader.cpp" />
@@ -155,6 +163,7 @@
     <ClInclude Include="src\gun_bros_re\engine\CMatrix4d.h" />
     <ClInclude Include="src\gun_bros_re\engine\CTexture.h" />
     <ClInclude Include="src\gun_bros_re\engine\CQuadBatch.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CMeshBuffer.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CGameAssetRef.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CGameObjectPack.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\TileSet.h" />
@@ -175,11 +184,18 @@
     <ClInclude Include="src\gun_bros_re\glu_script\CScriptVariable.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CProp.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMap.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMesh.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMoveSetMesh.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CBrother.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CGun.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CBullet.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CArmor.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGlu.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGluArchetype.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteIterator.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpritePlayer.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\M35Mesh.h" />
     <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />
     <ClInclude Include="src\gun_bros_re\engine\CShaderProgram.h" />
     <ClInclude Include="src\gun_bros_re\engine\platform\GLLoader.h" />

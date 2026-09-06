@@ -10,6 +10,7 @@
 #include "milestones/M1Resources.h"
 #include "milestones/M2Texture.h"
 #include "milestones/M3Map.h"
+#include "milestones/M35Mesh.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -36,6 +37,9 @@ void PrintUsage() {
         "  --dump <pack>             list one pack's resource table\n"
         "  --maps                    list every map, in the viewer's order\n"
         "  --levels                  list which levels scroll a tile layer\n"
+        "  --meshes                  parse every 3D model and list what is in it\n"
+        "  --movesets                follow every model to the atlas it wears\n"
+        "  --mesh <n>                M3.5: show model <n> of the catalogue\n"
         "  --map <pack> <n>          which map M3 should START on; the arrow\n"
         "                            keys reach every other one\n"
         "                            (default: %s %u)\n"
@@ -47,6 +51,42 @@ void PrintUsage() {
         "  --advance <ms>            run the animations on this far before\n"
         "                            that first frame\n",
         kDefaultMapPack, kDefaultMapIndex, kDefaultImagePack, kDefaultImageResourceId);
+}
+
+/**
+ * The menu shown when the program is started with no arguments.
+ *
+ * Every harness is reachable from the command line, but the command line is
+ * not much use when the executable was double-clicked or launched from the
+ * debugger. Returns the chosen number, or the default when the line is empty.
+ */
+int PromptForHarness() {
+    std::printf(
+        "\n=== gun_bros_re ===\n"
+        "\n"
+        "  1  map viewer      -- terrain, scenery, animation, scrolling\n"
+        "  2  model viewer    -- one 3D model at a time, on a turntable\n"
+        "  3  texture viewer  -- one PNG out of a .big\n"
+        "\n"
+        "  4  list every map\n"
+        "  5  list every model\n"
+        "  6  list every model with the atlas it wears\n"
+        "  7  list every level script\n"
+        "  8  resource addressing self-check\n"
+        "\n"
+        "choice [1]: ");
+    std::fflush(stdout);
+
+    char line[64];
+    if (std::fgets(line, sizeof(line), stdin) == nullptr) {
+        return 1;
+    }
+
+    const int choice = std::atoi(line);
+    if (choice < 1 || choice > 8) {
+        return 1;
+    }
+    return choice;
 }
 
 }  // namespace
@@ -67,6 +107,12 @@ int main(int argc, char **argv) {
     bool runM2 = false;
     bool listMaps = false;
     bool surveyLevels = false;
+    bool surveyMeshes = false;
+    bool surveyMoveSets = false;
+    bool runM35 = false;
+    std::uint32_t meshIndex = 0;
+    float meshSpinDegrees = 0.0f;
+    std::uint32_t meshFrameIndex = 0;
 
     for (int i = 1; i < argc; ++i) {
         const char *argument = argv[i];
@@ -79,6 +125,17 @@ int main(int argc, char **argv) {
             listMaps = true;
         } else if (std::strcmp(argument, "--levels") == 0) {
             surveyLevels = true;
+        } else if (std::strcmp(argument, "--meshes") == 0) {
+            surveyMeshes = true;
+        } else if (std::strcmp(argument, "--movesets") == 0) {
+            surveyMoveSets = true;
+        } else if (std::strcmp(argument, "--frame") == 0 && i + 1 < argc) {
+            meshFrameIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
+        } else if (std::strcmp(argument, "--spin") == 0 && i + 1 < argc) {
+            meshSpinDegrees = static_cast<float>(std::atof(argv[++i]));
+        } else if (std::strcmp(argument, "--mesh") == 0 && i + 1 < argc) {
+            runM35 = true;
+            meshIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--dump") == 0 && i + 1 < argc) {
             dumpPackName = argv[++i];
         } else if (std::strcmp(argument, "--map") == 0 && i + 2 < argc) {
@@ -100,6 +157,35 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Nothing on the command line means nobody typed one: ask instead.
+    if (argc == 1) {
+        const int choice = PromptForHarness();
+        if (choice == 2) {
+            return RunM35Mesh(bigDirectory, 0, 0.0f, 0, screenshotPath);
+        }
+        if (choice == 3) {
+            return RunM2Texture(bigDirectory, imagePackName, imageResourceId,
+                                screenshotPath);
+        }
+        if (choice == 4) {
+            return RunMapList(bigDirectory);
+        }
+        if (choice == 5) {
+            return RunMeshSurvey(bigDirectory);
+        }
+        if (choice == 6) {
+            return RunMoveSetSurvey(bigDirectory);
+        }
+        if (choice == 7) {
+            return RunLevelSurvey(bigDirectory);
+        }
+        if (choice == 8) {
+            return RunM1Resources(bigDirectory);
+        }
+        return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
+                        advanceMs);
+    }
+
     if (!dumpPackName.empty()) {
         return RunPackDump(bigDirectory, dumpPackName);
     }
@@ -108,6 +194,16 @@ int main(int argc, char **argv) {
     }
     if (surveyLevels) {
         return RunLevelSurvey(bigDirectory);
+    }
+    if (surveyMeshes) {
+        return RunMeshSurvey(bigDirectory);
+    }
+    if (surveyMoveSets) {
+        return RunMoveSetSurvey(bigDirectory);
+    }
+    if (runM35) {
+        return RunM35Mesh(bigDirectory, meshIndex, meshSpinDegrees,
+                          meshFrameIndex, screenshotPath);
     }
     if (runM1) {
         return RunM1Resources(bigDirectory);

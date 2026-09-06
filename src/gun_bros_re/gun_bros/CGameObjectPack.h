@@ -37,7 +37,12 @@ extern const char *const kObjectScriptCountsName;
  * _Big_tool/sections.md section 6.3.
  */
 enum class GameSection {
+    Armor = 3,
+    Bullet = 4,
+    Enemy = 6,
+    Gun = 7,
     Level = 8,
+    Player = 16,
     Prop = 20,
     TileLayer = 24,
     TileSet = 25,
@@ -84,6 +89,16 @@ public:
 
     /** Base handle of a section, for diagnostics. */
     std::uint32_t GetSectionBase(GameSection section) const;
+
+    /**
+     * How many handles a section spans: the distance to the next base.
+     *
+     * The counts resource only covers the first 28 sections, so this is the
+     * only way to size PNG, WAV and MESH. It counts placeholders too -- a
+     * section holding nothing still owns one empty resource -- so a caller
+     * has to be ready for an empty payload.
+     */
+    std::uint32_t GetSectionSpan(GameSection section) const;
 
 private:
     std::vector<std::uint32_t> m_sectionBases;

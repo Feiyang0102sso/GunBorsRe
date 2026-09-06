@@ -5,11 +5,13 @@
 
 #include "engine/platform/CWindow.h"
 
+#include "engine/CPNG.h"
 #include "engine/platform/GLLoader.h"
 
 #include <SDL3/SDL.h>
 
 #include <cstdio>
+#include <cstring>
 
 namespace {
 
@@ -23,6 +25,7 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_HOME:   return KeyCode::Home;
         case SDLK_T:      return KeyCode::T;
         case SDLK_P:      return KeyCode::P;
+        case SDLK_G:      return KeyCode::G;
         case SDLK_SPACE:  return KeyCode::Space;
         case SDLK_PERIOD: return KeyCode::Period;
         default:          return KeyCode::None;
@@ -163,6 +166,33 @@ KeyCode CWindow::TakeKeyPress() {
 
 void CWindow::Present() {
     SDL_GL_SwapWindow(m_window);
+}
+
+bool CWindow::SaveFrame(const std::string &path) const {
+    int width = 0;
+    int height = 0;
+    GetDrawableSize(width, height);
+
+    PNGImage frame;
+    frame.width = static_cast<std::uint32_t>(width);
+    frame.height = static_cast<std::uint32_t>(height);
+    frame.pixels.resize(static_cast<std::size_t>(width) * height * 4);
+
+    // GL hands rows back bottom-up; PNG wants them top-down.
+    std::vector<std::uint8_t> bottomUp(frame.pixels.size());
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, bottomUp.data());
+    if (!GLCheckErrors("glReadPixels")) {
+        return false;
+    }
+
+    const std::size_t rowBytes = static_cast<std::size_t>(width) * 4;
+    for (int y = 0; y < height; ++y) {
+        std::memcpy(&frame.pixels[static_cast<std::size_t>(y) * rowBytes],
+                    &bottomUp[static_cast<std::size_t>(height - 1 - y) * rowBytes],
+                    rowBytes);
+    }
+
+    return PNGEncode(frame, path);
 }
 
 void CWindow::GetDrawableSize(int &width, int &height) const {
