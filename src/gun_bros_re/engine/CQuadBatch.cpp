@@ -12,6 +12,19 @@ namespace {
 // Six vertices per quad: two triangles, since grouping rules out a strip.
 constexpr std::size_t kVerticesPerQuad = 6;
 
+/** Set the blend function a mode stands for. */
+void ApplyBlendMode(BlendMode blend) {
+    if (blend == BlendMode::Additive) {
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        return;
+    }
+    if (blend == BlendMode::AdditiveOpaque) {
+        glBlendFunc(GL_ONE, GL_ONE);
+        return;
+    }
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
 }  // namespace
 
 CQuadBatch::CQuadBatch()
@@ -73,6 +86,7 @@ void CQuadBatch::Destroy() {
     m_groupFirst.clear();
     m_groupCount.clear();
     m_groupTexture.clear();
+    m_groupBlend.clear();
 }
 
 void CQuadBatch::Begin() {
@@ -80,25 +94,33 @@ void CQuadBatch::Begin() {
     m_groupFirst.clear();
     m_groupCount.clear();
     m_groupTexture.clear();
+    m_groupBlend.clear();
 }
 
-CQuadBatch::Group &CQuadBatch::GroupFor(const CTexture &texture) {
+CQuadBatch::Group &CQuadBatch::GroupFor(const CTexture &texture, BlendMode blend) {
     const GLuint handle = texture.GetHandle();
-    for (std::size_t i = 0; i < m_groups.size(); ++i) {
-        if (m_groups[i].textureHandle == handle) {
-            return m_groups[i];
-        }
+
+    // Only the group still being filled can be extended. Reaching back into an
+    // earlier group with the same texture would draw this quad before quads
+    // that were added first, and sprites are stacked back to front -- a prop
+    // and the tile underneath it are on different atlases, so merging by
+    // texture puts the ground on top of the rock. Runs stay long anyway: a
+    // tile layer is one texture, and so is most of a sprite.
+    if (!m_groups.empty() && m_groups.back().textureHandle == handle &&
+        m_groups.back().blend == blend) {
+        return m_groups.back();
     }
 
     Group group;
     group.textureHandle = handle;
+    group.blend = blend;
     m_groups.push_back(group);
     return m_groups.back();
 }
 
 void CQuadBatch::AddQuad(const CTexture &texture, float x, float y, float width,
                          float height, const SourceRect &source, bool flipHorizontal,
-                         bool flipVertical) {
+                         bool flipVertical, BlendMode blend) {
     if (!texture.IsValid() || texture.GetWidth() == 0 || texture.GetHeight() == 0) {
         return;
     }
@@ -133,7 +155,7 @@ void CQuadBatch::AddQuad(const CTexture &texture, float x, float y, float width,
     const Vertex bottomLeft = {left, bottom, u0, v1};
     const Vertex bottomRight = {right, bottom, u1, v1};
 
-    Group &group = GroupFor(texture);
+    Group &group = GroupFor(texture, blend);
     group.vertices.push_back(topLeft);
     group.vertices.push_back(topRight);
     group.vertices.push_back(bottomLeft);
@@ -147,6 +169,7 @@ void CQuadBatch::Upload() {
     m_groupFirst.clear();
     m_groupCount.clear();
     m_groupTexture.clear();
+    m_groupBlend.clear();
 
     std::size_t totalVertices = 0;
     for (std::size_t i = 0; i < m_groups.size(); ++i) {
@@ -167,6 +190,7 @@ void CQuadBatch::Upload() {
         m_groupFirst.push_back(static_cast<GLint>(flattened.size()));
         m_groupCount.push_back(static_cast<GLsizei>(group.vertices.size()));
         m_groupTexture.push_back(group.textureHandle);
+        m_groupBlend.push_back(group.blend);
         flattened.insert(flattened.end(), group.vertices.begin(), group.vertices.end());
     }
 
@@ -195,6 +219,8 @@ void CQuadBatch::Draw(const CShaderProgram &program, const float *mvp) const {
 
     glBindVertexArray(m_vertexArray);
     for (std::size_t i = 0; i < m_groupFirst.size(); ++i) {
+        ApplyBlendMode(m_groupBlend[i]);
+
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_groupTexture[i]);
         glDrawArrays(GL_TRIANGLES, m_groupFirst[i], m_groupCount[i]);

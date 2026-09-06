@@ -76,6 +76,7 @@ gun_bro_re/
 │   │   │   └── platform/ ← SDL3 窗口 / GL 上下文 / GL 加载器
 │   │   │                   （原 platform/shared/cocoa 的角色）
 │   │   ├── gun_bros/     ← src/gunbros 保留的 ~160 个
+│   │   ├── sprite_glu/   ← src/spriteGlu3 的 3 个，与 gunbros 平级的独立子系统
 │   │   ├── milestones/   ← 每个里程碑一个验收台，main 保持薄
 │   │   └── shaders/      ← 7 个，从反编译里的 GLSL 原文改写为 GL 3.3
 │   └── third_party/      ← zlib（源码）/ SDL3（预编译）
@@ -185,6 +186,53 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 > **缩小查看时图块边缘有淡接缝**，是无 mipmap 的缩小走样，不是拼接错位——
 > 1:1 查看时干净。原版同样没有 mipmap，所以保持一致，没有加。
 
+#### M3.1 — 地图上的装饰物
+
+`CLayerObject` + `CProp::Template` + `spriteGlu3` 三件套，把 PROP 画到地形上。
+
+先补齐了 `CMap` 的图层解析：借 [`_Big_tool/binary template/big_assets/maps/map.bt`](_Big_tool/binary%20template/big_assets/maps/map.bt)
+（对 83 张地图验证过）拿到 PathLink / PathMesh 的布局，与反编译逐字段核对后写进
+`CMap.cpp`。之前遇到路径图层就停，藏在它们后面的对象层根本读不到——补齐后
+props 从 1624 涨到 1653。现在每张地图的所有图层都读到资源末字节，剩余 0 字节。
+
+寻址链五级：对象层 → PROP 段基址 + localIndex → `CGameSpriteGluRef`(packHash +
+archetype + action + anim) → archetype 资源 → anim → frame → sprite → spriteMap
+→ 包级 imageSlot 表 → archetype 的 rect 表 → 图集页 PNG。
+
+> **验收**：完整地图上出现石堆、管道、传送门、岩浆池。
+
+> 实测：22 张地图共 **1653 个 PROP，0 个解析失败，0 个精灵部件画不出**。
+> **pack7 的 5 张"空图"现在全都有内容了**，证实了上面的判断。
+>
+> 查看器把全部 22 张图排成**一条扁平列表**：左右键逐张走，走到一个包的末尾直接进下一个包；
+> 上下键整包跳。`--map` 只决定从哪张开始，不再是切包的唯一手段。
+> `--maps` 会把这条列表连同全局编号一起列出来。`T` / `P` 开关地形与装饰物。
+>
+> 顺带修了一个**潜伏的跨包寻址 bug**：图块集和图集原先拿"地图所在的包"去解析，
+> 把引用自带的 packHash 丢掉了。照 `CGunBros::GetGameObject` 的做法，
+> packHash 是地址的一部分——**先选包，再加段基址**。实测这 69 个引用目前碰巧都指向自己的包，
+> 所以画面没错；但 PROP 已经有 5 个跨到 pack1，同样的写法迟早会踩。
+> 现在所有引用统一走 `ReadSectionResource(packHash, section, ordinal)`。
+>
+> 三个细节照抄了原版：
+> - **三个绘制槽**。`CProp` 有主 / 前景 / 背景三个 `CSpritePlayer`，261 个模板里
+>   有 85 个**只填背景槽**——只画主槽会静默丢掉三分之一的布景。
+> - **绘制顺序**。`CRenderQueue::Draw` 是按 `(zOrderGroup, y)` 排一次序、
+>   然后整队走三遍（全体背景 → 全体主 → 全体前景），不是每个物件画完自己的三槽。
+>   一个物件的前景要压在**下一个**物件的主精灵上。
+> - **两级倒序**。`SetFrame` / `NextSprite` 从最后一个部件往前走，所以帧部件和
+>   精灵部件都是倒着画的。顺着画的话叠放关系会整体翻过来。
+>
+> `CQuadBatch` 因此改了两处：分组从"按纹理合并"改成"按纹理游程切分"
+> （合并会把后提交的四边形提前画，地面就盖到石头上了），以及每组带自己的混合模式
+> ——spriteMap 的第三个字节是混合标志，bit6/bit7 是加法混合，不做的话
+> 所有辉光贴图都带一圈黑框。
+>
+> **未做**：ENEMY（3D mesh）、PARTICLEEFFECT（粒子系统）、PLAYER（不可见标记），
+> 合计占物件总数的 7%。sprite 替换表和图元填充矩形也没做——
+> 这几个包的替换组数全是 0，图元只有 pack7 有 1 个。
+> 动画不播放，每个槽固定取第 0 帧（原版取随机帧，静态查看器要可复现）。
+
 ### M4 — 动得起来
 
 资源模板系统（`gameObject` / `gameObjectPack` / 各 `Template::Init`）+ `brother` + `moveSet` + 精灵动画 + `input`。
@@ -216,9 +264,9 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 |---|---|---|
 | ~~**体系外资源寻址未解**~~：已解。所谓"不在 Section 表内"的资源住在**聚合资源**里，handle bit29 标记，走 `CAggregateResource` | 已消除 | M1 实测：5659 个条目解析 5594，41 个空引用，21 个未解（仅两个 name key，疑为引擎元数据） |
 | **`gluScript` 脚本系统**（11 文件 + `CScriptInterpreter`） | 若逻辑大量走脚本则绕不开 | M4 前先探调用密度 |
-| **`spriteGlu3`** 只有 3 个文件但可能是关键 | `CGameSpriteGluRef` 是装饰物/特效的寻址入口；地图上的石堆、管道、传送门全走这条路，不画它们地图会明显偏空 | M3 只做了图块地形，PROP 单独一步：需要 `CLayerObject` + `CProp::Template` + SpriteGlu 五级间接 |
+| ~~**`spriteGlu3`** 只有 3 个文件但可能是关键~~：已解。`CGameSpriteGluRef` 走 packHash + archetype，不带资源 ID | 已消除 | M3.1 实测：22 张图 1653 个 PROP 全部画出，0 失败。特效贴图那批"体系外资源"正是走这条路 |
 | **3D mesh 格式未完全解出**（Section 31） | 影响角色模型 | 推到 M5 之后，先用精灵占位 |
-| **寻路图层格式未解**（`CLayerPathLink` type 5 / `CLayerPathMesh` type 6） | 解析到它们就无法继续，其后的图层读不到 | 不影响地形（图块层都在它们之前）；M4 做 AI 寻路时再啃 |
+| ~~**寻路图层格式未解**（`CLayerPathLink` type 5 / `CLayerPathMesh` type 6）~~：已解，见 `_Big_tool` 的 `map.bt` | 已消除 | M3.1 补齐了两者的解析（只跳过不保留）。之前遇到它们就停，藏在后面的对象层读不到 |
 
 ---
 
@@ -228,5 +276,6 @@ shader 移植改动：`attribute`→`in`、`varying`→`out`/`in`、`gl_FragColo
 - [x] M1 读得到资源 —— 2026-09-05 完成
 - [x] M2 看得到贴图 —— 2026-09-05 完成
 - [x] M3 画得出地图 —— 2026-09-05 完成
+- [x] M3.1 地图上的装饰物 —— 2026-09-05 完成
 - [ ] M4 动得起来
 - [ ] M5 打得起来

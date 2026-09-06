@@ -1,6 +1,6 @@
 /**
  * @file M3Map.h
- * @brief M3 milestone harness: a whole level's terrain, on screen.
+ * @brief M3 milestone harness: a whole level, terrain and scenery, on screen.
  */
 
 #ifndef GUN_BROS_RE_MILESTONES_M3MAP_H
@@ -10,7 +10,8 @@
 #include <string>
 
 /**
- * Assemble one map out of its tile layers and draw it, pannable with the mouse.
+ * Assemble one map out of its tile and object layers and draw it, pannable
+ * with the mouse.
  *
  * @param bigDirectory   Directory holding the .big files.
  * @param packShortName  Pack the map lives in, e.g. "pack2".

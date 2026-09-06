@@ -1,8 +1,8 @@
 /**
  * @file M3Map.cpp
- * @brief M3 milestone harness: a whole level's terrain, on screen.
+ * @brief M3 milestone harness: a whole level, terrain and scenery, on screen.
  *
- * The chain this exercises:
+ * Two chains meet here. The terrain one:
  *
  *   ___GAME_TOC_KEYSET -> 33 section bases          (CGameObjectPack)
  *   TILELAYER base + n -> map resource              (CMap)
@@ -10,9 +10,17 @@
  *   tileset.images[i]  -> PNG base + assetId        (CTexture)
  *   layer cells        -> quads                     (CQuadBatch)
  *
- * Terrain only. The rocks, pipes and portals are PROP instances drawn through
- * SpriteGlu, which is a separate subsystem and a separate step; without them a
- * map looks emptier than the game does.
+ * and the scenery one, which is where the rocks, pipes and portals live:
+ *
+ *   object layer       -> placed objects            (CLayerObject)
+ *   PROP base + local  -> prop template             (CProp::Template)
+ *   template.sprite    -> pack + archetype          (CGameSpriteGluRef)
+ *   archetype          -> frames and atlas pages    (CSpriteGluArchetype)
+ *   frame              -> quads                     (CSpriteIterator)
+ *
+ * Objects other than props are read but not drawn: enemies are 3D meshes,
+ * particle effects need the particle system, and player tags are invisible.
+ * Between them they are seven per cent of what a map places.
  */
 
 #include "milestones/M3Map.h"
@@ -26,13 +34,19 @@
 #include "engine/platform/CWindow.h"
 #include "engine/platform/GLLoader.h"
 #include "gun_bros/CGameObjectPack.h"
+#include "gun_bros/CLayerObject.h"
 #include "gun_bros/CLayerTile.h"
 #include "gun_bros/CMap.h"
+#include "gun_bros/CProp.h"
 #include "gun_bros/CResTOCManager.h"
 #include "gun_bros/TileSet.h"
+#include "sprite_glu/CSpriteGlu.h"
+#include "sprite_glu/CSpriteIterator.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -54,43 +68,172 @@ constexpr float kMaxZoom = 4.0f;
 // Leave a little room around a fitted map so its edges are visible.
 constexpr float kFitMargin = 1.05f;
 
+// Which animation step of a prop to show. The original picks a random frame
+// per instance so a field of identical rocks does not pulse in unison; a
+// viewer wants the same picture every run, so it always takes the first.
+// Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:124916 (Utility::Random in Bind)
+constexpr std::uint32_t kStaticAnimationStep = 0;
+
+/**
+ * Z-order groups, from CProp::GetZOrderGroup.
+ * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:123406
+ *
+ * The render queue sorts on these before it sorts on y, so a prop that only
+ * has a background sprite sits behind every prop that has a main one, however
+ * far down the screen it is. The map is group 0 with a z of -100000, which is
+ * why the tiles simply go in first rather than being sorted with the props.
+ * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:92795 (CMap::GetZOrder)
+ */
+constexpr int kZGroupBackgroundOnly = 0;
+constexpr int kZGroupNormal = 3;
+constexpr int kZGroupForegroundOnly = 6;
+
+/**
+ * One prop template's three sprite slots, already expanded to quads.
+ *
+ * Shared between instances: a map places a hundred props from a couple of
+ * dozen templates, and expanding the same frame a hundred times would mean a
+ * hundred archive reads for nothing.
+ */
+struct PropSprite {
+    std::vector<SpriteQuad> background;
+    std::vector<SpriteQuad> main;
+    std::vector<SpriteQuad> foreground;
+    int zOrderGroup;
+
+    // What the walk could not draw, kept so the load can report a total
+    // rather than a line per template.
+    std::uint32_t skippedParts;
+    std::uint32_t unsupportedTransforms;
+};
+
+/** One prop standing on the map. */
+struct PlacedProp {
+    float x;
+    float y;
+    const PropSprite *sprite;
+};
+
+/** The per-pack tables a prop needs, built the first time that pack is used. */
+struct PackResources {
+    CGameObjectPack objectPack;
+    CSpriteGlu spriteGlu;
+    bool objectPackReady;
+    bool spriteGluReady;
+
+    PackResources() : objectPackReady(false), spriteGluReady(false) {}
+};
+
 /** Everything one map needs to draw, held together for the render loop. */
 struct LoadedMap {
     CMap map;
     TileSet tileSet;
     std::vector<std::unique_ptr<CTexture>> textures;
+
+    // Props, and everything they hang off. The caches own the atlas pages, so
+    // they have to outlive the props that point into them -- replacing a
+    // LoadedMap wholesale is what keeps that true.
+    std::map<int, std::unique_ptr<PackResources>> packs;
+    std::map<std::uint64_t, PropSprite> propSprites;
+    std::vector<PlacedProp> props;
 };
 
-/** Fetch a resource by handle and run a parser over it. */
-bool ReadResource(CResPackTOC &pack, std::uint32_t handle,
-                  std::vector<std::uint8_t> &payload) {
-    if (handle == 0) {
-        std::printf("[m3] null handle\n");
+/**
+ * The section bases and SpriteGlu tables of one pack, built on first use.
+ *
+ * Keyed by pack index rather than assumed, because references cross packs:
+ * pack2's maps borrow five props from pack1.
+ * Returns null when the pack cannot be addressed at all.
+ */
+PackResources *GetPackResources(CResTOCManager &tocManager, LoadedMap &loaded,
+                                int packIndex) {
+    std::map<int, std::unique_ptr<PackResources>>::iterator found =
+        loaded.packs.find(packIndex);
+    if (found != loaded.packs.end()) {
+        return found->second.get();
+    }
+
+    CResPackTOC *pack = tocManager.GetPack(packIndex);
+    if (pack == nullptr) {
+        return nullptr;
+    }
+
+    std::unique_ptr<PackResources> resources(new PackResources());
+    resources->objectPackReady = resources->objectPack.Init(*pack);
+    resources->spriteGluReady = resources->spriteGlu.Init(*pack);
+
+    PackResources *result = resources.get();
+    loaded.packs[packIndex] = std::move(resources);
+    return result;
+}
+
+/**
+ * Read the resource a (pack hash, section, ordinal) triple names.
+ *
+ * Every reference in the data is one of these, and the pack hash is part of
+ * the address -- CGunBros::GetGameObject picks the pack first and only then
+ * adds the section base. Resolving an ordinal against the pack that happened
+ * to hold the reference works right up until something points elsewhere, and
+ * props already do.
+ * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:78497
+ */
+bool ReadSectionResource(CResTOCManager &tocManager, LoadedMap &loaded,
+                         std::uint32_t packHash, GameSection section,
+                         std::uint32_t localIndex,
+                         std::vector<std::uint8_t> &payload) {
+    const int packIndex = tocManager.GetPackIndexFromHash(packHash);
+    PackResources *resources = GetPackResources(tocManager, loaded, packIndex);
+    if (resources == nullptr || !resources->objectPackReady) {
+        std::printf("[m3] pack %08X has no section table\n", packHash);
         return false;
     }
-    if (!pack.GetResource(handle, payload)) {
+
+    const std::uint32_t handle = resources->objectPack.GetHandle(section, localIndex);
+    if (handle == 0) {
+        std::printf("[m3] pack %08X section %u has no base\n", packHash,
+                    static_cast<unsigned>(section));
+        return false;
+    }
+    if (!tocManager.GetPack(packIndex)->GetResource(handle, payload)) {
         std::printf("[m3] handle 0x%08X unreadable\n", handle);
         return false;
     }
+
     return true;
 }
 
 /**
  * Load a map, its tile set and the atlases the tile set names.
+ *
+ * @param mapPackIndex Which pack the map itself lives in. Everything it
+ *                     references is addressed by its own pack hash, not by
+ *                     this one.
  */
-bool LoadMap(CResPackTOC &pack, const CGameObjectPack &objectPack,
-             std::uint32_t mapIndex, LoadedMap &out) {
+bool LoadMap(CResTOCManager &tocManager, int mapPackIndex, std::uint32_t mapIndex,
+             LoadedMap &out) {
+    CResPackTOC *mapPack = tocManager.GetPack(mapPackIndex);
+    if (mapPack == nullptr) {
+        std::printf("[m3] no pack at index %d\n", mapPackIndex);
+        return false;
+    }
+
+    PackResources *resources = GetPackResources(tocManager, out, mapPackIndex);
+    if (resources == nullptr || !resources->objectPackReady) {
+        return false;
+    }
+
     // --- the map ---
-    const std::uint32_t mapCount = objectPack.GetObjectCount(GameSection::TileLayer);
+    const std::uint32_t mapCount =
+        resources->objectPack.GetObjectCount(GameSection::TileLayer);
     if (mapIndex >= mapCount) {
         std::printf("[m3] %s has %u maps; %u is out of range\n",
-                    pack.GetShortName().c_str(), mapCount, mapIndex);
+                    mapPack->GetShortName().c_str(), mapCount, mapIndex);
         return false;
     }
 
     std::vector<std::uint8_t> payload;
-    const std::uint32_t mapHandle = objectPack.GetHandle(GameSection::TileLayer, mapIndex);
-    if (!ReadResource(pack, mapHandle, payload)) {
+    if (!ReadSectionResource(tocManager, out, mapPack->GetPackHash(),
+                             GameSection::TileLayer, mapIndex, payload)) {
         return false;
     }
 
@@ -99,11 +242,11 @@ bool LoadMap(CResPackTOC &pack, const CGameObjectPack &objectPack,
         return false;
     }
 
-    std::printf("[m3] map %u: %ux%u tiles, %u tile layers",
+    std::printf("[m3] map %u: %ux%u tiles, %u tile layers, %u object layers",
                 mapIndex, out.map.GetCanvasWidth(), out.map.GetCanvasHeight(),
-                out.map.GetTileLayerCount());
+                out.map.GetTileLayerCount(), out.map.GetObjectLayerCount());
     if (out.map.GetUnparsedLayerCount() > 0) {
-        std::printf(", %u further layers not parsed (collision/objects/paths)",
+        std::printf(", %u layers abandoned at an unknown type",
                     out.map.GetUnparsedLayerCount());
     }
     std::printf("\n");
@@ -115,9 +258,8 @@ bool LoadMap(CResPackTOC &pack, const CGameObjectPack &objectPack,
         return false;
     }
 
-    const std::uint32_t tileSetHandle =
-        objectPack.GetHandle(GameSection::TileSet, tileSetRef.localIndex);
-    if (!ReadResource(pack, tileSetHandle, payload)) {
+    if (!ReadSectionResource(tocManager, out, tileSetRef.packHash,
+                             GameSection::TileSet, tileSetRef.localIndex, payload)) {
         return false;
     }
 
@@ -134,10 +276,9 @@ bool LoadMap(CResPackTOC &pack, const CGameObjectPack &objectPack,
     // decides they index the PNG section. The data does not say so.
     const std::vector<CGameAssetRef> &images = out.tileSet.GetImages();
     for (std::size_t i = 0; i < images.size(); ++i) {
-        const std::uint32_t imageHandle =
-            objectPack.GetHandle(GameSection::Png,
-                                 static_cast<std::uint32_t>(images[i].assetId));
-        if (!ReadResource(pack, imageHandle, payload)) {
+        if (!ReadSectionResource(tocManager, out, images[i].packHash, GameSection::Png,
+                                 static_cast<std::uint32_t>(images[i].assetId),
+                                 payload)) {
             return false;
         }
 
@@ -159,13 +300,182 @@ bool LoadMap(CResPackTOC &pack, const CGameObjectPack &objectPack,
 }
 
 /**
- * Turn the tile layers into quads.
+ * Expand one prop template into the quads its three slots draw.
  *
- * Walks the canvas rather than each layer's own extent, so a layer smaller
- * than the canvas repeats -- CLayerTile::GetCell does the wrapping. Layers are
- * emitted bottom first, matching CMap::DrawBackground's order.
+ * This is CProp::Bind's job: it resolves the sprite reference to an archetype
+ * and points three CSpritePlayers at three animations of it. The z-order group
+ * falls out of which of the three ended up with an animation, exactly as
+ * CProp::GetZOrderGroup computes it.
  */
-void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch) {
+bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
+                     std::uint32_t propPackHash, std::uint8_t localIndex,
+                     PropSprite &out) {
+    std::vector<std::uint8_t> payload;
+    if (!ReadSectionResource(tocManager, loaded, propPackHash, GameSection::Prop,
+                             localIndex, payload)) {
+        return false;
+    }
+
+    CArrayInputStream stream(payload);
+    CProp::Template propTemplate;
+    if (!propTemplate.Init(stream)) {
+        return false;
+    }
+
+    // The sprite lives in whichever pack the reference names, which need not
+    // be the one the template came from.
+    const CGameSpriteGluRef &spriteRef = propTemplate.GetSpriteRef();
+    const int gluPackIndex = tocManager.GetPackIndexFromHash(spriteRef.packHash);
+    PackResources *gluPack = GetPackResources(tocManager, loaded, gluPackIndex);
+    if (gluPack == nullptr || !gluPack->spriteGluReady) {
+        return false;
+    }
+
+    const CSpriteGluArchetype *archetype =
+        gluPack->spriteGlu.GetArchetype(spriteRef.archetype);
+    if (archetype == nullptr) {
+        return false;
+    }
+
+    CSpriteIterator iterator(gluPack->spriteGlu, *archetype);
+    iterator.Expand(propTemplate.GetBackgroundAnimation(), kStaticAnimationStep,
+                    out.background);
+    iterator.Expand(propTemplate.GetMainAnimation(), kStaticAnimationStep, out.main);
+    iterator.Expand(propTemplate.GetForegroundAnimation(), kStaticAnimationStep,
+                    out.foreground);
+
+    out.skippedParts = iterator.GetSkippedPartCount();
+    out.unsupportedTransforms = iterator.GetUnsupportedTransformCount();
+
+    if (!out.main.empty()) {
+        out.zOrderGroup = kZGroupNormal;
+    } else if (!out.background.empty()) {
+        out.zOrderGroup = kZGroupBackgroundOnly;
+    } else if (!out.foreground.empty()) {
+        out.zOrderGroup = kZGroupForegroundOnly;
+    } else {
+        out.zOrderGroup = kZGroupNormal;
+    }
+
+    return true;
+}
+
+/** Order props the way CRenderQueue does: by group, then down the screen. */
+bool PropDrawsBefore(const PlacedProp &left, const PlacedProp &right) {
+    if (left.sprite->zOrderGroup != right.sprite->zOrderGroup) {
+        return left.sprite->zOrderGroup < right.sprite->zOrderGroup;
+    }
+    return left.y < right.y;
+}
+
+/**
+ * Turn the map's object layers into drawable props.
+ *
+ * Objects of other types are counted and left alone. Nothing here fails the
+ * load: a prop whose template or sprite will not resolve is dropped and
+ * reported, because one bad rock should not cost the whole level.
+ */
+void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
+    loaded.props.clear();
+    loaded.propSprites.clear();
+
+    std::uint32_t placed = 0;
+    std::uint32_t skipped = 0;
+    std::uint32_t otherTypes = 0;
+
+    for (std::uint32_t layerIndex = 0; layerIndex < loaded.map.GetObjectLayerCount();
+         ++layerIndex) {
+        const std::vector<PlacedObject> &objects =
+            loaded.map.GetObjectLayer(layerIndex).GetObjects();
+
+        for (std::size_t i = 0; i < objects.size(); ++i) {
+            const PlacedObject &object = objects[i];
+            if (object.objectType != static_cast<std::uint8_t>(PlacedObjectType::Prop)) {
+                otherTypes++;
+                continue;
+            }
+
+            // One template serves many instances, so its quads are built once.
+            const std::uint64_t key =
+                (static_cast<std::uint64_t>(object.packHash) << 8) | object.localIndex;
+
+            std::map<std::uint64_t, PropSprite>::iterator found =
+                loaded.propSprites.find(key);
+            if (found == loaded.propSprites.end()) {
+                PropSprite sprite;
+                sprite.zOrderGroup = kZGroupNormal;
+                sprite.skippedParts = 0;
+                sprite.unsupportedTransforms = 0;
+                if (!BuildPropSprite(tocManager, loaded, object.packHash,
+                                     object.localIndex, sprite)) {
+                    std::printf("[m3]   prop %08X/%u will not resolve\n",
+                                object.packHash, object.localIndex);
+                    skipped++;
+                    continue;
+                }
+                found = loaded.propSprites.insert(std::make_pair(key, sprite)).first;
+            }
+
+            PlacedProp prop;
+            prop.x = static_cast<float>(object.x);
+            prop.y = static_cast<float>(object.y);
+            prop.sprite = &found->second;
+            loaded.props.push_back(prop);
+            placed++;
+        }
+    }
+
+    std::stable_sort(loaded.props.begin(), loaded.props.end(), PropDrawsBefore);
+
+    std::uint32_t skippedParts = 0;
+    std::uint32_t unsupportedTransforms = 0;
+    std::map<std::uint64_t, PropSprite>::const_iterator sprite;
+    for (sprite = loaded.propSprites.begin(); sprite != loaded.propSprites.end();
+         ++sprite) {
+        skippedParts += sprite->second.skippedParts;
+        unsupportedTransforms += sprite->second.unsupportedTransforms;
+    }
+
+    std::printf("[m3] %u props from %zu templates (%u unresolved, "
+                "%u non-prop objects ignored)\n",
+                placed, loaded.propSprites.size(), skipped, otherTypes);
+    if (skippedParts > 0 || unsupportedTransforms > 0) {
+        std::printf("[m3]   %u sprite parts undrawable, "
+                    "%u drawn without a rotating transform\n",
+                    skippedParts, unsupportedTransforms);
+    }
+}
+
+/** Emit one prop's slot, positioned at the prop and offset by each quad. */
+void AddSpriteQuads(const PlacedProp &prop, const std::vector<SpriteQuad> &quads,
+                    CQuadBatch &batch) {
+    for (std::size_t i = 0; i < quads.size(); ++i) {
+        const SpriteQuad &quad = quads[i];
+
+        batch.AddQuad(*quad.page, prop.x + static_cast<float>(quad.offsetX),
+                      prop.y + static_cast<float>(quad.offsetY),
+                      static_cast<float>(quad.source.width),
+                      static_cast<float>(quad.source.height), quad.source,
+                      quad.flipHorizontal, quad.flipVertical, quad.blend);
+    }
+}
+
+/**
+ * Turn the tile layers and the props into quads.
+ *
+ * Tiles walk the canvas rather than each layer's own extent, so a layer
+ * smaller than the canvas repeats -- CLayerTile::GetCell does the wrapping.
+ * Layers are emitted bottom first, matching CMap::DrawBackground's order.
+ *
+ * Then the props, in the order CRenderQueue::Draw produces: the queue is
+ * sorted once and walked three times over, background slot for everything
+ * first, then main, then foreground. That is why this cannot just draw each
+ * prop's three slots together -- a prop's foreground has to land on top of the
+ * NEXT prop's main sprite, not just its own.
+ * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:145235
+ */
+void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
+                   bool showProps) {
     const CMap &map = loaded.map;
     const TileSet &tileSet = loaded.tileSet;
     const std::vector<TileRect> &tiles = tileSet.GetTiles();
@@ -174,48 +484,69 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch) {
     batch.Begin();
 
     std::uint32_t skipped = 0;
-    for (std::uint32_t layerIndex = 0; layerIndex < map.GetTileLayerCount(); ++layerIndex) {
-        const CLayerTile &layer = map.GetTileLayer(layerIndex);
 
-        for (std::uint32_t row = 0; row < map.GetCanvasHeight(); ++row) {
-            for (std::uint32_t column = 0; column < map.GetCanvasWidth(); ++column) {
-                const TileCell &cell = layer.GetCell(column, row);
+    if (showTiles) {
+        for (std::uint32_t layerIndex = 0; layerIndex < map.GetTileLayerCount();
+             ++layerIndex) {
+            const CLayerTile &layer = map.GetTileLayer(layerIndex);
 
-                // 255 means nothing here; the layer below shows through.
-                if (cell.tileId == kEmptyTileId) {
-                    skipped++;
-                    continue;
+            for (std::uint32_t row = 0; row < map.GetCanvasHeight(); ++row) {
+                for (std::uint32_t column = 0; column < map.GetCanvasWidth(); ++column) {
+                    const TileCell &cell = layer.GetCell(column, row);
+
+                    // 255 means nothing here; the layer below shows through.
+                    if (cell.tileId == kEmptyTileId) {
+                        skipped++;
+                        continue;
+                    }
+                    if (cell.tileId >= tiles.size()) {
+                        skipped++;
+                        continue;
+                    }
+
+                    const TileRect &tile = tiles[cell.tileId];
+                    if (tile.imageIndex >= loaded.textures.size()) {
+                        skipped++;
+                        continue;
+                    }
+
+                    SourceRect source;
+                    source.x = tile.x;
+                    source.y = tile.y;
+                    source.width = tile.width;
+                    source.height = tile.height;
+
+                    batch.AddQuad(*loaded.textures[tile.imageIndex],
+                                  static_cast<float>(column) * drawSize,
+                                  static_cast<float>(row) * drawSize,
+                                  drawSize, drawSize, source,
+                                  (cell.flags & kTileFlagFlipHorizontal) != 0,
+                                  (cell.flags & kTileFlagFlipVertical) != 0,
+                                  BlendMode::Alpha);
                 }
-                if (cell.tileId >= tiles.size()) {
-                    skipped++;
-                    continue;
-                }
-
-                const TileRect &tile = tiles[cell.tileId];
-                if (tile.imageIndex >= loaded.textures.size()) {
-                    skipped++;
-                    continue;
-                }
-
-                SourceRect source;
-                source.x = tile.x;
-                source.y = tile.y;
-                source.width = tile.width;
-                source.height = tile.height;
-
-                batch.AddQuad(*loaded.textures[tile.imageIndex],
-                              static_cast<float>(column) * drawSize,
-                              static_cast<float>(row) * drawSize,
-                              drawSize, drawSize, source,
-                              (cell.flags & kTileFlagFlipHorizontal) != 0,
-                              (cell.flags & kTileFlagFlipVertical) != 0);
             }
         }
     }
 
+    const std::uint32_t tileQuads = batch.GetQuadCount();
+
+    if (showProps) {
+        for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+            AddSpriteQuads(loaded.props[i], loaded.props[i].sprite->background, batch);
+        }
+        for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+            AddSpriteQuads(loaded.props[i], loaded.props[i].sprite->main, batch);
+        }
+        for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+            AddSpriteQuads(loaded.props[i], loaded.props[i].sprite->foreground, batch);
+        }
+    }
+
     batch.Upload();
-    std::printf("[m3] %u quads in %u draw calls (%u cells empty or unusable)\n",
-                batch.GetQuadCount(), batch.GetGroupCount(), skipped);
+    std::printf("[m3] %u tile quads + %u prop quads in %u draw calls "
+                "(%u cells empty or unusable)\n",
+                tileQuads, batch.GetQuadCount() - tileQuads, batch.GetGroupCount(),
+                skipped);
 }
 
 /** Read the current frame back and save it, flipping to top-down. */
@@ -240,34 +571,86 @@ bool SaveFrame(int width, int height, const std::string &path) {
     return PNGEncode(frame, path);
 }
 
-/** One pack that actually contains maps, with its addressing ready to use. */
-struct CatalogEntry {
-    CResPackTOC *pack;
-    CGameObjectPack objectPack;
-    std::uint32_t mapCount;
+/** One map, wherever it lives. */
+struct CatalogMap {
+    int packIndex;
+    std::string packName;
+    std::uint32_t mapIndex;  // ordinal within its own pack's TILELAYER section
 };
 
 /**
- * Every pack holding at least one map, so the viewer can walk between them
- * without reopening the archives.
+ * Every map in every pack, as one flat list.
+ *
+ * Flat rather than grouped because a pack boundary is not something the viewer
+ * should make anyone think about -- the packs are a packaging detail, and a map
+ * reaches across them for its props anyway. Walking the list runs off the end
+ * of one pack straight into the next.
  */
-std::vector<CatalogEntry> BuildCatalog(CResTOCManager &tocManager) {
-    std::vector<CatalogEntry> catalog;
+std::vector<CatalogMap> BuildCatalog(CResTOCManager &tocManager) {
+    std::vector<CatalogMap> catalog;
 
     for (std::uint32_t i = 0; i < tocManager.GetPackCount(); ++i) {
-        CatalogEntry entry;
-        entry.pack = tocManager.GetPack(static_cast<int>(i));
-        if (entry.pack == nullptr || !entry.objectPack.Init(*entry.pack)) {
+        CResPackTOC *pack = tocManager.GetPack(static_cast<int>(i));
+        if (pack == nullptr) {
             continue;
         }
-        entry.mapCount = entry.objectPack.GetObjectCount(GameSection::TileLayer);
-        if (entry.mapCount == 0) {
+
+        CGameObjectPack objectPack;
+        if (!objectPack.Init(*pack)) {
             continue;
         }
-        catalog.push_back(entry);
+
+        const std::uint32_t mapCount =
+            objectPack.GetObjectCount(GameSection::TileLayer);
+        for (std::uint32_t m = 0; m < mapCount; ++m) {
+            CatalogMap entry;
+            entry.packIndex = static_cast<int>(i);
+            entry.packName = pack->GetShortName();
+            entry.mapIndex = m;
+            catalog.push_back(entry);
+        }
     }
 
     return catalog;
+}
+
+/** Slot of the first map of the pack `slot` belongs to. */
+std::size_t FirstMapOfPack(const std::vector<CatalogMap> &catalog, std::size_t slot) {
+    std::size_t first = slot;
+    while (first > 0 && catalog[first - 1].packIndex == catalog[slot].packIndex) {
+        first--;
+    }
+    return first;
+}
+
+/**
+ * Slot of the first map of the next pack, wrapping round the end.
+ *
+ * Left and right already cross pack boundaries one map at a time; this is the
+ * shortcut for skipping a whole pack, which matters when pack2 alone holds
+ * nine maps.
+ */
+std::size_t NextPackSlot(const std::vector<CatalogMap> &catalog, std::size_t slot) {
+    const int currentPack = catalog[slot].packIndex;
+
+    for (std::size_t step = 1; step <= catalog.size(); ++step) {
+        const std::size_t candidate = (slot + step) % catalog.size();
+        if (catalog[candidate].packIndex != currentPack) {
+            return FirstMapOfPack(catalog, candidate);
+        }
+    }
+    return slot;  // only one pack has maps
+}
+
+/** Slot of the first map of the previous pack, wrapping round the start. */
+std::size_t PreviousPackSlot(const std::vector<CatalogMap> &catalog,
+                             std::size_t slot) {
+    const std::size_t first = FirstMapOfPack(catalog, slot);
+
+    // The map before this pack's first belongs to the previous pack; back up
+    // from there to that pack's own first.
+    const std::size_t previous = (first + catalog.size() - 1) % catalog.size();
+    return FirstMapOfPack(catalog, previous);
 }
 
 /** The camera state the viewer manipulates. */
@@ -346,12 +729,21 @@ int RunMapList(const std::string &bigDirectory) {
                     objectPack.GetObjectCount(GameSection::TileSet),
                     objectPack.GetObjectCount(GameSection::Level));
     }
+
+    // The flat order the viewer's left and right keys walk, so a map can be
+    // named by one number instead of a pack and an ordinal.
+    const std::vector<CatalogMap> catalog = BuildCatalog(tocManager);
+    std::printf("\nviewer order (%zu maps):\n", catalog.size());
+    for (std::size_t i = 0; i < catalog.size(); ++i) {
+        std::printf("  %2zu  %-8s map %u\n", i + 1, catalog[i].packName.c_str(),
+                    catalog[i].mapIndex);
+    }
     return 0;
 }
 
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath) {
-    std::printf("=== M3: a level's terrain, on screen ===\n\n");
+    std::printf("=== M3: a level, terrain and scenery, on screen ===\n\n");
 
     // --- resources, before any GL exists ---
     CResTOCManager tocManager;
@@ -359,29 +751,34 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         return 1;
     }
 
-    std::vector<CatalogEntry> catalog = BuildCatalog(tocManager);
+    std::vector<CatalogMap> catalog = BuildCatalog(tocManager);
     if (catalog.empty()) {
         std::printf("[m3] no pack contains any maps\n");
         return 1;
     }
 
-    // Start on whichever pack was asked for.
-    std::size_t packSlot = 0;
+    // --map only picks where to start now; the whole catalogue is reachable
+    // from the keyboard.
+    std::size_t slot = 0;
     for (std::size_t i = 0; i < catalog.size(); ++i) {
-        if (catalog[i].pack->GetShortName() == packShortName) {
-            packSlot = i;
-            break;
+        if (catalog[i].packName != packShortName) {
+            continue;
+        }
+        slot = i;
+        if (catalog[i].mapIndex == mapIndex) {
+            break;  // exact match; otherwise the pack's first map stands
         }
     }
-    std::uint32_t currentMap = mapIndex;
-    if (currentMap >= catalog[packSlot].mapCount) {
-        currentMap = 0;
-    }
 
-    std::printf("[m3] %zu packs with maps:", catalog.size());
+    std::printf("[m3] %zu maps across the archives:", catalog.size());
     for (std::size_t i = 0; i < catalog.size(); ++i) {
-        std::printf(" %s(%u)", catalog[i].pack->GetShortName().c_str(),
-                    catalog[i].mapCount);
+        if (i == 0 || catalog[i].packIndex != catalog[i - 1].packIndex) {
+            std::printf(" %s(", catalog[i].packName.c_str());
+        }
+        std::printf("%u", catalog[i].mapIndex);
+        const bool lastOfPack = (i + 1 == catalog.size()) ||
+                                (catalog[i + 1].packIndex != catalog[i].packIndex);
+        std::printf("%s", lastOfPack ? ")" : ",");
     }
     std::printf("\n");
 
@@ -405,19 +802,32 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     int drawableHeight = 0;
     window.GetDrawableSize(drawableWidth, drawableHeight);
 
+    std::printf("\n[m3] --- %s map %u (%zu of %zu) ---\n",
+                catalog[slot].packName.c_str(), catalog[slot].mapIndex, slot + 1,
+                catalog.size());
+
     LoadedMap loaded;
-    if (!LoadMap(*catalog[packSlot].pack, catalog[packSlot].objectPack,
-                 currentMap, loaded)) {
+    if (!LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
+                 loaded)) {
         return 1;
     }
-    BuildGeometry(loaded, batch);
+    LoadProps(tocManager, loaded);
+
+    // Either layer can be hidden, which is how "is that rock in the right
+    // place or is the ground wrong?" gets answered without a debugger.
+    bool showTiles = true;
+    bool showProps = true;
+
+    BuildGeometry(loaded, batch, showTiles, showProps);
     Camera camera = FitCamera(loaded, drawableWidth, drawableHeight);
 
+    // The factors themselves are the batch's business now: glows and fire are
+    // additive, everything else is straight alpha.
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    std::printf("\n[m3] left/right: map, up/down: pack, Home: refit, "
-                "drag: pan, wheel: zoom, Esc: quit\n");
+    std::printf("\n[m3] left/right: map (crosses packs), up/down: pack, "
+                "Home: refit, T: tiles, P: props, drag: pan, wheel: zoom, "
+                "Esc: quit\n");
 
     bool reportedFirstFrame = false;
     while (window.PumpEvents()) {
@@ -426,23 +836,28 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         // --- switching maps and packs ---
         bool reload = false;
         bool refit = false;
+        bool rebuild = false;
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
              key = window.TakeKeyPress()) {
-            const std::uint32_t mapCount = catalog[packSlot].mapCount;
-
-            if (key == KeyCode::Right) {
-                currentMap = (currentMap + 1) % mapCount;
+            if (key == KeyCode::T) {
+                showTiles = !showTiles;
+                rebuild = true;
+            } else if (key == KeyCode::P) {
+                showProps = !showProps;
+                rebuild = true;
+            } else if (key == KeyCode::Right) {
+                // One step through the flat list, so the last map of a pack is
+                // followed by the first map of the next.
+                slot = (slot + 1) % catalog.size();
                 reload = true;
             } else if (key == KeyCode::Left) {
-                currentMap = (currentMap + mapCount - 1) % mapCount;
+                slot = (slot + catalog.size() - 1) % catalog.size();
                 reload = true;
             } else if (key == KeyCode::Down) {
-                packSlot = (packSlot + 1) % catalog.size();
-                currentMap = 0;
+                slot = NextPackSlot(catalog, slot);
                 reload = true;
             } else if (key == KeyCode::Up) {
-                packSlot = (packSlot + catalog.size() - 1) % catalog.size();
-                currentMap = 0;
+                slot = PreviousPackSlot(catalog, slot);
                 reload = true;
             } else if (key == KeyCode::Home) {
                 refit = true;
@@ -450,21 +865,27 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         }
 
         if (reload) {
-            std::printf("\n[m3] --- %s map %u ---\n",
-                        catalog[packSlot].pack->GetShortName().c_str(), currentMap);
+            std::printf("\n[m3] --- %s map %u (%zu of %zu) ---\n",
+                        catalog[slot].packName.c_str(), catalog[slot].mapIndex,
+                        slot + 1, catalog.size());
 
-            // Replace wholesale: the old textures go with the old LoadedMap.
+            // Replace wholesale: the old textures, including every atlas page
+            // the props point at, go with the old LoadedMap.
             LoadedMap replacement;
-            if (LoadMap(*catalog[packSlot].pack, catalog[packSlot].objectPack,
-                        currentMap, replacement)) {
+            if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
+                        replacement)) {
+                LoadProps(tocManager, replacement);
                 loaded = std::move(replacement);
-                BuildGeometry(loaded, batch);
+                rebuild = true;
                 refit = true;
             } else {
                 // A map that will not load leaves the previous one on screen
                 // rather than a blank window.
                 std::printf("[m3] staying on the previous map\n");
             }
+        }
+        if (rebuild) {
+            BuildGeometry(loaded, batch, showTiles, showProps);
         }
         if (refit) {
             camera = FitCamera(loaded, drawableWidth, drawableHeight);

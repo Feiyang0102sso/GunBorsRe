@@ -116,7 +116,12 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CGameObjectPack.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\TileSet.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerTile.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CLayerObject.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CProp.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMap.cpp" />
+    <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteGlu.cpp" />
+    <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteGluArchetype.cpp" />
+    <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteIterator.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
@@ -140,7 +145,12 @@
     <ClInclude Include="src\gun_bros_re\gun_bros\CGameObjectPack.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\TileSet.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CLayerTile.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CLayerObject.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CProp.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMap.h" />
+    <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGlu.h" />
+    <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGluArchetype.h" />
+    <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteIterator.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
     <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />
     <ClInclude Include="src\gun_bros_re\engine\CShaderProgram.h" />

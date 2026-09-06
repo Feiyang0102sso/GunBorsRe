@@ -21,6 +21,8 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_UP:    return KeyCode::Up;
         case SDLK_DOWN:  return KeyCode::Down;
         case SDLK_HOME:  return KeyCode::Home;
+        case SDLK_T:     return KeyCode::T;
+        case SDLK_P:     return KeyCode::P;
         default:         return KeyCode::None;
     }
 }
