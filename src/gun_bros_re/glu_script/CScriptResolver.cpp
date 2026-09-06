@@ -5,6 +5,7 @@
 
 #include "glu_script/CScriptResolver.h"
 
+#include "gun_bros/CEnemy.h"
 #include "gun_bros/CLevel.h"
 
 #include <cstdio>
@@ -23,6 +24,10 @@ std::int16_t ResolveFunction(IScriptObject *host, std::uint16_t functionId,
         return static_cast<CLevel *>(host)->FunctionResolver(function, arguments,
                                                              argumentCount);
     }
+    if (classId == kScriptClassEnemy) {
+        return static_cast<CEnemy *>(host)->FunctionResolver(function, arguments,
+                                                             argumentCount);
+    }
 
     std::printf("[script] class %u function %u, %u args:", classId, function,
                 argumentCount);
@@ -39,6 +44,9 @@ std::int16_t *ResolveVariable(IScriptObject *host, std::uint16_t variableId) {
 
     if (classId == kScriptClassLevel) {
         return static_cast<CLevel *>(host)->VariableResolver(variable);
+    }
+    if (classId == kScriptClassEnemy) {
+        return static_cast<CEnemy *>(host)->VariableResolver(variable);
     }
 
     // Null is a legitimate answer here, not an error: the original returns it

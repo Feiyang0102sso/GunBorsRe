@@ -11,6 +11,7 @@
 #include "milestones/M2Texture.h"
 #include "milestones/M3Map.h"
 #include "milestones/M35Mesh.h"
+#include "milestones/M38Enemy.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -40,6 +41,11 @@ void PrintUsage() {
         "  --meshes                  parse every 3D model and list what is in it\n"
         "  --movesets                follow every model to the atlas it wears\n"
         "  --mesh <n>                M3.5: show model <n> of the catalogue\n"
+        "  --character [n]           M3.7: the player, his legs, and gun <n>\n"
+        "  --enemy <n>               M3.8: enemy <n>, assembled by its script\n"
+        "  --enemies                 run every enemy script, list its parts\n"
+        "  --move <n>                M3.8: hold body move <n> instead of the\n"
+        "                            one the script chose, and loop it\n"
         "  --map <pack> <n>          which map M3 should START on; the arrow\n"
         "                            keys reach every other one\n"
         "                            (default: %s %u)\n"
@@ -64,15 +70,18 @@ int PromptForHarness() {
     std::printf(
         "\n=== gun_bros_re ===\n"
         "\n"
-        "  1  map viewer      -- terrain, scenery, animation, scrolling\n"
-        "  2  model viewer    -- one 3D model at a time, on a turntable\n"
-        "  3  texture viewer  -- one PNG out of a .big\n"
+        "  1  map viewer       -- terrain, scenery, animation, scrolling\n"
+        "  2  model viewer     -- one 3D model at a time, on a turntable\n"
+        "  3  character viewer -- a player assembled out of his parts\n"
+        "  4  enemy viewer     -- an enemy assembled by its own script\n"
+        "  5  texture viewer   -- one PNG out of a .big\n"
         "\n"
-        "  4  list every map\n"
-        "  5  list every model\n"
-        "  6  list every model with the atlas it wears\n"
-        "  7  list every level script\n"
-        "  8  resource addressing self-check\n"
+        "  6  list every map\n"
+        "  7  list every model\n"
+        "  8  list every model with the atlas it wears\n"
+        "  9  list what each enemy script assembles\n"
+        " 10  list every level script\n"
+        " 11  resource addressing self-check\n"
         "\n"
         "choice [1]: ");
     std::fflush(stdout);
@@ -83,7 +92,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 8) {
+    if (choice < 1 || choice > 11) {
         return 1;
     }
     return choice;
@@ -110,6 +119,12 @@ int main(int argc, char **argv) {
     bool surveyMeshes = false;
     bool surveyMoveSets = false;
     bool runM35 = false;
+    bool runM37 = false;
+    bool runM38 = false;
+    bool surveyEnemies = false;
+    std::uint32_t enemyIndex = 0;
+    std::int32_t bodyMoveIndex = -1;
+    std::uint32_t gunIndex = 0;
     std::uint32_t meshIndex = 0;
     float meshSpinDegrees = 0.0f;
     std::uint32_t meshFrameIndex = 0;
@@ -127,6 +142,13 @@ int main(int argc, char **argv) {
             surveyLevels = true;
         } else if (std::strcmp(argument, "--meshes") == 0) {
             surveyMeshes = true;
+        } else if (std::strcmp(argument, "--move") == 0 && i + 1 < argc) {
+            bodyMoveIndex = static_cast<std::int32_t>(std::strtol(argv[++i], nullptr, 0));
+        } else if (std::strcmp(argument, "--enemies") == 0) {
+            surveyEnemies = true;
+        } else if (std::strcmp(argument, "--enemy") == 0 && i + 1 < argc) {
+            runM38 = true;
+            enemyIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--movesets") == 0) {
             surveyMoveSets = true;
         } else if (std::strcmp(argument, "--frame") == 0 && i + 1 < argc) {
@@ -136,6 +158,13 @@ int main(int argc, char **argv) {
         } else if (std::strcmp(argument, "--mesh") == 0 && i + 1 < argc) {
             runM35 = true;
             meshIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
+        } else if (std::strcmp(argument, "--character") == 0) {
+            // The gun index is optional: there is only one player, so the
+            // number after it is the only thing left to choose.
+            runM37 = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                gunIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
+            }
         } else if (std::strcmp(argument, "--dump") == 0 && i + 1 < argc) {
             dumpPackName = argv[++i];
         } else if (std::strcmp(argument, "--map") == 0 && i + 2 < argc) {
@@ -164,22 +193,32 @@ int main(int argc, char **argv) {
             return RunM35Mesh(bigDirectory, 0, 0.0f, 0, screenshotPath, advanceMs);
         }
         if (choice == 3) {
+            return RunM37Character(bigDirectory, 0, 0.0f, screenshotPath, advanceMs);
+        }
+        if (choice == 4) {
+            return RunM38Enemy(bigDirectory, 0, 0.0f, screenshotPath, advanceMs,
+                               -1);
+        }
+        if (choice == 5) {
             return RunM2Texture(bigDirectory, imagePackName, imageResourceId,
                                 screenshotPath);
         }
-        if (choice == 4) {
+        if (choice == 6) {
             return RunMapList(bigDirectory);
         }
-        if (choice == 5) {
+        if (choice == 7) {
             return RunMeshSurvey(bigDirectory);
         }
-        if (choice == 6) {
+        if (choice == 8) {
             return RunMoveSetSurvey(bigDirectory);
         }
-        if (choice == 7) {
+        if (choice == 9) {
+            return RunEnemySurvey(bigDirectory);
+        }
+        if (choice == 10) {
             return RunLevelSurvey(bigDirectory);
         }
-        if (choice == 8) {
+        if (choice == 11) {
             return RunM1Resources(bigDirectory);
         }
         return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
@@ -200,6 +239,17 @@ int main(int argc, char **argv) {
     }
     if (surveyMoveSets) {
         return RunMoveSetSurvey(bigDirectory);
+    }
+    if (surveyEnemies) {
+        return RunEnemySurvey(bigDirectory);
+    }
+    if (runM38) {
+        return RunM38Enemy(bigDirectory, enemyIndex, meshSpinDegrees,
+                           screenshotPath, advanceMs, bodyMoveIndex);
+    }
+    if (runM37) {
+        return RunM37Character(bigDirectory, gunIndex, meshSpinDegrees,
+                               screenshotPath, advanceMs);
     }
     if (runM35) {
         return RunM35Mesh(bigDirectory, meshIndex, meshSpinDegrees,

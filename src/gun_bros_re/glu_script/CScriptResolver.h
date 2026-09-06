@@ -17,9 +17,14 @@
  * functions of a class its own host actually is. Every host in these archives
  * is a CLevel.
  *
- * **Only case 5 is implemented.** The other eleven classes are M4 and M5; a
- * call to one is logged with its id and arguments and returns zero, which is
- * how the list of what to build next gets collected.
+ * **Cases 5 and 7 are implemented.** CLevel arrived with M3.4; CEnemy arrived
+ * with M3.8, which needed it because an enemy's own script is what assembles
+ * its model out of parts. The other ten classes are M4 and M5; a call to one
+ * is logged with its id and arguments and returns zero, which is how the list
+ * of what to build next gets collected.
+ *
+ * The comment above about every host being a CLevel no longer holds: a CEnemy
+ * hosts its own script, and calls a class-7 id.
  */
 
 #ifndef GUN_BROS_RE_GLU_SCRIPT_CSCRIPTRESOLVER_H

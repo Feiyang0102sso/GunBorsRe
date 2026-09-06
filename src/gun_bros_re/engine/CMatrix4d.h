@@ -59,6 +59,26 @@ void Matrix4dOrthoCentred(float width, float height, float depth, float *out);
 void Matrix4dRotationX(float radians, float *out);
 void Matrix4dRotationY(float radians, float *out);
 
+/**
+ * Rotation about an arbitrary axis, which need not be a unit vector.
+ *
+ * The engine's CMatrix4dh::Rotate takes an axis as three floats; the parts of
+ * an assembled model carry one, for the swing a gun gets when it is aimed.
+ * A zero-length axis leaves the identity, since there is no rotation to make.
+ */
+void Matrix4dRotationAxis(float radians, float axisX, float axisY, float axisZ,
+                          float *out);
+
+/**
+ * The rotation a quaternion describes.
+ *
+ * Copied term for term off the block DrawHeirarchy (:99070) builds inline for
+ * every part it draws. The quaternion is NOT normalised first -- neither the
+ * evaluator that produced it nor the original does that, so a blend between
+ * two key frames shows up as a slight scale on the attached part.
+ */
+void Matrix4dFromQuaternion(float x, float y, float z, float w, float *out);
+
 /** Models are authored z-up, so this is the one they spin about. */
 void Matrix4dRotationZ(float radians, float *out);
 void Matrix4dScale(float scale, float *out);

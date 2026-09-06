@@ -1,19 +1,28 @@
 /**
  * @file M35Mesh.cpp
- * @brief M3.5 harness: the 3D models in Section 31.
+ * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
  *
- * Three entry points over one body of knowledge:
+ * Four entry points over one body of knowledge:
  *
  * - `--meshes` parses every model and reports what is in it,
  * - `--movesets` follows every model to the atlas it wears,
- * - the viewer puts one on screen.
+ * - `--mesh` puts one on screen and plays its moves,
+ * - `--character` stands a whole player up out of three of them.
  *
- * The middle two share a walk over the five template types that own models,
- * because "which atlas does this model wear" has exactly one answer and it
- * should be computed in exactly one place.
+ * All four share a walk over the five template types that own models, because
+ * "which atlas does this model wear" has exactly one answer and it should be
+ * computed in exactly one place. That sharing is why the M3.7 viewer is here
+ * rather than in a file of its own.
+ *
+ * PackTables has already moved out to its own header, which M3.8 shares. The
+ * walk itself should follow the next time something outside this file needs
+ * it; M3.8 does not, because an enemy is reached by its own template rather
+ * than by the model it wears.
  */
 
 #include "milestones/M35Mesh.h"
+
+#include "milestones/PackTables.h"
 
 #include "engine/CArrayInputStream.h"
 #include "engine/CMatrix4d.h"
@@ -31,6 +40,8 @@
 #include "gun_bros/CGameObjectPack.h"
 #include "gun_bros/CGun.h"
 #include "gun_bros/CMesh.h"
+#include "gun_bros/CMeshAnimationController.h"
+#include "gun_bros/CMeshCamera.h"
 #include "gun_bros/CMoveSetMesh.h"
 #include "gun_bros/CMoveSetMeshController.h"
 #include "gun_bros/CResTOCManager.h"
@@ -317,48 +328,6 @@ void SurveyPack(CResPackTOC &pack, MeshSurveyTotals &totals) {
 // ---------------------------------------------------------------------------
 // Who owns the models: one walk, two consumers
 // ---------------------------------------------------------------------------
-
-/**
- * Section bases for every pack at once, so a reference can be followed into
- * whichever pack its hash names.
- *
- * A reference carries its own pack hash and it is not always the pack the
- * template came from, which is the rule M3.1 had to learn the hard way: pick
- * the pack first, then add the section base.
- */
-class PackTables {
-public:
-    explicit PackTables(CResTOCManager &tocManager) : m_tocManager(tocManager) {
-        m_objectPacks.resize(tocManager.GetPackCount());
-        for (std::uint32_t i = 0; i < tocManager.GetPackCount(); ++i) {
-            m_objectPacks[i].Init(*tocManager.GetPack(static_cast<int>(i)));
-        }
-    }
-
-    CGameObjectPack &GetObjectPack(int packIndex) { return m_objectPacks[packIndex]; }
-
-    /** Which pack a hash lands on. The reference decides, not its owner. */
-    const std::string &GetPackName(std::uint32_t packHash) {
-        const int packIndex = m_tocManager.GetPackIndexFromHash(packHash);
-        return m_tocManager.GetPack(packIndex)->GetShortName();
-    }
-
-    bool ReadSectionResource(std::uint32_t packHash, GameSection section,
-                             std::uint32_t ordinal,
-                             std::vector<std::uint8_t> &payload) {
-        const int packIndex = m_tocManager.GetPackIndexFromHash(packHash);
-        const std::uint32_t handle =
-            m_objectPacks[packIndex].GetHandle(section, ordinal);
-        if (handle == 0) {
-            return false;
-        }
-        return m_tocManager.GetPack(packIndex)->GetResource(handle, payload);
-    }
-
-private:
-    CResTOCManager &m_tocManager;
-    std::vector<CGameObjectPack> m_objectPacks;
-};
 
 /** One model and the atlas it wears, as some template names them. */
 struct MeshPair {
@@ -947,24 +916,32 @@ void ReportMove(const CatalogEntry &entry, const LoadedModel &model) {
                 move.restartsWhenRepeated != 0 ? ", restarts" : "");
 }
 
-/** Fetch and decode one catalogue entry. */
-bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) {
+/**
+ * Fetch one model and the atlas it wears, and report what came out.
+ *
+ * The one place a mesh ordinal and an image ordinal turn into something
+ * drawable; both viewers go through it.
+ */
+bool LoadMeshAndAtlas(PackTables &tables, const char *label,
+                      std::uint32_t meshPackHash, std::uint32_t meshOrdinal,
+                      std::uint32_t imagePackHash, std::uint32_t imageOrdinal,
+                      CMesh &mesh, CTexture &texture) {
     std::vector<std::uint8_t> meshPayload;
-    if (!tables.ReadSectionResource(entry.meshPackHash, GameSection::Mesh,
-                                    entry.meshOrdinal, meshPayload)) {
-        std::printf("[m35] mesh %u unreadable\n", entry.meshOrdinal);
+    if (!tables.ReadSectionResource(meshPackHash, GameSection::Mesh, meshOrdinal,
+                                    meshPayload)) {
+        std::printf("[m35] mesh %u unreadable\n", meshOrdinal);
         return false;
     }
 
     CArrayInputStream meshStream(meshPayload);
-    if (!out.mesh.Init(meshStream)) {
+    if (!mesh.Init(meshStream)) {
         return false;
     }
 
     std::vector<std::uint8_t> imagePayload;
-    if (!tables.ReadSectionResource(entry.imagePackHash, GameSection::Png,
-                                    entry.imageOrdinal, imagePayload)) {
-        std::printf("[m35] atlas %u unreadable\n", entry.imageOrdinal);
+    if (!tables.ReadSectionResource(imagePackHash, GameSection::Png, imageOrdinal,
+                                    imagePayload)) {
+        std::printf("[m35] atlas %u unreadable\n", imageOrdinal);
         return false;
     }
 
@@ -974,17 +951,26 @@ bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) 
     }
 
     // Models tile their textures, unlike sprite atlases.
-    if (!out.texture.Create(decoded, GL_REPEAT)) {
+    if (!texture.Create(decoded, GL_REPEAT)) {
         return false;
     }
 
     std::printf("[m35] %s: %s mesh %u -- %u verts, %zu indices, %zu frames; "
                 "atlas %s %u (%ux%u)\n",
-                entry.owner.c_str(), tables.GetPackName(entry.meshPackHash).c_str(),
-                entry.meshOrdinal, out.mesh.GetVertexCount(),
-                out.mesh.GetIndices().size(), out.mesh.GetFrames().size(),
-                tables.GetPackName(entry.imagePackHash).c_str(), entry.imageOrdinal,
-                decoded.width, decoded.height);
+                label, tables.GetPackName(meshPackHash).c_str(), meshOrdinal,
+                mesh.GetVertexCount(), mesh.GetIndices().size(),
+                mesh.GetFrames().size(), tables.GetPackName(imagePackHash).c_str(),
+                imageOrdinal, decoded.width, decoded.height);
+    return true;
+}
+
+/** Fetch and decode one catalogue entry. */
+bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) {
+    if (!LoadMeshAndAtlas(tables, entry.owner.c_str(), entry.meshPackHash,
+                          entry.meshOrdinal, entry.imagePackHash,
+                          entry.imageOrdinal, out.mesh, out.texture)) {
+        return false;
+    }
 
     if (entry.hasMoveSet) {
         BindMoveSet(entry, out);
@@ -1051,6 +1037,360 @@ void BuildModelViewProjection(const MeshBounds &bounds, const Turntable &view,
     Matrix4dOrthoCentred(viewWidth, viewHeight, kDepthMargin, projection);
 
     Matrix4dMultiply(projection, model, out);
+}
+
+// ---------------------------------------------------------------------------
+// M3.7: a whole character, assembled
+//
+// The viewer above shows one model at a time. This one stands a player up out
+// of the three models a player actually is -- torso, legs, and whatever gun is
+// in his hand -- following the part table CBrother::Draw (:134780) builds.
+// ---------------------------------------------------------------------------
+
+// The player's move set names its models in this order. Two configs, and the
+// original draws them as parts 0 and 1 with no attachment between them.
+constexpr std::uint8_t kTorsoConfigIndex = 0;
+constexpr std::uint8_t kLegsConfigIndex = 1;
+
+/** One drawable piece of an assembled character. */
+struct CharacterPart {
+    std::string name;
+
+    CMesh mesh;
+    CTexture texture;
+    CMeshBuffer buffer;
+
+    // Empty for a part with no animation of its own -- a gun model is a single
+    // frame, and its pose comes entirely from the hand it hangs off.
+    CMoveSetMeshController controller;
+    std::vector<const CMesh *> configMeshes;
+    std::vector<std::int32_t> moves;
+    std::size_t moveSlot;
+    std::vector<float> pose;
+
+    // Which bone of the TORSO mesh this hangs off. Torso and legs hang off
+    // nothing and are drawn where they are authored.
+    bool attached;
+    std::size_t boneIndex;
+
+    CharacterPart() : moveSlot(0), attached(false), boneIndex(0) {}
+};
+
+/**
+ * A player, his legs and his gun.
+ *
+ * Held by pointer per part because a CMeshBuffer owns a GL name and cannot be
+ * copied or moved, and because `configMeshes` points back at its own `mesh`.
+ */
+struct Character {
+    // The player's move set, owned here so the controllers can point at it.
+    CMoveSetMesh moveSet;
+    std::vector<std::unique_ptr<CharacterPart>> parts;
+};
+
+/** One weapon the viewer can put in the character's hand. */
+struct GunEntry {
+    std::uint32_t meshPackHash;
+    std::uint32_t meshOrdinal;
+    std::uint32_t imagePackHash;
+    std::uint32_t imageOrdinal;
+    std::string owner;
+};
+
+/** Collects the one player template, and every gun's own weapon model. */
+class CharacterSink : public IMeshPairSink {
+public:
+    CharacterSink() : m_havePlayer(false) {}
+
+    void OnPair(const MeshPair &pair) override {
+        if (pair.moveSet != nullptr) {
+            // Every config of the player's set carries the same move set, so
+            // the first one is all it takes.
+            if (!m_havePlayer && pair.owner.find(" player ") != std::string::npos) {
+                m_playerMoveSet = *pair.moveSet;
+                m_playerPackHash = pair.meshPackHash;
+                m_playerOwner = pair.owner;
+                m_havePlayer = true;
+            }
+            return;
+        }
+
+        // A gun emits its weapon model as a plain asset ref, which is the pair
+        // with no move set behind it.
+        if (pair.owner.find(" gun ") == std::string::npos) {
+            return;
+        }
+
+        GunEntry gun;
+        gun.meshPackHash = pair.meshPackHash;
+        gun.meshOrdinal = pair.meshOrdinal;
+        gun.imagePackHash = pair.imagePackHash;
+        gun.imageOrdinal = pair.imageOrdinal;
+        gun.owner = pair.owner;
+        m_guns.push_back(gun);
+    }
+
+    void OnTemplateFailed(const std::string &owner) override { (void)owner; }
+    void OnLeftoverBytes(const std::string &owner, std::size_t bytes) override {
+        (void)owner;
+        (void)bytes;
+    }
+
+    bool HavePlayer() const { return m_havePlayer; }
+    const CMoveSetMesh &GetPlayerMoveSet() const { return m_playerMoveSet; }
+    std::uint32_t GetPlayerPackHash() const { return m_playerPackHash; }
+    const std::string &GetPlayerOwner() const { return m_playerOwner; }
+    const std::vector<GunEntry> &GetGuns() const { return m_guns; }
+
+private:
+    bool m_havePlayer;
+    CMoveSetMesh m_playerMoveSet;
+    std::uint32_t m_playerPackHash;
+    std::string m_playerOwner;
+    std::vector<GunEntry> m_guns;
+};
+
+/** Which moves of the set drive one config, by index into the set. */
+std::vector<std::int32_t> MovesForConfig(const CMoveSetMesh &moveSet,
+                                         std::uint8_t configIndex) {
+    std::vector<std::int32_t> moves;
+    for (std::size_t i = 0; i < moveSet.GetMoves().size(); ++i) {
+        if (moveSet.GetMoves()[i].meshConfigIndex == configIndex) {
+            moves.push_back(static_cast<std::int32_t>(i));
+        }
+    }
+    return moves;
+}
+
+/**
+ * Build one animated part out of a move set config.
+ *
+ * The controller gets the whole config array, as the original's does, but only
+ * this config's mesh is filled in -- the moves naming the other configs are
+ * filtered out rather than left to fail at SetMove.
+ */
+bool BuildAnimatedPart(PackTables &tables, const CMoveSetMesh &moveSet,
+                       std::uint8_t configIndex, const char *name,
+                       CharacterPart &part) {
+    const MeshConfig &config = moveSet.GetMeshConfigs()[configIndex];
+    part.name = name;
+
+    if (!LoadMeshAndAtlas(tables, name, moveSet.GetPackHash(), config.meshOrdinal,
+                          moveSet.GetPackHash(), config.imageOrdinal, part.mesh,
+                          part.texture)) {
+        return false;
+    }
+
+    part.configMeshes.assign(moveSet.GetMeshConfigs().size(), nullptr);
+    part.configMeshes[configIndex] = &part.mesh;
+    part.moves = MovesForConfig(moveSet, configIndex);
+    part.moveSlot = 0;
+    part.controller.SetMoveSet(&moveSet, part.configMeshes);
+    if (!part.moves.empty()) {
+        part.controller.SetMove(part.moves[0]);
+    }
+    return true;
+}
+
+/** Assemble the player, with one of the guns in his hand. */
+bool BuildCharacter(PackTables &tables, const CharacterSink &catalog,
+                    std::size_t gunSlot, Character &out) {
+    out.parts.clear();
+    out.moveSet = catalog.GetPlayerMoveSet();
+
+    if (out.moveSet.GetMeshConfigs().size() <= kLegsConfigIndex) {
+        std::printf("[m37] the player's move set has %zu configs, expected two\n",
+                    out.moveSet.GetMeshConfigs().size());
+        return false;
+    }
+
+    // Part 0 is the torso, and it is the parent: every attachment below is
+    // read off ITS mesh at ITS animation time.
+    std::unique_ptr<CharacterPart> torso(new CharacterPart());
+    std::unique_ptr<CharacterPart> legs(new CharacterPart());
+    if (!BuildAnimatedPart(tables, out.moveSet, kTorsoConfigIndex, "torso", *torso) ||
+        !BuildAnimatedPart(tables, out.moveSet, kLegsConfigIndex, "legs", *legs)) {
+        return false;
+    }
+
+    std::unique_ptr<CharacterPart> gun(new CharacterPart());
+    const GunEntry &entry = catalog.GetGuns()[gunSlot];
+    gun->name = entry.owner;
+    if (!LoadMeshAndAtlas(tables, entry.owner.c_str(), entry.meshPackHash,
+                          entry.meshOrdinal, entry.imagePackHash,
+                          entry.imageOrdinal, gun->mesh, gun->texture)) {
+        return false;
+    }
+
+    // The one hardwired number in the whole assembly: CBrother::Draw picks
+    // bone 4 off the torso mesh for a one-handed weapon, and the torso's bone
+    // list names bone 4 "gun".
+    gun->attached = true;
+    gun->boneIndex = kGunBoneIndex;
+    if (kGunBoneIndex < torso->mesh.GetBoneNames().size()) {
+        std::printf("[m37] gun hangs off bone %zu, named \"%s\"\n", kGunBoneIndex,
+                    torso->mesh.GetBoneNames()[kGunBoneIndex].c_str());
+    } else {
+        std::printf("[m37] torso mesh has no bone %zu; the gun will sit at the "
+                    "origin\n",
+                    kGunBoneIndex);
+        gun->attached = false;
+    }
+
+    out.parts.push_back(std::move(torso));
+    out.parts.push_back(std::move(legs));
+    out.parts.push_back(std::move(gun));
+    return true;
+}
+
+/** Create the GL buffers for every part and fill in what never changes. */
+bool CreatePartBuffers(Character &character, const CShaderProgram &program) {
+    for (std::size_t i = 0; i < character.parts.size(); ++i) {
+        CharacterPart &part = *character.parts[i];
+        if (!part.buffer.Create(program) || !part.buffer.SetMesh(part.mesh)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** Move every animated part's clock on, and rewrite its vertices. */
+void AdvanceCharacter(Character &character, std::int32_t deltaMs) {
+    for (std::size_t i = 0; i < character.parts.size(); ++i) {
+        CharacterPart &part = *character.parts[i];
+        if (part.moves.empty()) {
+            continue;
+        }
+
+        part.controller.Update(deltaMs);
+        if (part.controller.GetAnimation().Evaluate(part.pose)) {
+            part.buffer.SetVertices(part.pose);
+        }
+    }
+}
+
+/** Put every part's first pose in its buffer. Still parts show frame 0. */
+void PoseCharacter(Character &character) {
+    for (std::size_t i = 0; i < character.parts.size(); ++i) {
+        CharacterPart &part = *character.parts[i];
+        if (part.moves.empty()) {
+            part.buffer.SetFrame(part.mesh, 0);
+            continue;
+        }
+        if (part.controller.GetAnimation().Evaluate(part.pose)) {
+            part.buffer.SetVertices(part.pose);
+        }
+    }
+}
+
+/**
+ * The box the whole character occupies.
+ *
+ * Only the parts that hang off nothing count: an attached part sits inside the
+ * body anyway, and letting a long rifle drive the framing would make the
+ * character shrink every time the gun changed.
+ */
+MeshBounds CharacterBounds(const Character &character) {
+    MeshBounds combined = MeshBounds();
+    for (std::size_t i = 0; i < character.parts.size(); ++i) {
+        const CharacterPart &part = *character.parts[i];
+        if (part.attached) {
+            continue;
+        }
+
+        const MeshBounds &bounds = part.mesh.GetBounds();
+        if (bounds.minX < combined.minX) {
+            combined.minX = bounds.minX;
+        }
+        if (bounds.minY < combined.minY) {
+            combined.minY = bounds.minY;
+        }
+        if (bounds.minZ < combined.minZ) {
+            combined.minZ = bounds.minZ;
+        }
+        if (bounds.maxX > combined.maxX) {
+            combined.maxX = bounds.maxX;
+        }
+        if (bounds.maxY > combined.maxY) {
+            combined.maxY = bounds.maxY;
+        }
+        if (bounds.maxZ > combined.maxZ) {
+            combined.maxZ = bounds.maxZ;
+        }
+    }
+
+    combined.centerX = 0.5f * (combined.minX + combined.maxX);
+    combined.centerY = 0.5f * (combined.minY + combined.maxY);
+    combined.centerZ = 0.5f * (combined.minZ + combined.maxZ);
+
+    float extent = combined.maxX - combined.minX;
+    if (combined.maxY - combined.minY > extent) {
+        extent = combined.maxY - combined.minY;
+    }
+    if (combined.maxZ - combined.minZ > extent) {
+        extent = combined.maxZ - combined.minZ;
+    }
+    if (extent > 0.0f) {
+        combined.inverseExtent = 1.0f / extent;
+    }
+    return combined;
+}
+
+/**
+ * Draw every part against one base matrix.
+ *
+ * The attachment comes from the TORSO -- its mesh, at its animation time --
+ * whichever part is being drawn. That is the whole of what DrawHeirarchy does
+ * differently from drawing three separate models.
+ */
+void DrawCharacter(Character &character, const CShaderProgram &program,
+                   const float *base) {
+    const CMeshAnimationController &parent =
+        character.parts[0]->controller.GetAnimation();
+
+    for (std::size_t i = 0; i < character.parts.size(); ++i) {
+        CharacterPart &part = *character.parts[i];
+
+        MeshPart placement;
+        if (part.attached) {
+            parent.GetNodeAt(part.boneIndex, placement.attachment);
+        }
+
+        float mvp[kMatrix4dElements];
+        MeshCameraBuildPartMatrix(placement, base, mvp);
+        part.buffer.Draw(program, mvp, part.texture);
+    }
+}
+
+/**
+ * Point every animated part at the same slot of its own move list.
+ *
+ * A viewer convention, not something the data says: the torso's moves and the
+ * legs' moves are separate lists, and the game picks one of each independently
+ * -- aim with the arms, walk with the feet. Stepping them together is just the
+ * cheapest way to see a whole character move.
+ */
+void SelectMoveSlot(Character &character, std::size_t slot) {
+    for (std::size_t i = 0; i < character.parts.size(); ++i) {
+        CharacterPart &part = *character.parts[i];
+        if (part.moves.empty()) {
+            continue;
+        }
+
+        part.moveSlot = slot % part.moves.size();
+        if (!part.controller.SetMove(part.moves[part.moveSlot])) {
+            CMeshAnimationController &animation = part.controller.GetAnimation();
+            animation.SetTimeMs(animation.GetRangeStartMs());
+        }
+
+        const MeshMove &move =
+            character.moveSet.GetMoves()[part.moves[part.moveSlot]];
+        std::printf("[m37] %s: move %d (%zu of %zu) -- frames %u..%u, %d ms\n",
+                    part.name.c_str(), part.moves[part.moveSlot],
+                    part.moveSlot + 1, part.moves.size(), move.firstFrame,
+                    move.lastFrame,
+                    part.controller.GetAnimation().GetRangeDurationMs());
+    }
 }
 
 }  // namespace
@@ -1316,5 +1656,210 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     }
 
     std::printf("[m35] done\n");
+    return 0;
+}
+
+int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
+                    float spinDegrees, const std::string &screenshotPath,
+                    std::uint32_t advanceMs) {
+    std::printf("=== M3.7: a whole character ===\n\n");
+
+    CResTOCManager tocManager;
+    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+        return 1;
+    }
+
+    PackTables tables(tocManager);
+    CharacterSink catalog;
+    WalkMeshPairs(tocManager, tables, catalog);
+
+    if (!catalog.HavePlayer()) {
+        std::printf("[m37] no player template found\n");
+        return 1;
+    }
+    if (catalog.GetGuns().empty()) {
+        std::printf("[m37] no gun names a weapon model\n");
+        return 1;
+    }
+    std::printf("\n[m37] %s, %zu weapon models\n", catalog.GetPlayerOwner().c_str(),
+                catalog.GetGuns().size());
+
+    std::size_t gunSlot = gunIndex;
+    if (gunSlot >= catalog.GetGuns().size()) {
+        gunSlot = 0;
+    }
+
+    CWindow window;
+    if (!window.Open("gun_bros_re -- M3.7", kDefaultWindowWidth,
+                     kDefaultWindowHeight)) {
+        return 1;
+    }
+
+    CShaderProgram program;
+    if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
+        return 1;
+    }
+
+    // Held by pointer for the same reason one part is: swapping the gun
+    // rebuilds the whole thing, and nothing in it can be moved.
+    std::unique_ptr<Character> character(new Character());
+    if (!BuildCharacter(tables, catalog, gunSlot, *character) ||
+        !CreatePartBuffers(*character, program)) {
+        return 1;
+    }
+
+    std::size_t moveSlot = 0;
+    SelectMoveSlot(*character, moveSlot);
+    for (std::uint32_t elapsed = 0; elapsed < advanceMs; elapsed += kWarmUpFrameMs) {
+        AdvanceCharacter(*character, kWarmUpFrameMs);
+    }
+    PoseCharacter(*character);
+
+    glEnable(GL_DEPTH_TEST);
+
+    Turntable view;
+    view.spinDegrees = kUiFacingDegrees + spinDegrees;
+    view.tiltDegrees = kUiTiltDegrees;
+    view.extraTilt = 0.0f;
+    view.zoom = 1.0f;
+
+    std::printf("\n[m37] left/right: weapon, M/N: move, space: pause, "
+                "period: step, drag: turn, wheel: zoom, G: game tilt, "
+                "Home: reset view, Esc: quit\n");
+
+    std::uint64_t previousTicks = window.GetTicksMs();
+    bool paused = false;
+    bool singleStep = false;
+    bool reportedFirstFrame = false;
+
+    while (window.PumpEvents()) {
+        int drawableWidth = 0;
+        int drawableHeight = 0;
+        window.GetDrawableSize(drawableWidth, drawableHeight);
+
+        const std::size_t previousGunSlot = gunSlot;
+        bool moveChanged = false;
+        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
+             key = window.TakeKeyPress()) {
+            const std::size_t gunCount = catalog.GetGuns().size();
+            if (key == KeyCode::Right) {
+                gunSlot = (gunSlot + 1) % gunCount;
+            } else if (key == KeyCode::Left) {
+                gunSlot = (gunSlot + gunCount - 1) % gunCount;
+            } else if (key == KeyCode::Down) {
+                gunSlot = (gunSlot + 10) % gunCount;
+            } else if (key == KeyCode::Up) {
+                gunSlot = (gunSlot + gunCount - 10) % gunCount;
+            } else if (key == KeyCode::M) {
+                moveSlot++;
+                moveChanged = true;
+            } else if (key == KeyCode::N) {
+                // The torso has the longest move list, so step by it and let
+                // the shorter ones wrap inside SelectMoveSlot.
+                const std::size_t count = character->parts[0]->moves.size();
+                moveSlot = (moveSlot + count - 1) % count;
+                moveChanged = true;
+            } else if (key == KeyCode::Space) {
+                paused = !paused;
+                std::printf("[m37] %s\n", paused ? "paused" : "playing");
+            } else if (key == KeyCode::Period) {
+                singleStep = true;
+            } else if (key == KeyCode::G) {
+                if (view.tiltDegrees == kUiTiltDegrees) {
+                    view.tiltDegrees = kGameTiltDegrees;
+                } else {
+                    view.tiltDegrees = kUiTiltDegrees;
+                }
+                std::printf("[m37] tilt %.0f degrees\n", view.tiltDegrees);
+            } else if (key == KeyCode::Home) {
+                view.spinDegrees = kUiFacingDegrees + spinDegrees;
+                view.extraTilt = 0.0f;
+                view.zoom = 1.0f;
+            }
+        }
+
+        if (gunSlot != previousGunSlot) {
+            std::printf("\n[m37] --- weapon %zu of %zu ---\n", gunSlot + 1,
+                        catalog.GetGuns().size());
+
+            std::unique_ptr<Character> replacement(new Character());
+            if (BuildCharacter(tables, catalog, gunSlot, *replacement) &&
+                CreatePartBuffers(*replacement, program)) {
+                character = std::move(replacement);
+                SelectMoveSlot(*character, moveSlot);
+                PoseCharacter(*character);
+            } else {
+                std::printf("[m37] staying on the previous weapon\n");
+                gunSlot = previousGunSlot;
+            }
+        } else if (moveChanged) {
+            SelectMoveSlot(*character, moveSlot);
+            PoseCharacter(*character);
+        }
+
+        const std::uint64_t nowTicks = window.GetTicksMs();
+        std::uint64_t elapsedMs = nowTicks - previousTicks;
+        previousTicks = nowTicks;
+
+        if (elapsedMs > kMaxFrameMs) {
+            elapsedMs = kMaxFrameMs;
+        }
+        if (paused) {
+            elapsedMs = 0;
+        }
+        if (singleStep) {
+            elapsedMs = static_cast<std::uint64_t>(kSingleStepMs);
+            singleStep = false;
+        }
+        if (elapsedMs > 0) {
+            AdvanceCharacter(*character, static_cast<std::int32_t>(elapsedMs));
+        }
+
+        int dragX = 0;
+        int dragY = 0;
+        window.TakeDragDelta(dragX, dragY);
+        view.spinDegrees += static_cast<float>(dragX) * kDragToDegrees;
+        view.extraTilt += static_cast<float>(dragY) * kDragToDegrees;
+
+        const float wheel = window.TakeWheelDelta();
+        for (float notch = 0.0f; notch < wheel; notch += 1.0f) {
+            view.zoom *= kZoomPerNotch;
+        }
+        for (float notch = 0.0f; notch > wheel; notch -= 1.0f) {
+            view.zoom /= kZoomPerNotch;
+        }
+        if (view.zoom < kMinZoom) {
+            view.zoom = kMinZoom;
+        }
+        if (view.zoom > kMaxZoom) {
+            view.zoom = kMaxZoom;
+        }
+
+        glViewport(0, 0, drawableWidth, drawableHeight);
+        glClearColor(0.08f, 0.08f, 0.10f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        float base[kMatrix4dElements];
+        BuildModelViewProjection(CharacterBounds(*character), view, drawableWidth,
+                                 drawableHeight, base);
+        DrawCharacter(*character, program, base);
+
+        if (!reportedFirstFrame) {
+            GLCheckErrors("first frame");
+            reportedFirstFrame = true;
+
+            if (!screenshotPath.empty()) {
+                if (!window.SaveFrame(screenshotPath)) {
+                    return 1;
+                }
+                window.Present();
+                break;
+            }
+        }
+
+        window.Present();
+    }
+
+    std::printf("[m37] done\n");
     return 0;
 }

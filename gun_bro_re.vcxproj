@@ -121,8 +121,10 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerCamera.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CProp.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMap.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CEnemy.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMesh.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMeshAnimationController.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMeshCamera.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMoveSetMesh.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMoveSetMeshController.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CBrother.cpp" />
@@ -147,6 +149,7 @@
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpritePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M35Mesh.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\M38Enemy.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\platform\GLLoader.cpp" />
@@ -186,8 +189,10 @@
     <ClInclude Include="src\gun_bros_re\glu_script\CScriptVariable.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CProp.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMap.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CEnemy.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMesh.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMeshAnimationController.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMeshCamera.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMoveSetMesh.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMoveSetMeshController.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CBrother.h" />
@@ -200,6 +205,8 @@
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpritePlayer.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M35Mesh.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\M38Enemy.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\PackTables.h" />
     <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />
     <ClInclude Include="src\gun_bros_re\engine\CShaderProgram.h" />
     <ClInclude Include="src\gun_bros_re\engine\platform\GLLoader.h" />

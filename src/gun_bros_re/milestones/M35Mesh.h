@@ -1,6 +1,10 @@
 /**
  * @file M35Mesh.h
- * @brief M3.5 harness: the 3D models in Section 31.
+ * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
+ *
+ * The character viewer lives alongside the model viewer because they share the
+ * walk that answers "which atlas does this model wear" -- see the .cpp. When a
+ * third caller needs that walk it should move out to a header of its own.
  */
 
 #ifndef GUN_BROS_RE_MILESTONES_M35MESH_H
@@ -49,5 +53,22 @@ int RunMeshSurvey(const std::string &bigDirectory);
  * @return 0 when every pair resolved and no player template had bytes left.
  */
 int RunMoveSetSurvey(const std::string &bigDirectory);
+
+/**
+ * M3.7: stand a whole player up -- torso, legs and a gun in his hand.
+ *
+ * The three are separate models. The torso is the parent: the gun's placement
+ * comes from a bone of the TORSO mesh evaluated at the TORSO's animation time,
+ * which is what CBrother::Draw (:134780) does.
+ *
+ * @param gunIndex Which weapon model to put in his hand, out of every one the
+ *        gun templates name. The arrow keys reach the rest.
+ * @param spinDegrees Turn the character this far before the first frame.
+ * @param screenshotPath When non-empty, save the first frame here and exit.
+ * @param advanceMs Run the animation on this far before that first frame.
+ */
+int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
+                    float spinDegrees, const std::string &screenshotPath,
+                    std::uint32_t advanceMs);
 
 #endif  // GUN_BROS_RE_MILESTONES_M35MESH_H

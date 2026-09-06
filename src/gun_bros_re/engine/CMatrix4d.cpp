@@ -88,6 +88,52 @@ void Matrix4dRotationY(float radians, float *out) {
     out[10] = c;
 }
 
+void Matrix4dRotationAxis(float radians, float axisX, float axisY, float axisZ,
+                          float *out) {
+    Matrix4dIdentity(out);
+
+    const float length =
+        std::sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ);
+    if (length == 0.0f) {
+        return;
+    }
+
+    const float x = axisX / length;
+    const float y = axisY / length;
+    const float z = axisZ / length;
+    const float c = std::cos(radians);
+    const float s = std::sin(radians);
+    const float t = 1.0f - c;
+
+    out[0] = t * x * x + c;
+    out[1] = t * x * y - s * z;
+    out[2] = t * x * z + s * y;
+
+    out[4] = t * x * y + s * z;
+    out[5] = t * y * y + c;
+    out[6] = t * y * z - s * x;
+
+    out[8] = t * x * z - s * y;
+    out[9] = t * y * z + s * x;
+    out[10] = t * z * z + c;
+}
+
+void Matrix4dFromQuaternion(float x, float y, float z, float w, float *out) {
+    Matrix4dIdentity(out);
+
+    out[0] = 1.0f - 2.0f * (y * y + z * z);
+    out[1] = 2.0f * (x * y - z * w);
+    out[2] = 2.0f * (x * z + y * w);
+
+    out[4] = 2.0f * (x * y + z * w);
+    out[5] = 1.0f - 2.0f * (x * x + z * z);
+    out[6] = 2.0f * (y * z - x * w);
+
+    out[8] = 2.0f * (x * z - y * w);
+    out[9] = 2.0f * (y * z + x * w);
+    out[10] = 1.0f - 2.0f * (x * x + y * y);
+}
+
 void Matrix4dRotationZ(float radians, float *out) {
     Matrix4dIdentity(out);
     const float c = std::cos(radians);
