@@ -34,6 +34,8 @@ enum class KeyCode {
     Home,
     T,
     P,
+    Space,
+    Period,
 };
 
 // The art set we run: the original xga assets are authored for this size.

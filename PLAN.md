@@ -233,11 +233,75 @@ archetype + action + anim) → archetype 资源 → anim → frame → sprite �
 > 这几个包的替换组数全是 0，图元只有 pack7 有 1 个。
 > 动画不播放，每个槽固定取第 0 帧（原版取随机帧，静态查看器要可复现）。
 
+#### M3.2 — 地图活起来
+
+`CSpritePlayer` + 主循环时间步，把 M3.1 画出来的静止布景播起来。
+
+动画数据在 M3.1 就已经解析进 `CSpriteGluArchetype` 了（`AnimationStep` 的帧号与时长），
+只是每个槽固定取第 0 帧。这一步补的是那个缺席的时钟。
+
+> **验收**：地图上的岩浆、辉光、传送门动起来，图块与叠放关系不变。
+
+> 实测：22 张图 **1653 个 PROP、0 个未解析、0 个部件画不出**，与 M3.1 逐项一致。
+> 其中 **138 个 PROP 会动**（模板里至少一个槽多于一步），pack9 map 0 最多，有 31 个。
+> 只有 pack7 map 2 一张图完全静止。
+>
+> `--advance <ms>` 先把动画时钟推进指定毫秒再画第一帧，这样 `--screenshot` 也能验收动画：
+> 同一张图取几个时刻截图对比即可。像素差随时间增长（pack9 map 0 相对 t=0：
+> 120ms 差 2156 像素，200ms 差 4304，400ms 差 4422），且差异只落在辉光上，
+> 地形与其余布景一动不动。查看器另加 `空格` 暂停、`.` 单步 80ms。
+>
+> **`AnimationStep` 的字段顺序原本就是对的**。`LoadArcheType`（:57552）里线上先帧号后时长、
+> 内存里反过来存成 `{时长, 帧号}`——和 sprite map 那个坑同型，但 M3.1 按线上顺序读的，
+> 没踩到。`kDurationUnitMs = 10` 也和原版那个 `10 *` 对得上。
+>
+> 三个细节照抄了原版：
+> - **时间结转**。`AdvanceFrame` 进入新一步时不是把时钟重置成整段时长，而是
+>   `max(新时长 + 上一步的欠账, 新时长 / 2)`。欠账让慢帧不会拉长动画，
+>   下限让一个极慢帧不会无限跳步。帧率无关性就是从这来的。
+> - **只有主槽随机起始帧**。`CProp::Bind`（:124916）对主槽调 `Random(0, 步数-1)`，
+>   前景槽和背景槽都从第 0 步开始。不照抄的话一片岩浆会整齐划一地脉动。
+>   这里用按绘制序的确定性哈希代替真随机，`--screenshot` 才还能两次跑出同一张图。
+> - **单步动画回卷到自己时不动时钟**。原版在那条路径上直接返回，
+>   这正是"静止布景保持静止"的实现方式，而不是靠额外判断。
+>
+> **绘制顺序没有跟着动画变**。排序键 `(zOrderGroup, y)` 只跟 prop 的位置有关，
+> 而动画只换贴图不换位置——所以队列仍然只在加载时排一次。zOrderGroup 也仍按第 0 步判定，
+> 与 M3.1 逐字节一致。`CRenderQueue` 因此**没有**抽出来：现在没有会移动的实体，
+> 抽出来只是多一层没有职责的间接。等 M4a 有了玩家和敌人再说。
+>
+> 几何改成每帧重建。实测最大的一张图也只有 190 个图块 quad + 342 个精灵 quad，
+> 对一个本来就为"每帧重填"设计的 dynamic VBO 来说无关痛痒，所以没有把图块拆出去缓存。
+
 ### M4 — 动得起来
 
-资源模板系统（`gameObject` / `gameObjectPack` / 各 `Template::Init`）+ `brother` + `moveSet` + 精灵动画 + `input`。
+**这一关拆成两半，因为角色不是精灵。** `CBrother::Template::Init`（:134571）读的是
+`CMoveSetMesh`，`CBrother::Draw` 走 `CMeshCamera::DrawHeirarchy`；模板里那个
+`CGameSpriteGluRef` 只在 `DrawBackground` 里用，是影子。`CGun` 和 `CEnemy` 同样是
+`CMoveSetMesh`。`CMoveSet`（精灵动作集）全项目只有 `CProp` 用——也就是说
+M3.2 已经把精灵动画这条线走完了，角色那条线绕不开 Section 31。
 
-> **验收**：角色站在地图上，键盘/手柄能移动，播放行走动画，相机跟随。
+先做地基再补表现：mesh 做完了角色也还是不能动，而时间步、相机、碰撞是 M5 也要踩的。
+
+#### M4a — 关卡与实体骨架
+
+`CLevel`(Section 8) + 出生点 + `input` + 相机跟随 + 碰撞层。
+`CLevel::Template::Init`（:114779）很浅：地图的 `GameObjectRef` + `CScript` + 3 个 uint16。
+出生点是对象层的 type 15（`PlacedObjectType::Player`），M3.1 已经解析到，只是当成
+不可见标记跳过了。碰撞层同理——有解析器，但只跳过不保留。
+
+玩家先用占位：真解析 `CBrother::Template`，画它的影子精灵加一个朝向标记。
+这一步也该把 `CCamera` / `CRenderQueue` 从 `M3Map.cpp` 里提炼出来——到这时才有
+会移动的实体，队列才真的需要每帧重排。
+
+> **验收**：一个东西在真关卡里按真碰撞跑，相机跟随。
+
+#### M4b — 真角色
+
+Section 31 mesh + `CMoveSetMesh` + `CMeshCamera`。需要给渲染层加顶点/索引缓冲和深度测试，
+是独立的一块。
+
+> **验收**：角色站在地图上，键盘/手柄能移动，播放行走动画。
 
 ### M5 — 打得起来
 
@@ -263,9 +327,9 @@ archetype + action + anim) → archetype 资源 → anim → frame → sprite �
 | 风险 | 影响 | 应对 |
 |---|---|---|
 | ~~**体系外资源寻址未解**~~：已解。所谓"不在 Section 表内"的资源住在**聚合资源**里，handle bit29 标记，走 `CAggregateResource` | 已消除 | M1 实测：5659 个条目解析 5594，41 个空引用，21 个未解（仅两个 name key，疑为引擎元数据） |
-| **`gluScript` 脚本系统**（11 文件 + `CScriptInterpreter`） | 若逻辑大量走脚本则绕不开 | M4 前先探调用密度 |
+| **`gluScript` 脚本系统**（11 文件 + `CScriptInterpreter`） | 若逻辑大量走脚本则绕不开 | 探了一半：13 个模板带 `CScript` 字段（enemy / pickup / level / prop / gun / bullet / brother / mission / armor / powerup），但 `CScript::Load`（:106317）第一个字节是开关，为 0 就整段不读。**真实密度还没量**——要跑一遍包统计非零比例，放进 M4a |
 | ~~**`spriteGlu3`** 只有 3 个文件但可能是关键~~：已解。`CGameSpriteGluRef` 走 packHash + archetype，不带资源 ID | 已消除 | M3.1 实测：22 张图 1653 个 PROP 全部画出，0 失败。特效贴图那批"体系外资源"正是走这条路 |
-| **3D mesh 格式未完全解出**（Section 31） | 影响角色模型 | 推到 M5 之后，先用精灵占位 |
+| **3D mesh 格式未完全解出**（Section 31） | 挡住玩家、敌人、枪——三者都是 `CMoveSetMesh` | 隔离成 M4b。M4a 先用占位跑通关卡骨架，不让表现问题挡住玩法逻辑 |
 | ~~**寻路图层格式未解**（`CLayerPathLink` type 5 / `CLayerPathMesh` type 6）~~：已解，见 `_Big_tool` 的 `map.bt` | 已消除 | M3.1 补齐了两者的解析（只跳过不保留）。之前遇到它们就停，藏在后面的对象层读不到 |
 
 ---
@@ -277,5 +341,6 @@ archetype + action + anim) → archetype 资源 → anim → frame → sprite �
 - [x] M2 看得到贴图 —— 2026-09-05 完成
 - [x] M3 画得出地图 —— 2026-09-05 完成
 - [x] M3.1 地图上的装饰物 —— 2026-09-05 完成
+- [x] M3.2 地图活起来 —— 2026-09-05 完成
 - [ ] M4 动得起来
 - [ ] M5 打得起来

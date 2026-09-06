@@ -42,6 +42,7 @@
 #include "gun_bros/TileSet.h"
 #include "sprite_glu/CSpriteGlu.h"
 #include "sprite_glu/CSpriteIterator.h"
+#include "sprite_glu/CSpritePlayer.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -68,11 +69,22 @@ constexpr float kMaxZoom = 4.0f;
 // Leave a little room around a fitted map so its edges are visible.
 constexpr float kFitMargin = 1.05f;
 
-// Which animation step of a prop to show. The original picks a random frame
-// per instance so a field of identical rocks does not pulse in unison; a
-// viewer wants the same picture every run, so it always takes the first.
-// Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:124916 (Utility::Random in Bind)
-constexpr std::uint32_t kStaticAnimationStep = 0;
+// Longest frame the animation clock will believe. Past this the wall clock has
+// stopped meaning anything -- a debugger breakpoint, a dragged window, a lost
+// context -- and the animations should carry on from where they were rather
+// than lurch forward by however long the pause was.
+constexpr std::uint64_t kMaxFrameMs = 100;
+
+// How far a single-step of the viewer moves time on. A twelfth of a second is
+// short enough to catch a fast animation changing frame and long enough that
+// holding the key walks visibly.
+constexpr std::uint16_t kSingleStepMs = 80;
+
+// The bite --advance moves time on in. Animations only ever step once per
+// tick, so winding the clock forward has to be done a frame at a time or it
+// would advance every animation by exactly one step however far it was asked
+// to go. Sixty hertz, because that is what it is imitating.
+constexpr std::uint16_t kWarmUpFrameMs = 16;
 
 /**
  * Z-order groups, from CProp::GetZOrderGroup.
@@ -88,17 +100,31 @@ constexpr int kZGroupBackgroundOnly = 0;
 constexpr int kZGroupNormal = 3;
 constexpr int kZGroupForegroundOnly = 6;
 
+/** One animation slot of a prop template, expanded step by step. */
+struct PropSlot {
+    // One quad list per animation step, so playback is a subscript rather than
+    // a walk back down the sprite tree. A template's steps run to a couple of
+    // dozen at most, and expanding them all costs a fraction of the archive
+    // read that got us the template in the first place.
+    std::vector<std::vector<SpriteQuad>> quadsByStep;
+
+    // The same steps' durations, which is all a CSpritePlayer needs.
+    std::vector<std::uint16_t> stepDurationsMs;
+};
+
 /**
- * One prop template's three sprite slots, already expanded to quads.
+ * One prop template's three sprite slots, every step already expanded.
  *
  * Shared between instances: a map places a hundred props from a couple of
- * dozen templates, and expanding the same frame a hundred times would mean a
- * hundred archive reads for nothing.
+ * dozen templates, and expanding the same animation a hundred times would mean
+ * a hundred archive reads for nothing. Instances differ only in where they
+ * stand and how far into the animation they are, and both of those live on
+ * PlacedProp.
  */
 struct PropSprite {
-    std::vector<SpriteQuad> background;
-    std::vector<SpriteQuad> main;
-    std::vector<SpriteQuad> foreground;
+    PropSlot background;
+    PropSlot main;
+    PropSlot foreground;
     int zOrderGroup;
 
     // What the walk could not draw, kept so the load can report a total
@@ -107,11 +133,15 @@ struct PropSprite {
     std::uint32_t unsupportedTransforms;
 };
 
-/** One prop standing on the map. */
+/** One prop standing on the map, each of its three slots playing its own. */
 struct PlacedProp {
     float x;
     float y;
     const PropSprite *sprite;
+
+    CSpritePlayer background;
+    CSpritePlayer main;
+    CSpritePlayer foreground;
 };
 
 /** The per-pack tables a prop needs, built the first time that pack is used. */
@@ -300,6 +330,61 @@ bool LoadMap(CResTOCManager &tocManager, int mapPackIndex, std::uint32_t mapInde
 }
 
 /**
+ * Expand every step of one animation into the quads that step draws.
+ *
+ * An unused slot -- animation 255, which is how a prop says it has no
+ * foreground or no main sprite -- comes back empty, and so does one whose
+ * animation is out of range. Neither is an error: most templates fill one slot
+ * of the three, and a player pointed at an empty slot simply never ticks.
+ */
+void ExpandSlot(CSpriteIterator &iterator, const CSpriteGluArchetype &archetype,
+                std::uint8_t animationIndex, PropSlot &out) {
+    if (animationIndex == kNoSpriteGluIndex) {
+        return;
+    }
+    if (animationIndex >= archetype.GetAnimationCount()) {
+        return;
+    }
+
+    const SpriteAnimation &animation = archetype.GetAnimation(animationIndex);
+    const std::size_t stepCount = animation.steps.size();
+
+    out.quadsByStep.resize(stepCount);
+    out.stepDurationsMs.resize(stepCount);
+
+    for (std::size_t step = 0; step < stepCount; ++step) {
+        out.stepDurationsMs[step] = animation.steps[step].durationMs;
+        iterator.Expand(animationIndex, static_cast<std::uint32_t>(step),
+                        out.quadsByStep[step]);
+    }
+}
+
+/**
+ * Whether any of a template's slots has more than one step to play.
+ *
+ * Most scenery is a single step and stands perfectly still, which is correct
+ * and also indistinguishable from a broken clock. Counting the ones that can
+ * move is what tells the two apart without staring at the window.
+ */
+bool PropAnimates(const PropSprite &sprite) {
+    if (sprite.background.stepDurationsMs.size() > 1) {
+        return true;
+    }
+    if (sprite.main.stepDurationsMs.size() > 1) {
+        return true;
+    }
+    return sprite.foreground.stepDurationsMs.size() > 1;
+}
+
+/** Whether a slot draws anything on its first step. */
+bool SlotDrawsAtStart(const PropSlot &slot) {
+    if (slot.quadsByStep.empty()) {
+        return false;
+    }
+    return !slot.quadsByStep[0].empty();
+}
+
+/**
  * Expand one prop template into the quads its three slots draw.
  *
  * This is CProp::Bind's job: it resolves the sprite reference to an archetype
@@ -338,26 +423,71 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     }
 
     CSpriteIterator iterator(gluPack->spriteGlu, *archetype);
-    iterator.Expand(propTemplate.GetBackgroundAnimation(), kStaticAnimationStep,
-                    out.background);
-    iterator.Expand(propTemplate.GetMainAnimation(), kStaticAnimationStep, out.main);
-    iterator.Expand(propTemplate.GetForegroundAnimation(), kStaticAnimationStep,
-                    out.foreground);
+    ExpandSlot(iterator, *archetype, propTemplate.GetBackgroundAnimation(),
+               out.background);
+    ExpandSlot(iterator, *archetype, propTemplate.GetMainAnimation(), out.main);
+    ExpandSlot(iterator, *archetype, propTemplate.GetForegroundAnimation(),
+               out.foreground);
 
     out.skippedParts = iterator.GetSkippedPartCount();
     out.unsupportedTransforms = iterator.GetUnsupportedTransformCount();
 
-    if (!out.main.empty()) {
+    // Judged on the first step alone, which is what M3.1 sorted on before
+    // anything animated. Playback moves what a slot draws but never whether it
+    // draws, so keeping the test on step 0 keeps the draw order fixed for the
+    // life of the map -- and lets the queue stay sorted once, at load.
+    if (SlotDrawsAtStart(out.main)) {
         out.zOrderGroup = kZGroupNormal;
-    } else if (!out.background.empty()) {
+    } else if (SlotDrawsAtStart(out.background)) {
         out.zOrderGroup = kZGroupBackgroundOnly;
-    } else if (!out.foreground.empty()) {
+    } else if (SlotDrawsAtStart(out.foreground)) {
         out.zOrderGroup = kZGroupForegroundOnly;
     } else {
         out.zOrderGroup = kZGroupNormal;
     }
 
     return true;
+}
+
+/**
+ * A repeatable stand-in for the Utility::Random in CProp::Bind.
+ *
+ * Bind starts the main slot on a random step so a field of identical rocks
+ * does not pulse in unison. A real random would cost --screenshot its one
+ * useful property, that two runs produce the same image, so this hashes the
+ * prop's place in the draw order instead: scattered between neighbours, and
+ * the same on every run.
+ * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:124916
+ *
+ * The multiplier is Knuth's, and the shift drops the low bits, which move too
+ * regularly between consecutive ordinals to scatter anything.
+ */
+std::uint32_t StartStepFor(std::size_t propOrdinal, std::size_t stepCount) {
+    if (stepCount <= 1) {
+        return 0;
+    }
+
+    const std::uint32_t scrambled =
+        static_cast<std::uint32_t>(propOrdinal) * 2654435761u;
+    return (scrambled >> 16) % static_cast<std::uint32_t>(stepCount);
+}
+
+/**
+ * Point one placed prop's three players at their slots, as CProp::Bind does.
+ *
+ * All three loop forwards, which is CSpritePlayer's constructed state and
+ * which Bind never changes. Only the main slot starts part-way in; the other
+ * two begin at step 0, so a prop's foreground and background stay in step with
+ * each other however its body is phased.
+ */
+void StartPropPlayers(PlacedProp &prop, std::size_t propOrdinal) {
+    const PropSprite &sprite = *prop.sprite;
+
+    prop.background.SetAnimation(&sprite.background.stepDurationsMs);
+    prop.foreground.SetAnimation(&sprite.foreground.stepDurationsMs);
+
+    prop.main.SetAnimation(&sprite.main.stepDurationsMs);
+    prop.main.SetStep(StartStepFor(propOrdinal, sprite.main.stepDurationsMs.size()));
 }
 
 /** Order props the way CRenderQueue does: by group, then down the screen. */
@@ -427,6 +557,16 @@ void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
 
     std::stable_sort(loaded.props.begin(), loaded.props.end(), PropDrawsBefore);
 
+    // After the sort, so a prop's phase follows from where it ends up in the
+    // draw order rather than from which layer happened to place it.
+    std::uint32_t animated = 0;
+    for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+        StartPropPlayers(loaded.props[i], i);
+        if (PropAnimates(*loaded.props[i].sprite)) {
+            animated++;
+        }
+    }
+
     std::uint32_t skippedParts = 0;
     std::uint32_t unsupportedTransforms = 0;
     std::map<std::uint64_t, PropSprite>::const_iterator sprite;
@@ -436,14 +576,54 @@ void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
         unsupportedTransforms += sprite->second.unsupportedTransforms;
     }
 
-    std::printf("[m3] %u props from %zu templates (%u unresolved, "
-                "%u non-prop objects ignored)\n",
-                placed, loaded.propSprites.size(), skipped, otherTypes);
+    std::printf("[m3] %u props from %zu templates, %u of them animated "
+                "(%u unresolved, %u non-prop objects ignored)\n",
+                placed, loaded.propSprites.size(), animated, skipped, otherTypes);
     if (skippedParts > 0 || unsupportedTransforms > 0) {
         std::printf("[m3]   %u sprite parts undrawable, "
                     "%u drawn without a rotating transform\n",
                     skippedParts, unsupportedTransforms);
     }
+}
+
+/** Move every prop's three players on by one frame's worth of time. */
+void AdvanceProps(std::vector<PlacedProp> &props, std::uint16_t deltaMs) {
+    for (std::size_t i = 0; i < props.size(); ++i) {
+        props[i].background.Update(deltaMs);
+        props[i].main.Update(deltaMs);
+        props[i].foreground.Update(deltaMs);
+    }
+}
+
+/**
+ * Run the animation clock forward, in the bites playback would use.
+ *
+ * What makes a still screenshot able to prove anything about animation: shoot
+ * the same map at two different times and diff them. Deterministic, because
+ * the bite size is fixed rather than taken from the wall clock.
+ */
+void WarmUpProps(std::vector<PlacedProp> &props, std::uint32_t totalMs) {
+    for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
+        AdvanceProps(props, kWarmUpFrameMs);
+    }
+}
+
+/**
+ * The quads a slot draws at its player's current step.
+ *
+ * An empty slot -- an unused animation, or one that expanded to nothing --
+ * lands on the out-of-range path and draws nothing, which is why the players
+ * of empty slots never need a special case anywhere else.
+ */
+const std::vector<SpriteQuad> &CurrentQuads(const PropSlot &slot,
+                                            const CSpritePlayer &player) {
+    static const std::vector<SpriteQuad> kNothing;
+
+    const std::uint32_t step = player.GetStep();
+    if (step >= slot.quadsByStep.size()) {
+        return kNothing;
+    }
+    return slot.quadsByStep[step];
 }
 
 /** Emit one prop's slot, positioned at the prop and offset by each quad. */
@@ -473,9 +653,16 @@ void AddSpriteQuads(const PlacedProp &prop, const std::vector<SpriteQuad> &quads
  * prop's three slots together -- a prop's foreground has to land on top of the
  * NEXT prop's main sprite, not just its own.
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:145235
+ *
+ * This runs every frame now, because a prop's quads change as it animates. The
+ * tiles do not, and could in principle be kept -- but the largest map in these
+ * archives is 190 tile quads and 342 prop ones, so the whole rebuild is a few
+ * hundred quads into a buffer designed to be refilled every frame. Splitting
+ * the batch in two to save half of nothing would cost a second buffer and the
+ * code that decides which half is stale.
  */
 void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
-                   bool showProps) {
+                   bool showProps, bool report) {
     const CMap &map = loaded.map;
     const TileSet &tileSet = loaded.tileSet;
     const std::vector<TileRect> &tiles = tileSet.GetTiles();
@@ -532,21 +719,31 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
 
     if (showProps) {
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
-            AddSpriteQuads(loaded.props[i], loaded.props[i].sprite->background, batch);
+            const PlacedProp &prop = loaded.props[i];
+            AddSpriteQuads(prop, CurrentQuads(prop.sprite->background, prop.background),
+                           batch);
         }
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
-            AddSpriteQuads(loaded.props[i], loaded.props[i].sprite->main, batch);
+            const PlacedProp &prop = loaded.props[i];
+            AddSpriteQuads(prop, CurrentQuads(prop.sprite->main, prop.main), batch);
         }
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
-            AddSpriteQuads(loaded.props[i], loaded.props[i].sprite->foreground, batch);
+            const PlacedProp &prop = loaded.props[i];
+            AddSpriteQuads(prop, CurrentQuads(prop.sprite->foreground, prop.foreground),
+                           batch);
         }
     }
 
     batch.Upload();
-    std::printf("[m3] %u tile quads + %u prop quads in %u draw calls "
-                "(%u cells empty or unusable)\n",
-                tileQuads, batch.GetQuadCount() - tileQuads, batch.GetGroupCount(),
-                skipped);
+
+    // This runs every frame now, so it only says anything when the caller has
+    // just changed what is being drawn.
+    if (report) {
+        std::printf("[m3] %u tile quads + %u prop quads in %u draw calls "
+                    "(%u cells empty or unusable)\n",
+                    tileQuads, batch.GetQuadCount() - tileQuads,
+                    batch.GetGroupCount(), skipped);
+    }
 }
 
 /** Read the current frame back and save it, flipping to top-down. */
@@ -742,7 +939,8 @@ int RunMapList(const std::string &bigDirectory) {
 }
 
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
-             std::uint32_t mapIndex, const std::string &screenshotPath) {
+             std::uint32_t mapIndex, const std::string &screenshotPath,
+             std::uint32_t advanceMs) {
     std::printf("=== M3: a level, terrain and scenery, on screen ===\n\n");
 
     // --- resources, before any GL exists ---
@@ -812,22 +1010,31 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         return 1;
     }
     LoadProps(tocManager, loaded);
+    WarmUpProps(loaded.props, advanceMs);
 
     // Either layer can be hidden, which is how "is that rock in the right
     // place or is the ground wrong?" gets answered without a debugger.
     bool showTiles = true;
     bool showProps = true;
 
-    BuildGeometry(loaded, batch, showTiles, showProps);
+    // The props animate, so the geometry is rebuilt every frame from here on.
+    // This flag only decides whether a rebuild says anything about itself.
+    bool reportGeometry = true;
     Camera camera = FitCamera(loaded, drawableWidth, drawableHeight);
+
+    // Time, and the two ways of taking it apart when something looks wrong:
+    // stop it, or move it on one bite at a time.
+    std::uint64_t previousTicks = window.GetTicksMs();
+    bool paused = false;
+    bool singleStep = false;
 
     // The factors themselves are the batch's business now: glows and fire are
     // additive, everything else is straight alpha.
     glEnable(GL_BLEND);
 
     std::printf("\n[m3] left/right: map (crosses packs), up/down: pack, "
-                "Home: refit, T: tiles, P: props, drag: pan, wheel: zoom, "
-                "Esc: quit\n");
+                "Home: refit, T: tiles, P: props, space: pause, "
+                "'.': one step on, drag: pan, wheel: zoom, Esc: quit\n");
 
     bool reportedFirstFrame = false;
     while (window.PumpEvents()) {
@@ -836,15 +1043,22 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         // --- switching maps and packs ---
         bool reload = false;
         bool refit = false;
-        bool rebuild = false;
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
              key = window.TakeKeyPress()) {
             if (key == KeyCode::T) {
                 showTiles = !showTiles;
-                rebuild = true;
+                reportGeometry = true;
             } else if (key == KeyCode::P) {
                 showProps = !showProps;
-                rebuild = true;
+                reportGeometry = true;
+            } else if (key == KeyCode::Space) {
+                paused = !paused;
+                std::printf("[m3] %s\n", paused ? "paused" : "running");
+            } else if (key == KeyCode::Period) {
+                // Stepping implies pausing: otherwise the step is lost in the
+                // real time that keeps flowing around it.
+                paused = true;
+                singleStep = true;
             } else if (key == KeyCode::Right) {
                 // One step through the flat list, so the last map of a pack is
                 // followed by the first map of the next.
@@ -875,8 +1089,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
                         replacement)) {
                 LoadProps(tocManager, replacement);
+                WarmUpProps(replacement.props, advanceMs);
                 loaded = std::move(replacement);
-                rebuild = true;
+                reportGeometry = true;
                 refit = true;
             } else {
                 // A map that will not load leaves the previous one on screen
@@ -884,12 +1099,29 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
                 std::printf("[m3] staying on the previous map\n");
             }
         }
-        if (rebuild) {
-            BuildGeometry(loaded, batch, showTiles, showProps);
-        }
         if (refit) {
             camera = FitCamera(loaded, drawableWidth, drawableHeight);
         }
+
+        // --- animation clock ---
+        const std::uint64_t nowTicks = window.GetTicksMs();
+        std::uint64_t elapsedMs = nowTicks - previousTicks;
+        previousTicks = nowTicks;
+
+        if (elapsedMs > kMaxFrameMs) {
+            elapsedMs = kMaxFrameMs;
+        }
+        if (paused) {
+            elapsedMs = 0;
+        }
+        if (singleStep) {
+            elapsedMs = kSingleStepMs;
+            singleStep = false;
+        }
+
+        AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
+        BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
+        reportGeometry = false;
 
         // --- zoom about the centre of the view ---
         const float wheel = window.TakeWheelDelta();

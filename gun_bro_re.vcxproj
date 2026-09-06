@@ -122,6 +122,7 @@
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteGlu.cpp" />
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteGluArchetype.cpp" />
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpriteIterator.cpp" />
+    <ClCompile Include="src\gun_bros_re\sprite_glu\CSpritePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
@@ -151,6 +152,7 @@
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGlu.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGluArchetype.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteIterator.h" />
+    <ClInclude Include="src\gun_bros_re\sprite_glu\CSpritePlayer.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
     <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />
     <ClInclude Include="src\gun_bros_re\engine\CShaderProgram.h" />

@@ -42,7 +42,9 @@ void PrintUsage() {
         "                            (default: %s %u)\n"
         "  --big <directory>         where the .big files are\n"
         "                            (default: ASSET_ROOT/big)\n"
-        "  --screenshot <file.png>   save the first frame and exit\n",
+        "  --screenshot <file.png>   save the first frame and exit\n"
+        "  --advance <ms>            run the animations on this far before\n"
+        "                            that first frame\n",
         kDefaultMapPack, kDefaultMapIndex, kDefaultImagePack, kDefaultImageResourceId);
 }
 
@@ -52,6 +54,7 @@ int main(int argc, char **argv) {
     std::string bigDirectory = std::string(ASSET_ROOT) + "/big";
     std::string dumpPackName;
     std::string screenshotPath;
+    std::uint32_t advanceMs = 0;
 
     std::string imagePackName = kDefaultImagePack;
     std::uint32_t imageResourceId = kDefaultImageResourceId;
@@ -85,6 +88,8 @@ int main(int argc, char **argv) {
             bigDirectory = argv[++i];
         } else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
             screenshotPath = argv[++i];
+        } else if (std::strcmp(argument, "--advance") == 0 && i + 1 < argc) {
+            advanceMs = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else {
             PrintUsage();
             return 1;
@@ -103,5 +108,5 @@ int main(int argc, char **argv) {
     if (runM2) {
         return RunM2Texture(bigDirectory, imagePackName, imageResourceId, screenshotPath);
     }
-    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath);
+    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath, advanceMs);
 }

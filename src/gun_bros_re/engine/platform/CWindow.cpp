@@ -16,14 +16,16 @@ namespace {
 /** Map an SDL keycode onto the platform-independent enum. */
 KeyCode TranslateKey(SDL_Keycode key) {
     switch (key) {
-        case SDLK_LEFT:  return KeyCode::Left;
-        case SDLK_RIGHT: return KeyCode::Right;
-        case SDLK_UP:    return KeyCode::Up;
-        case SDLK_DOWN:  return KeyCode::Down;
-        case SDLK_HOME:  return KeyCode::Home;
-        case SDLK_T:     return KeyCode::T;
-        case SDLK_P:     return KeyCode::P;
-        default:         return KeyCode::None;
+        case SDLK_LEFT:   return KeyCode::Left;
+        case SDLK_RIGHT:  return KeyCode::Right;
+        case SDLK_UP:     return KeyCode::Up;
+        case SDLK_DOWN:   return KeyCode::Down;
+        case SDLK_HOME:   return KeyCode::Home;
+        case SDLK_T:      return KeyCode::T;
+        case SDLK_P:      return KeyCode::P;
+        case SDLK_SPACE:  return KeyCode::Space;
+        case SDLK_PERIOD: return KeyCode::Period;
+        default:          return KeyCode::None;
     }
 }
 
