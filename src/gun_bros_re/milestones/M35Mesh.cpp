@@ -32,6 +32,7 @@
 #include "gun_bros/CGun.h"
 #include "gun_bros/CMesh.h"
 #include "gun_bros/CMoveSetMesh.h"
+#include "gun_bros/CMoveSetMeshController.h"
 #include "gun_bros/CResTOCManager.h"
 
 #include <cmath>
@@ -62,6 +63,18 @@ constexpr float kMaxZoom = 20.0f;
 
 // Viewer: the ortho box is this many model widths deep, so nothing clips.
 constexpr float kDepthMargin = 4.0f;
+
+// Viewer: the longest step the animation clock will take in one frame. A
+// window dragged around or a debugger break otherwise hands the move set a
+// gap of seconds, which reads as a skip rather than as slow motion.
+constexpr std::uint64_t kMaxFrameMs = 100;
+
+// Viewer: how far the period key nudges the clock while paused.
+constexpr std::int32_t kSingleStepMs = 33;
+
+// Viewer: the step --advance runs the animation on in. Same bite size as M3's
+// warm-up, so an animation lands in the same place either way.
+constexpr std::int32_t kWarmUpFrameMs = 16;
 
 /**
  * The two tilts the engine uses, copied from CMeshCamera.
@@ -358,6 +371,10 @@ struct MeshPair {
     // owners that have none. CMesh::Init takes the same argument.
     const CMoveSetMesh *moveSet;
 
+    // Which of that set's mesh configs this pair is. Moves name a config, so
+    // this is what says which moves drive this particular model.
+    std::uint8_t meshConfigIndex;
+
     // "pack1 enemy 3", for the log and the viewer's title line.
     std::string owner;
 };
@@ -397,6 +414,7 @@ void EmitMoveSet(const CMoveSetMesh &moveSet, const std::string &owner,
         pair.imagePackHash = moveSet.GetPackHash();
         pair.imageOrdinal = config.imageOrdinal;
         pair.moveSet = &moveSet;
+        pair.meshConfigIndex = static_cast<std::uint8_t>(i);
         pair.owner = owner;
         sink.OnPair(pair);
     }
@@ -411,6 +429,7 @@ void EmitAssetRefs(const CGameAssetRef &meshRef, const CGameAssetRef &imageRef,
     pair.imagePackHash = imageRef.packHash;
     pair.imageOrdinal = static_cast<std::uint32_t>(imageRef.assetId);
     pair.moveSet = nullptr;
+    pair.meshConfigIndex = 0;
     pair.owner = owner;
     sink.OnPair(pair);
 }
@@ -765,6 +784,14 @@ struct CatalogEntry {
     std::uint32_t imagePackHash;
     std::uint32_t imageOrdinal;
     std::string owner;
+
+    // The move set is COPIED, not pointed at: the one the walk turned up is a
+    // local of whichever Walk function parsed the template and is gone by the
+    // time the viewer opens a window. Empty for the models named by a plain
+    // asset ref -- those have no moves and show a single still frame.
+    CMoveSetMesh moveSet;
+    bool hasMoveSet;
+    std::uint8_t meshConfigIndex;
 };
 
 /**
@@ -790,6 +817,11 @@ public:
         entry.imagePackHash = pair.imagePackHash;
         entry.imageOrdinal = pair.imageOrdinal;
         entry.owner = pair.owner;
+        entry.hasMoveSet = pair.moveSet != nullptr;
+        entry.meshConfigIndex = pair.meshConfigIndex;
+        if (entry.hasMoveSet) {
+            entry.moveSet = *pair.moveSet;
+        }
         m_entries.push_back(entry);
     }
 
@@ -805,11 +837,115 @@ private:
     std::vector<CatalogEntry> m_entries;
 };
 
-/** The model currently on screen: its data, its GL buffers, its atlas. */
+/**
+ * The model currently on screen: its data, its atlas, and its clock.
+ *
+ * Never copied or moved once built -- `configMeshes` points back at `mesh`,
+ * which is why the viewer holds one of these by pointer and swaps the pointer
+ * rather than the object.
+ */
 struct LoadedModel {
     CMesh mesh;
     CTexture texture;
+
+    // The playback machinery, used only when the catalogue entry brought a
+    // move set. A model named by a plain asset ref shows frame 0 and stops.
+    CMoveSetMeshController controller;
+    std::vector<const CMesh *> configMeshes;
+
+    // Which moves of the set drive THIS mesh, by index into the set. A player
+    // move set has moves for the torso and moves for the legs; only one half
+    // of them belongs to the model on screen.
+    std::vector<std::int32_t> moves;
+    std::size_t moveSlot;
+
+    // The evaluator's output, kept between frames so it is not reallocated
+    // sixty times a second.
+    std::vector<float> pose;
+
+    LoadedModel() : moveSlot(0) {}
 };
+
+/**
+ * Bind the move set and pick out the moves that drive this model.
+ *
+ * The controller wants the whole config array because a move can switch which
+ * mesh is shown; here only one config is loaded, so the rest stay null and the
+ * moves naming them are filtered out instead of failing at SetMove.
+ */
+void BindMoveSet(const CatalogEntry &entry, LoadedModel &model) {
+    model.configMeshes.assign(entry.moveSet.GetMeshConfigs().size(), nullptr);
+    if (entry.meshConfigIndex < model.configMeshes.size()) {
+        model.configMeshes[entry.meshConfigIndex] = &model.mesh;
+    }
+
+    model.moves.clear();
+    for (std::size_t i = 0; i < entry.moveSet.GetMoves().size(); ++i) {
+        if (entry.moveSet.GetMoves()[i].meshConfigIndex == entry.meshConfigIndex) {
+            model.moves.push_back(static_cast<std::int32_t>(i));
+        }
+    }
+
+    model.moveSlot = 0;
+    model.controller.SetMoveSet(&entry.moveSet, model.configMeshes);
+    if (!model.moves.empty()) {
+        model.controller.SetMove(model.moves[0]);
+    }
+}
+
+/**
+ * Put the current pose in the vertex buffer.
+ *
+ * A model with a move set is asked where it is right now; one without shows
+ * the still frame the command line picked. Either way the buffer keeps its
+ * last contents if the evaluator has nothing -- better a held pose than a
+ * model that blinks out.
+ */
+void UploadPose(LoadedModel &model, CMeshBuffer &buffer,
+                std::uint32_t stillFrameIndex) {
+    if (model.moves.empty()) {
+        buffer.SetFrame(model.mesh, stillFrameIndex);
+        return;
+    }
+
+    if (model.controller.GetAnimation().Evaluate(model.pose)) {
+        buffer.SetVertices(model.pose);
+    }
+}
+
+/**
+ * Run the animation on before the first frame is drawn.
+ *
+ * Stepped rather than handed the whole span at once, because the move's speed
+ * is rounded to whole milliseconds every update -- one big step and one
+ * hundred small ones do not land in the same place, and it is the small ones
+ * that match what a running viewer does.
+ */
+void WarmUp(LoadedModel &model, std::uint32_t advanceMs) {
+    if (model.moves.empty()) {
+        return;
+    }
+    for (std::uint32_t elapsed = 0; elapsed < advanceMs; elapsed += kWarmUpFrameMs) {
+        model.controller.Update(kWarmUpFrameMs);
+    }
+}
+
+/** "move 3 of 18 -- frames 40..79, speed 1.00" */
+void ReportMove(const CatalogEntry &entry, const LoadedModel &model) {
+    if (model.moves.empty()) {
+        std::printf("[m35] no move drives this model; showing frame 0\n");
+        return;
+    }
+
+    const std::int32_t moveIndex = model.moves[model.moveSlot];
+    const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+    std::printf("[m35] move %d (%zu of %zu for this mesh) -- frames %u..%u, "
+                "%d ms, speed %.2f%s\n",
+                moveIndex, model.moveSlot + 1, model.moves.size(),
+                move.firstFrame, move.lastFrame,
+                model.controller.GetAnimation().GetRangeDurationMs(), move.speed,
+                move.restartsWhenRepeated != 0 ? ", restarts" : "");
+}
 
 /** Fetch and decode one catalogue entry. */
 bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) {
@@ -849,6 +985,11 @@ bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) 
                 out.mesh.GetIndices().size(), out.mesh.GetFrames().size(),
                 tables.GetPackName(entry.imagePackHash).c_str(), entry.imageOrdinal,
                 decoded.width, decoded.height);
+
+    if (entry.hasMoveSet) {
+        BindMoveSet(entry, out);
+        ReportMove(entry, out);
+    }
     return true;
 }
 
@@ -961,7 +1102,7 @@ int RunMoveSetSurvey(const std::string &bigDirectory) {
 
 int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
                float spinDegrees, std::uint32_t frameIndex,
-               const std::string &screenshotPath) {
+               const std::string &screenshotPath, std::uint32_t advanceMs) {
     std::printf("=== M3.5: a model on screen ===\n\n");
 
     CResTOCManager tocManager;
@@ -1009,7 +1150,8 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     if (!buffer.SetMesh(model->mesh)) {
         return 1;
     }
-    buffer.SetFrame(model->mesh, frameIndex);
+    WarmUp(*model, advanceMs);
+    UploadPose(*model, buffer, frameIndex);
 
     // Depth, because a model is solid: without this the far side of it draws
     // over the near side wherever the strip happens to arrive later.
@@ -1022,8 +1164,13 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     view.zoom = 1.0f;
 
     std::printf("\n[m35] left/right: model, up/down: ten at a time, "
+                "M/N: move, space: pause, period: step, "
                 "drag: turn, wheel: zoom, G: game tilt, Home: reset view, "
                 "Esc: quit\n");
+
+    std::uint64_t previousTicks = window.GetTicksMs();
+    bool paused = false;
+    bool singleStep = false;
 
     bool reportedFirstFrame = false;
     while (window.PumpEvents()) {
@@ -1033,6 +1180,7 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
 
         // --- walking the catalogue ---
         const std::size_t previousSlot = slot;
+        bool moveChanged = false;
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
              key = window.TakeKeyPress()) {
             const std::size_t count = catalog.GetEntries().size();
@@ -1044,6 +1192,18 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
                 slot = (slot + 10) % count;
             } else if (key == KeyCode::Up) {
                 slot = (slot + count - 10) % count;
+            } else if (key == KeyCode::M && !model->moves.empty()) {
+                model->moveSlot = (model->moveSlot + 1) % model->moves.size();
+                moveChanged = true;
+            } else if (key == KeyCode::N && !model->moves.empty()) {
+                const std::size_t moveCount = model->moves.size();
+                model->moveSlot = (model->moveSlot + moveCount - 1) % moveCount;
+                moveChanged = true;
+            } else if (key == KeyCode::Space) {
+                paused = !paused;
+                std::printf("[m35] %s\n", paused ? "paused" : "playing");
+            } else if (key == KeyCode::Period) {
+                singleStep = true;
             } else if (key == KeyCode::G) {
                 // The 30-degree lean the game plays at, against the 90 the
                 // menus stand a model up with.
@@ -1068,13 +1228,45 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
             if (LoadModel(tables, catalog.GetEntries()[slot], *replacement)) {
                 model = std::move(replacement);
                 buffer.SetMesh(model->mesh);
-                buffer.SetFrame(model->mesh, frameIndex);
+                WarmUp(*model, advanceMs);
+                UploadPose(*model, buffer, frameIndex);
             } else {
                 // A model that will not load leaves the previous one on screen
                 // rather than a blank window.
                 std::printf("[m35] staying on the previous model\n");
                 slot = previousSlot;
             }
+        } else if (moveChanged) {
+            if (!model->controller.SetMove(model->moves[model->moveSlot])) {
+                // Refused, so this is the move already playing and it is not
+                // flagged to restart. Cycling round a mesh with one move would
+                // otherwise look like a dead key; rewind it by hand.
+                CMeshAnimationController &animation = model->controller.GetAnimation();
+                animation.SetTimeMs(animation.GetRangeStartMs());
+            }
+            UploadPose(*model, buffer, frameIndex);
+            ReportMove(catalog.GetEntries()[slot], *model);
+        }
+
+        // --- animation clock ---
+        const std::uint64_t nowTicks = window.GetTicksMs();
+        std::uint64_t elapsedMs = nowTicks - previousTicks;
+        previousTicks = nowTicks;
+
+        if (elapsedMs > kMaxFrameMs) {
+            elapsedMs = kMaxFrameMs;
+        }
+        if (paused) {
+            elapsedMs = 0;
+        }
+        if (singleStep) {
+            elapsedMs = static_cast<std::uint64_t>(kSingleStepMs);
+            singleStep = false;
+        }
+
+        if (elapsedMs > 0 && !model->moves.empty()) {
+            model->controller.Update(static_cast<std::int32_t>(elapsedMs));
+            UploadPose(*model, buffer, frameIndex);
         }
 
         // --- turntable ---

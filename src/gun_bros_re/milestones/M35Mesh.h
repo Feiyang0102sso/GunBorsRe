@@ -17,12 +17,15 @@
  *        hand them over.
  * @param spinDegrees Turn the model this far about its own up axis before
  *        the first frame, so a screenshot can be taken from a chosen side.
- * @param frameIndex Which of the model's key frames to pose it with.
+ * @param frameIndex Which of the model's key frames to pose it with. Only
+ *        used by the models that have no move set; the rest play a move.
  * @param screenshotPath When non-empty, save the first frame here and exit.
+ * @param advanceMs Run the animation on this far before the first frame, so a
+ *        screenshot can be taken part way through a move.
  */
 int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
                float spinDegrees, std::uint32_t frameIndex,
-               const std::string &screenshotPath);
+               const std::string &screenshotPath, std::uint32_t advanceMs);
 
 /**
  * Parse every mesh in every pack and print what came out of each.

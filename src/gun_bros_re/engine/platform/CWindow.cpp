@@ -26,6 +26,8 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_T:      return KeyCode::T;
         case SDLK_P:      return KeyCode::P;
         case SDLK_G:      return KeyCode::G;
+        case SDLK_M:      return KeyCode::M;
+        case SDLK_N:      return KeyCode::N;
         case SDLK_SPACE:  return KeyCode::Space;
         case SDLK_PERIOD: return KeyCode::Period;
         default:          return KeyCode::None;

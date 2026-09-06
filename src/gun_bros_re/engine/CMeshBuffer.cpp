@@ -127,8 +127,10 @@ void CMeshBuffer::SetFrame(const CMesh &mesh, std::size_t frameIndex) {
     if (frameIndex >= mesh.GetFrames().size()) {
         return;
     }
+    SetVertices(mesh.GetFrames()[frameIndex].vertices);
+}
 
-    const std::vector<float> &vertices = mesh.GetFrames()[frameIndex].vertices;
+void CMeshBuffer::SetVertices(const std::vector<float> &vertices) {
     if (vertices.empty()) {
         return;
     }

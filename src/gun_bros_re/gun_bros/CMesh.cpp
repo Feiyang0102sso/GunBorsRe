@@ -136,6 +136,172 @@ std::int32_t CMesh::GetDurationMs() const {
     return m_frames.back().timeMs;
 }
 
+void CMesh::FindFramesAt(std::int32_t timeMs, std::size_t &firstFrame,
+                         std::size_t &secondFrame, float &t) const {
+    // A model with one frame is not animated; so is one whose frames all sit
+    // at the same timestamp, and that case has to be caught before the modulo
+    // below divides by its length.
+    const std::int32_t duration = GetDurationMs();
+    if (m_frames.size() <= 1 || duration <= 0) {
+        firstFrame = 0;
+        secondFrame = 0;
+        t = 0.0f;
+        return;
+    }
+
+    // Time past the last frame wraps round, which is what lets a caller feed
+    // this a clock that only grows.
+    std::int32_t wrapped = timeMs;
+    if (duration < timeMs) {
+        wrapped = timeMs % duration;
+    }
+
+    for (std::size_t i = 0; i < m_frames.size(); ++i) {
+        if (m_frames[i].timeMs < wrapped) {
+            continue;
+        }
+
+        // The first frame cannot be the second half of a pair.
+        if (i == 0) {
+            firstFrame = 0;
+            secondFrame = 0;
+            t = 0.0f;
+            return;
+        }
+
+        const std::int32_t startMs = m_frames[i - 1].timeMs;
+        const std::int32_t endMs = m_frames[i].timeMs;
+        firstFrame = i - 1;
+        secondFrame = i;
+        t = static_cast<float>(wrapped - startMs) / static_cast<float>(endMs - startMs);
+        return;
+    }
+
+    // Unreachable after the wrap above, because the last frame's timestamp is
+    // the duration the wrap is taken against. The original falls through here
+    // with an index of -1 and reads off the end of the array; we hold on the
+    // last frame instead.
+    firstFrame = m_frames.size() - 1;
+    secondFrame = m_frames.size() - 1;
+    t = 0.0f;
+}
+
+bool CMesh::BuildTweenFrame(std::size_t firstFrame, std::size_t secondFrame,
+                            float t, std::vector<float> &out) const {
+    if (firstFrame >= m_frames.size() || secondFrame >= m_frames.size()) {
+        return false;
+    }
+
+    // Which two frames actually get blended: t at or outside either end
+    // collapses the pair onto one frame, and the copy below runs instead.
+    std::size_t startFrame = firstFrame;
+    std::size_t endFrame = firstFrame;
+    if (t > 0.0f) {
+        endFrame = secondFrame;
+        if (t < 1.0f) {
+            startFrame = firstFrame;
+        } else {
+            startFrame = secondFrame;
+        }
+    }
+
+    // The original sizes the write off the start frame, so a start frame with
+    // no vertices writes nothing at all -- that is what a frame skipped at
+    // load time does. Say so rather than leaving the caller a stale buffer it
+    // cannot tell apart from a fresh one.
+    const std::vector<float> &startVertices = m_frames[startFrame].vertices;
+    if (startVertices.empty()) {
+        return false;
+    }
+
+    out.resize(startVertices.size());
+
+    if (startFrame == endFrame) {
+        for (std::size_t i = 0; i < startVertices.size(); ++i) {
+            out[i] = startVertices[i];
+        }
+        return true;
+    }
+
+    const std::vector<float> &endVertices = m_frames[endFrame].vertices;
+    if (endVertices.size() < startVertices.size()) {
+        return false;
+    }
+
+    const float startWeight = 1.0f - t;
+    for (std::size_t i = 0; i < startVertices.size(); ++i) {
+        out[i] = startVertices[i] * startWeight + endVertices[i] * t;
+    }
+    return true;
+}
+
+bool CMesh::GetVerticesAt(std::int32_t timeMs, std::vector<float> &out) const {
+    if (m_frames.empty()) {
+        return false;
+    }
+
+    std::size_t firstFrame = 0;
+    std::size_t secondFrame = 0;
+    float t = 0.0f;
+    FindFramesAt(timeMs, firstFrame, secondFrame, t);
+    return BuildTweenFrame(firstFrame, secondFrame, t, out);
+}
+
+bool CMesh::GetNodeAt(std::int32_t timeMs, std::size_t boneIndex,
+                      MeshBoneTransform &out) const {
+    // Against the name list, not against a frame's bone array: a frame skipped
+    // at load time has no bones, and the names are always all there.
+    if (m_frames.empty() || boneIndex >= m_boneNames.size()) {
+        return false;
+    }
+
+    std::size_t firstFrame = 0;
+    std::size_t secondFrame = 0;
+    float t = 0.0f;
+    FindFramesAt(timeMs, firstFrame, secondFrame, t);
+
+    if (boneIndex >= m_frames[firstFrame].bones.size() ||
+        boneIndex >= m_frames[secondFrame].bones.size()) {
+        return false;
+    }
+
+    if (firstFrame == secondFrame) {
+        out = m_frames[firstFrame].bones[boneIndex];
+        return true;
+    }
+
+    const MeshBoneTransform &start = m_frames[firstFrame].bones[boneIndex];
+    MeshBoneTransform end = m_frames[secondFrame].bones[boneIndex];
+
+    // Two unit quaternions describe the same rotation when one is the other
+    // negated, and the straight-line blend below takes the short way round
+    // only if they point the same way to begin with. A negative dot product
+    // means they do not, so flip one.
+    const float dot = start.rotX * end.rotX + start.rotY * end.rotY +
+                      start.rotZ * end.rotZ + start.rotW * end.rotW;
+    if (dot < 0.0f) {
+        end.rotX = -end.rotX;
+        end.rotY = -end.rotY;
+        end.rotZ = -end.rotZ;
+        end.rotW = -end.rotW;
+    }
+
+    const float startWeight = 1.0f - t;
+    out.posX = start.posX * startWeight + end.posX * t;
+    out.posY = start.posY * startWeight + end.posY * t;
+    out.posZ = start.posZ * startWeight + end.posZ * t;
+
+    // Straight lerp, and deliberately not normalised afterwards: the original
+    // does not either. Between neighbouring key frames the two quaternions are
+    // close enough that the length error is a fraction of a per cent, and it
+    // shows up as a scale on the attached part rather than a wrong angle.
+    out.rotX = start.rotX * startWeight + end.rotX * t;
+    out.rotY = start.rotY * startWeight + end.rotY * t;
+    out.rotZ = start.rotZ * startWeight + end.rotZ * t;
+    out.rotW = start.rotW * startWeight + end.rotW * t;
+    return true;
+}
+
 void CMesh::ComputeBounds() {
     m_bounds = MeshBounds();
 

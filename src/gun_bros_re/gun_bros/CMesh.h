@@ -112,7 +112,57 @@ public:
     /** Timestamp of the last frame, which is how long the animation runs. */
     std::int32_t GetDurationMs() const;
 
+    // -----------------------------------------------------------------------
+    // The time evaluator
+    //
+    // Two outlets on one mechanism: both find the pair of key frames that
+    // bracket a moment and interpolate between them. Vertices lerp; bone
+    // rotations nlerp. The whole of assembly hangs off GetNodeAt -- a gun goes
+    // in a hand by asking where the "hand" bone is right now.
+    // -----------------------------------------------------------------------
+
+    /**
+     * The model's vertices at a moment, in the same flat layout as a frame's.
+     *
+     * Port of GetVerticesAt (:98486). Time past the end wraps, so a caller can
+     * hand this a clock that only ever grows.
+     *
+     * Returns false when the bracketing frame carries no vertices, which is
+     * what a frame skipped at load time looks like; `out` is left alone, so a
+     * caller that keeps its buffer between calls simply holds the last pose.
+     */
+    bool GetVerticesAt(std::int32_t timeMs, std::vector<float> &out) const;
+
+    /**
+     * Where one bone sits at a moment.
+     *
+     * Port of GetNodeAt (:98298). Returns false for a bone index this mesh
+     * does not have.
+     */
+    bool GetNodeAt(std::int32_t timeMs, std::size_t boneIndex,
+                   MeshBoneTransform &out) const;
+
+    /**
+     * Blend two frames' vertices into `out`, at `t` from the first to the
+     * second. Port of BuildTweenFrame (:98051).
+     *
+     * `t` outside [0, 1] collapses to whichever end it passed, exactly as the
+     * original does -- it is the one place the two frames need not bracket
+     * anything.
+     */
+    bool BuildTweenFrame(std::size_t firstFrame, std::size_t secondFrame,
+                         float t, std::vector<float> &out) const;
+
 private:
+    /**
+     * The two frames bracketing a moment, and how far between them it falls.
+     *
+     * Both outlets of the evaluator open with this same search; the original
+     * writes it out twice, once in each.
+     */
+    void FindFramesAt(std::int32_t timeMs, std::size_t &firstFrame,
+                      std::size_t &secondFrame, float &t) const;
+
     /** Min, max, centre and draw scale, off the first frame that has vertices. */
     void ComputeBounds();
 

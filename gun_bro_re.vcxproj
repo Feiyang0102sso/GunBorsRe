@@ -122,7 +122,9 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CProp.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMap.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMesh.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMeshAnimationController.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMoveSetMesh.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMoveSetMeshController.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CBrother.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CGun.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CBullet.cpp" />
@@ -185,7 +187,9 @@
     <ClInclude Include="src\gun_bros_re\gun_bros\CProp.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMap.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMesh.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMeshAnimationController.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMoveSetMesh.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMoveSetMeshController.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CBrother.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CGun.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CBullet.h" />

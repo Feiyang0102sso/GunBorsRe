@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
     if (argc == 1) {
         const int choice = PromptForHarness();
         if (choice == 2) {
-            return RunM35Mesh(bigDirectory, 0, 0.0f, 0, screenshotPath);
+            return RunM35Mesh(bigDirectory, 0, 0.0f, 0, screenshotPath, advanceMs);
         }
         if (choice == 3) {
             return RunM2Texture(bigDirectory, imagePackName, imageResourceId,
@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
     }
     if (runM35) {
         return RunM35Mesh(bigDirectory, meshIndex, meshSpinDegrees,
-                          meshFrameIndex, screenshotPath);
+                          meshFrameIndex, screenshotPath, advanceMs);
     }
     if (runM1) {
         return RunM1Resources(bigDirectory);

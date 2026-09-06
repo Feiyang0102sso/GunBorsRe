@@ -48,6 +48,7 @@
 #include "gun_bros/CMesh.h"
 
 #include <cstdint>
+#include <vector>
 
 class CMeshBuffer {
 public:
@@ -71,6 +72,15 @@ public:
 
     /** Rewrite the vertex positions from one of the model's frames. */
     void SetFrame(const CMesh &mesh, std::size_t frameIndex);
+
+    /**
+     * Rewrite the vertex positions from a pose the evaluator built.
+     *
+     * Three floats per vertex, same layout as a frame's. This is the path an
+     * animated model takes every frame; SetFrame is the still-pose shortcut
+     * onto the same buffer.
+     */
+    void SetVertices(const std::vector<float> &vertices);
 
     /**
      * Draw the model.
