@@ -72,6 +72,8 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_D:      return KeyCode::D;
         case SDLK_B:      return KeyCode::B;
         case SDLK_C:      return KeyCode::C;
+        case SDLK_E:      return KeyCode::E;
+        case SDLK_F:      return KeyCode::F;
         default:          return KeyCode::None;
     }
 }
@@ -103,7 +105,7 @@ bool CWindow::Open(const std::string &title, int width, int height) {
         m_keyDown[i] = false;
     }
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         std::printf("[window] SDL_Init failed: %s\n", SDL_GetError());
         return false;
     }

@@ -15,9 +15,8 @@
  *   CScript           script
  *   CMoveSet          moveSet
  *
- * Parsing stops after bulletCollision. The script and move set are not needed
- * yet, but the normal collision is part of player movement and therefore can
- * no longer be skipped.
+ * Parsing stops after the script. The move set is not needed yet, but the
+ * script resource table supplies the original transition particles and sound.
  *
  * The two animation bytes are stored in the opposite order to the one they are
  * written in: the first byte on the wire is the FOREGROUND animation.
@@ -27,6 +26,7 @@
 #define GUN_BROS_RE_GUN_BROS_CPROP_H
 
 #include "engine/CArrayInputStream.h"
+#include "glu_script/CScript.h"
 #include "gun_bros/CCollisionData.h"
 
 #include <cstdint>
@@ -85,12 +85,16 @@ public:
             return m_bulletCollision;
         }
 
+        const CScript &GetScript() const { return m_script; }
+
     private:
         CGameSpriteGluRef m_sprite;
         std::uint8_t m_foregroundAnimation;
         std::uint8_t m_backgroundAnimation;
         CCollisionData m_collision;
         CCollisionData m_bulletCollision;
+        std::uint8_t m_persistent;
+        CScript m_script;
     };
 };
 

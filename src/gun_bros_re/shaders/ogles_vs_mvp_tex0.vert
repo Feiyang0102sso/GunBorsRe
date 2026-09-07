@@ -6,14 +6,17 @@
 
 in vec4 Position;
 in vec4 TexCoord;
+in float Alpha;
 
 uniform mat4 mvp;
 
 out vec4 texcoord0;
+out float opacity;
 
 void main()
 {
     gl_Position = mvp * Position;
 
     texcoord0 = TexCoord * 0.0002441406255;
+    opacity = Alpha;
 }

@@ -5,12 +5,14 @@
 
 #include "engine/CQuadBatch.h"
 
+#include <cmath>
 #include <cstdio>
 
 namespace {
 
 // Six vertices per quad: two triangles, since grouping rules out a strip.
 constexpr std::size_t kVerticesPerQuad = 6;
+constexpr float kDegreesToRadians = 3.14159265f / 180.0f;
 
 /** Set the blend function a mode stands for. */
 void ApplyBlendMode(BlendMode blend) {
@@ -42,8 +44,9 @@ bool CQuadBatch::Create(const CShaderProgram &program) {
 
     const GLint positionLocation = program.GetAttribLocation("Position");
     const GLint texCoordLocation = program.GetAttribLocation("TexCoord");
-    if (positionLocation < 0 || texCoordLocation < 0) {
-        std::printf("[batch] shader has no Position/TexCoord attribute\n");
+    const GLint alphaLocation = program.GetAttribLocation("Alpha");
+    if (positionLocation < 0 || texCoordLocation < 0 || alphaLocation < 0) {
+        std::printf("[batch] shader has no Position/TexCoord/Alpha attribute\n");
         return false;
     }
     m_mvpLocation = program.GetUniformLocation("mvp");
@@ -67,6 +70,11 @@ bool CQuadBatch::Create(const CShaderProgram &program) {
     glVertexAttribPointer(static_cast<GLuint>(texCoordLocation), 2, GL_FLOAT, GL_FALSE,
                           sizeof(Vertex),
                           reinterpret_cast<const void *>(sizeof(float) * 2));
+
+    glEnableVertexAttribArray(static_cast<GLuint>(alphaLocation));
+    glVertexAttribPointer(static_cast<GLuint>(alphaLocation), 1, GL_FLOAT, GL_FALSE,
+                          sizeof(Vertex),
+                          reinterpret_cast<const void *>(sizeof(float) * 4));
 
     glBindVertexArray(0);
 
@@ -150,10 +158,65 @@ void CQuadBatch::AddQuad(const CTexture &texture, float x, float y, float width,
     const float right = x + width;
     const float bottom = y + height;
 
-    const Vertex topLeft = {left, top, u0, v0};
-    const Vertex topRight = {right, top, u1, v0};
-    const Vertex bottomLeft = {left, bottom, u0, v1};
-    const Vertex bottomRight = {right, bottom, u1, v1};
+    const Vertex topLeft = {left, top, u0, v0, 1.0f};
+    const Vertex topRight = {right, top, u1, v0, 1.0f};
+    const Vertex bottomLeft = {left, bottom, u0, v1, 1.0f};
+    const Vertex bottomRight = {right, bottom, u1, v1, 1.0f};
+
+    AddVertices(texture, blend, topLeft, topRight, bottomLeft, bottomRight);
+}
+
+void CQuadBatch::AddTransformedQuad(
+    const CTexture &texture, float x, float y, float width, float height,
+    const SourceRect &source, bool flipHorizontal, bool flipVertical,
+    BlendMode blend, float pivotX, float pivotY, float scaleX, float scaleY,
+    float rotationDegrees, float alpha) {
+    if (!texture.IsValid() || texture.GetWidth() == 0 || texture.GetHeight() == 0) {
+        return;
+    }
+
+    const float uScale = kTexCoordScale / static_cast<float>(texture.GetWidth());
+    const float vScale = kTexCoordScale / static_cast<float>(texture.GetHeight());
+    float u0 = static_cast<float>(source.x) * uScale;
+    float v0 = static_cast<float>(source.y) * vScale;
+    float u1 = static_cast<float>(source.x + source.width) * uScale;
+    float v1 = static_cast<float>(source.y + source.height) * vScale;
+    if (flipHorizontal) {
+        const float swap = u0;
+        u0 = u1;
+        u1 = swap;
+    }
+    if (flipVertical) {
+        const float swap = v0;
+        v0 = v1;
+        v1 = swap;
+    }
+
+    const float radians = rotationDegrees * kDegreesToRadians;
+    const float sine = std::sin(radians);
+    const float cosine = std::cos(radians);
+    const float cornersX[4] = {x, x + width, x, x + width};
+    const float cornersY[4] = {y, y, y + height, y + height};
+    float transformedX[4];
+    float transformedY[4];
+    for (std::size_t corner = 0; corner < 4; ++corner) {
+        const float localX = (cornersX[corner] - pivotX) * scaleX;
+        const float localY = (cornersY[corner] - pivotY) * scaleY;
+        transformedX[corner] = pivotX + localX * cosine - localY * sine;
+        transformedY[corner] = pivotY + localX * sine + localY * cosine;
+    }
+
+    const Vertex topLeft = {transformedX[0], transformedY[0], u0, v0, alpha};
+    const Vertex topRight = {transformedX[1], transformedY[1], u1, v0, alpha};
+    const Vertex bottomLeft = {transformedX[2], transformedY[2], u0, v1, alpha};
+    const Vertex bottomRight = {transformedX[3], transformedY[3], u1, v1, alpha};
+    AddVertices(texture, blend, topLeft, topRight, bottomLeft, bottomRight);
+}
+
+void CQuadBatch::AddVertices(const CTexture &texture, BlendMode blend,
+                             const Vertex &topLeft, const Vertex &topRight,
+                             const Vertex &bottomLeft,
+                             const Vertex &bottomRight) {
 
     Group &group = GroupFor(texture, blend);
     group.vertices.push_back(topLeft);

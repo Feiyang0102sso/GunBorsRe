@@ -22,7 +22,7 @@ void CGameSpriteGluRef::Init(CArrayInputStream &stream) {
 }
 
 CProp::Template::Template()
-    : m_foregroundAnimation(255), m_backgroundAnimation(255) {}
+    : m_foregroundAnimation(255), m_backgroundAnimation(255), m_persistent(0) {}
 
 bool CProp::Template::Init(CArrayInputStream &stream) {
     m_sprite.Init(stream);
@@ -37,6 +37,9 @@ bool CProp::Template::Init(CArrayInputStream &stream) {
     if (!m_bulletCollision.Load(stream)) {
         return false;
     }
+
+    m_persistent = stream.ReadUInt8();
+    m_script.Load(stream);
 
     if (stream.Overran()) {
         std::printf("[prop] template truncated\n");

@@ -35,6 +35,7 @@
 #include "milestones/PackTables.h"
 
 #include "engine/CArrayInputStream.h"
+#include "engine/CAudioPlayer.h"
 #include "engine/CMarkerBatch.h"
 #include "engine/CMatrix4d.h"
 #include "engine/CPNG.h"
@@ -44,10 +45,12 @@
 #include "engine/platform/CWindow.h"
 #include "engine/platform/GLLoader.h"
 #include "gun_bros/CGameObjectPack.h"
+#include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CLayerObject.h"
 #include "gun_bros/CLayerTile.h"
 #include "gun_bros/CLevel.h"
 #include "gun_bros/CMap.h"
+#include "gun_bros/CParticleEffect.h"
 #include "gun_bros/CProp.h"
 #include "gun_bros/CResTOCManager.h"
 #include "gun_bros/TileSet.h"
@@ -103,6 +106,26 @@ constexpr std::uint32_t kCoverPackHash = 0x00267585;
 constexpr std::uint8_t kHorizontalCoverTemplate = 0;
 constexpr std::uint8_t kVerticalCoverTemplate = 1;
 constexpr std::uint8_t kCoverVisibleStateCount = 4;
+constexpr std::uint8_t kMaximumInteractiveStateCount = 5;
+
+constexpr std::uint32_t kLavaPackHash = 0x00267582u;
+constexpr std::uint8_t kLavaBarrelTemplate = 0;
+constexpr std::uint32_t kWaterPackHash = 0x01675822u;
+constexpr std::uint8_t kWaterBarrelTemplate = 22;
+constexpr std::uint32_t kSpirePackHash = 0x00267587u;
+constexpr std::uint8_t kSpireTemplate = 33;
+
+constexpr float kSecondsToMilliseconds = 1000.0f;
+constexpr float kParticleFallbackLifetimeMs = 750.0f;
+constexpr std::size_t kMaximumParticlesPerEffect = 2048;
+constexpr std::size_t kMaximumSpawnsPerEmitterPerFrame = 64;
+
+enum class InteractivePropKind : std::uint8_t {
+    None,
+    Cover,
+    Barrel,
+    Spire,
+};
 
 enum class CoverState : std::uint8_t {
     Intact,
@@ -156,6 +179,16 @@ struct PropSlot {
     std::vector<std::uint16_t> stepDurationsMs;
 };
 
+/** The three sprite layers and collision rule used by one prop state. */
+struct PropVisualState {
+    PropSlot background;
+    PropSlot main;
+    PropSlot foreground;
+    bool collisionEnabled;
+
+    PropVisualState() : collisionEnabled(true) {}
+};
+
 /**
  * One prop template's three sprite slots, every step already expanded.
  *
@@ -169,15 +202,24 @@ struct PropSprite {
     PropSlot background;
     PropSlot main;
     PropSlot foreground;
-    std::array<PropSlot, kCoverVisibleStateCount> coverBackgrounds;
+    std::array<PropVisualState, kMaximumInteractiveStateCount> states;
+    std::vector<ScriptResourceRef> transitionResources;
     CCollisionData collision;
-    bool isDestructibleCover;
+    InteractivePropKind interactiveKind;
+    std::uint8_t stateCount;
     int zOrderGroup;
 
     // What the walk could not draw, kept so the load can report a total
     // rather than a line per template.
     std::uint32_t skippedParts;
     std::uint32_t unsupportedTransforms;
+
+    PropSprite()
+        : interactiveKind(InteractivePropKind::None),
+          stateCount(0),
+          zOrderGroup(kZGroupNormal),
+          skippedParts(0),
+          unsupportedTransforms(0) {}
 };
 
 /** One prop standing on the map, each of its three slots playing its own. */
@@ -185,11 +227,19 @@ struct PlacedProp {
     float x;
     float y;
     const PropSprite *sprite;
-    CoverState coverState;
+    std::uint8_t interactiveState;
+    float hitFlashRemainingMs;
 
     CSpritePlayer background;
     CSpritePlayer main;
     CSpritePlayer foreground;
+
+    PlacedProp()
+        : x(0.0f),
+          y(0.0f),
+          sprite(nullptr),
+          interactiveState(0),
+          hitFlashRemainingMs(0.0f) {}
 };
 
 /** The per-pack tables a prop needs, built the first time that pack is used. */
@@ -200,6 +250,42 @@ struct PackResources {
     bool spriteGluReady;
 
     PackResources() : objectPackReady(false), spriteGluReady(false) {}
+};
+
+/** Sprite animations belonging to one emitter in a particle template. */
+struct ParticleEmitterVisual {
+    std::array<PropSlot, 2> animations;
+};
+
+/** Parsed particle data plus the already-expanded atlas quads it draws. */
+struct ParticleEffectVisual {
+    CParticleEffect effect;
+    std::vector<ParticleEmitterVisual> emitters;
+};
+
+/** One particle emitted by an active effect. */
+struct LiveParticle {
+    std::uint32_t emitterIndex;
+    std::uint8_t animationIndex;
+    float x;
+    float y;
+    float velocityX;
+    float velocityY;
+    float ageMs;
+    float lifetimeMs;
+    std::array<float, kParticleInterpolatorChannelCount> randomValues;
+};
+
+/** One effect attached to a prop position until its particles finish. */
+struct ActiveParticleEffect {
+    std::uint64_t visualKey;
+    float x;
+    float y;
+    int zOrderGroup;
+    float ageMs;
+    std::uint32_t randomState;
+    std::vector<float> nextSpawnMs;
+    std::vector<LiveParticle> particles;
 };
 
 /** One enemy template standing on the map, with the model it draws as. */
@@ -259,6 +345,11 @@ struct LoadedMap {
     std::map<int, std::unique_ptr<PackResources>> packs;
     std::map<std::uint64_t, PropSprite> propSprites;
     std::vector<PlacedProp> props;
+
+    // Effects are cached by their game-object address and instantiated only
+    // when a transition asks for one.
+    std::map<std::uint64_t, ParticleEffectVisual> particleEffects;
+    std::vector<ActiveParticleEffect> activeParticleEffects;
 };
 
 /**
@@ -537,16 +628,18 @@ void ExpandSlot(CSpriteIterator &iterator, const CSpriteGluArchetype &archetype,
  * move is what tells the two apart without staring at the window.
  */
 bool PropAnimates(const PropSprite &sprite) {
-    if (sprite.background.stepDurationsMs.size() > 1) {
-        return true;
-    }
-    if (sprite.isDestructibleCover) {
-        for (std::size_t state = 0; state < sprite.coverBackgrounds.size();
-             ++state) {
-            if (sprite.coverBackgrounds[state].stepDurationsMs.size() > 1) {
+    if (sprite.interactiveKind != InteractivePropKind::None) {
+        for (std::uint8_t state = 0; state < sprite.stateCount; ++state) {
+            const PropVisualState &visual = sprite.states[state];
+            if (visual.background.stepDurationsMs.size() > 1 ||
+                visual.main.stepDurationsMs.size() > 1 ||
+                visual.foreground.stepDurationsMs.size() > 1) {
                 return true;
             }
         }
+    }
+    if (sprite.background.stepDurationsMs.size() > 1) {
+        return true;
     }
     if (sprite.main.stepDurationsMs.size() > 1) {
         return true;
@@ -569,6 +662,85 @@ bool IsDestructibleCover(std::uint32_t packHash, std::uint8_t localIndex) {
     }
     return localIndex == kHorizontalCoverTemplate ||
            localIndex == kVerticalCoverTemplate;
+}
+
+InteractivePropKind InteractiveKindFor(std::uint32_t packHash,
+                                       std::uint8_t localIndex) {
+    if (IsDestructibleCover(packHash, localIndex)) {
+        return InteractivePropKind::Cover;
+    }
+    if ((packHash == kLavaPackHash && localIndex == kLavaBarrelTemplate) ||
+        (packHash == kWaterPackHash && localIndex == kWaterBarrelTemplate)) {
+        return InteractivePropKind::Barrel;
+    }
+    if (packHash == kSpirePackHash && localIndex == kSpireTemplate) {
+        return InteractivePropKind::Spire;
+    }
+    return InteractivePropKind::None;
+}
+
+void ExpandPropState(CSpriteIterator &iterator,
+                     const CSpriteGluArchetype &archetype,
+                     std::uint8_t backgroundAnimation,
+                     std::uint8_t mainAnimation,
+                     std::uint8_t foregroundAnimation,
+                     PropVisualState &state) {
+    ExpandSlot(iterator, archetype, backgroundAnimation, state.background);
+    ExpandSlot(iterator, archetype, mainAnimation, state.main);
+    ExpandSlot(iterator, archetype, foregroundAnimation, state.foreground);
+}
+
+/** Build the known visual states named by the three original prop scripts. */
+void BuildInteractiveStates(std::uint32_t packHash, std::uint8_t localIndex,
+                            CSpriteIterator &iterator,
+                            const CSpriteGluArchetype &archetype,
+                            PropSprite &out) {
+    out.interactiveKind = InteractiveKindFor(packHash, localIndex);
+    if (out.interactiveKind == InteractivePropKind::Cover) {
+        out.stateCount = 5;
+        std::uint8_t firstAnimation = 0;
+        if (localIndex == kVerticalCoverTemplate) {
+            firstAnimation = 4;
+        }
+        for (std::uint8_t state = 0; state < kCoverVisibleStateCount; ++state) {
+            ExpandPropState(iterator, archetype,
+                            static_cast<std::uint8_t>(firstAnimation + state),
+                            kNoSpriteGluIndex, kNoSpriteGluIndex,
+                            out.states[state]);
+        }
+        out.states[3].collisionEnabled = false;
+        out.states[4].collisionEnabled = false;
+        return;
+    }
+
+    if (out.interactiveKind == InteractivePropKind::Barrel) {
+        out.stateCount = 4;
+        std::uint8_t firstAnimation = 29;
+        if (packHash == kWaterPackHash) {
+            firstAnimation = 21;
+        }
+        for (std::uint8_t state = 0; state < 3; ++state) {
+            ExpandPropState(iterator, archetype, kNoSpriteGluIndex,
+                            static_cast<std::uint8_t>(firstAnimation + state),
+                            kNoSpriteGluIndex, out.states[state]);
+        }
+        if (packHash == kWaterPackHash) {
+            ExpandPropState(iterator, archetype, 5, kNoSpriteGluIndex,
+                            kNoSpriteGluIndex, out.states[3]);
+        }
+        out.states[3].collisionEnabled = false;
+        return;
+    }
+
+    if (out.interactiveKind == InteractivePropKind::Spire) {
+        out.stateCount = 3;
+        for (std::uint8_t state = 0; state < out.stateCount; ++state) {
+            ExpandPropState(iterator, archetype,
+                            static_cast<std::uint8_t>(53 + state),
+                            static_cast<std::uint8_t>(50 + state),
+                            kNoSpriteGluIndex, out.states[state]);
+        }
+    }
 }
 
 /**
@@ -610,24 +782,15 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     }
 
     CSpriteIterator iterator(gluPack->spriteGlu, *archetype);
-    out.isDestructibleCover = IsDestructibleCover(propPackHash, localIndex);
-    if (out.isDestructibleCover) {
-        std::uint8_t firstAnimation = 0;
-        if (localIndex == kVerticalCoverTemplate) {
-            firstAnimation = 4;
-        }
-        for (std::uint8_t state = 0; state < kCoverVisibleStateCount; ++state) {
-            ExpandSlot(iterator, *archetype,
-                       static_cast<std::uint8_t>(firstAnimation + state),
-                       out.coverBackgrounds[state]);
-        }
-    } else {
+    BuildInteractiveStates(propPackHash, localIndex, iterator, *archetype, out);
+    out.transitionResources = propTemplate.GetScript().GetResources();
+    if (out.interactiveKind == InteractivePropKind::None) {
         ExpandSlot(iterator, *archetype, propTemplate.GetBackgroundAnimation(),
                    out.background);
+        ExpandSlot(iterator, *archetype, propTemplate.GetMainAnimation(), out.main);
+        ExpandSlot(iterator, *archetype, propTemplate.GetForegroundAnimation(),
+                   out.foreground);
     }
-    ExpandSlot(iterator, *archetype, propTemplate.GetMainAnimation(), out.main);
-    ExpandSlot(iterator, *archetype, propTemplate.GetForegroundAnimation(),
-               out.foreground);
     out.collision = propTemplate.GetCollision();
 
     out.skippedParts = iterator.GetSkippedPartCount();
@@ -638,15 +801,19 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     // draws, so keeping the test on step 0 keeps the draw order fixed for the
     // life of the map -- and lets the queue stay sorted once, at load.
     bool backgroundDraws = SlotDrawsAtStart(out.background);
-    if (out.isDestructibleCover) {
-        backgroundDraws = SlotDrawsAtStart(out.coverBackgrounds[0]);
+    bool mainDraws = SlotDrawsAtStart(out.main);
+    bool foregroundDraws = SlotDrawsAtStart(out.foreground);
+    if (out.interactiveKind != InteractivePropKind::None) {
+        backgroundDraws = SlotDrawsAtStart(out.states[0].background);
+        mainDraws = SlotDrawsAtStart(out.states[0].main);
+        foregroundDraws = SlotDrawsAtStart(out.states[0].foreground);
     }
 
-    if (SlotDrawsAtStart(out.main)) {
+    if (mainDraws) {
         out.zOrderGroup = kZGroupNormal;
     } else if (backgroundDraws) {
         out.zOrderGroup = kZGroupBackgroundOnly;
-    } else if (SlotDrawsAtStart(out.foreground)) {
+    } else if (foregroundDraws) {
         out.zOrderGroup = kZGroupForegroundOnly;
     } else {
         out.zOrderGroup = kZGroupNormal;
@@ -680,15 +847,33 @@ std::uint32_t StartStepFor(std::size_t propOrdinal, std::size_t stepCount) {
 
 /** Background slot selected by a prop's current cover state. */
 const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
-    if (!prop.sprite->isDestructibleCover) {
+    if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->background;
     }
-
-    const std::uint8_t state = static_cast<std::uint8_t>(prop.coverState);
-    if (state >= kCoverVisibleStateCount) {
-        return nullptr;
+    if (prop.interactiveState >= prop.sprite->stateCount) {
+        return &prop.sprite->background;
     }
-    return &prop.sprite->coverBackgrounds[state];
+    return &prop.sprite->states[prop.interactiveState].background;
+}
+
+const PropSlot *MainSlotFor(const PlacedProp &prop) {
+    if (prop.sprite->interactiveKind == InteractivePropKind::None) {
+        return &prop.sprite->main;
+    }
+    if (prop.interactiveState >= prop.sprite->stateCount) {
+        return &prop.sprite->main;
+    }
+    return &prop.sprite->states[prop.interactiveState].main;
+}
+
+const PropSlot *ForegroundSlotFor(const PlacedProp &prop) {
+    if (prop.sprite->interactiveKind == InteractivePropKind::None) {
+        return &prop.sprite->foreground;
+    }
+    if (prop.interactiveState >= prop.sprite->stateCount) {
+        return &prop.sprite->foreground;
+    }
+    return &prop.sprite->states[prop.interactiveState].foreground;
 }
 
 /**
@@ -702,13 +887,16 @@ const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
 void StartPropPlayers(PlacedProp &prop, std::size_t propOrdinal) {
     const PropSprite &sprite = *prop.sprite;
 
-    prop.coverState = CoverState::Intact;
+    prop.interactiveState = 0;
+    prop.hitFlashRemainingMs = 0.0f;
     const PropSlot *background = BackgroundSlotFor(prop);
     prop.background.SetAnimation(&background->stepDurationsMs);
-    prop.foreground.SetAnimation(&sprite.foreground.stepDurationsMs);
+    const PropSlot *foreground = ForegroundSlotFor(prop);
+    prop.foreground.SetAnimation(&foreground->stepDurationsMs);
 
-    prop.main.SetAnimation(&sprite.main.stepDurationsMs);
-    prop.main.SetStep(StartStepFor(propOrdinal, sprite.main.stepDurationsMs.size()));
+    const PropSlot *main = MainSlotFor(prop);
+    prop.main.SetAnimation(&main->stepDurationsMs);
+    prop.main.SetStep(StartStepFor(propOrdinal, main->stepDurationsMs.size()));
 }
 
 /** Human-readable state for the keyboard diagnostic. */
@@ -743,29 +931,632 @@ std::uint32_t SetCoverState(LoadedMap &loaded, CoverState state) {
     std::uint32_t changed = 0;
     for (std::size_t i = 0; i < loaded.props.size(); ++i) {
         PlacedProp &prop = loaded.props[i];
-        if (!prop.sprite->isDestructibleCover) {
+        if (prop.sprite->interactiveKind != InteractivePropKind::Cover) {
             continue;
         }
 
-        prop.coverState = state;
+        prop.interactiveState = static_cast<std::uint8_t>(state);
         const PropSlot *background = BackgroundSlotFor(prop);
-        if (background == nullptr) {
-            prop.background.SetAnimation(nullptr);
-        } else {
-            prop.background.SetAnimation(&background->stepDurationsMs);
+        prop.background.SetAnimation(&background->stepDurationsMs);
+        prop.main.SetAnimation(&MainSlotFor(prop)->stepDurationsMs);
+        prop.foreground.SetAnimation(&ForegroundSlotFor(prop)->stepDurationsMs);
+        prop.hitFlashRemainingMs = 500.0f;
+        changed++;
+    }
+    return changed;
+}
+
+const char *InteractiveStateName(InteractivePropKind kind, std::uint8_t state) {
+    if (kind == InteractivePropKind::Barrel) {
+        const char *const names[] = {"intact", "damaged", "critical", "exploded"};
+        if (state < 4) {
+            return names[state];
+        }
+    }
+    if (kind == InteractivePropKind::Spire) {
+        const char *const names[] = {"dormant", "charged", "shockwave"};
+        if (state < 3) {
+            return names[state];
+        }
+    }
+    return "unknown";
+}
+
+/** Apply one visual state to every prop of a scripted interactive kind. */
+std::uint32_t SetInteractiveState(LoadedMap &loaded, InteractivePropKind kind,
+                                  std::uint8_t state) {
+    std::uint32_t changed = 0;
+    for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+        PlacedProp &prop = loaded.props[i];
+        if (prop.sprite->interactiveKind != kind ||
+            state >= prop.sprite->stateCount) {
+            continue;
+        }
+
+        prop.interactiveState = state;
+        prop.background.SetAnimation(&BackgroundSlotFor(prop)->stepDurationsMs);
+        prop.main.SetAnimation(&MainSlotFor(prop)->stepDurationsMs);
+        prop.foreground.SetAnimation(&ForegroundSlotFor(prop)->stepDurationsMs);
+        if (kind != InteractivePropKind::Spire) {
+            prop.hitFlashRemainingMs = 500.0f;
         }
         changed++;
     }
     return changed;
 }
 
-/** The original disables both collision shapes in the destroyed state. */
-bool CoverHasCollision(const PlacedProp &prop) {
-    if (!prop.sprite->isDestructibleCover) {
+std::uint64_t AssetKey(std::uint32_t packHash, std::uint32_t localIndex) {
+    return (static_cast<std::uint64_t>(packHash) << 32) | localIndex;
+}
+
+int SoundResourceForState(InteractivePropKind kind, std::uint8_t state) {
+    if (kind == InteractivePropKind::Cover && state >= 1 && state <= 3) {
+        return 4;
+    }
+    if (kind == InteractivePropKind::Barrel && state == 3) {
+        return 2;
+    }
+    if (kind == InteractivePropKind::Spire && state == 1) {
+        return 2;
+    }
+    if (kind == InteractivePropKind::Spire && state == 2) {
+        return 3;
+    }
+    return -1;
+}
+
+/** Resolve SoundEffect -> WAV, cache it, then play one batch transition cue. */
+void PlayTransitionSound(CResTOCManager &tocManager, LoadedMap &loaded,
+                         CAudioPlayer &audio, InteractivePropKind kind,
+                         std::uint8_t state) {
+    const int resourceIndex = SoundResourceForState(kind, state);
+    if (resourceIndex < 0) {
+        return;
+    }
+
+    const PropSprite *sprite = nullptr;
+    for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+        if (loaded.props[i].sprite->interactiveKind == kind) {
+            sprite = loaded.props[i].sprite;
+            break;
+        }
+    }
+    if (sprite == nullptr ||
+        resourceIndex >= static_cast<int>(sprite->transitionResources.size())) {
+        return;
+    }
+
+    const ScriptResourceRef &soundEffect =
+        sprite->transitionResources[resourceIndex];
+    std::vector<std::uint8_t> soundPayload;
+    if (!ReadSectionResource(tocManager, loaded, soundEffect.packHash,
+                             GameSection::SoundEffect, soundEffect.resourceId,
+                             soundPayload)) {
+        return;
+    }
+
+    CArrayInputStream soundStream(soundPayload);
+    CGameAssetRef wavReference;
+    wavReference.Init(soundStream);
+    if (wavReference.IsNull() || wavReference.assetId < 0) {
+        return;
+    }
+
+    const std::uint64_t key = AssetKey(
+        wavReference.packHash, static_cast<std::uint32_t>(wavReference.assetId));
+    std::vector<std::uint8_t> wavPayload;
+    if (!ReadSectionResource(tocManager, loaded, wavReference.packHash,
+                             GameSection::Wav,
+                             static_cast<std::uint32_t>(wavReference.assetId),
+                             wavPayload)) {
+        return;
+    }
+    if (audio.Load(key, wavPayload)) {
+        audio.Play(key);
+    }
+}
+
+/** Parse and expand one original particle template the first time it is used. */
+bool EnsureParticleEffectVisual(CResTOCManager &tocManager, LoadedMap &loaded,
+                                const ScriptResourceRef &reference,
+                                std::uint64_t &visualKey) {
+    visualKey = AssetKey(reference.packHash, reference.resourceId);
+    if (loaded.particleEffects.find(visualKey) != loaded.particleEffects.end()) {
         return true;
     }
-    return static_cast<std::uint8_t>(prop.coverState) <
-           static_cast<std::uint8_t>(CoverState::Destroyed);
+
+    std::vector<std::uint8_t> payload;
+    if (!ReadSectionResource(tocManager, loaded, reference.packHash,
+                             GameSection::ParticleEffect,
+                             reference.resourceId, payload)) {
+        return false;
+    }
+
+    ParticleEffectVisual visual;
+    CArrayInputStream stream(payload);
+    if (!visual.effect.Init(stream)) {
+        std::printf("[particle] effect %08X/%u could not be parsed\n",
+                    reference.packHash, reference.resourceId);
+        return false;
+    }
+
+    const int spritePackIndex = tocManager.GetPackIndexFromHash(
+        visual.effect.GetSpritePackHash());
+    PackResources *spritePack = GetPackResources(tocManager, loaded,
+                                                  spritePackIndex);
+    if (spritePack == nullptr || !spritePack->spriteGluReady) {
+        return false;
+    }
+
+    const std::vector<ParticleEmitterTemplate> &emitters =
+        visual.effect.GetEmitters();
+    visual.emitters.resize(emitters.size());
+    for (std::size_t emitterIndex = 0; emitterIndex < emitters.size();
+         ++emitterIndex) {
+        const CSpriteGluArchetype *archetype =
+            spritePack->spriteGlu.GetArchetype(emitters[emitterIndex].archetype);
+        if (archetype == nullptr) {
+            continue;
+        }
+
+        CSpriteIterator iterator(spritePack->spriteGlu, *archetype);
+        ExpandSlot(iterator, *archetype, 0,
+                   visual.emitters[emitterIndex].animations[0]);
+        ExpandSlot(iterator, *archetype, 1,
+                   visual.emitters[emitterIndex].animations[1]);
+    }
+
+    loaded.particleEffects.insert(std::make_pair(visualKey, visual));
+    return true;
+}
+
+/** Deterministic local random stream, independent from map animation timing. */
+float NextParticleRandom(std::uint32_t &state) {
+    state = state * 1664525u + 1013904223u;
+    const std::uint32_t fraction = (state >> 8) & 0x00FFFFFFu;
+    return static_cast<float>(fraction) / 16777215.0f;
+}
+
+float ParticleRandomRange(std::uint32_t &state, float minimum, float maximum) {
+    return minimum + (maximum - minimum) * NextParticleRandom(state);
+}
+
+float ParticleRangeAt(float minimum, float maximum, float randomValue) {
+    return minimum + (maximum - minimum) * randomValue;
+}
+
+/** Queue one cached effect at a prop's world position. */
+void StartParticleEffect(LoadedMap &loaded, std::uint64_t visualKey,
+                         float x, float y, int zOrderGroup,
+                         std::uint32_t randomSalt) {
+    const std::map<std::uint64_t, ParticleEffectVisual>::const_iterator found =
+        loaded.particleEffects.find(visualKey);
+    if (found == loaded.particleEffects.end()) {
+        return;
+    }
+
+    ActiveParticleEffect active;
+    active.visualKey = visualKey;
+    active.x = x;
+    active.y = y;
+    active.zOrderGroup = zOrderGroup;
+    active.ageMs = 0.0f;
+    active.randomState = static_cast<std::uint32_t>(visualKey) ^ randomSalt;
+
+    const std::vector<ParticleEmitterTemplate> &emitters =
+        found->second.effect.GetEmitters();
+    active.nextSpawnMs.resize(emitters.size());
+    for (std::size_t emitter = 0; emitter < emitters.size(); ++emitter) {
+        float startMs = emitters[emitter].startSeconds * kSecondsToMilliseconds;
+        if (startMs < 0.0f) {
+            startMs = 0.0f;
+        }
+        active.nextSpawnMs[emitter] = startMs;
+        active.randomState ^= emitters[emitter].randomSeed +
+                              static_cast<std::uint32_t>(emitter * 7919u);
+    }
+    loaded.activeParticleEffects.push_back(active);
+}
+
+/** Original script resource indices and z groups for one state transition. */
+void StartTransitionParticlesForProp(CResTOCManager &tocManager,
+                                     LoadedMap &loaded,
+                                     const PlacedProp &prop,
+                                     std::uint8_t state,
+                                     std::uint32_t randomSalt) {
+    int firstResource = -1;
+    int firstZGroup = kZGroupNormal;
+    int secondResource = -1;
+    int secondZGroup = kZGroupNormal;
+
+    const InteractivePropKind kind = prop.sprite->interactiveKind;
+    if (kind == InteractivePropKind::Cover && state >= 1 && state <= 3) {
+        firstResource = 3;
+        firstZGroup = 5;
+        secondResource = 1;
+        secondZGroup = 2;
+    } else if (kind == InteractivePropKind::Barrel && state == 3) {
+        firstResource = 0;
+        secondResource = 1;
+    } else if (kind == InteractivePropKind::Spire && state == 1) {
+        firstResource = 0;
+    } else if (kind == InteractivePropKind::Spire && state == 2) {
+        firstResource = 1;
+    }
+
+    const int resources[2] = {firstResource, secondResource};
+    const int zGroups[2] = {firstZGroup, secondZGroup};
+    for (std::size_t cue = 0; cue < 2; ++cue) {
+        const int resourceIndex = resources[cue];
+        if (resourceIndex < 0 ||
+            resourceIndex >=
+                static_cast<int>(prop.sprite->transitionResources.size())) {
+            continue;
+        }
+
+        const ScriptResourceRef &reference =
+            prop.sprite->transitionResources[resourceIndex];
+        std::uint64_t visualKey = 0;
+        if (!EnsureParticleEffectVisual(tocManager, loaded, reference,
+                                        visualKey)) {
+            continue;
+        }
+        StartParticleEffect(loaded, visualKey, prop.x, prop.y, zGroups[cue],
+                            randomSalt + static_cast<std::uint32_t>(cue));
+    }
+}
+
+/** Start each matching prop's script-authored particle cues. */
+void StartTransitionParticles(CResTOCManager &tocManager, LoadedMap &loaded,
+                              InteractivePropKind kind, std::uint8_t state) {
+    for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+        const PlacedProp &prop = loaded.props[i];
+        if (prop.sprite->interactiveKind != kind) {
+            continue;
+        }
+        StartTransitionParticlesForProp(tocManager, loaded, prop, state,
+                                        static_cast<std::uint32_t>(i * 2654435761u));
+    }
+}
+
+/** Create one live particle from an emitter's pattern and velocity. */
+void SpawnParticle(ActiveParticleEffect &active,
+                   const ParticleEmitterTemplate &emitter,
+                   std::uint32_t emitterIndex) {
+    if (active.particles.size() >= kMaximumParticlesPerEffect) {
+        return;
+    }
+
+    LiveParticle particle;
+    particle.emitterIndex = emitterIndex;
+    particle.animationIndex = 0;
+    if (NextParticleRandom(active.randomState) >= 0.5f) {
+        particle.animationIndex = 1;
+    }
+    particle.x = active.x;
+    particle.y = active.y;
+    particle.velocityX = 0.0f;
+    particle.velocityY = 0.0f;
+    particle.ageMs = 0.0f;
+    particle.lifetimeMs = static_cast<float>(emitter.GetParticleLifetimeMs());
+    if (particle.lifetimeMs <= 0.0f) {
+        particle.lifetimeMs = kParticleFallbackLifetimeMs;
+    }
+    for (std::size_t channel = 0; channel < particle.randomValues.size();
+         ++channel) {
+        particle.randomValues[channel] = NextParticleRandom(active.randomState);
+    }
+
+    if (emitter.pattern == ParticleSpawnPattern::Line) {
+        const float distance = NextParticleRandom(active.randomState);
+        particle.x += emitter.patternValues[0] +
+                      (emitter.patternValues[2] - emitter.patternValues[0]) *
+                          distance;
+        particle.y += emitter.patternValues[1] +
+                      (emitter.patternValues[3] - emitter.patternValues[1]) *
+                          distance;
+    } else if (emitter.pattern == ParticleSpawnPattern::Rectangle) {
+        particle.x += ParticleRandomRange(active.randomState,
+                                          emitter.patternValues[0],
+                                          emitter.patternValues[2]);
+        particle.y += ParticleRandomRange(active.randomState,
+                                          emitter.patternValues[1],
+                                          emitter.patternValues[3]);
+    } else {
+        const float outerRadius = ParticleRandomRange(
+            active.randomState, emitter.patternValues[2],
+            emitter.patternValues[3]);
+        const float innerWidth = ParticleRandomRange(
+            active.randomState, emitter.patternValues[4],
+            emitter.patternValues[5]);
+        const float radius = ParticleRandomRange(active.randomState,
+                                                 outerRadius - innerWidth,
+                                                 outerRadius);
+        const float angle = ParticleRandomRange(active.randomState, 0.0f,
+                                                360.0f) /
+                            kRadiansToDegrees;
+        particle.x += emitter.patternValues[0] + std::sin(angle) * radius;
+        particle.y += emitter.patternValues[1] - std::cos(angle) * radius;
+    }
+
+    if (emitter.velocity == ParticleSpawnVelocity::Linear) {
+        particle.velocityX = ParticleRandomRange(
+            active.randomState, emitter.velocityValues[0],
+            emitter.velocityValues[1]);
+        particle.velocityY = ParticleRandomRange(
+            active.randomState, emitter.velocityValues[2],
+            emitter.velocityValues[3]);
+    } else {
+        const float direction = ParticleRandomRange(
+            active.randomState, emitter.velocityValues[0],
+            emitter.velocityValues[1]) /
+                                kRadiansToDegrees;
+        const float speed = ParticleRandomRange(
+            active.randomState, emitter.velocityValues[2],
+            emitter.velocityValues[3]);
+        particle.velocityX = std::sin(direction) * speed;
+        particle.velocityY = std::cos(direction) * speed;
+    }
+
+    active.particles.push_back(particle);
+}
+
+/** Resolve one particle channel at an age using the original timed ranges. */
+float ParticleChannelValue(const ParticleEmitterTemplate &emitter,
+                           const LiveParticle &particle,
+                           std::size_t channel, float defaultValue) {
+    const std::vector<ParticleInterpolatorKey> &keys =
+        emitter.interpolators[channel];
+    float value = defaultValue;
+    const float randomValue = particle.randomValues[channel];
+    for (std::size_t keyIndex = 0; keyIndex < keys.size(); ++keyIndex) {
+        const ParticleInterpolatorKey &key = keys[keyIndex];
+        float startValue = value;
+        if (!key.keepPreviousStart) {
+            startValue = ParticleRangeAt(key.startMinimum, key.startMaximum,
+                                         randomValue);
+        }
+        const float endValue = ParticleRangeAt(key.endMinimum, key.endMaximum,
+                                               randomValue);
+        const float startMs = static_cast<float>(key.startMs);
+        const float endMs = startMs + static_cast<float>(key.durationMs);
+        if (particle.ageMs < startMs) {
+            return value;
+        }
+        if (key.durationMs == 0 || particle.ageMs >= endMs) {
+            value = endValue;
+            continue;
+        }
+
+        const float progress = (particle.ageMs - startMs) /
+                               static_cast<float>(key.durationMs);
+        return startValue + (endValue - startValue) * progress;
+    }
+    return value;
+}
+
+/** Advance emitters and their live particles. */
+void AdvanceParticleEffects(LoadedMap &loaded, std::uint16_t deltaMs) {
+    const float elapsedSeconds = static_cast<float>(deltaMs) /
+                                 kSecondsToMilliseconds;
+    std::size_t activeIndex = 0;
+    while (activeIndex < loaded.activeParticleEffects.size()) {
+        ActiveParticleEffect &active =
+            loaded.activeParticleEffects[activeIndex];
+        const std::map<std::uint64_t, ParticleEffectVisual>::const_iterator found =
+            loaded.particleEffects.find(active.visualKey);
+        if (found == loaded.particleEffects.end()) {
+            loaded.activeParticleEffects.erase(
+                loaded.activeParticleEffects.begin() + activeIndex);
+            continue;
+        }
+
+        const std::vector<ParticleEmitterTemplate> &emitters =
+            found->second.effect.GetEmitters();
+        active.ageMs += static_cast<float>(deltaMs);
+        bool futureSpawnExists = false;
+        for (std::size_t emitterIndex = 0; emitterIndex < emitters.size();
+             ++emitterIndex) {
+            const ParticleEmitterTemplate &emitter = emitters[emitterIndex];
+            float &nextSpawnMs = active.nextSpawnMs[emitterIndex];
+            if (nextSpawnMs < 0.0f) {
+                continue;
+            }
+
+            float startMs = emitter.startSeconds * kSecondsToMilliseconds;
+            if (startMs < 0.0f) {
+                startMs = 0.0f;
+            }
+            const float endMs = emitter.endSeconds * kSecondsToMilliseconds;
+            const bool oneShot = endMs <= startMs;
+            std::size_t spawned = 0;
+            while (nextSpawnMs <= active.ageMs &&
+                   spawned < kMaximumSpawnsPerEmitterPerFrame) {
+                if (!oneShot && nextSpawnMs > endMs) {
+                    nextSpawnMs = -1.0f;
+                    break;
+                }
+
+                SpawnParticle(active, emitter,
+                              static_cast<std::uint32_t>(emitterIndex));
+                spawned++;
+                if (oneShot) {
+                    nextSpawnMs = -1.0f;
+                    break;
+                }
+
+                float intervalMs = ParticleRandomRange(
+                    active.randomState, emitter.intervalMinimumSeconds,
+                    emitter.intervalMaximumSeconds) *
+                                   kSecondsToMilliseconds;
+                if (intervalMs < 1.0f) {
+                    intervalMs = 1.0f;
+                }
+                nextSpawnMs += intervalMs;
+            }
+            if (nextSpawnMs >= 0.0f &&
+                (oneShot || nextSpawnMs <= endMs)) {
+                futureSpawnExists = true;
+            }
+        }
+
+        std::size_t particleIndex = 0;
+        while (particleIndex < active.particles.size()) {
+            LiveParticle &particle = active.particles[particleIndex];
+            if (particle.emitterIndex >= emitters.size()) {
+                active.particles.erase(active.particles.begin() + particleIndex);
+                continue;
+            }
+
+            const ParticleEmitterTemplate &emitter =
+                emitters[particle.emitterIndex];
+            particle.ageMs += static_cast<float>(deltaMs);
+            if (particle.ageMs >= particle.lifetimeMs) {
+                active.particles.erase(active.particles.begin() + particleIndex);
+                continue;
+            }
+
+            const float speedScale = ParticleChannelValue(
+                emitter, particle, 5, 1.0f);
+            particle.velocityX += emitter.accelerationX * elapsedSeconds;
+            particle.velocityY += emitter.accelerationY * elapsedSeconds;
+            particle.x += particle.velocityX * speedScale * elapsedSeconds;
+            particle.y += particle.velocityY * speedScale * elapsedSeconds;
+            particleIndex++;
+        }
+
+        if (!futureSpawnExists && active.particles.empty()) {
+            loaded.activeParticleEffects.erase(
+                loaded.activeParticleEffects.begin() + activeIndex);
+            continue;
+        }
+        activeIndex++;
+    }
+}
+
+/** Select the looping sprite step belonging to a particle's current age. */
+std::size_t ParticleAnimationStep(const PropSlot &animation, float ageMs) {
+    if (animation.stepDurationsMs.empty()) {
+        return 0;
+    }
+
+    std::uint32_t totalDuration = 0;
+    for (std::size_t i = 0; i < animation.stepDurationsMs.size(); ++i) {
+        totalDuration += animation.stepDurationsMs[i];
+    }
+    if (totalDuration == 0) {
+        return 0;
+    }
+
+    const std::uint32_t wrappedAge =
+        static_cast<std::uint32_t>(ageMs) % totalDuration;
+    std::uint32_t stepEnd = 0;
+    for (std::size_t step = 0; step < animation.stepDurationsMs.size(); ++step) {
+        stepEnd += animation.stepDurationsMs[step];
+        if (wrappedAge < stepEnd) {
+            return step;
+        }
+    }
+    return animation.stepDurationsMs.size() - 1;
+}
+
+/** Emit live particle sprites in the requested z-order interval. */
+void AddParticleQuads(const LoadedMap &loaded, CQuadBatch &batch,
+                      int minimumZGroup, int maximumZGroup) {
+    for (std::size_t activeIndex = 0;
+         activeIndex < loaded.activeParticleEffects.size(); ++activeIndex) {
+        const ActiveParticleEffect &active =
+            loaded.activeParticleEffects[activeIndex];
+        if (active.zOrderGroup < minimumZGroup ||
+            active.zOrderGroup > maximumZGroup) {
+            continue;
+        }
+
+        const std::map<std::uint64_t, ParticleEffectVisual>::const_iterator found =
+            loaded.particleEffects.find(active.visualKey);
+        if (found == loaded.particleEffects.end()) {
+            continue;
+        }
+        const ParticleEffectVisual &visual = found->second;
+        const std::vector<ParticleEmitterTemplate> &emitters =
+            visual.effect.GetEmitters();
+
+        for (std::size_t particleIndex = 0;
+             particleIndex < active.particles.size(); ++particleIndex) {
+            const LiveParticle &particle = active.particles[particleIndex];
+            if (particle.emitterIndex >= emitters.size() ||
+                particle.emitterIndex >= visual.emitters.size()) {
+                continue;
+            }
+
+            const ParticleEmitterTemplate &emitter =
+                emitters[particle.emitterIndex];
+            const ParticleEmitterVisual &emitterVisual =
+                visual.emitters[particle.emitterIndex];
+            const PropSlot *animation =
+                &emitterVisual.animations[particle.animationIndex];
+            if (animation->quadsByStep.empty()) {
+                const std::uint8_t fallback =
+                    static_cast<std::uint8_t>(1 - particle.animationIndex);
+                animation = &emitterVisual.animations[fallback];
+            }
+            if (animation->quadsByStep.empty()) {
+                continue;
+            }
+
+            const std::size_t step = ParticleAnimationStep(*animation,
+                                                           particle.ageMs);
+            if (step >= animation->quadsByStep.size()) {
+                continue;
+            }
+
+            const float scaleX = ParticleChannelValue(
+                emitter, particle, 0, 1.0f);
+            const float scaleY = ParticleChannelValue(
+                emitter, particle, 1, 1.0f);
+            const float uniformScale = ParticleChannelValue(
+                emitter, particle, 2, 1.0f);
+            float alpha = ParticleChannelValue(emitter, particle, 3, 1.0f);
+            if (alpha < 0.0f) {
+                alpha = 0.0f;
+            }
+            if (alpha > 1.0f) {
+                alpha = 1.0f;
+            }
+            float rotation = ParticleChannelValue(emitter, particle, 4, 0.0f);
+            if (emitter.alignToVelocity) {
+                rotation += std::atan2(particle.velocityY,
+                                       particle.velocityX) *
+                            kRadiansToDegrees;
+            }
+
+            const std::vector<SpriteQuad> &quads = animation->quadsByStep[step];
+            for (std::size_t quadIndex = 0; quadIndex < quads.size();
+                 ++quadIndex) {
+                const SpriteQuad &quad = quads[quadIndex];
+                batch.AddTransformedQuad(
+                    *quad.page,
+                    particle.x + static_cast<float>(quad.offsetX),
+                    particle.y + static_cast<float>(quad.offsetY),
+                    static_cast<float>(quad.source.width),
+                    static_cast<float>(quad.source.height), quad.source,
+                    quad.flipHorizontal, quad.flipVertical, quad.blend,
+                    particle.x, particle.y, scaleX * uniformScale,
+                    scaleY * uniformScale, rotation, alpha);
+            }
+        }
+    }
+}
+
+/** The original disables both collision shapes in the destroyed state. */
+bool PropHasCollision(const PlacedProp &prop) {
+    if (prop.sprite->interactiveKind == InteractivePropKind::None) {
+        return true;
+    }
+    if (prop.interactiveState >= prop.sprite->stateCount) {
+        return true;
+    }
+    return prop.sprite->states[prop.interactiveState].collisionEnabled;
 }
 
 /** Order props the way CRenderQueue does: by group, then down the screen. */
@@ -870,6 +1661,10 @@ void AdvanceProps(std::vector<PlacedProp> &props, std::uint16_t deltaMs) {
         props[i].background.Update(deltaMs);
         props[i].main.Update(deltaMs);
         props[i].foreground.Update(deltaMs);
+        props[i].hitFlashRemainingMs -= static_cast<float>(deltaMs);
+        if (props[i].hitFlashRemainingMs < 0.0f) {
+            props[i].hitFlashRemainingMs = 0.0f;
+        }
     }
 }
 
@@ -913,6 +1708,17 @@ void AddSpriteQuads(const PlacedProp &prop, const std::vector<SpriteQuad> &quads
                       static_cast<float>(quad.source.width),
                       static_cast<float>(quad.source.height), quad.source,
                       quad.flipHorizontal, quad.flipVertical, quad.blend);
+
+        if (prop.hitFlashRemainingMs > 0.0f) {
+            const float flashAlpha = prop.hitFlashRemainingMs / 500.0f;
+            batch.AddTransformedQuad(
+                *quad.page, prop.x + static_cast<float>(quad.offsetX),
+                prop.y + static_cast<float>(quad.offsetY),
+                static_cast<float>(quad.source.width),
+                static_cast<float>(quad.source.height), quad.source,
+                quad.flipHorizontal, quad.flipVertical, BlendMode::Additive,
+                prop.x, prop.y, 1.0f, 1.0f, 0.0f, flashAlpha);
+        }
     }
 }
 
@@ -991,7 +1797,7 @@ void BuildCollisionScene(LoadedMap &loaded) {
     std::uint32_t propShapes = 0;
     for (std::size_t i = 0; i < loaded.props.size(); ++i) {
         const PlacedProp &prop = loaded.props[i];
-        if (!CoverHasCollision(prop)) {
+        if (!PropHasCollision(prop)) {
             continue;
         }
         if (prop.sprite->collision.GetEdges().empty()) {
@@ -1451,18 +2257,20 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
             const PlacedProp &prop = loaded.props[i];
             const PropSlot *background = BackgroundSlotFor(prop);
-            if (background != nullptr) {
-                AddSpriteQuads(prop, CurrentQuads(*background, prop.background),
-                               batch);
-            }
+            AddSpriteQuads(prop, CurrentQuads(*background, prop.background), batch);
         }
+        // Script z=2 effects sit above background scenery but below bodies.
+        AddParticleQuads(loaded, batch, 0, 2);
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
             const PlacedProp &prop = loaded.props[i];
-            AddSpriteQuads(prop, CurrentQuads(prop.sprite->main, prop.main), batch);
+            AddSpriteQuads(prop, CurrentQuads(*MainSlotFor(prop), prop.main), batch);
         }
+        // Explosion/shockwave z=3 and cover debris z=5 sit above bodies.
+        AddParticleQuads(loaded, batch, 3, 5);
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
             const PlacedProp &prop = loaded.props[i];
-            AddSpriteQuads(prop, CurrentQuads(prop.sprite->foreground, prop.foreground),
+            AddSpriteQuads(prop,
+                           CurrentQuads(*ForegroundSlotFor(prop), prop.foreground),
                            batch);
         }
     }
@@ -1895,6 +2703,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     if (!batch.Create(program)) {
         return 1;
     }
+    CAudioPlayer audio;
 
     int drawableWidth = 0;
     int drawableHeight = 0;
@@ -1922,6 +2731,8 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     bool showSpawns = startWithSpawns;
     bool showCollisions = startWithCollisions;
     CoverState coverState = CoverState::Intact;
+    std::uint8_t barrelState = 0;
+    std::uint8_t spireState = 0;
 
     // The props animate, so the geometry is rebuilt every frame from here on.
     // This flag only decides whether a rebuild says anything about itself.
@@ -1945,12 +2756,14 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
     if (gameView) {
         std::printf("\n[gameview] WASD: move, arrows: change map, "
-                    "T: tiles, P: props, K: spawns, B: covers, C: collision, "
+                    "T: tiles, P: props, K: spawns, B: covers, E: barrels, "
+                    "F: spires, C: collision, "
                     "space: pause, '.': one step, Esc: quit\n");
     } else {
         std::printf("\n[preview] arrows: change map, Home: refit, "
                     "drag: pan, wheel: zoom, T: tiles, P: props, "
-                    "K: spawns, B: covers, C: collision, space: pause, "
+                    "K: spawns, B: covers, E: barrels, S/F: spires, "
+                    "C: collision, space: pause, "
                     "'.': one step, Esc: quit\n");
     }
 
@@ -1969,10 +2782,44 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             } else if (key == KeyCode::B) {
                 coverState = NextCoverState(coverState);
                 const std::uint32_t changed = SetCoverState(loaded, coverState);
+                StartTransitionParticles(
+                    tocManager, loaded, InteractivePropKind::Cover,
+                    static_cast<std::uint8_t>(coverState));
+                PlayTransitionSound(tocManager, loaded, audio,
+                                    InteractivePropKind::Cover,
+                                    static_cast<std::uint8_t>(coverState));
                 BuildCollisionScene(loaded);
                 reportGeometry = true;
                 std::printf("[m4] %u covers: %s\n", changed,
                             CoverStateName(coverState));
+            } else if (key == KeyCode::E) {
+                barrelState = static_cast<std::uint8_t>((barrelState + 1) % 4);
+                const std::uint32_t changed = SetInteractiveState(
+                    loaded, InteractivePropKind::Barrel, barrelState);
+                StartTransitionParticles(tocManager, loaded,
+                                         InteractivePropKind::Barrel,
+                                         barrelState);
+                PlayTransitionSound(tocManager, loaded, audio,
+                                    InteractivePropKind::Barrel, barrelState);
+                BuildCollisionScene(loaded);
+                reportGeometry = true;
+                std::printf("[m4] %u barrels: %s\n", changed,
+                            InteractiveStateName(InteractivePropKind::Barrel,
+                                                 barrelState));
+            } else if (key == KeyCode::F ||
+                       (key == KeyCode::S && !gameView)) {
+                spireState = static_cast<std::uint8_t>((spireState + 1) % 3);
+                const std::uint32_t changed = SetInteractiveState(
+                    loaded, InteractivePropKind::Spire, spireState);
+                StartTransitionParticles(tocManager, loaded,
+                                         InteractivePropKind::Spire,
+                                         spireState);
+                PlayTransitionSound(tocManager, loaded, audio,
+                                    InteractivePropKind::Spire, spireState);
+                reportGeometry = true;
+                std::printf("[m4] %u spires: %s\n", changed,
+                            InteractiveStateName(InteractivePropKind::Spire,
+                                                 spireState));
             } else if (key == KeyCode::C) {
                 showCollisions = !showCollisions;
                 std::printf("[m4] collision %s\n",
@@ -2022,6 +2869,8 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
                         replacement)) {
                 LoadProps(tocManager, replacement);
                 coverState = CoverState::Intact;
+                barrelState = 0;
+                spireState = 0;
                 BuildCollisionScene(replacement);
                 LoadPlacedEnemies(tocManager, program, replacement);
                 LoadPlacedPlayers(tocManager, program, replacement);
@@ -2069,9 +2918,11 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             UpdateControlledPlayer(loaded, window, elapsedMs);
         }
         AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
+        AdvanceParticleEffects(loaded, static_cast<std::uint16_t>(elapsedMs));
         AdvanceEnemies(loaded, static_cast<std::int32_t>(elapsedMs));
         AdvancePlayers(loaded, static_cast<std::int32_t>(elapsedMs));
         AdvanceTileLayers(loaded.map, static_cast<std::uint16_t>(elapsedMs));
+        audio.Update();
         BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
         reportGeometry = false;
 

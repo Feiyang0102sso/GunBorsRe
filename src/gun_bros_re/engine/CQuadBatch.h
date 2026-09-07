@@ -95,6 +95,13 @@ public:
                  const SourceRect &source, bool flipHorizontal, bool flipVertical,
                  BlendMode blend);
 
+    /** Queue a tinted quad transformed around a world-space pivot. */
+    void AddTransformedQuad(const CTexture &texture, float x, float y,
+                            float width, float height, const SourceRect &source,
+                            bool flipHorizontal, bool flipVertical, BlendMode blend,
+                            float pivotX, float pivotY, float scaleX, float scaleY,
+                            float rotationDegrees, float alpha);
+
     /** Push the accumulated geometry to the GPU. */
     void Upload();
 
@@ -118,12 +125,13 @@ public:
     }
 
 private:
-    /** Screen position and a 4096-scaled UV, matching the shader's attributes. */
+    /** Screen position, a 4096-scaled UV, and per-vertex opacity. */
     struct Vertex {
         float x;
         float y;
         float u;
         float v;
+        float alpha;
     };
 
     /** A run of consecutive quads sharing one texture and one blend mode. */
@@ -135,6 +143,11 @@ private:
 
     /** Extend the current run, or start a new one when its state changes. */
     Group &GroupFor(const CTexture &texture, BlendMode blend);
+
+    /** Append two triangles after UV and corner positions have been resolved. */
+    void AddVertices(const CTexture &texture, BlendMode blend,
+                     const Vertex &topLeft, const Vertex &topRight,
+                     const Vertex &bottomLeft, const Vertex &bottomRight);
 
     std::vector<Group> m_groups;
 

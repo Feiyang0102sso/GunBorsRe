@@ -17,6 +17,7 @@ CMeshBuffer::CMeshBuffer()
       m_indexBuffer(0),
       m_positionLocation(-1),
       m_texCoordLocation(-1),
+      m_alphaLocation(-1),
       m_mvpLocation(-1),
       m_tex0Location(-1),
       m_indexCount(0) {}
@@ -30,6 +31,7 @@ bool CMeshBuffer::Create(const CShaderProgram &program) {
 
     m_positionLocation = program.GetAttribLocation("Position");
     m_texCoordLocation = program.GetAttribLocation("TexCoord");
+    m_alphaLocation = program.GetAttribLocation("Alpha");
     if (m_positionLocation < 0 || m_texCoordLocation < 0) {
         std::printf("[meshbuf] shader has no Position/TexCoord attribute\n");
         return false;
@@ -160,6 +162,12 @@ void CMeshBuffer::Draw(const CShaderProgram &program, const float *mvp,
     texture.Bind(GL_TEXTURE0);
 
     glBindVertexArray(m_vertexArray);
+    if (m_alphaLocation >= 0) {
+        // Particle sprites supply per-vertex opacity, but a mesh has no alpha
+        // buffer. Generic attributes are context state, so make every mesh
+        // vertex opaque at draw time instead of inheriting the default zero.
+        glVertexAttrib1f(static_cast<GLuint>(m_alphaLocation), 1.0f);
+    }
     glDrawElements(GL_TRIANGLE_STRIP, static_cast<GLsizei>(m_indexCount),
                    GL_UNSIGNED_SHORT, nullptr);
     glBindVertexArray(0);

@@ -70,6 +70,7 @@ typedef std::ptrdiff_t GLintptr;
     X(void,   glDeleteVertexArrays,      (GLsizei n, const GLuint *arrays))                         \
     X(void,   glBindVertexArray,         (GLuint array))                                            \
     X(void,   glEnableVertexAttribArray, (GLuint index))                                            \
+    X(void,   glVertexAttrib1f,          (GLuint index, GLfloat x))                                 \
     X(void,   glVertexAttribPointer,     (GLuint index, GLint size, GLenum type,                    \
                                           GLboolean normalized, GLsizei stride,                     \
                                           const void *pointer))                                     \

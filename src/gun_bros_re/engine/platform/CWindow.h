@@ -46,6 +46,8 @@ enum class KeyCode {
     D,
     B,
     C,
+    E,
+    F,
     Count,
 };
 

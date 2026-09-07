@@ -104,6 +104,7 @@ private:
 
     GLint m_positionLocation;
     GLint m_texCoordLocation;
+    GLint m_alphaLocation;
     GLint m_mvpLocation;
     GLint m_tex0Location;
 

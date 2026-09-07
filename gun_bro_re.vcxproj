@@ -109,6 +109,7 @@
   <ItemGroup>
     <ClCompile Include="src\gun_bros_re\main.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CArrayInputStream.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CAudioPlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CMarkerBatch.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CMatrix4d.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CTexture.cpp" />
@@ -124,6 +125,7 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerCamera.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CProp.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMap.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CParticleEffect.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CEnemy.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMesh.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CMeshAnimationController.cpp" />
@@ -169,6 +171,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\engine\CBigFileReader.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CAudioPlayer.h" />
     <ClInclude Include="src\gun_bros_re\engine\CArrayInputStream.h" />
     <ClInclude Include="src\gun_bros_re\engine\CMarkerBatch.h" />
     <ClInclude Include="src\gun_bros_re\engine\CMatrix4d.h" />
@@ -197,6 +200,7 @@
     <ClInclude Include="src\gun_bros_re\glu_script\CScriptVariable.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CProp.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMap.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CParticleEffect.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CEnemy.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMesh.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CMeshAnimationController.h" />
