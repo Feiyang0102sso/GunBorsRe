@@ -364,6 +364,32 @@ std::int32_t MoveDurationMs(const EnemyTemplate &entry,
     return frames[move.lastFrame].timeMs - frames[move.firstFrame].timeMs;
 }
 
+/**
+ * Spell out what a sequence plays: every move it chains, and how long each
+ * runs. "moves 4" on its own says nothing; this says what move 4 IS.
+ */
+void PrintSequence(const EnemyTemplate &entry,
+                   const std::vector<std::unique_ptr<LoadedConfig>> &configs,
+                   const std::vector<std::uint8_t> &sequence) {
+    std::int32_t total = 0;
+    for (std::size_t i = 0; i < sequence.size(); ++i) {
+        const std::uint8_t moveIndex = sequence[i];
+        const std::int32_t durationMs = MoveDurationMs(entry, configs, moveIndex);
+        total += durationMs;
+
+        if (moveIndex < entry.moveSet.GetMoves().size()) {
+            const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+            std::printf(" %s move %u [cfg %u, frames %u..%u, %d ms]",
+                        i == 0 ? "--" : "then", moveIndex, move.meshConfigIndex,
+                        move.firstFrame, move.lastFrame, durationMs);
+        } else {
+            std::printf(" %s move %u [past the set]", i == 0 ? "--" : "then",
+                        moveIndex);
+        }
+    }
+    std::printf("  = %d ms\n", total);
+}
+
 /** One enemy's states, with the moves each of them chains. */
 void ReportStates(std::size_t index, const EnemyTemplate &entry,
                   const std::vector<std::unique_ptr<LoadedConfig>> &configs) {
@@ -389,25 +415,7 @@ void ReportStates(std::size_t index, const EnemyTemplate &entry,
             std::printf(" -- inherited");
         }
 
-        std::int32_t total = 0;
-        for (std::size_t i = 0; i < sequence->size(); ++i) {
-            const std::uint8_t moveIndex = (*sequence)[i];
-            const std::int32_t durationMs =
-                MoveDurationMs(entry, configs, moveIndex);
-            total += durationMs;
-
-            if (moveIndex < entry.moveSet.GetMoves().size()) {
-                const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
-                std::printf(" %s move %u [cfg %u, frames %u..%u, %d ms]",
-                            i == 0 ? "--" : "then", moveIndex,
-                            move.meshConfigIndex, move.firstFrame, move.lastFrame,
-                            durationMs);
-            } else {
-                std::printf(" %s move %u [past the set]", i == 0 ? "--" : "then",
-                            moveIndex);
-            }
-        }
-        std::printf("  = %d ms\n", total);
+        PrintSequence(entry, configs, *sequence);
     }
 }
 
@@ -626,6 +634,10 @@ void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
         const std::vector<std::uint8_t> *sequence =
             SequenceOfState(entry.script, static_cast<std::uint8_t>(stateId));
         if (sequence == nullptr || sequence->empty()) {
+            // Said out loud, because a silent skip looks like a lost state.
+            // Such a state is pure logic: entering it would leave whatever was
+            // last on screen exactly where it was.
+            std::printf("[m38] state %d has no animation, skipped\n", stateId);
             continue;
         }
 
@@ -634,11 +646,8 @@ void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
 
         // Ids are zero-based, so the last one is stateCount - 1. Spelt out
         // because "state 6 of 7" reads like there is a seventh still to come.
-        std::printf("[m38] state %d of 0..%zu -- moves", stateId, stateCount - 1);
-        for (std::size_t i = 0; i < sequence->size(); ++i) {
-            std::printf(" %u", (*sequence)[i]);
-        }
-        std::printf("\n");
+        std::printf("[m38] state %d of 0..%zu", stateId, stateCount - 1);
+        PrintSequence(entry, loaded.configs, *sequence);
         return;
     }
 
