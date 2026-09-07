@@ -44,8 +44,14 @@ void PrintUsage() {
         "  --character [n]           M3.7: the player, his legs, and gun <n>\n"
         "  --enemy <n>               M3.8: enemy <n>, assembled by its script\n"
         "  --enemies                 run every enemy script, list its parts\n"
+        "  --enemyanim <n>           M3.8: enemy <n>, M/N walking the script's\n"
+        "                            states -- its real idle/attack/death\n"
+        "  --enemyanims              list every enemy's states and the moves\n"
+        "                            each one chains\n"
         "  --move <n>                M3.8: hold body move <n> instead of the\n"
         "                            one the script chose, and loop it\n"
+        "  --state <n>               M3.8: enter state <n> and let its whole\n"
+        "                            sequence play\n"
         "  --map <pack> <n>          which map M3 should START on; the arrow\n"
         "                            keys reach every other one\n"
         "                            (default: %s %u)\n"
@@ -74,14 +80,16 @@ int PromptForHarness() {
         "  2  model viewer     -- one 3D model at a time, on a turntable\n"
         "  3  character viewer -- a player assembled out of his parts\n"
         "  4  enemy viewer     -- an enemy assembled by its own script\n"
-        "  5  texture viewer   -- one PNG out of a .big\n"
+        "  5  enemy animations -- the idle/attack/death its states play\n"
+        "  6  texture viewer   -- one PNG out of a .big\n"
         "\n"
-        "  6  list every map\n"
-        "  7  list every model\n"
-        "  8  list every model with the atlas it wears\n"
-        "  9  list what each enemy script assembles\n"
-        " 10  list every level script\n"
-        " 11  resource addressing self-check\n"
+        "  7  list every map\n"
+        "  8  list every model\n"
+        "  9  list every model with the atlas it wears\n"
+        " 10  list what each enemy script assembles\n"
+        " 11  list what each enemy script animates\n"
+        " 12  list every level script\n"
+        " 13  resource addressing self-check\n"
         "\n"
         "choice [1]: ");
     std::fflush(stdout);
@@ -92,7 +100,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 11) {
+    if (choice < 1 || choice > 13) {
         return 1;
     }
     return choice;
@@ -122,8 +130,11 @@ int main(int argc, char **argv) {
     bool runM37 = false;
     bool runM38 = false;
     bool surveyEnemies = false;
+    bool surveyEnemyAnimations = false;
+    bool stepStates = false;
     std::uint32_t enemyIndex = 0;
     std::int32_t bodyMoveIndex = -1;
+    std::int32_t stateIndex = -1;
     std::uint32_t gunIndex = 0;
     std::uint32_t meshIndex = 0;
     float meshSpinDegrees = 0.0f;
@@ -144,8 +155,16 @@ int main(int argc, char **argv) {
             surveyMeshes = true;
         } else if (std::strcmp(argument, "--move") == 0 && i + 1 < argc) {
             bodyMoveIndex = static_cast<std::int32_t>(std::strtol(argv[++i], nullptr, 0));
+        } else if (std::strcmp(argument, "--state") == 0 && i + 1 < argc) {
+            stateIndex = static_cast<std::int32_t>(std::strtol(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--enemies") == 0) {
             surveyEnemies = true;
+        } else if (std::strcmp(argument, "--enemyanims") == 0) {
+            surveyEnemyAnimations = true;
+        } else if (std::strcmp(argument, "--enemyanim") == 0 && i + 1 < argc) {
+            runM38 = true;
+            stepStates = true;
+            enemyIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--enemy") == 0 && i + 1 < argc) {
             runM38 = true;
             enemyIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
@@ -197,28 +216,35 @@ int main(int argc, char **argv) {
         }
         if (choice == 4) {
             return RunM38Enemy(bigDirectory, 0, 0.0f, screenshotPath, advanceMs,
-                               -1);
+                               -1, false, -1);
         }
         if (choice == 5) {
+            return RunM38Enemy(bigDirectory, 0, 0.0f, screenshotPath, advanceMs,
+                               -1, true, -1);
+        }
+        if (choice == 6) {
             return RunM2Texture(bigDirectory, imagePackName, imageResourceId,
                                 screenshotPath);
         }
-        if (choice == 6) {
+        if (choice == 7) {
             return RunMapList(bigDirectory);
         }
-        if (choice == 7) {
+        if (choice == 8) {
             return RunMeshSurvey(bigDirectory);
         }
-        if (choice == 8) {
+        if (choice == 9) {
             return RunMoveSetSurvey(bigDirectory);
         }
-        if (choice == 9) {
+        if (choice == 10) {
             return RunEnemySurvey(bigDirectory);
         }
-        if (choice == 10) {
+        if (choice == 11) {
+            return RunEnemyAnimationSurvey(bigDirectory);
+        }
+        if (choice == 12) {
             return RunLevelSurvey(bigDirectory);
         }
-        if (choice == 11) {
+        if (choice == 13) {
             return RunM1Resources(bigDirectory);
         }
         return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
@@ -243,9 +269,13 @@ int main(int argc, char **argv) {
     if (surveyEnemies) {
         return RunEnemySurvey(bigDirectory);
     }
+    if (surveyEnemyAnimations) {
+        return RunEnemyAnimationSurvey(bigDirectory);
+    }
     if (runM38) {
         return RunM38Enemy(bigDirectory, enemyIndex, meshSpinDegrees,
-                           screenshotPath, advanceMs, bodyMoveIndex);
+                           screenshotPath, advanceMs, bodyMoveIndex, stepStates,
+                           stateIndex);
     }
     if (runM37) {
         return RunM37Character(bigDirectory, gunIndex, meshSpinDegrees,

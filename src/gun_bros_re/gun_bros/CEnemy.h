@@ -120,6 +120,23 @@ public:
      */
     bool SpawnForUI();
 
+    /**
+     * Enter one of the script's states, as the script's own transitions do.
+     *
+     * A state carries an animation SEQUENCE -- a list of move indices -- and
+     * entering one starts that sequence playing. This is how the game reaches
+     * an enemy's idle, attack and death animations: they are states, not
+     * moves, and a move on its own is only one link of the chain.
+     *
+     * Hands the body back to the script, since the script is driving again.
+     */
+    bool SetState(std::uint8_t stateId);
+
+    std::uint8_t GetStateId() const { return m_interpreter.GetStateId(); }
+
+    /** The script this enemy is running, for a caller that wants to read it. */
+    const CScriptInterpreter &GetInterpreter() const { return m_interpreter; }
+
     std::uint32_t GetPartCount() const { return m_partCount; }
     EnemyPart &GetPart(std::size_t index) { return m_parts[index]; }
     const EnemyPart &GetPart(std::size_t index) const { return m_parts[index]; }
@@ -184,6 +201,13 @@ private:
     // original hands back a real field for each; this hands back scratch and
     // logs which one was wanted.
     std::int16_t m_variableScratch;
+
+    // Which unimplemented ids have already been reported. A running script
+    // calls the same handful many times a second, and a line per call buries
+    // everything else; a line per id is the list of what to build next, which
+    // is the whole point of logging them.
+    bool m_reportedFunction[256];
+    bool m_reportedVariable[256];
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CENEMY_H

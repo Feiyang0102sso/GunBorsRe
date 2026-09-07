@@ -25,10 +25,17 @@
  * @param bodyMoveIndex Hold this move on the body instead of the one the
  *        script chose, or -1 to leave the script in charge. The same takeover
  *        the M and N keys do, so a screenshot can name an animation.
+ * @param stepStates Make M and N walk the script's STATES rather than the
+ *        move set's raw moves. A state is what the game plays -- a chain of
+ *        moves -- so this is the mode that shows idle, attack and death.
+ * @param stateIndex Enter this state before the first frame, or -1 to leave
+ *        the enemy as SpawnForUI left it. What the M and N keys do in state
+ *        mode, so a screenshot can name an animation.
  */
 int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
                 float spinDegrees, const std::string &screenshotPath,
-                std::uint32_t advanceMs, std::int32_t bodyMoveIndex);
+                std::uint32_t advanceMs, std::int32_t bodyMoveIndex,
+                bool stepStates, std::int32_t stateIndex);
 
 /**
  * Run every enemy's script and report the part table it builds. Touches no GL.
@@ -39,5 +46,16 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
  * @return 0 when every enemy template parsed.
  */
 int RunEnemySurvey(const std::string &bigDirectory);
+
+/**
+ * List every enemy's states and the moves each of them chains. Touches no GL.
+ *
+ * A move is one window onto the mesh's frame bank; a STATE is what the game
+ * plays, and a state chains several moves. This is therefore the list that
+ * corresponds to an enemy's real idle, attack and death animations.
+ *
+ * @return 0 when every enemy template parsed.
+ */
+int RunEnemyAnimationSurvey(const std::string &bigDirectory);
 
 #endif  // GUN_BROS_RE_MILESTONES_M38ENEMY_H

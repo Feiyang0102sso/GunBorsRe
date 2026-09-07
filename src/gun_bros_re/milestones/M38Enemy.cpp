@@ -23,6 +23,7 @@
 #include "engine/platform/CWindow.h"
 #include "engine/platform/GLLoader.h"
 #include "glu_script/CScript.h"
+#include "glu_script/CScriptState.h"
 #include "gun_bros/CEnemy.h"
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CGameObjectPack.h"
@@ -299,6 +300,118 @@ void ReportPartTable(std::size_t index, const EnemyTemplate &entry,
 }
 
 // ---------------------------------------------------------------------------
+// --enemyanims: the animations a script actually plays
+//
+// A move is not an animation. It is one window onto the mesh's frame bank, and
+// what the game plays is a STATE: a chain of move indices that the interpreter
+// walks as each one runs out. An enemy's idle, its attack and its death are
+// states, so this is the list that maps onto those names.
+// ---------------------------------------------------------------------------
+
+/**
+ * The sequence a state plays, following the parent chain.
+ *
+ * States inherit: one with no sequence of its own takes its parent's, which is
+ * how a family of states shares one animation. Walked here rather than through
+ * CScriptState::GetSequence so the survey needs no interpreter.
+ */
+const std::vector<std::uint8_t> *SequenceOfState(const CScript &script,
+                                                 std::uint8_t stateId) {
+    // At most one pass over the states: a parent chain that loops would
+    // otherwise never end, and nothing guarantees the data is a tree.
+    for (std::size_t hops = 0; hops < script.GetStates().size(); ++hops) {
+        if (stateId >= script.GetStates().size()) {
+            return nullptr;
+        }
+
+        const CScriptState &state = script.GetStates()[stateId];
+        if (!state.GetOwnSequence().empty()) {
+            return &state.GetOwnSequence();
+        }
+        if (state.GetParent() == kNoParentState) {
+            return nullptr;
+        }
+        stateId = state.GetParent();
+    }
+    return nullptr;
+}
+
+/**
+ * How long one move runs, in milliseconds.
+ *
+ * The move set only names a frame RANGE; the milliseconds live in the mesh,
+ * because it is the frames that carry the timestamps. So this needs the loaded
+ * models, which is why the listing loads them even though it draws nothing.
+ */
+std::int32_t MoveDurationMs(const EnemyTemplate &entry,
+                            const std::vector<std::unique_ptr<LoadedConfig>> &configs,
+                            std::uint8_t moveIndex) {
+    if (moveIndex >= entry.moveSet.GetMoves().size()) {
+        return 0;
+    }
+
+    const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+    if (move.meshConfigIndex >= configs.size() ||
+        !configs[move.meshConfigIndex]->valid) {
+        return 0;
+    }
+
+    const std::vector<MeshFrame> &frames =
+        configs[move.meshConfigIndex]->mesh.GetFrames();
+    if (move.firstFrame >= frames.size() || move.lastFrame >= frames.size()) {
+        return 0;
+    }
+    return frames[move.lastFrame].timeMs - frames[move.firstFrame].timeMs;
+}
+
+/** One enemy's states, with the moves each of them chains. */
+void ReportStates(std::size_t index, const EnemyTemplate &entry,
+                  const std::vector<std::unique_ptr<LoadedConfig>> &configs) {
+    std::printf("  %3zu  %-18s %zu states, %u moves\n", index,
+                entry.owner.c_str(), entry.script.GetStates().size(),
+                static_cast<unsigned>(entry.moveSet.GetMoves().size()));
+
+    for (std::size_t stateId = 0; stateId < entry.script.GetStates().size();
+         ++stateId) {
+        const CScriptState &state = entry.script.GetStates()[stateId];
+        const std::vector<std::uint8_t> *sequence =
+            SequenceOfState(entry.script, static_cast<std::uint8_t>(stateId));
+
+        std::printf("      state %2zu", stateId);
+        if (state.GetParent() != kNoParentState) {
+            std::printf(" (parent %u)", state.GetParent());
+        }
+        if (sequence == nullptr || sequence->empty()) {
+            std::printf(" -- no animation\n");
+            continue;
+        }
+        if (state.GetOwnSequence().empty()) {
+            std::printf(" -- inherited");
+        }
+
+        std::int32_t total = 0;
+        for (std::size_t i = 0; i < sequence->size(); ++i) {
+            const std::uint8_t moveIndex = (*sequence)[i];
+            const std::int32_t durationMs =
+                MoveDurationMs(entry, configs, moveIndex);
+            total += durationMs;
+
+            if (moveIndex < entry.moveSet.GetMoves().size()) {
+                const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+                std::printf(" %s move %u [cfg %u, frames %u..%u, %d ms]",
+                            i == 0 ? "--" : "then", moveIndex,
+                            move.meshConfigIndex, move.firstFrame, move.lastFrame,
+                            durationMs);
+            } else {
+                std::printf(" %s move %u [past the set]", i == 0 ? "--" : "then",
+                            moveIndex);
+            }
+        }
+        std::printf("  = %d ms\n", total);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The viewer
 // ---------------------------------------------------------------------------
 
@@ -312,6 +425,16 @@ void ReportPartTable(std::size_t index, const EnemyTemplate &entry,
  * given before `uiScalePercent` trims it.
  */
 enum class ViewMode { Game, Ui };
+
+/**
+ * What M and N step through.
+ *
+ * `Moves` walks the move set one raw move at a time, which is how you see
+ * every window the artists cut. `States` walks the script's states, which is
+ * what the game actually plays: a state chains several moves, and it is states
+ * that correspond to idle, attack and death.
+ */
+enum class StepTarget { Moves, States };
 
 struct Turntable {
     float spinDegrees;
@@ -341,7 +464,11 @@ struct LoadedEnemy {
     // from the script. kNoMoveIndex until then.
     std::int32_t bodyMoveIndex;
 
-    LoadedEnemy() : bodyMoveIndex(kNoMoveIndex) {}
+    // Which state the viewer is holding, or -1 while the script runs free.
+    // Both a cursor and a lock -- see StepState for why it has to be both.
+    std::int32_t heldStateId;
+
+    LoadedEnemy() : bodyMoveIndex(kNoMoveIndex), heldStateId(-1) {}
 };
 
 std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex);
@@ -465,6 +592,75 @@ void SelectBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded,
     std::printf("[m38] body move %d of %zu -- config %u, frames %u..%u, %d ms\n",
                 moveIndex, entry.moveSet.GetMoves().size(), move.meshConfigIndex,
                 move.firstFrame, move.lastFrame, animation.GetRangeDurationMs());
+}
+
+/**
+ * Walk the script's states forward or back, and play the one landed on.
+ *
+ * This is the animation the game plays, as against the raw move StepBodyMove
+ * picks: entering a state starts its whole sequence, and the interpreter
+ * chains the moves as each runs out. States with no sequence anywhere in their
+ * parent chain are skipped -- they are pure logic and would leave the model
+ * standing on whatever was last on screen.
+ */
+void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
+    const std::size_t stateCount = entry.script.GetStates().size();
+    if (stateCount == 0) {
+        return;
+    }
+
+    // The cursor is the viewer's own, NOT the interpreter's current state.
+    // A script does not sit still in the state it is put in: enemy 2 entered
+    // at state 3 has walked itself back to state 2 within a second. Stepping
+    // from wherever the script happens to be would then bounce between two
+    // states forever, which is what reading GetStateId() here used to do.
+    int stateId = loaded.heldStateId;
+    if (stateId < 0) {
+        stateId = static_cast<int>(loaded.enemy.GetStateId());
+    }
+
+    for (std::size_t tried = 0; tried < stateCount; ++tried) {
+        stateId = (stateId + step + static_cast<int>(stateCount)) %
+                  static_cast<int>(stateCount);
+
+        const std::vector<std::uint8_t> *sequence =
+            SequenceOfState(entry.script, static_cast<std::uint8_t>(stateId));
+        if (sequence == nullptr || sequence->empty()) {
+            continue;
+        }
+
+        loaded.heldStateId = stateId;
+        loaded.enemy.SetState(static_cast<std::uint8_t>(stateId));
+
+        // Ids are zero-based, so the last one is stateCount - 1. Spelt out
+        // because "state 6 of 7" reads like there is a seventh still to come.
+        std::printf("[m38] state %d of 0..%zu -- moves", stateId, stateCount - 1);
+        for (std::size_t i = 0; i < sequence->size(); ++i) {
+            std::printf(" %u", (*sequence)[i]);
+        }
+        std::printf("\n");
+        return;
+    }
+
+    std::printf("[m38] no state of this enemy carries an animation\n");
+}
+
+/**
+ * Put the held state back if the script has wandered off it.
+ *
+ * A state is not a loop: its sequence plays out and then the script's own
+ * logic moves on, usually back to an idle. That is right in a level and wrong
+ * in a previewer, where the point is to watch one animation repeat. Silent,
+ * because it happens several times a second.
+ */
+void HoldState(LoadedEnemy &loaded) {
+    if (loaded.heldStateId < 0) {
+        return;
+    }
+    if (loaded.enemy.GetStateId() == loaded.heldStateId) {
+        return;
+    }
+    loaded.enemy.SetState(static_cast<std::uint8_t>(loaded.heldStateId));
 }
 
 void StepBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
@@ -716,9 +912,56 @@ int RunEnemySurvey(const std::string &bigDirectory) {
     return 0;
 }
 
+int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
+    std::printf("=== M3.8: the animations each enemy script plays ===\n\n");
+
+    CResTOCManager tocManager;
+    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+        return 1;
+    }
+
+    PackTables tables(tocManager);
+    std::vector<EnemyTemplate> enemies;
+    CollectEnemies(tocManager, tables, enemies);
+
+    unsigned animated = 0;
+    unsigned inherited = 0;
+    for (std::size_t i = 0; i < enemies.size(); ++i) {
+        // Meshes but no textures and no GL: the timestamps a move's duration
+        // is measured from live in the mesh, not in the move set.
+        std::vector<std::unique_ptr<LoadedConfig>> configs;
+        LoadConfigs(tables, enemies[i], configs, false, nullptr);
+
+        ReportStates(i, enemies[i], configs);
+
+        for (std::size_t stateId = 0;
+             stateId < enemies[i].script.GetStates().size(); ++stateId) {
+            const CScriptState &state = enemies[i].script.GetStates()[stateId];
+            const std::vector<std::uint8_t> *sequence =
+                SequenceOfState(enemies[i].script,
+                                static_cast<std::uint8_t>(stateId));
+            if (sequence == nullptr || sequence->empty()) {
+                continue;
+            }
+            animated++;
+            if (state.GetOwnSequence().empty()) {
+                inherited++;
+            }
+        }
+    }
+
+    std::printf("\n%zu enemies, %u states carry an animation, %u of those "
+                "inherit it from a parent state\n",
+                enemies.size(), animated, inherited);
+    return 0;
+}
+
 int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
                 float spinDegrees, const std::string &screenshotPath,
-                std::uint32_t advanceMs, std::int32_t bodyMoveIndex) {
+                std::uint32_t advanceMs, std::int32_t bodyMoveIndex,
+                bool stepStates, std::int32_t stateIndex) {
+    const StepTarget stepTarget =
+        stepStates ? StepTarget::States : StepTarget::Moves;
     std::printf("=== M3.8: an enemy, assembled by its own script ===\n\n");
 
     CResTOCManager tocManager;
@@ -755,14 +998,23 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
     if (!BuildEnemy(tables, enemies[slot], program, *loaded)) {
         return 1;
     }
+    if (stateIndex >= 0) {
+        loaded->heldStateId = stateIndex;
+        loaded->enemy.SetState(static_cast<std::uint8_t>(stateIndex));
+        std::printf("[m38] entered state %d\n", stateIndex);
+    }
     if (bodyMoveIndex >= 0) {
         SelectBodyMove(enemies[slot], *loaded, bodyMoveIndex);
     }
     for (std::uint32_t elapsed = 0; elapsed < advanceMs; elapsed += kWarmUpFrameMs) {
         loaded->enemy.Update(kWarmUpFrameMs);
+        if (stepTarget == StepTarget::States) {
+            HoldState(*loaded);
+        }
     }
-    std::printf("[m38] body is on move %d after %u ms%s\n",
-                loaded->enemy.GetPart(0).controller.GetMoveIndex(), advanceMs,
+    std::printf("[m38] after %u ms: state %u, body on move %d%s\n", advanceMs,
+                loaded->enemy.GetStateId(),
+                loaded->enemy.GetPart(0).controller.GetMoveIndex(),
                 loaded->enemy.IsBodyMoveLocked() ? " (held)" : " (script's)");
 
     glEnable(GL_DEPTH_TEST);
@@ -777,8 +1029,11 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
     view.mode = ViewMode::Game;
 
     std::printf("\n[m38] left/right: enemy, up/down: ten at a time, "
-                "M/N: body move, space: pause, period: step, drag: turn, "
-                "wheel: zoom, G: game/menu view, Home: reset view, Esc: quit\n");
+                "M/N: %s, space: pause, period: step, drag: turn, "
+                "wheel: zoom, G: game/menu view, Home: reset view, Esc: quit\n",
+                stepTarget == StepTarget::States
+                    ? "animation (a script state)"
+                    : "body move (one raw move)");
 
     std::uint64_t previousTicks = window.GetTicksMs();
     bool paused = false;
@@ -844,7 +1099,11 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
                 slot = previousSlot;
             }
         } else if (moveStep != 0) {
-            StepBodyMove(enemies[slot], *loaded, moveStep);
+            if (stepTarget == StepTarget::States) {
+                StepState(enemies[slot], *loaded, moveStep);
+            } else {
+                StepBodyMove(enemies[slot], *loaded, moveStep);
+            }
         }
 
         const std::uint64_t nowTicks = window.GetTicksMs();
@@ -863,6 +1122,9 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
         }
         if (elapsedMs > 0) {
             loaded->enemy.Update(static_cast<std::int32_t>(elapsedMs));
+            if (stepTarget == StepTarget::States) {
+                HoldState(*loaded);
+            }
         }
 
         int dragX = 0;

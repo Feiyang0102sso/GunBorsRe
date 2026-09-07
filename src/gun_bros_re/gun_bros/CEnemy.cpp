@@ -31,7 +31,12 @@ CEnemy::CEnemy()
     : m_moveSet(nullptr),
       m_partCount(1),
       m_bodyMoveLocked(false),
-      m_variableScratch(0) {}
+      m_variableScratch(0) {
+    for (std::size_t i = 0; i < 256; ++i) {
+        m_reportedFunction[i] = false;
+        m_reportedVariable[i] = false;
+    }
+}
 
 void CEnemy::Bind(const CScript &script, const CMoveSetMesh &moveSet,
                   const std::vector<const CMesh *> &configMeshes) {
@@ -64,6 +69,11 @@ bool CEnemy::SpawnForUI() {
     // is CEnemy::Bind followed by CEnemy::SpawnForUI, with no state entered
     // first. Entering state 0 anyway would run enter code the menu never runs.
     return m_interpreter.CallExportFunction(kExportSpawnForUI);
+}
+
+bool CEnemy::SetState(std::uint8_t stateId) {
+    m_bodyMoveLocked = false;
+    return m_interpreter.SetState(stateId);
 }
 
 void CEnemy::Update(std::int32_t deltaMs) {
@@ -171,17 +181,27 @@ std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
         return 0;
     }
 
-    std::printf("[enemy] function %u, %u args:", function, argumentCount);
-    for (std::uint8_t i = 0; i < argumentCount; ++i) {
-        std::printf(" %d", arguments[i]);
+    // Once per id, not once per call: a running script calls the same few
+    // handlers many times a second, and a line each buries everything else.
+    // One line per id is the list of what to build next, which is why these
+    // are logged at all.
+    if (!m_reportedFunction[function]) {
+        m_reportedFunction[function] = true;
+        std::printf("[enemy] function %u, %u args:", function, argumentCount);
+        for (std::uint8_t i = 0; i < argumentCount; ++i) {
+            std::printf(" %d", arguments[i]);
+        }
+        std::printf(" -- not implemented\n");
     }
-    std::printf(" -- not implemented\n");
     return 0;
 }
 
 std::int16_t *CEnemy::VariableResolver(std::uint8_t variable) {
-    std::printf("[enemy] variable %u -- not implemented, reading scratch\n",
-                variable);
+    if (!m_reportedVariable[variable]) {
+        m_reportedVariable[variable] = true;
+        std::printf("[enemy] variable %u -- not implemented, reading scratch\n",
+                    variable);
+    }
     m_variableScratch = 0;
     return &m_variableScratch;
 }
