@@ -32,7 +32,7 @@ void PrintUsage() {
     std::printf(
         "usage: gun_bros_re [options]\n"
         "\n"
-        "  (no options)              M3: show a level, terrain and scenery\n"
+        "  (no options)              choose a viewer from the menu\n"
         "  --m1                      M1: verify cross-pack resource addressing\n"
         "  --m2                      M2: show a single PNG from a .big\n"
         "  --dump <pack>             list one pack's resource table\n"
@@ -53,6 +53,8 @@ void PrintUsage() {
         "  --state <n>               M3.8: enter state <n> and let its whole\n"
         "                            sequence play\n"
         "  --spawns                  M3: start with the spawn overlay on\n"
+        "  --collisions              M4: start with collision edges visible\n"
+        "  --gameview                open the map as a playable fixed view\n"
         "  --map <pack> <n>          which map M3 should START on; the arrow\n"
         "                            keys reach every other one\n"
         "                            (default: %s %u)\n"
@@ -77,20 +79,21 @@ int PromptForHarness() {
     std::printf(
         "\n=== gun_bros_re ===\n"
         "\n"
-        "  1  map viewer       -- terrain, scenery, animation, scrolling\n"
-        "  2  model viewer     -- one 3D model at a time, on a turntable\n"
-        "  3  character viewer -- a player assembled out of his parts\n"
-        "  4  enemy viewer     -- an enemy assembled by its own script\n"
-        "  5  enemy animations -- the idle/attack/death its states play\n"
-        "  6  texture viewer   -- one PNG out of a .big\n"
+        "  1  Preview          -- whole-map canvas; pan and zoom freely\n"
+        "  2  GameView         -- playable game camera; fixed view\n"
+        "  3  model viewer     -- one 3D model at a time, on a turntable\n"
+        "  4  character viewer -- a player assembled out of his parts\n"
+        "  5  enemy viewer     -- an enemy assembled by its own script\n"
+        "  6  enemy animations -- the idle/attack/death its states play\n"
+        "  7  texture viewer   -- one PNG out of a .big\n"
         "\n"
-        "  7  list every map\n"
-        "  8  list every model\n"
-        "  9  list every model with the atlas it wears\n"
-        " 10  list what each enemy script assembles\n"
-        " 11  list what each enemy script animates\n"
-        " 12  list every level script\n"
-        " 13  resource addressing self-check\n"
+        "  8  list every map\n"
+        "  9  list every model\n"
+        " 10  list every model with the atlas it wears\n"
+        " 11  list what each enemy script assembles\n"
+        " 12  list what each enemy script animates\n"
+        " 13  list every level script\n"
+        " 14  resource addressing self-check\n"
         "\n"
         "choice [1]: ");
     std::fflush(stdout);
@@ -101,7 +104,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 13) {
+    if (choice < 1 || choice > 14) {
         return 1;
     }
     return choice;
@@ -133,6 +136,8 @@ int main(int argc, char **argv) {
     bool surveyEnemies = false;
     bool surveyEnemyAnimations = false;
     bool showSpawns = false;
+    bool showCollisions = false;
+    bool runGameView = false;
     bool stepStates = false;
     std::uint32_t enemyIndex = 0;
     std::int32_t bodyMoveIndex = -1;
@@ -161,6 +166,10 @@ int main(int argc, char **argv) {
             stateIndex = static_cast<std::int32_t>(std::strtol(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--spawns") == 0) {
             showSpawns = true;
+        } else if (std::strcmp(argument, "--collisions") == 0) {
+            showCollisions = true;
+        } else if (std::strcmp(argument, "--gameview") == 0) {
+            runGameView = true;
         } else if (std::strcmp(argument, "--enemies") == 0) {
             surveyEnemies = true;
         } else if (std::strcmp(argument, "--enemyanims") == 0) {
@@ -212,47 +221,55 @@ int main(int argc, char **argv) {
     // Nothing on the command line means nobody typed one: ask instead.
     if (argc == 1) {
         const int choice = PromptForHarness();
+        if (choice == 1) {
+            return RunM3Map(bigDirectory, mapPackName, mapIndex,
+                            screenshotPath, advanceMs, showSpawns,
+                            showCollisions, MapViewMode::Preview);
+        }
         if (choice == 2) {
-            return RunM35Mesh(bigDirectory, 0, 0.0f, 0, screenshotPath, advanceMs);
+            return RunM3Map(bigDirectory, mapPackName, mapIndex,
+                            screenshotPath, advanceMs, showSpawns,
+                            showCollisions, MapViewMode::GameView);
         }
         if (choice == 3) {
-            return RunM37Character(bigDirectory, 0, 0.0f, screenshotPath, advanceMs);
+            return RunM35Mesh(bigDirectory, 0, 0.0f, 0, screenshotPath, advanceMs);
         }
         if (choice == 4) {
-            return RunM38Enemy(bigDirectory, 0, 0.0f, screenshotPath, advanceMs,
-                               -1, false, -1);
+            return RunM37Character(bigDirectory, 0, 0.0f, screenshotPath, advanceMs);
         }
         if (choice == 5) {
             return RunM38Enemy(bigDirectory, 0, 0.0f, screenshotPath, advanceMs,
-                               -1, true, -1);
+                               -1, false, -1);
         }
         if (choice == 6) {
+            return RunM38Enemy(bigDirectory, 0, 0.0f, screenshotPath, advanceMs,
+                               -1, true, -1);
+        }
+        if (choice == 7) {
             return RunM2Texture(bigDirectory, imagePackName, imageResourceId,
                                 screenshotPath);
         }
-        if (choice == 7) {
+        if (choice == 8) {
             return RunMapList(bigDirectory);
         }
-        if (choice == 8) {
+        if (choice == 9) {
             return RunMeshSurvey(bigDirectory);
         }
-        if (choice == 9) {
+        if (choice == 10) {
             return RunMoveSetSurvey(bigDirectory);
         }
-        if (choice == 10) {
+        if (choice == 11) {
             return RunEnemySurvey(bigDirectory);
         }
-        if (choice == 11) {
+        if (choice == 12) {
             return RunEnemyAnimationSurvey(bigDirectory);
         }
-        if (choice == 12) {
+        if (choice == 13) {
             return RunLevelSurvey(bigDirectory);
         }
-        if (choice == 13) {
+        if (choice == 14) {
             return RunM1Resources(bigDirectory);
         }
-        return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
-                        advanceMs, showSpawns);
     }
 
     if (!dumpPackName.empty()) {
@@ -295,6 +312,10 @@ int main(int argc, char **argv) {
     if (runM2) {
         return RunM2Texture(bigDirectory, imagePackName, imageResourceId, screenshotPath);
     }
-    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath, advanceMs,
-                    showSpawns);
+    MapViewMode mapViewMode = MapViewMode::Preview;
+    if (runGameView) {
+        mapViewMode = MapViewMode::GameView;
+    }
+    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
+                    advanceMs, showSpawns, showCollisions, mapViewMode);
 }

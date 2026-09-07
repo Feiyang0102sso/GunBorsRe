@@ -11,7 +11,7 @@
  * the level object exists here only to be the script's host. Everything a
  * level really does (spawning, objectives, triggers, the camera) is M4 and M5.
  *
- * **Eighty-one of the eighty-two native functions are unimplemented**, and
+ * Most native functions are still unimplemented, and
  * calling one logs its id and arguments rather than failing. That log is the
  * list of what the levels in these archives actually ask for, which is how the
  * rest of the resolver should be prioritised.
@@ -30,9 +30,11 @@
 
 class CMap;
 
-// The CLevel functions implemented so far, both of which only touch the map.
-// Reference: :117497 (setCameraLayer), :117823 (setTileLayerSpeed)
+// The CLevel functions implemented so far, all of which only touch the map.
+// Reference: :117497 (setCameraLayer), :117508 (setCollisionLayer),
+//            :117823 (setTileLayerSpeed)
 constexpr std::uint8_t kLevelFunctionSetCameraLayer = 1;
+constexpr std::uint8_t kLevelFunctionSetCollisionLayer = 2;
 constexpr std::uint8_t kLevelFunctionSetTileLayerSpeed = 42;
 
 // Both speed arguments are fixed-point, and the resolver divides by this
@@ -104,6 +106,10 @@ public:
 private:
     /** setCameraLayer. Reference: :117497 */
     void SetCameraLayer(const std::int16_t *arguments, std::uint8_t argumentCount);
+
+    /** setCollisionLayer. Reference: :117508 */
+    void SetCollisionLayer(const std::int16_t *arguments,
+                           std::uint8_t argumentCount);
 
     /** setTileLayerSpeed. Reference: :117823 */
     void SetTileLayerSpeed(const std::int16_t *arguments, std::uint8_t argumentCount);

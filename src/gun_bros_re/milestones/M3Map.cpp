@@ -56,6 +56,7 @@
 #include "sprite_glu/CSpritePlayer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -77,8 +78,23 @@ constexpr float kZoomPerNotch = 1.15f;
 constexpr float kMinZoom = 0.05f;
 constexpr float kMaxZoom = 4.0f;
 
-// Leave a little room around a fitted map so its edges are visible.
-constexpr float kFitMargin = 1.05f;
+// Fill the limiting window dimension. The old 1.05 margin made an already
+// small overview smaller; exact fit keeps the whole map without dead padding.
+constexpr float kFitMargin = 1.0f;
+
+// GameView keeps the original 4:3 logical field of view independent of the
+// desktop window's pixel size. A 1600x1200 window therefore renders the same
+// world area as 1024x768 instead of zooming the game farther in or out.
+constexpr float kGameViewWorldWidth = 1024.0f;
+constexpr float kGameViewWorldHeight = 768.0f;
+
+// Temporary keyboard locomotion until the original control-stick module is
+// ported. The movement and collision time step are frame-rate independent.
+constexpr float kPlayerMovementUnitsPerSecond = 240.0f;
+// CBrother::Bind stores 22.0 as the player diameter. CPlayer::Move passes half
+// of it to CLayerCollision, whose half-unit edge allowance makes 11.5.
+constexpr float kPlayerCollisionRadius = 11.5f;
+constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
 
 // Longest frame the animation clock will believe. Past this the wall clock has
 // stopped meaning anything -- a debugger breakpoint, a dragged window, a lost
@@ -136,6 +152,7 @@ struct PropSprite {
     PropSlot background;
     PropSlot main;
     PropSlot foreground;
+    CCollisionData collision;
     int zOrderGroup;
 
     // What the walk could not draw, kept so the load can report a total
@@ -185,11 +202,16 @@ struct PlacedEnemy {
 struct PlacedPlayer {
     float x;
     float y;
+    float facingDegrees;
+    bool moving;
 
     // By pointer for the same reason a PlacedEnemy's model is: it owns GL
     // buffers and its controllers point back into it, so it cannot be moved
     // once built.
     std::unique_ptr<PlayerModel> model;
+
+    PlacedPlayer()
+        : x(0.0f), y(0.0f), facingDegrees(0.0f), moving(false) {}
 };
 
 /** Everything one map needs to draw, held together for the render loop. */
@@ -197,6 +219,10 @@ struct LoadedMap {
     CMap map;
     TileSet tileSet;
     std::vector<std::unique_ptr<CTexture>> textures;
+
+    // Effective player collision: the level-selected map layer plus every
+    // placed prop's local collision translated into world space.
+    CCollisionData collisionScene;
 
     // The enemies the object layer places. Held by pointer because an
     // EnemyModel owns GL buffers and points at its own meshes.
@@ -552,6 +578,7 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     ExpandSlot(iterator, *archetype, propTemplate.GetMainAnimation(), out.main);
     ExpandSlot(iterator, *archetype, propTemplate.GetForegroundAnimation(),
                out.foreground);
+    out.collision = propTemplate.GetCollision();
 
     out.skippedParts = iterator.GetSkippedPartCount();
     out.unsupportedTransforms = iterator.GetUnsupportedTransformCount();
@@ -818,6 +845,66 @@ void BuildMarkers(const LoadedMap &loaded, CMarkerBatch &markers,
 }
 
 /**
+ * Assemble exactly the collision shapes CLayerCollision tests for a player.
+ *
+ * The level script selects one map collision layer. Static props then add
+ * their template-local geometry at their placed position. Keeping this as one
+ * scene lets the existing resolver choose the nearest edge across both kinds
+ * instead of resolving each prop in an arbitrary order.
+ */
+void BuildCollisionScene(LoadedMap &loaded) {
+    loaded.collisionScene.Clear();
+
+    const CLayerCollision *mapLayer = loaded.map.GetCurrentCollisionLayer();
+    if (mapLayer != nullptr) {
+        loaded.collisionScene.AppendTranslated(mapLayer->GetCollision(), 0.0f,
+                                               0.0f);
+    }
+
+    std::uint32_t propShapes = 0;
+    for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+        const PlacedProp &prop = loaded.props[i];
+        if (prop.sprite->collision.GetEdges().empty()) {
+            continue;
+        }
+        if (!loaded.collisionScene.AppendTranslated(prop.sprite->collision,
+                                                    prop.x, prop.y)) {
+            break;
+        }
+        propShapes++;
+    }
+
+    int mapLayerIndex = -1;
+    if (mapLayer != nullptr) {
+        mapLayerIndex = static_cast<int>(mapLayer->GetLayerIndex());
+    }
+    std::printf("[m4] effective collision: map layer %d, %u prop shapes, "
+                "%zu vertices, %zu edges\n",
+                mapLayerIndex, propShapes,
+                loaded.collisionScene.GetVertices().size(),
+                loaded.collisionScene.GetEdges().size());
+}
+
+/** Collect the exact collision scene used by player movement. */
+void BuildCollisionMarkers(const LoadedMap &loaded, CMarkerBatch &markers) {
+    markers.Begin();
+
+    const std::vector<CollisionPoint> &vertices =
+        loaded.collisionScene.GetVertices();
+    const std::vector<CollisionEdge> &edges = loaded.collisionScene.GetEdges();
+    for (std::size_t edgeIndex = 0; edgeIndex < edges.size(); ++edgeIndex) {
+        const CollisionEdge &edge = edges[edgeIndex];
+        if (!edge.enabled) {
+            continue;
+        }
+        const CollisionPoint &first = vertices[edge.firstVertex];
+        const CollisionPoint &second = vertices[edge.secondVertex];
+        markers.AddSegment(first.x, first.y, second.x, second.y,
+                           kMarkerThickness);
+    }
+}
+
+/**
  * The camera scale a level snaps to. Reference: :120747, where CLevel does
  * `CCamera::SnapScale(camera, 0.8)` right after binding the map.
  *
@@ -967,6 +1054,92 @@ void AdvancePlayers(LoadedMap &loaded, std::int32_t deltaMs) {
 }
 
 /**
+ * Drive the first player with WASD and resolve the requested movement.
+ *
+ * Maps contain one real player spawn. A few abandoned campaign maps contain
+ * none; those remain valid viewers and simply ignore movement input.
+ */
+bool UpdateControlledPlayer(LoadedMap &loaded, const CWindow &window,
+                            std::uint64_t elapsedMs) {
+    if (loaded.players.empty()) {
+        return false;
+    }
+
+    float directionX = 0.0f;
+    float directionY = 0.0f;
+    if (window.IsKeyDown(KeyCode::A)) {
+        directionX -= 1.0f;
+    }
+    if (window.IsKeyDown(KeyCode::D)) {
+        directionX += 1.0f;
+    }
+    if (window.IsKeyDown(KeyCode::W)) {
+        directionY -= 1.0f;
+    }
+    if (window.IsKeyDown(KeyCode::S)) {
+        directionY += 1.0f;
+    }
+
+    const bool moving = directionX != 0.0f || directionY != 0.0f;
+    PlacedPlayer &player = loaded.players[0];
+    if (moving != player.moving) {
+        // The player data interleaves torso and leg moves. Slot zero is the
+        // spawn/idle pair and slot one is the first locomotion pair.
+        const std::size_t moveSlot = moving ? 1 : 0;
+        SelectPlayerMoveSlot(*player.model, moveSlot, false);
+        player.moving = moving;
+    }
+
+    if (!moving || elapsedMs == 0) {
+        return moving;
+    }
+
+    const float directionLength = std::sqrt(directionX * directionX +
+                                            directionY * directionY);
+    directionX /= directionLength;
+    directionY /= directionLength;
+    player.facingDegrees = std::atan2(directionY, directionX) * kRadiansToDegrees;
+
+    const float elapsedSeconds = static_cast<float>(elapsedMs) * 0.001f;
+    CollisionPoint movement(directionX * kPlayerMovementUnitsPerSecond *
+                                elapsedSeconds,
+                            directionY * kPlayerMovementUnitsPerSecond *
+                                elapsedSeconds);
+    CollisionPoint resolved = loaded.collisionScene.ResolveCircleMovement(
+        CollisionPoint(player.x, player.y), movement, kPlayerCollisionRadius);
+
+    // CPlayer::Move clamps the body to the active camera bounds before it
+    // resolves collision. Keep the whole circle inside the same rectangle.
+    const MapRectangle bounds = loaded.map.GetVisibleBounds();
+    if (!bounds.IsEmpty()) {
+        const float minimumX = static_cast<float>(bounds.x) +
+                               kPlayerCollisionRadius;
+        const float maximumX = static_cast<float>(bounds.x + bounds.width) -
+                               kPlayerCollisionRadius;
+        const float minimumY = static_cast<float>(bounds.y) +
+                               kPlayerCollisionRadius;
+        const float maximumY = static_cast<float>(bounds.y + bounds.height) -
+                               kPlayerCollisionRadius;
+        if (resolved.x < minimumX) {
+            resolved.x = minimumX;
+        }
+        if (resolved.x > maximumX) {
+            resolved.x = maximumX;
+        }
+        if (resolved.y < minimumY) {
+            resolved.y = minimumY;
+        }
+        if (resolved.y > maximumY) {
+            resolved.y = maximumY;
+        }
+    }
+
+    player.x = resolved.x;
+    player.y = resolved.y;
+    return true;
+}
+
+/**
  * Run the animation clock forward, in the bites playback would use.
  *
  * What makes a still screenshot able to prove anything about animation: shoot
@@ -1024,7 +1197,8 @@ void DrawModels(LoadedMap &loaded, const CShaderProgram &program,
             *placed.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
 
         float base[kMatrix4dElements];
-        BuildPlayerGameMatrix(mapMvp, placed.x, placed.y, scale, 0.0f, base);
+        BuildPlayerGameMatrix(mapMvp, placed.x, placed.y, scale,
+                              placed.facingDegrees, base);
         DrawPlayer(*placed.model, program, base);
     }
 
@@ -1052,6 +1226,9 @@ void ReportSpawns(const LoadedMap &loaded) {
     std::printf("[m3] %u player spawns, %u enemy spawns\n",
                 CountObjects(loaded, PlacedObjectType::Player),
                 CountObjects(loaded, PlacedObjectType::Enemy));
+
+    std::printf("[m4] %u collision layers in map data\n",
+                loaded.map.GetCollisionLayerCount());
 }
 
 void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
@@ -1305,6 +1482,90 @@ Camera FitCamera(const LoadedMap &loaded, int viewWidth, int viewHeight) {
     return camera;
 }
 
+/** Centre the fixed GameView camera on the controlled player. */
+void FollowPlayerCamera(const LoadedMap &loaded, int viewWidth, int viewHeight,
+                        Camera &camera) {
+    if (loaded.players.empty()) {
+        return;
+    }
+
+    const float viewWorldWidth = static_cast<float>(viewWidth) / camera.zoom;
+    const float viewWorldHeight = static_cast<float>(viewHeight) / camera.zoom;
+    camera.x = loaded.players[0].x - viewWorldWidth * 0.5f;
+    camera.y = loaded.players[0].y - viewWorldHeight * 0.5f;
+
+    const MapRectangle bounds = loaded.map.GetVisibleBounds();
+    if (bounds.IsEmpty()) {
+        return;
+    }
+
+    const float left = static_cast<float>(bounds.x);
+    const float top = static_cast<float>(bounds.y);
+    const float right = static_cast<float>(bounds.x + bounds.width);
+    const float bottom = static_cast<float>(bounds.y + bounds.height);
+
+    if (viewWorldWidth >= static_cast<float>(bounds.width)) {
+        camera.x = left + (static_cast<float>(bounds.width) - viewWorldWidth) *
+                            0.5f;
+    } else {
+        if (camera.x < left) {
+            camera.x = left;
+        }
+        if (camera.x + viewWorldWidth > right) {
+            camera.x = right - viewWorldWidth;
+        }
+    }
+
+    if (viewWorldHeight >= static_cast<float>(bounds.height)) {
+        camera.y = top + (static_cast<float>(bounds.height) - viewWorldHeight) *
+                           0.5f;
+    } else {
+        if (camera.y < top) {
+            camera.y = top;
+        }
+        if (camera.y + viewWorldHeight > bottom) {
+            camera.y = bottom - viewWorldHeight;
+        }
+    }
+}
+
+/**
+ * Pick a close gameplay scale that never reveals empty space around the
+ * current camera region.
+ *
+ * The original 1024x768 logical view is the floor. Narrow stage-specific
+ * camera regions may need a larger scale to cover the 4:3 window; cropping
+ * those regions is correct for a following game camera and avoids revealing
+ * space outside the playable region.
+ */
+float GameViewCameraZoom(const LoadedMap &loaded, int viewWidth,
+                         int viewHeight) {
+    const float logicalScaleX = static_cast<float>(viewWidth) /
+                                kGameViewWorldWidth;
+    const float logicalScaleY = static_cast<float>(viewHeight) /
+                                kGameViewWorldHeight;
+    float zoom = logicalScaleX;
+    if (logicalScaleY > zoom) {
+        zoom = logicalScaleY;
+    }
+    const MapRectangle bounds = loaded.map.GetVisibleBounds();
+    if (bounds.IsEmpty() || bounds.width <= 0 || bounds.height <= 0) {
+        return zoom;
+    }
+
+    const float fillX = static_cast<float>(viewWidth) /
+                        static_cast<float>(bounds.width);
+    const float fillY = static_cast<float>(viewHeight) /
+                        static_cast<float>(bounds.height);
+    if (fillX > zoom) {
+        zoom = fillX;
+    }
+    if (fillY > zoom) {
+        zoom = fillY;
+    }
+    return zoom;
+}
+
 /**
  * Where the camera bounds land on the window, as a scissor rectangle.
  *
@@ -1425,8 +1686,14 @@ int RunMapList(const std::string &bigDirectory) {
 
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
-             std::uint32_t advanceMs, bool startWithSpawns) {
-    std::printf("=== M3: a level, terrain and scenery, on screen ===\n\n");
+             std::uint32_t advanceMs, bool startWithSpawns,
+             bool startWithCollisions, MapViewMode viewMode) {
+    const bool gameView = viewMode == MapViewMode::GameView;
+    const char *modeName = "Preview";
+    if (gameView) {
+        modeName = "GameView";
+    }
+    std::printf("=== M3: %s ===\n\n", modeName);
 
     // --- resources, before any GL exists ---
     CResTOCManager tocManager;
@@ -1467,7 +1734,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
     // --- window, then everything that needs a context ---
     CWindow window;
-    if (!window.Open("gun_bros_re -- M3", kDefaultWindowWidth, kDefaultWindowHeight)) {
+    std::string windowTitle = "gun_bros_re -- ";
+    windowTitle += modeName;
+    if (!window.Open(windowTitle, kDefaultWindowWidth, kDefaultWindowHeight)) {
         return 1;
     }
 
@@ -1508,6 +1777,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         return 1;
     }
     LoadProps(tocManager, loaded);
+    BuildCollisionScene(loaded);
     LoadPlacedEnemies(tocManager, program, loaded);
     LoadPlacedPlayers(tocManager, program, loaded);
     ReportSpawns(loaded);
@@ -1517,11 +1787,17 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     bool showTiles = true;
     bool showProps = true;
     bool showSpawns = startWithSpawns;
+    bool showCollisions = startWithCollisions;
 
     // The props animate, so the geometry is rebuilt every frame from here on.
     // This flag only decides whether a rebuild says anything about itself.
     bool reportGeometry = true;
     Camera camera = FitCamera(loaded, drawableWidth, drawableHeight);
+    bool followPlayer = gameView && !loaded.players.empty();
+    if (followPlayer) {
+        camera.zoom = GameViewCameraZoom(loaded, drawableWidth, drawableHeight);
+        FollowPlayerCamera(loaded, drawableWidth, drawableHeight, camera);
+    }
 
     // Time, and the two ways of taking it apart when something looks wrong:
     // stop it, or move it on one bite at a time.
@@ -1533,9 +1809,16 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     // additive, everything else is straight alpha.
     glEnable(GL_BLEND);
 
-    std::printf("\n[m3] left/right: map (crosses packs), up/down: pack, "
-                "Home: refit, T: tiles, P: props, K: spawns, space: pause, "
-                "'.': one step on, drag: pan, wheel: zoom, Esc: quit\n");
+    if (gameView) {
+        std::printf("\n[gameview] WASD: move, arrows: change map, "
+                    "T: tiles, P: props, K: spawns, C: collision, "
+                    "space: pause, '.': one step, Esc: quit\n");
+    } else {
+        std::printf("\n[preview] arrows: change map, Home: refit, "
+                    "drag: pan, wheel: zoom, T: tiles, P: props, "
+                    "K: spawns, C: collision, space: pause, "
+                    "'.': one step, Esc: quit\n");
+    }
 
     bool reportedFirstFrame = false;
     while (window.PumpEvents()) {
@@ -1549,6 +1832,10 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (key == KeyCode::T) {
                 showTiles = !showTiles;
                 reportGeometry = true;
+            } else if (key == KeyCode::C) {
+                showCollisions = !showCollisions;
+                std::printf("[m4] collision %s\n",
+                            showCollisions ? "on" : "off");
             } else if (key == KeyCode::K) {
                 showSpawns = !showSpawns;
                 std::printf("[m3] spawns %s\n", showSpawns ? "on" : "off");
@@ -1577,7 +1864,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             } else if (key == KeyCode::Up) {
                 slot = PreviousPackSlot(catalog, slot);
                 reload = true;
-            } else if (key == KeyCode::Home) {
+            } else if (key == KeyCode::Home && !gameView) {
                 refit = true;
             }
         }
@@ -1593,13 +1880,23 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
                         replacement)) {
                 LoadProps(tocManager, replacement);
+                BuildCollisionScene(replacement);
                 LoadPlacedEnemies(tocManager, program, replacement);
                 LoadPlacedPlayers(tocManager, program, replacement);
                 ReportSpawns(replacement);
                 WarmUp(replacement, advanceMs);
                 loaded = std::move(replacement);
                 reportGeometry = true;
-                refit = true;
+                followPlayer = gameView && !loaded.players.empty();
+                if (followPlayer) {
+                    camera.zoom = GameViewCameraZoom(
+                        loaded, drawableWidth, drawableHeight);
+                    FollowPlayerCamera(loaded, drawableWidth, drawableHeight,
+                                       camera);
+                    refit = false;
+                } else {
+                    refit = true;
+                }
             } else {
                 // A map that will not load leaves the previous one on screen
                 // rather than a blank window.
@@ -1626,6 +1923,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             singleStep = false;
         }
 
+        if (gameView) {
+            UpdateControlledPlayer(loaded, window, elapsedMs);
+        }
         AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
         AdvanceEnemies(loaded, static_cast<std::int32_t>(elapsedMs));
         AdvancePlayers(loaded, static_cast<std::int32_t>(elapsedMs));
@@ -1633,9 +1933,16 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
         reportGeometry = false;
 
+        if (gameView) {
+            // Window resizing changes only pixel scale, never the game field
+            // of view. The camera remains entirely owned by GameView.
+            camera.zoom = GameViewCameraZoom(loaded, drawableWidth,
+                                             drawableHeight);
+        }
+
         // --- zoom about the centre of the view ---
         const float wheel = window.TakeWheelDelta();
-        if (wheel != 0.0f) {
+        if (!gameView && wheel != 0.0f) {
             const float viewWidthBefore = static_cast<float>(drawableWidth) / camera.zoom;
             const float viewHeightBefore = static_cast<float>(drawableHeight) / camera.zoom;
 
@@ -1659,14 +1966,20 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             camera.y += (viewHeightBefore - static_cast<float>(drawableHeight) / camera.zoom) * 0.5f;
         }
 
+        if (followPlayer) {
+            FollowPlayerCamera(loaded, drawableWidth, drawableHeight, camera);
+        }
+
         // --- pan ---
         int dragX = 0;
         int dragY = 0;
         window.TakeDragDelta(dragX, dragY);
-        // Dragging right moves the view left, as if pulling the map along.
-        // Divided by zoom so a drag tracks the cursor at any scale.
-        camera.x -= static_cast<float>(dragX) / camera.zoom * kDragScale;
-        camera.y -= static_cast<float>(dragY) / camera.zoom * kDragScale;
+        if (!gameView) {
+            // Dragging right moves the view left, as if pulling the map along.
+            // Divided by zoom so a drag tracks the cursor at any scale.
+            camera.x -= static_cast<float>(dragX) / camera.zoom * kDragScale;
+            camera.y -= static_cast<float>(dragY) / camera.zoom * kDragScale;
+        }
 
         glViewport(0, 0, drawableWidth, drawableHeight);
         glClearColor(0.08f, 0.08f, 0.10f, 1.0f);
@@ -1681,8 +1994,8 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         Matrix4dTranslate(mvp, -camera.x, -camera.y);
 
         int scissor[4];
-        const bool clipping = VisibleBoundsScissor(loaded, camera, drawableWidth,
-                                                   drawableHeight, scissor);
+        const bool clipping = VisibleBoundsScissor(
+            loaded, camera, drawableWidth, drawableHeight, scissor);
         if (clipping) {
             // After the clear, so the background still fills the window.
             glEnable(GL_SCISSOR_TEST);
@@ -1700,6 +2013,11 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
             BuildMarkers(loaded, markers, PlacedObjectType::Enemy);
             markers.Draw(markerProgram, mvp, 1.0f, 0.25f, 0.2f, 1.0f);
+        }
+
+        if (showCollisions) {
+            BuildCollisionMarkers(loaded, markers);
+            markers.Draw(markerProgram, mvp, 0.15f, 0.85f, 1.0f, 0.9f);
         }
 
         if (clipping) {

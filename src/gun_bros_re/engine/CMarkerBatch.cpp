@@ -6,6 +6,7 @@
 
 #include "engine/CMarkerBatch.h"
 
+#include <cmath>
 #include <cstdio>
 
 CMarkerBatch::CMarkerBatch()
@@ -82,6 +83,39 @@ void CMarkerBatch::AddOutline(float x, float y, float width, float height,
     AddRect(x, y + thickness, thickness, height - 2.0f * thickness);
     AddRect(x + width - thickness, y + thickness, thickness,
             height - 2.0f * thickness);
+}
+
+void CMarkerBatch::AddSegment(float firstX, float firstY, float secondX,
+                              float secondY, float thickness) {
+    const float directionX = secondX - firstX;
+    const float directionY = secondY - firstY;
+    const float length = std::sqrt(directionX * directionX +
+                                   directionY * directionY);
+    if (length <= 0.000001f || thickness <= 0.0f) {
+        return;
+    }
+
+    const float halfThickness = thickness * 0.5f;
+    const float normalX = -directionY / length * halfThickness;
+    const float normalY = directionX / length * halfThickness;
+
+    const float firstLeftX = firstX + normalX;
+    const float firstLeftY = firstY + normalY;
+    const float firstRightX = firstX - normalX;
+    const float firstRightY = firstY - normalY;
+    const float secondLeftX = secondX + normalX;
+    const float secondLeftY = secondY + normalY;
+    const float secondRightX = secondX - normalX;
+    const float secondRightY = secondY - normalY;
+
+    const float corners[12] = {
+        firstLeftX, firstLeftY, secondLeftX, secondLeftY,
+        firstRightX, firstRightY, secondLeftX, secondLeftY,
+        secondRightX, secondRightY, firstRightX, firstRightY,
+    };
+    for (int i = 0; i < 12; ++i) {
+        m_vertices.push_back(corners[i]);
+    }
 }
 
 void CMarkerBatch::Draw(const CShaderProgram &program, const float *mvp,

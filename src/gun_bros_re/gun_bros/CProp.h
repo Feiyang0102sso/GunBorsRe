@@ -5,7 +5,7 @@
  * Port of CProp::Template (src/gunbros/prop.cpp).
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:123346 (Init), :124863 (Bind)
  *
- * Wire format, of which only the head is read here:
+ * Wire format, read through both collision shapes here:
  *   CGameSpriteGluRef sprite      -- 7 bytes
  *   uint8             foregroundAnimation
  *   uint8             backgroundAnimation
@@ -15,9 +15,9 @@
  *   CScript           script
  *   CMoveSet          moveSet
  *
- * Everything after the ninth byte belongs to collision, scripting and movement,
- * none of which draws. Parsing stops there rather than growing three more
- * subsystems to reach a field nobody reads.
+ * Parsing stops after bulletCollision. The script and move set are not needed
+ * yet, but the normal collision is part of player movement and therefore can
+ * no longer be skipped.
  *
  * The two animation bytes are stored in the opposite order to the one they are
  * written in: the first byte on the wire is the FOREGROUND animation.
@@ -27,6 +27,7 @@
 #define GUN_BROS_RE_GUN_BROS_CPROP_H
 
 #include "engine/CArrayInputStream.h"
+#include "gun_bros/CCollisionData.h"
 
 #include <cstdint>
 
@@ -76,10 +77,20 @@ public:
         std::uint8_t GetForegroundAnimation() const { return m_foregroundAnimation; }
         std::uint8_t GetBackgroundAnimation() const { return m_backgroundAnimation; }
 
+        /** Local-space collision used by players and enemies. */
+        const CCollisionData &GetCollision() const { return m_collision; }
+
+        /** Local-space collision used by bullets. Parsed for wire fidelity. */
+        const CCollisionData &GetBulletCollision() const {
+            return m_bulletCollision;
+        }
+
     private:
         CGameSpriteGluRef m_sprite;
         std::uint8_t m_foregroundAnimation;
         std::uint8_t m_backgroundAnimation;
+        CCollisionData m_collision;
+        CCollisionData m_bulletCollision;
     };
 };
 

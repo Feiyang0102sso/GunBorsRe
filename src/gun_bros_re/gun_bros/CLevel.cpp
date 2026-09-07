@@ -46,6 +46,11 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
         return 0;
     }
 
+    if (function == kLevelFunctionSetCollisionLayer) {
+        SetCollisionLayer(arguments, argumentCount);
+        return 0;
+    }
+
     if (function == kLevelFunctionSetTileLayerSpeed) {
         SetTileLayerSpeed(arguments, argumentCount);
         return 0;
@@ -82,6 +87,24 @@ void CLevel::SetCameraLayer(const std::int16_t *arguments, std::uint8_t argument
     }
 
     std::printf("[level] setCameraLayer( %d )\n", layerIndex);
+}
+
+void CLevel::SetCollisionLayer(const std::int16_t *arguments,
+                               std::uint8_t argumentCount) {
+    if (m_map == nullptr || argumentCount < 1) {
+        return;
+    }
+
+    // Like the camera selector, this indexes the complete map layer stack.
+    const std::int16_t layerIndex = arguments[0];
+    if (layerIndex < 0 ||
+        !m_map->SetCollisionLayer(static_cast<std::uint32_t>(layerIndex))) {
+        std::printf("[level] setCollisionLayer( %d ) names no collision layer\n",
+                    layerIndex);
+        return;
+    }
+
+    std::printf("[level] setCollisionLayer( %d )\n", layerIndex);
 }
 
 void CLevel::SetTileLayerSpeed(const std::int16_t *arguments, std::uint8_t argumentCount) {

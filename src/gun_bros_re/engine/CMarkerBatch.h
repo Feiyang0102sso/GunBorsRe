@@ -46,6 +46,10 @@ public:
     /** A hollow rectangle, `thickness` wide on every side. */
     void AddOutline(float x, float y, float width, float height, float thickness);
 
+    /** A thick line segment, used to reveal collision geometry. */
+    void AddSegment(float firstX, float firstY, float secondX, float secondY,
+                    float thickness);
+
     /** Upload and draw everything collected, in one colour. */
     void Draw(const CShaderProgram &program, const float *mvp, float red,
               float green, float blue, float alpha);

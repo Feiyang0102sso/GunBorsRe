@@ -19,6 +19,7 @@
 
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CLayerCamera.h"
+#include "gun_bros/CLayerCollision.h"
 #include "gun_bros/CLayerObject.h"
 #include "gun_bros/CLayerTile.h"
 
@@ -41,10 +42,9 @@ enum class MapLayerType : std::uint8_t {
  * walked past.
  *
  * Every layer type has a parser now, so the whole stack is read rather than
- * abandoned at the first layer whose size is unknown. Collision, movie and the
- * two path layers are stepped over without being kept -- nothing uses them yet
- * -- but they no longer block the layers behind them, which is how pack11's
- * object layers were being missed.
+ * abandoned at the first layer whose size is unknown. Movie and the two path
+ * layers are stepped over without being kept. Collision is retained because
+ * M4 uses it to constrain the player.
  */
 class CMap {
 public:
@@ -63,6 +63,22 @@ public:
 
     /** Same layer, for the caller that sets its scroll speed or ticks it. */
     CLayerTile &GetTileLayer(std::uint32_t index) { return m_tileLayers[index]; }
+
+    std::uint32_t GetCollisionLayerCount() const {
+        return static_cast<std::uint32_t>(m_collisionLayers.size());
+    }
+    const CLayerCollision &GetCollisionLayer(std::uint32_t index) const {
+        return m_collisionLayers[index];
+    }
+
+    /**
+     * Choose the player collision layer by its complete map-layer index.
+     * This is the value passed by CLevel's setCollisionLayer function.
+     */
+    bool SetCollisionLayer(std::uint32_t layerIndex);
+
+    /** Collision selected by the level script, or null when none exists. */
+    const CLayerCollision *GetCurrentCollisionLayer() const;
 
     std::uint32_t GetObjectLayerCount() const {
         return static_cast<std::uint32_t>(m_objectLayers.size());
@@ -132,12 +148,14 @@ private:
     std::uint8_t m_declaredLayerCount;
     std::uint32_t m_layersRead;  // includes the ones only stepped over
     std::vector<CLayerTile> m_tileLayers;
+    std::vector<CLayerCollision> m_collisionLayers;
     std::vector<CLayerObject> m_objectLayers;
     std::vector<CLayerCamera> m_cameraLayers;
 
     // Index into m_cameraLayers, not into the layer stack. Stays at zero until
     // a script calls setCameraLayer.
     std::uint32_t m_currentCameraLayer;
+    std::uint32_t m_currentCollisionLayer;
 
     std::uint16_t m_canvasWidth;
     std::uint16_t m_canvasHeight;

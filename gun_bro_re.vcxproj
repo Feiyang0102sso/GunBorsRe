@@ -115,9 +115,11 @@
     <ClCompile Include="src\gun_bros_re\engine\CQuadBatch.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CMeshBuffer.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CGameAssetRef.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CCollisionData.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CGameObjectPack.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\TileSet.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerTile.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CLayerCollision.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerObject.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CLayerCamera.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CProp.cpp" />
@@ -174,9 +176,11 @@
     <ClInclude Include="src\gun_bros_re\engine\CQuadBatch.h" />
     <ClInclude Include="src\gun_bros_re\engine\CMeshBuffer.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CGameAssetRef.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CCollisionData.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CGameObjectPack.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\TileSet.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CLayerTile.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CLayerCollision.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CLayerObject.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CLayerCamera.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CLevel.h" />

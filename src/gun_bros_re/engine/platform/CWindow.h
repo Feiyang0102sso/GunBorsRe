@@ -40,11 +40,19 @@ enum class KeyCode {
     N,
     Space,
     Period,
+    W,
+    A,
+    S,
+    D,
+    C,
+    Count,
 };
 
-// The art set we run: the original xga assets are authored for this size.
-constexpr int kDefaultWindowWidth = 1024;
-constexpr int kDefaultWindowHeight = 768;
+// A large but desktop-friendly 4:3 target. CWindow also scales this down when
+// the current display's usable area is smaller, so the title bar and all four
+// edges remain reachable.
+constexpr int kDefaultWindowWidth = 1600;
+constexpr int kDefaultWindowHeight = 1200;
 
 // GL 3.3 Core is the target: same mental model as the ES 2.0 the engine was
 // written against, so the shaders port across with a change of keywords.
@@ -117,6 +125,9 @@ public:
      */
     KeyCode TakeKeyPress();
 
+    /** Whether a key is currently held. Intended for continuous movement. */
+    bool IsKeyDown(KeyCode key) const;
+
 private:
     SDL_Window *m_window;
     SDL_GLContext m_context;
@@ -128,6 +139,7 @@ private:
     int m_dragDeltaY;
     float m_wheelDelta;
     std::vector<KeyCode> m_keyPresses;
+    bool m_keyDown[static_cast<int>(KeyCode::Count)];
 };
 
 #endif  // GUN_BROS_RE_ENGINE_PLATFORM_CWINDOW_H

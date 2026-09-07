@@ -6,34 +6,9 @@
 #include "gun_bros/CMap.h"
 
 #include <cstdio>
+#include <utility>
 
 namespace {
-
-/**
- * The layers that are stepped over rather than parsed.
- *
- * Terrain and objects are what gets drawn, but a layer this port does not care
- * about still has to be walked byte for byte to reach the ones after it. These
- * read exactly what the originals read and keep nothing.
- *
- * Each will become a real class when something needs its contents:
- * CLayerCollision in M5, the path layers when AI pathfinding lands.
- */
-
-/**
- * CLayerCollision, which delegates to CCollisionData::Load.
- * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:125241, :142446
- *
- *   uint16 vertexCount, { int32 x, int32 y }[]
- *   uint16 edgeCount,   { uint8, uint16, uint16 }[]
- */
-void SkipCollisionLayer(CArrayInputStream &stream) {
-    const std::uint16_t vertexCount = stream.ReadUInt16();
-    stream.Skip(static_cast<std::size_t>(vertexCount) * 8);
-
-    const std::uint16_t edgeCount = stream.ReadUInt16();
-    stream.Skip(static_cast<std::size_t>(edgeCount) * 5);
-}
 
 /**
  * CLayerMovie: a CGameAssetRef and a position.
@@ -107,14 +82,17 @@ CMap::CMap()
     : m_declaredLayerCount(0),
       m_layersRead(0),
       m_currentCameraLayer(0),
+      m_currentCollisionLayer(0),
       m_canvasWidth(0),
       m_canvasHeight(0) {}
 
 bool CMap::Init(CArrayInputStream &stream) {
     m_tileLayers.clear();
+    m_collisionLayers.clear();
     m_objectLayers.clear();
     m_cameraLayers.clear();
     m_currentCameraLayer = 0;
+    m_currentCollisionLayer = 0;
     m_canvasWidth = 0;
     m_canvasHeight = 0;
 
@@ -153,7 +131,12 @@ bool CMap::Init(CArrayInputStream &stream) {
             m_objectLayers.push_back(layer);
 
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Collision)) {
-            SkipCollisionLayer(stream);
+            CLayerCollision layer;
+            if (!layer.Init(stream)) {
+                return false;
+            }
+            layer.SetLayerIndex(i);
+            m_collisionLayers.push_back(std::move(layer));
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Movie)) {
             SkipMovieLayer(stream);
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Camera)) {
@@ -210,6 +193,23 @@ bool CMap::SetCameraLayer(std::uint32_t layerIndex) {
     }
 
     return false;
+}
+
+bool CMap::SetCollisionLayer(std::uint32_t layerIndex) {
+    for (std::size_t i = 0; i < m_collisionLayers.size(); ++i) {
+        if (m_collisionLayers[i].GetLayerIndex() == layerIndex) {
+            m_currentCollisionLayer = static_cast<std::uint32_t>(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+const CLayerCollision *CMap::GetCurrentCollisionLayer() const {
+    if (m_currentCollisionLayer >= m_collisionLayers.size()) {
+        return nullptr;
+    }
+    return &m_collisionLayers[m_currentCollisionLayer];
 }
 
 MapRectangle CMap::GetCameraExtent() const {

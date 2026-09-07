@@ -31,6 +31,13 @@ bool CProp::Template::Init(CArrayInputStream &stream) {
     m_foregroundAnimation = stream.ReadUInt8();
     m_backgroundAnimation = stream.ReadUInt8();
 
+    if (!m_collision.Load(stream)) {
+        return false;
+    }
+    if (!m_bulletCollision.Load(stream)) {
+        return false;
+    }
+
     if (stream.Overran()) {
         std::printf("[prop] template truncated\n");
         return false;
