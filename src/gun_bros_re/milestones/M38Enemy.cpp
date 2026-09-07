@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file M38Enemy.cpp
  * @brief M3.8 harness: enemies, assembled by their own scripts.
  *
@@ -32,6 +32,7 @@
 #include "gun_bros/CResTOCManager.h"
 #include "milestones/PackTables.h"
 
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -831,7 +832,8 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
         }
 
         if (slot != previousSlot) {
-            std::printf("\n[m38] --- enemy %zu of %zu ---\n", slot + 1,
+            // Zero-based, so it is the number --enemy and --enemies both use.
+            std::printf("\n[m38] --- enemy %zu of %zu ---\n", slot,
                         enemies.size());
 
             std::unique_ptr<LoadedEnemy> replacement(new LoadedEnemy());

@@ -70,12 +70,29 @@ void Matrix4dRotationAxis(float radians, float axisX, float axisY, float axisZ,
                           float *out);
 
 /**
- * The rotation a quaternion describes.
+ * The rotation a quaternion describes, in the engine's sense of it.
  *
- * Copied term for term off the block DrawHeirarchy (:99070) builds inline for
- * every part it draws. The quaternion is NOT normalised first -- neither the
- * evaluator that produced it nor the original does that, so a blend between
- * two key frames shows up as a slight scale on the attached part.
+ * **This is the TRANSPOSE of the textbook quaternion matrix, on purpose.**
+ * DrawHeirarchy (:99070) builds its own inline, sixteen values written in a
+ * row, and those values only mean what the engine means by them once you know
+ * its matrices are COLUMN-major -- which `math::operator*` (:370909) settles:
+ * its first output term is `L[0]*R[0] + L[4]*R[1] + L[8]*R[2] + L[12]*R[3]`,
+ * and a row-major multiply would read `L[1]*R[4]` there instead.
+ *
+ * Copying those sixteen values into this project's ROW-major layout therefore
+ * transposes them, and for a rotation a transpose is an inverse -- which is
+ * exactly wrong. So the terms below carry the opposite signs, and the two
+ * transposes cancel.
+ *
+ * Symptom when this is wrong, since it is not obvious: parts hang off their
+ * bones at the wrong angle, and the further a part reaches from its bone the
+ * more it looks like it has been MOVED rather than turned. Parts whose bone
+ * sits near zero or near half a turn look right either way, because a half
+ * turn is its own inverse.
+ *
+ * The quaternion is NOT normalised first -- neither the evaluator that
+ * produced it nor the original does that, so a blend between two key frames
+ * shows up as a slight scale on the attached part.
  */
 void Matrix4dFromQuaternion(float x, float y, float z, float w, float *out);
 

@@ -121,16 +121,19 @@ void Matrix4dRotationAxis(float radians, float axisX, float axisY, float axisZ,
 void Matrix4dFromQuaternion(float x, float y, float z, float w, float *out) {
     Matrix4dIdentity(out);
 
+    // Every off-diagonal term has the sign OPPOSITE to the textbook formula,
+    // which makes this the transpose of it -- see the header for why that is
+    // the right matrix and not a mistake.
     out[0] = 1.0f - 2.0f * (y * y + z * z);
-    out[1] = 2.0f * (x * y - z * w);
-    out[2] = 2.0f * (x * z + y * w);
+    out[1] = 2.0f * (x * y + z * w);
+    out[2] = 2.0f * (x * z - y * w);
 
-    out[4] = 2.0f * (x * y + z * w);
+    out[4] = 2.0f * (x * y - z * w);
     out[5] = 1.0f - 2.0f * (x * x + z * z);
-    out[6] = 2.0f * (y * z - x * w);
+    out[6] = 2.0f * (y * z + x * w);
 
-    out[8] = 2.0f * (x * z - y * w);
-    out[9] = 2.0f * (y * z + x * w);
+    out[8] = 2.0f * (x * z + y * w);
+    out[9] = 2.0f * (y * z - x * w);
     out[10] = 1.0f - 2.0f * (x * x + y * y);
 }
 
