@@ -7,7 +7,7 @@
 
 #include <cstdio>
 
-CBrother::Template::Template() : m_unknown(0.0f) {}
+CBrother::Template::Template() : m_gameScale(0.0f) {}
 
 bool CBrother::Template::Init(CArrayInputStream &stream) {
     m_script.Load(stream);
@@ -17,7 +17,7 @@ bool CBrother::Template::Init(CArrayInputStream &stream) {
     }
 
     m_objectRef.Init(stream);
-    m_unknown = static_cast<float>(stream.ReadUInt16());
+    m_gameScale = static_cast<float>(stream.ReadUInt16());
 
     // Two more object references that the original reads into one stack slot
     // and never reads back -- the second overwrites the first. They are read

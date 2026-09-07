@@ -20,11 +20,13 @@
  * @param advanceMs      Milliseconds to run the animations on before that
  *                       first frame, so a screenshot can be taken of a map
  *                       part-way through its animation rather than at rest.
+ * @param showSpawns     Start with the spawn-point overlay on. `K` toggles it
+ *                       either way; this is so a screenshot can carry it.
  * @return 0 when the map was displayed.
  */
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
-             std::uint32_t advanceMs);
+             std::uint32_t advanceMs, bool showSpawns);
 
 /** List every pack that holds maps, and how many. */
 int RunMapList(const std::string &bigDirectory);

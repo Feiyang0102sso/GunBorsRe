@@ -109,6 +109,7 @@
   <ItemGroup>
     <ClCompile Include="src\gun_bros_re\main.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CArrayInputStream.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\CMarkerBatch.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CMatrix4d.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CTexture.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CQuadBatch.cpp" />
@@ -149,6 +150,8 @@
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpritePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M35Mesh.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\EnemyModel.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\PlayerModel.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M38Enemy.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CShaderProgram.cpp" />
@@ -165,6 +168,7 @@
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\engine\CBigFileReader.h" />
     <ClInclude Include="src\gun_bros_re\engine\CArrayInputStream.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CMarkerBatch.h" />
     <ClInclude Include="src\gun_bros_re\engine\CMatrix4d.h" />
     <ClInclude Include="src\gun_bros_re\engine\CTexture.h" />
     <ClInclude Include="src\gun_bros_re\engine\CQuadBatch.h" />
@@ -205,6 +209,8 @@
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpritePlayer.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M35Mesh.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\EnemyModel.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\PlayerModel.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M38Enemy.h" />
     <ClInclude Include="src\gun_bros_re\milestones\PackTables.h" />
     <ClInclude Include="src\gun_bros_re\engine\CPNG.h" />

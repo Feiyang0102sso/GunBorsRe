@@ -52,6 +52,7 @@ void PrintUsage() {
         "                            one the script chose, and loop it\n"
         "  --state <n>               M3.8: enter state <n> and let its whole\n"
         "                            sequence play\n"
+        "  --spawns                  M3: start with the spawn overlay on\n"
         "  --map <pack> <n>          which map M3 should START on; the arrow\n"
         "                            keys reach every other one\n"
         "                            (default: %s %u)\n"
@@ -131,6 +132,7 @@ int main(int argc, char **argv) {
     bool runM38 = false;
     bool surveyEnemies = false;
     bool surveyEnemyAnimations = false;
+    bool showSpawns = false;
     bool stepStates = false;
     std::uint32_t enemyIndex = 0;
     std::int32_t bodyMoveIndex = -1;
@@ -157,6 +159,8 @@ int main(int argc, char **argv) {
             bodyMoveIndex = static_cast<std::int32_t>(std::strtol(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--state") == 0 && i + 1 < argc) {
             stateIndex = static_cast<std::int32_t>(std::strtol(argv[++i], nullptr, 0));
+        } else if (std::strcmp(argument, "--spawns") == 0) {
+            showSpawns = true;
         } else if (std::strcmp(argument, "--enemies") == 0) {
             surveyEnemies = true;
         } else if (std::strcmp(argument, "--enemyanims") == 0) {
@@ -248,7 +252,7 @@ int main(int argc, char **argv) {
             return RunM1Resources(bigDirectory);
         }
         return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
-                        advanceMs);
+                        advanceMs, showSpawns);
     }
 
     if (!dumpPackName.empty()) {
@@ -291,5 +295,6 @@ int main(int argc, char **argv) {
     if (runM2) {
         return RunM2Texture(bigDirectory, imagePackName, imageResourceId, screenshotPath);
     }
-    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath, advanceMs);
+    return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath, advanceMs,
+                    showSpawns);
 }

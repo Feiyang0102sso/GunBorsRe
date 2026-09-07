@@ -121,6 +121,19 @@ public:
     bool SpawnForUI();
 
     /**
+     * Run the script the way a level does: export 0.
+     *
+     * Both overloads of CEnemy::Spawn (:73239, :73284) end in
+     * `CallExportFunction(interpreter, 0)`, and that is the only spawn a real
+     * enemy ever gets. Export 3 is the menu's, and for eighteen of the
+     * seventy-eight templates it does nothing at all -- a turret assembles its
+     * barrel in export 0 and stays a bare base without it.
+     *
+     * @return whether anything ran at all.
+     */
+    bool Spawn();
+
+    /**
      * Enter one of the script's states, as the script's own transitions do.
      *
      * A state carries an animation SEQUENCE -- a list of move indices -- and

@@ -20,9 +20,11 @@ constexpr int kMatrix4dElements = 16;
  * Orthographic projection with the origin at the top left and y growing
  * downward, which is how the game's 2D coordinates run.
  *
+ * @param depth Extent kept around z = 0. Sprites sit at z = 0, but models
+ *              placed in the same scene are as deep as they are tall.
  * @param out Receives 16 floats.
  */
-void Matrix4dOrthoTopLeft(float width, float height, float *out);
+void Matrix4dOrthoTopLeft(float width, float height, float depth, float *out);
 
 /**
  * Post-multiply a translation onto a matrix built by the above -- moves the

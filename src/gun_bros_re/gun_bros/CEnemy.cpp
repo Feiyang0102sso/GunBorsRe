@@ -14,6 +14,10 @@ namespace {
 // own says nothing.
 constexpr std::uint8_t kExportSpawnForUI = 3;
 
+// The export both CEnemy::Spawn overloads run (:73239, :73284) -- the one a
+// level uses.
+constexpr std::uint8_t kExportSpawn = 0;
+
 }  // namespace
 
 EnemyPart::EnemyPart()
@@ -69,6 +73,14 @@ bool CEnemy::SpawnForUI() {
     // is CEnemy::Bind followed by CEnemy::SpawnForUI, with no state entered
     // first. Entering state 0 anyway would run enter code the menu never runs.
     return m_interpreter.CallExportFunction(kExportSpawnForUI);
+}
+
+bool CEnemy::Spawn() {
+    if (!m_interpreter.HasScript()) {
+        std::printf("[enemy] no script; the model stays as bound\n");
+        return false;
+    }
+    return m_interpreter.CallExportFunction(kExportSpawn);
 }
 
 bool CEnemy::SetState(std::uint8_t stateId) {

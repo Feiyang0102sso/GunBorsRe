@@ -7,7 +7,7 @@
 
 #include <cmath>
 
-void Matrix4dOrthoTopLeft(float width, float height, float *out) {
+void Matrix4dOrthoTopLeft(float width, float height, float depth, float *out) {
     for (int i = 0; i < kMatrix4dElements; ++i) {
         out[i] = 0.0f;
     }
@@ -20,7 +20,11 @@ void Matrix4dOrthoTopLeft(float width, float height, float *out) {
     out[5] = -2.0f / height;
     out[7] = 1.0f;
 
-    out[10] = -1.0f;
+    // Map z from [-depth/2, depth/2] to [1, -1]. Negative so +z comes toward
+    // the viewer, matching Matrix4dOrthoCentred. Sprites all sit at z = 0, but
+    // a model is as deep as it is tall, and a depth of 1 would clip all but a
+    // sliver of it away.
+    out[10] = -2.0f / depth;
     out[15] = 1.0f;
 }
 

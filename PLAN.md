@@ -589,6 +589,75 @@ M3.2 已经把精灵动画这条线走完了，角色那条线绕不开 Section 
 
 > **验收**：一个东西在真关卡里按真碰撞跑，相机跟随。
 
+> **已开始**。出生点其实 M3.1 就解析并保留了——`PlacedObject` 带 `objectType`
+> （`Player = 15`、`Enemy = 5`）、坐标和 spawnTag，只是没人用。地图查看器加了 `K`
+> 叠加层（`CMarkerBatch`，跑在已有的 constcolor 那对 shader 上，不新增第八个）
+> 把它们画出来。22 张图全部有出生点数据：**每张恰好 1 个玩家出生点**
+> （pack7 的 map 1/2 是 0，正是那两张图块数据全 255 的空图），
+> 敌人出生点 0~28 个；为 0 的那些应该是走 `CEnemySpawner` 而不是对象层。
+>
+**缩放链**（`CEnemy::Draw` :67499）：
+`mesh.inverseExtent × 运行时缩放 × 模板word66 × CCamera::GetScale()`，
+关卡起手是 `SnapScale(camera, 0.8)`（:120747）。
+
+> **这个乘积作用在原始顶点上，不是作用在已归一化的模型上**——`inverseExtent`
+> 本身就是归一化那一步。炮塔：mesh 最长边 136.2，word66 = 150，
+> `136.2 × (150/136.2) × 0.8 = 120` 世界单位；小兵：`62.5 × (74/62.5) × 0.8 = 59`。
+> 按"模型已经是 1 单位"去读会得出不到一个像素的结果，差两个数量级——这就是读错时
+> 画面的样子。`ComputeBounds`（:98184）确认 offset 56 是 `1/最长边`，
+> `SetWidthAndHeightMappedOrthoProjection`（:378817）确认投影是 1 单位 = 1 像素。
+
+**验证**：pack9 map 0 的两个"敌人"其实是友方炮塔，地形上画着两个圆形炮台。
+把模型按对象层坐标画上去，**炮塔严丝合缝嵌进炮台**——位置和缩放同时验证通过。
+这是全库唯一能验的样本：发行版全是生存模式，敌人由关卡从周围刷出，
+对象层里的敌人点是没做完的战役模式遗留，别处没有参照物。
+
+**装配走的是 export 0，不是 export 3。**
+`CEnemy::SpawnForUI`（:72858）调 export 3，那是菜单的路；`CEnemy::Spawn` 的两个
+重载（:73239 / :73284）都以 `CallExportFunction(interpreter, 0)` 收尾，那才是关卡
+里真正生成一个敌人的路。78 个模板里有 18 个的 export 3 连一个 move 都不给 part 0——炮塔
+（enemy 13/16/21/53 等）用 export 3 装出来只有一个光秃秃的底座，上半身的
+`SetPartCount(2)` + `SetPart(1, move, bone)` 全在 export 0 里。
+
+> 改用 export 0 之后：**多部件敌人从 22 个涨到 33 个，挂骨骼的部件从 38 个涨到
+> 50 个，装不出任何动作的从 18 个降到 3 个**。地图走 `EnemySpawnMode::Level`；M3.8 预览器仍先跑 export 3（它模仿的
+> 就是 `CMenuMeshEnemy::Bind`），只在 export 3 什么都没装出来时回落到 export 0。
+
+**玩家站到出生点上。**`CBrother::Draw`（:134960）的缩放链和敌人同形：
+`mesh.inverseExtent × this[494] × this[495] × CCamera::GetScale()`。
+`CBrother::Bind`（:135608）把 this[494] 写死成 1.0，把**模板 offset 112**
+写进 this[495]——那个字段原来在 `CBrother::Template` 里标着 TODO，现在叫
+`m_gameScale`，值是 83。
+
+> 和敌人唯一的差别是**支点**：`CEnemy::Draw` 给 DrawHeirarchy 传自己的包围盒中心，
+> `CBrother::Draw` 传 null，让相机的默认支点顶上（这里按原点处理）。
+>
+> 顺手把角色装配从 M35Mesh.cpp 挪进了 `PlayerModel.{h,cpp}`——地图和 M3.7 预览器
+> 现在共用同一份躯干/腿/枪骨骼逻辑。留在 M35Mesh.cpp 的是**武器目录**，那是预览器
+> 的功能：游戏只会给玩家一把枪，不会给他一个列表翻。地图上玩家只挂默认模型，
+> 不带武器不带装甲——挂哪把枪是 loadout 的事，loadout 还没读。
+
+> **把 3D 模型塞进 2D 场景，踩到两个 GL 状态坑**：
+>
+> 1. **地图的正交投影没留深度。** `Matrix4dOrthoTopLeft` 原本 `out[10] = -1`，
+>    裁剪空间 z 就等于世界 z。精灵都在 z = 0 上，感觉不到；模型有 120 世界单位厚，
+>    整个被裁到只剩 |z| ≤ 1 的一薄片——pack7 map 3 的炮塔成了一块灰白方板，
+>    pack9 的干脆一点不剩。加了 `depth` 参数（地图给 4096）之后就对了。
+> 2. **混合开关不是我的。** `CQuadBatch::ApplyBlendMode` 只调 `glBlendFunc`，
+>    `GL_BLEND` 在开场打开后整帧不动。画模型前 `glDisable(GL_BLEND)` 会双向出错：
+>    后面的精灵全部丢掉 alpha 变成黑方块，模型自己的地面阴影盘也糊成一块白板。
+>    正确做法是只设函数，`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`。
+>    M3.5 / M3.8 两个模型预览器从来没开过混合，白板问题同源，一并补上。
+
+> **踩到一个指针陷阱，值得记住**：`CEnemy::Bind` 只保存 move set 和 script 的
+> **地址**。把 `EnemyTemplateData` 建成局部变量、Bind 完就出作用域，模型会指向已释放
+> 的内存——表现是脚本 `Refresh()` 走进野内存后整个进程卡死，看着像死循环而不是崩溃。
+> `PlacedEnemy` 因此用 `unique_ptr` 持有模板：vector 扩容时堆对象不会搬家。
+>
+> 顺带查清的 `CCamera` 形状（提取时照抄）：`this[1]/this[2]` 是世界坐标，
+> `GetLocationX(x)` = `round(x - camera.x)`，`this[13]` 是缩放（`GetScale` 返回它），
+> 构造时 `this[0] = min(屏宽/480, 屏高/320)`——**原版的参考分辨率是 480×320**。
+
 #### M4b — 真角色
 
 模型、动画、拼装在 M3.5 ~ M3.7 做掉了，这里剩**入戏**：`CMeshCamera::OrientForGame`

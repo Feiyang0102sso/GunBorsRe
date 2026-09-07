@@ -3,8 +3,9 @@
  * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
  *
  * The character viewer lives alongside the model viewer because they share the
- * walk that answers "which atlas does this model wear" -- see the .cpp. When a
- * third caller needs that walk it should move out to a header of its own.
+ * walk that answers "which atlas does this model wear" -- see the .cpp. The
+ * assembly the character viewer shows is in PlayerModel.h; what is left here is
+ * the weapon catalogue it pages through.
  */
 
 #ifndef GUN_BROS_RE_MILESTONES_M35MESH_H

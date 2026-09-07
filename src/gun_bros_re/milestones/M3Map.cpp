@@ -21,11 +21,21 @@
  * Objects other than props are read but not drawn: enemies are 3D meshes,
  * particle effects need the particle system, and player tags are invisible.
  * Between them they are seven per cent of what a map places.
+ *
+ * `K` puts a marker on every one of them anyway. A spawn point has no art, so
+ * the only way to tell one that is in the right place from one that is merely
+ * plausible is to draw the coordinate the data gives next to the terrain it
+ * belongs to. That is what M4a needs before it can put anything anywhere.
  */
 
 #include "milestones/M3Map.h"
 
+#include "milestones/EnemyModel.h"
+#include "milestones/PlayerModel.h"
+#include "milestones/PackTables.h"
+
 #include "engine/CArrayInputStream.h"
+#include "engine/CMarkerBatch.h"
 #include "engine/CMatrix4d.h"
 #include "engine/CPNG.h"
 #include "engine/CQuadBatch.h"
@@ -155,11 +165,47 @@ struct PackResources {
     PackResources() : objectPackReady(false), spriteGluReady(false) {}
 };
 
+/** One enemy template standing on the map, with the model it draws as. */
+struct PlacedEnemy {
+    float x;
+    float y;
+
+    // Both by pointer, and both for the same reason: CEnemy::Bind keeps the
+    // ADDRESS of the move set and the script, so the template has to stay put
+    // for as long as the model does. Holding either by value here would leave
+    // the model pointing at freed memory the moment this vector grew.
+    std::unique_ptr<EnemyTemplateData> templateData;
+    std::unique_ptr<EnemyModel> model;
+
+    // The template's game scale, which is half of how big it is drawn.
+    float gameScale;
+};
+
+/** A player standing on one of the map's spawn points. */
+struct PlacedPlayer {
+    float x;
+    float y;
+
+    // By pointer for the same reason a PlacedEnemy's model is: it owns GL
+    // buffers and its controllers point back into it, so it cannot be moved
+    // once built.
+    std::unique_ptr<PlayerModel> model;
+};
+
 /** Everything one map needs to draw, held together for the render loop. */
 struct LoadedMap {
     CMap map;
     TileSet tileSet;
     std::vector<std::unique_ptr<CTexture>> textures;
+
+    // The enemies the object layer places. Held by pointer because an
+    // EnemyModel owns GL buffers and points at its own meshes.
+    std::vector<PlacedEnemy> enemies;
+
+    // The player template, owned here because every PlacedPlayer's controllers
+    // hold the ADDRESS of its move set -- the same trap PlacedEnemy documents.
+    std::unique_ptr<PlayerTemplateData> playerTemplate;
+    std::vector<PlacedPlayer> players;
 
     // Props, and everything they hang off. The caches own the atlas pages, so
     // they have to outlive the props that point into them -- replacing a
@@ -685,20 +731,6 @@ void AdvanceTileLayers(CMap &map, std::uint16_t deltaMs) {
 }
 
 /**
- * Run the animation clock forward, in the bites playback would use.
- *
- * What makes a still screenshot able to prove anything about animation: shoot
- * the same map at two different times and diff them. Deterministic, because
- * the bite size is fixed rather than taken from the wall clock.
- */
-void WarmUp(LoadedMap &loaded, std::uint32_t totalMs) {
-    for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
-        AdvanceProps(loaded.props, kWarmUpFrameMs);
-        AdvanceTileLayers(loaded.map, kWarmUpFrameMs);
-    }
-}
-
-/**
  * The quads a slot draws at its player's current step.
  *
  * An empty slot -- an unused animation, or one that expanded to nothing --
@@ -751,6 +783,277 @@ void AddSpriteQuads(const PlacedProp &prop, const std::vector<SpriteQuad> &quads
  * the batch in two to save half of nothing would cost a second buffer and the
  * code that decides which half is stale.
  */
+/**
+ * Where a spawn marker goes, and how big.
+ *
+ * The size is the viewer's, not the data's: a spawn point is a single
+ * coordinate, and it has to be big enough to find against a 256-pixel tile.
+ */
+constexpr float kMarkerSize = 48.0f;
+
+// Depth kept by the map's projection. Terrain and props are flat at z = 0;
+// this only has to be deep enough for the tallest placed model, and the
+// biggest one in the archives is a couple of hundred world units.
+constexpr float kMapDepthRange = 4096.0f;
+constexpr float kMarkerThickness = 6.0f;
+
+/** Collect one outline per object of the given type, centred on its own x,y. */
+void BuildMarkers(const LoadedMap &loaded, CMarkerBatch &markers,
+                  PlacedObjectType wanted) {
+    markers.Begin();
+
+    const CMap &map = loaded.map;
+    for (std::uint32_t layer = 0; layer < map.GetObjectLayerCount(); ++layer) {
+        const std::vector<PlacedObject> &objects =
+            map.GetObjectLayer(layer).GetObjects();
+        for (std::size_t i = 0; i < objects.size(); ++i) {
+            if (objects[i].objectType != static_cast<std::uint8_t>(wanted)) {
+                continue;
+            }
+            markers.AddOutline(static_cast<float>(objects[i].x) - 0.5f * kMarkerSize,
+                               static_cast<float>(objects[i].y) - 0.5f * kMarkerSize,
+                               kMarkerSize, kMarkerSize, kMarkerThickness);
+        }
+    }
+}
+
+/**
+ * The camera scale a level snaps to. Reference: :120747, where CLevel does
+ * `CCamera::SnapScale(camera, 0.8)` right after binding the map.
+ *
+ * The real camera moves it afterwards; until there is a real camera this is
+ * the number the game starts every level with.
+ */
+constexpr float kLevelCameraScale = 0.8f;
+
+/** "3 player spawns, 41 enemy spawns" -- what the K overlay should show. */
+void ReportSpawns(const LoadedMap &loaded);
+
+/**
+ * Load a model for every enemy the object layer places.
+ *
+ * **These are leftovers, not how the shipped game works.** Every shipped map
+ * is survival: enemies arrive from off screen and close in, spawned by the
+ * level rather than placed on it. The object layer's enemies are what was left
+ * of a campaign mode, which is why most maps have none and the ones that do
+ * cannot be checked against anything -- except pack9's two, which are turrets
+ * and stand where they are placed.
+ */
+void LoadPlacedEnemies(CResTOCManager &tocManager, const CShaderProgram &program,
+                       LoadedMap &loaded) {
+    PackTables tables(tocManager);
+    unsigned failed = 0;
+
+    for (std::uint32_t layer = 0; layer < loaded.map.GetObjectLayerCount();
+         ++layer) {
+        const std::vector<PlacedObject> &objects =
+            loaded.map.GetObjectLayer(layer).GetObjects();
+        for (std::size_t i = 0; i < objects.size(); ++i) {
+            if (objects[i].objectType !=
+                static_cast<std::uint8_t>(PlacedObjectType::Enemy)) {
+                continue;
+            }
+
+            char label[128];
+            std::snprintf(label, sizeof(label), "%s enemy %u",
+                          tables.GetPackName(objects[i].packHash).c_str(),
+                          objects[i].localIndex);
+
+            PlacedEnemy placed;
+            placed.templateData.reset(new EnemyTemplateData());
+            if (!ReadEnemyTemplate(tables, objects[i].packHash,
+                                   objects[i].localIndex, label,
+                                   *placed.templateData)) {
+                failed++;
+                continue;
+            }
+
+            placed.x = static_cast<float>(objects[i].x);
+            placed.y = static_cast<float>(objects[i].y);
+            placed.gameScale = placed.templateData->gameScale;
+            placed.model.reset(new EnemyModel());
+            // A map is a level, so the level spawn export is the one to run.
+            if (!LoadEnemyModel(tables, *placed.templateData, true, &program,
+                                EnemySpawnMode::Level,
+                                *placed.model)) {
+                failed++;
+                continue;
+            }
+
+            // One line each: a map places a couple of dozen at most, and which
+            // template a leftover spawn names is exactly what is worth seeing.
+            std::printf("[m3] %s at %d %d -- %zu configs, %u parts\n",
+                        label, objects[i].x, objects[i].y,
+                        placed.model->configs.size(),
+                        placed.model->enemy.GetPartCount());
+
+            loaded.enemies.push_back(std::move(placed));
+        }
+    }
+
+    if (!loaded.enemies.empty() || failed > 0) {
+        std::printf("[m3] %zu placed enemies drawn, %u unloadable\n",
+                    loaded.enemies.size(), failed);
+    }
+}
+
+/** Move every placed enemy's animation on. */
+void AdvanceEnemies(LoadedMap &loaded, std::int32_t deltaMs) {
+    for (std::size_t i = 0; i < loaded.enemies.size(); ++i) {
+        loaded.enemies[i].model->enemy.Update(deltaMs);
+    }
+}
+
+/**
+ * Stand a player on every spawn point the object layer names.
+ *
+ * The default model and nothing else: no weapon, no armour. Which gun a
+ * player carries is a loadout question and the loadout is not read yet, so
+ * putting one in his hand here would be inventing data.
+ */
+void LoadPlacedPlayers(CResTOCManager &tocManager, const CShaderProgram &program,
+                       LoadedMap &loaded) {
+    PackTables tables(tocManager);
+
+    for (std::uint32_t layer = 0; layer < loaded.map.GetObjectLayerCount();
+         ++layer) {
+        const std::vector<PlacedObject> &objects =
+            loaded.map.GetObjectLayer(layer).GetObjects();
+        for (std::size_t i = 0; i < objects.size(); ++i) {
+            if (objects[i].objectType !=
+                static_cast<std::uint8_t>(PlacedObjectType::Player)) {
+                continue;
+            }
+
+            // Looked up on the first spawn point rather than up front, so a
+            // map with none never pays for the walk over every pack.
+            if (loaded.playerTemplate == nullptr) {
+                loaded.playerTemplate.reset(new PlayerTemplateData());
+                if (!FindPlayerTemplate(tocManager, tables,
+                                        *loaded.playerTemplate)) {
+                    std::printf("[m3] no player template in the archives\n");
+                    loaded.playerTemplate.reset();
+                    return;
+                }
+            }
+
+            PlacedPlayer placed;
+            placed.x = static_cast<float>(objects[i].x);
+            placed.y = static_cast<float>(objects[i].y);
+            placed.model.reset(new PlayerModel());
+            if (!BuildPlayerBody(tables, loaded.playerTemplate->moveSet,
+                                 *placed.model) ||
+                !CreatePlayerBuffers(*placed.model, program)) {
+                std::printf("[m3] player at %d %d could not be built\n",
+                            objects[i].x, objects[i].y);
+                continue;
+            }
+
+            SelectPlayerMoveSlot(*placed.model, 0, false);
+            PosePlayer(*placed.model);
+            std::printf("[m3] %s at %d %d -- scale %.0f\n",
+                        loaded.playerTemplate->owner.c_str(), objects[i].x,
+                        objects[i].y, loaded.playerTemplate->gameScale);
+            loaded.players.push_back(std::move(placed));
+        }
+    }
+}
+
+/** Move every placed player's animation on. */
+void AdvancePlayers(LoadedMap &loaded, std::int32_t deltaMs) {
+    for (std::size_t i = 0; i < loaded.players.size(); ++i) {
+        AdvancePlayer(*loaded.players[i].model, deltaMs);
+    }
+}
+
+/**
+ * Run the animation clock forward, in the bites playback would use.
+ *
+ * What makes a still screenshot able to prove anything about animation: shoot
+ * the same map at two different times and diff them. Deterministic, because
+ * the bite size is fixed rather than taken from the wall clock.
+ */
+void WarmUp(LoadedMap &loaded, std::uint32_t totalMs) {
+    for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
+        AdvanceProps(loaded.props, kWarmUpFrameMs);
+        AdvanceTileLayers(loaded.map, kWarmUpFrameMs);
+        AdvanceEnemies(loaded, kWarmUpFrameMs);
+        AdvancePlayers(loaded, kWarmUpFrameMs);
+    }
+}
+
+/**
+ * Draw every model the object layer places -- enemies and players alike.
+ *
+ * Depth on, and the depth buffer cleared first: the terrain and props are 2D
+ * and drawn in order, so they neither read nor write depth, but a model is
+ * solid and needs it against itself.
+ */
+void DrawModels(LoadedMap &loaded, const CShaderProgram &program,
+                const float *mapMvp) {
+    if (loaded.enemies.empty() && loaded.players.empty()) {
+        return;
+    }
+
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    // The quad batch sets a blend FUNCTION per group but never touches the
+    // enable, which is switched on once at start-up and stays on for the whole
+    // frame. So only the function is ours to set, and it has to be set: the
+    // last sprite group may have left an additive one behind. Switching
+    // blending off instead is wrong twice over -- the sprites drawn afterwards
+    // lose their alpha and turn into black rectangles, and a model's own
+    // ground-shadow disc goes opaque white.
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    for (std::size_t i = 0; i < loaded.enemies.size(); ++i) {
+        PlacedEnemy &placed = loaded.enemies[i];
+        const float scale = EnemyModelWorldScale(*placed.model, placed.gameScale,
+                                                 kLevelCameraScale);
+
+        float base[kMatrix4dElements];
+        BuildEnemyGameMatrix(*placed.model, mapMvp, placed.x, placed.y, scale,
+                             0.0f, base);
+        DrawEnemyModel(*placed.model, program, base);
+    }
+
+    for (std::size_t i = 0; i < loaded.players.size(); ++i) {
+        PlacedPlayer &placed = loaded.players[i];
+        const float scale = PlayerModelWorldScale(
+            *placed.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
+
+        float base[kMatrix4dElements];
+        BuildPlayerGameMatrix(mapMvp, placed.x, placed.y, scale, 0.0f, base);
+        DrawPlayer(*placed.model, program, base);
+    }
+
+    // Put back what was found: the sprite path draws flat and in order.
+    glDisable(GL_DEPTH_TEST);
+}
+
+/** How many objects of one type a map places. */
+unsigned CountObjects(const LoadedMap &loaded, PlacedObjectType wanted) {
+    const CMap &map = loaded.map;
+    unsigned total = 0;
+    for (std::uint32_t layer = 0; layer < map.GetObjectLayerCount(); ++layer) {
+        const std::vector<PlacedObject> &objects =
+            map.GetObjectLayer(layer).GetObjects();
+        for (std::size_t i = 0; i < objects.size(); ++i) {
+            if (objects[i].objectType == static_cast<std::uint8_t>(wanted)) {
+                total++;
+            }
+        }
+    }
+    return total;
+}
+
+void ReportSpawns(const LoadedMap &loaded) {
+    std::printf("[m3] %u player spawns, %u enemy spawns\n",
+                CountObjects(loaded, PlacedObjectType::Player),
+                CountObjects(loaded, PlacedObjectType::Enemy));
+}
+
 void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
                    bool showProps, bool report) {
     const CMap &map = loaded.map;
@@ -1122,7 +1425,7 @@ int RunMapList(const std::string &bigDirectory) {
 
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
-             std::uint32_t advanceMs) {
+             std::uint32_t advanceMs, bool startWithSpawns) {
     std::printf("=== M3: a level, terrain and scenery, on screen ===\n\n");
 
     // --- resources, before any GL exists ---
@@ -1174,6 +1477,19 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     }
 
     CQuadBatch batch;
+    // The constant-colour pair, for the spawn markers. Two programs, because
+    // the shaders the engine ships are one job each.
+    CShaderProgram markerProgram;
+    if (!markerProgram.Load(kShaderDirectory, "ogles_vs_mvp_constcolor",
+                            "ogles_ps_constcolor")) {
+        return 1;
+    }
+
+    CMarkerBatch markers;
+    if (!markers.Create(markerProgram)) {
+        return 1;
+    }
+
     if (!batch.Create(program)) {
         return 1;
     }
@@ -1192,11 +1508,15 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         return 1;
     }
     LoadProps(tocManager, loaded);
+    LoadPlacedEnemies(tocManager, program, loaded);
+    LoadPlacedPlayers(tocManager, program, loaded);
+    ReportSpawns(loaded);
     WarmUp(loaded, advanceMs);
 
     // Either layer can be hidden, which is how "is that rock in the right\n// place or is the ground wrong?" gets answered without a debugger.
     bool showTiles = true;
     bool showProps = true;
+    bool showSpawns = startWithSpawns;
 
     // The props animate, so the geometry is rebuilt every frame from here on.
     // This flag only decides whether a rebuild says anything about itself.
@@ -1214,7 +1534,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     glEnable(GL_BLEND);
 
     std::printf("\n[m3] left/right: map (crosses packs), up/down: pack, "
-                "Home: refit, T: tiles, P: props, space: pause, "
+                "Home: refit, T: tiles, P: props, K: spawns, space: pause, "
                 "'.': one step on, drag: pan, wheel: zoom, Esc: quit\n");
 
     bool reportedFirstFrame = false;
@@ -1229,6 +1549,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (key == KeyCode::T) {
                 showTiles = !showTiles;
                 reportGeometry = true;
+            } else if (key == KeyCode::K) {
+                showSpawns = !showSpawns;
+                std::printf("[m3] spawns %s\n", showSpawns ? "on" : "off");
             } else if (key == KeyCode::P) {
                 showProps = !showProps;
                 reportGeometry = true;
@@ -1270,6 +1593,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
                         replacement)) {
                 LoadProps(tocManager, replacement);
+                LoadPlacedEnemies(tocManager, program, replacement);
+                LoadPlacedPlayers(tocManager, program, replacement);
+                ReportSpawns(replacement);
                 WarmUp(replacement, advanceMs);
                 loaded = std::move(replacement);
                 reportGeometry = true;
@@ -1301,6 +1627,8 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         }
 
         AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
+        AdvanceEnemies(loaded, static_cast<std::int32_t>(elapsedMs));
+        AdvancePlayers(loaded, static_cast<std::int32_t>(elapsedMs));
         AdvanceTileLayers(loaded.map, static_cast<std::uint16_t>(elapsedMs));
         BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
         reportGeometry = false;
@@ -1342,13 +1670,14 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
         glViewport(0, 0, drawableWidth, drawableHeight);
         glClearColor(0.08f, 0.08f, 0.10f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Zoom is a wider or narrower slice of the world, so it goes into the
         // projection's extent rather than into a separate scale matrix.
         float mvp[kMatrix4dElements];
         Matrix4dOrthoTopLeft(static_cast<float>(drawableWidth) / camera.zoom,
-                             static_cast<float>(drawableHeight) / camera.zoom, mvp);
+                             static_cast<float>(drawableHeight) / camera.zoom,
+                             kMapDepthRange, mvp);
         Matrix4dTranslate(mvp, -camera.x, -camera.y);
 
         int scissor[4];
@@ -1361,6 +1690,17 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         }
 
         batch.Draw(program, mvp);
+        DrawModels(loaded, program, mvp);
+
+        if (showSpawns) {
+            // On top of the terrain, and outside the prop batch, because a
+            // marker is not part of the scene -- it is a note about it.
+            BuildMarkers(loaded, markers, PlacedObjectType::Player);
+            markers.Draw(markerProgram, mvp, 0.2f, 1.0f, 0.3f, 1.0f);
+
+            BuildMarkers(loaded, markers, PlacedObjectType::Enemy);
+            markers.Draw(markerProgram, mvp, 1.0f, 0.25f, 0.2f, 1.0f);
+        }
 
         if (clipping) {
             glDisable(GL_SCISSOR_TEST);

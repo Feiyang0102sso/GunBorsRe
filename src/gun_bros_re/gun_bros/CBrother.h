@@ -46,6 +46,16 @@ public:
         /** The sprite drawn under the model. Not the character itself. */
         const CGameSpriteGluRef &GetShadowSprite() const { return m_shadowSprite; }
 
+        /**
+         * The scale the player is drawn at in the world.
+         *
+         * CBrother::Bind (:135608) copies this straight into this[495], and
+         * CBrother::Draw (:134960) multiplies it into the draw scale next to
+         * the mesh's inverse extent and the camera's scale -- the same product
+         * an enemy's template word 66 goes into.
+         */
+        float GetGameScale() const { return m_gameScale; }
+
     private:
         CScript m_script;
         CMoveSetMesh m_moveSet;
@@ -54,8 +64,8 @@ public:
         // has been traced to a meaning yet.
         GameObjectRef m_objectRef;
 
-        // TODO: template offset 112. A uint16 on the wire, a float in memory.
-        float m_unknown;
+        // Template offset 112. A uint16 on the wire, a float in memory.
+        float m_gameScale;
 
         CGameSpriteGluRef m_shadowSprite;
     };

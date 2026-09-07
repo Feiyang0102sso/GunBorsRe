@@ -497,14 +497,25 @@ bool BuildEnemy(PackTables &tables, const EnemyTemplate &entry,
     out.enemy.Bind(entry.script, entry.moveSet, out.configMeshes);
     out.enemy.SpawnForUI();
 
-    // Eighteen of the seventy-eight leave part 0 without a move: their export 3
-    // does nothing, so the game must reach them through the level spawn path
-    // instead of the menu one. Show the first move rather than a blank window,
-    // and say that is what happened -- this is the viewer being helpful, not
-    // the engine doing it.
+    // Export 3 is the menu's, and for eighteen of the seventy-eight templates
+    // it gives part 0 nothing to play: a turret assembled this way is a bare
+    // base with no barrel. Run the LEVEL export instead when that happens --
+    // it is the one the game itself uses for these, and it is what puts the
+    // second part on.
+    if (out.enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex) {
+        out.enemy.Spawn();
+        std::printf("[m38] %s: export 3 assembled nothing; spawned as a level "
+                    "would instead\n",
+                    entry.owner.c_str());
+    }
+
+    // Still nothing: no export animates part 0. Show its first move rather
+    // than a blank window, and say that is what happened -- this is the viewer
+    // being helpful, not the engine doing it.
     if (out.enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex &&
         !entry.moveSet.GetMoves().empty()) {
-        std::printf("[m38] %s: SpawnForUI set no move; falling back to move 0\n",
+        std::printf("[m38] %s: no spawn export set a move; falling back to "
+                    "move 0\n",
                     entry.owner.c_str());
         out.enemy.GetPart(0).controller.SetMove(0);
     }
@@ -903,6 +914,9 @@ int RunEnemySurvey(const std::string &bigDirectory) {
         CEnemy enemy;
         enemy.Bind(enemies[i].script, enemies[i].moveSet, ConfigMeshes(configs));
         enemy.SpawnForUI();
+        if (enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex) {
+            enemy.Spawn();
+        }
 
         ReportPartTable(i, enemies[i], enemy);
         if (enemy.GetPartCount() > 1) {
@@ -1027,6 +1041,11 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
                 loaded->enemy.IsBodyMoveLocked() ? " (held)" : " (script's)");
 
     glEnable(GL_DEPTH_TEST);
+
+    // Meshes carry alpha: the turret's ground shadow is a faded disc, and
+    // without this it draws as a white plate.
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     Turntable view;
     view.spinDegrees = kUiFacingDegrees + spinDegrees;
