@@ -70,6 +70,7 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_A:      return KeyCode::A;
         case SDLK_S:      return KeyCode::S;
         case SDLK_D:      return KeyCode::D;
+        case SDLK_B:      return KeyCode::B;
         case SDLK_C:      return KeyCode::C;
         default:          return KeyCode::None;
     }

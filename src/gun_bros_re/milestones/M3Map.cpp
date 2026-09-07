@@ -56,6 +56,7 @@
 #include "sprite_glu/CSpritePlayer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -95,6 +96,22 @@ constexpr float kPlayerMovementUnitsPerSecond = 240.0f;
 // of it to CLayerCollision, whose half-unit edge allowance makes 11.5.
 constexpr float kPlayerCollisionRadius = 11.5f;
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
+
+// The PvP barricades are two orientations of one scripted prop. Their four
+// consecutive background animations are intact, damaged twice, and destroyed.
+constexpr std::uint32_t kCoverPackHash = 0x00267585;
+constexpr std::uint8_t kHorizontalCoverTemplate = 0;
+constexpr std::uint8_t kVerticalCoverTemplate = 1;
+constexpr std::uint8_t kCoverVisibleStateCount = 4;
+
+enum class CoverState : std::uint8_t {
+    Intact,
+    Damaged,
+    BadlyDamaged,
+    Destroyed,
+    Hidden,
+    Count,
+};
 
 // Longest frame the animation clock will believe. Past this the wall clock has
 // stopped meaning anything -- a debugger breakpoint, a dragged window, a lost
@@ -152,7 +169,9 @@ struct PropSprite {
     PropSlot background;
     PropSlot main;
     PropSlot foreground;
+    std::array<PropSlot, kCoverVisibleStateCount> coverBackgrounds;
     CCollisionData collision;
+    bool isDestructibleCover;
     int zOrderGroup;
 
     // What the walk could not draw, kept so the load can report a total
@@ -166,6 +185,7 @@ struct PlacedProp {
     float x;
     float y;
     const PropSprite *sprite;
+    CoverState coverState;
 
     CSpritePlayer background;
     CSpritePlayer main;
@@ -520,6 +540,14 @@ bool PropAnimates(const PropSprite &sprite) {
     if (sprite.background.stepDurationsMs.size() > 1) {
         return true;
     }
+    if (sprite.isDestructibleCover) {
+        for (std::size_t state = 0; state < sprite.coverBackgrounds.size();
+             ++state) {
+            if (sprite.coverBackgrounds[state].stepDurationsMs.size() > 1) {
+                return true;
+            }
+        }
+    }
     if (sprite.main.stepDurationsMs.size() > 1) {
         return true;
     }
@@ -532,6 +560,15 @@ bool SlotDrawsAtStart(const PropSlot &slot) {
         return false;
     }
     return !slot.quadsByStep[0].empty();
+}
+
+/** Whether a PROP reference names one of the two PvP barricade orientations. */
+bool IsDestructibleCover(std::uint32_t packHash, std::uint8_t localIndex) {
+    if (packHash != kCoverPackHash) {
+        return false;
+    }
+    return localIndex == kHorizontalCoverTemplate ||
+           localIndex == kVerticalCoverTemplate;
 }
 
 /**
@@ -573,8 +610,21 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     }
 
     CSpriteIterator iterator(gluPack->spriteGlu, *archetype);
-    ExpandSlot(iterator, *archetype, propTemplate.GetBackgroundAnimation(),
-               out.background);
+    out.isDestructibleCover = IsDestructibleCover(propPackHash, localIndex);
+    if (out.isDestructibleCover) {
+        std::uint8_t firstAnimation = 0;
+        if (localIndex == kVerticalCoverTemplate) {
+            firstAnimation = 4;
+        }
+        for (std::uint8_t state = 0; state < kCoverVisibleStateCount; ++state) {
+            ExpandSlot(iterator, *archetype,
+                       static_cast<std::uint8_t>(firstAnimation + state),
+                       out.coverBackgrounds[state]);
+        }
+    } else {
+        ExpandSlot(iterator, *archetype, propTemplate.GetBackgroundAnimation(),
+                   out.background);
+    }
     ExpandSlot(iterator, *archetype, propTemplate.GetMainAnimation(), out.main);
     ExpandSlot(iterator, *archetype, propTemplate.GetForegroundAnimation(),
                out.foreground);
@@ -587,9 +637,14 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     // anything animated. Playback moves what a slot draws but never whether it
     // draws, so keeping the test on step 0 keeps the draw order fixed for the
     // life of the map -- and lets the queue stay sorted once, at load.
+    bool backgroundDraws = SlotDrawsAtStart(out.background);
+    if (out.isDestructibleCover) {
+        backgroundDraws = SlotDrawsAtStart(out.coverBackgrounds[0]);
+    }
+
     if (SlotDrawsAtStart(out.main)) {
         out.zOrderGroup = kZGroupNormal;
-    } else if (SlotDrawsAtStart(out.background)) {
+    } else if (backgroundDraws) {
         out.zOrderGroup = kZGroupBackgroundOnly;
     } else if (SlotDrawsAtStart(out.foreground)) {
         out.zOrderGroup = kZGroupForegroundOnly;
@@ -623,6 +678,19 @@ std::uint32_t StartStepFor(std::size_t propOrdinal, std::size_t stepCount) {
     return (scrambled >> 16) % static_cast<std::uint32_t>(stepCount);
 }
 
+/** Background slot selected by a prop's current cover state. */
+const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
+    if (!prop.sprite->isDestructibleCover) {
+        return &prop.sprite->background;
+    }
+
+    const std::uint8_t state = static_cast<std::uint8_t>(prop.coverState);
+    if (state >= kCoverVisibleStateCount) {
+        return nullptr;
+    }
+    return &prop.sprite->coverBackgrounds[state];
+}
+
 /**
  * Point one placed prop's three players at their slots, as CProp::Bind does.
  *
@@ -634,11 +702,70 @@ std::uint32_t StartStepFor(std::size_t propOrdinal, std::size_t stepCount) {
 void StartPropPlayers(PlacedProp &prop, std::size_t propOrdinal) {
     const PropSprite &sprite = *prop.sprite;
 
-    prop.background.SetAnimation(&sprite.background.stepDurationsMs);
+    prop.coverState = CoverState::Intact;
+    const PropSlot *background = BackgroundSlotFor(prop);
+    prop.background.SetAnimation(&background->stepDurationsMs);
     prop.foreground.SetAnimation(&sprite.foreground.stepDurationsMs);
 
     prop.main.SetAnimation(&sprite.main.stepDurationsMs);
     prop.main.SetStep(StartStepFor(propOrdinal, sprite.main.stepDurationsMs.size()));
+}
+
+/** Human-readable state for the keyboard diagnostic. */
+const char *CoverStateName(CoverState state) {
+    switch (state) {
+        case CoverState::Intact:
+            return "intact";
+        case CoverState::Damaged:
+            return "damaged";
+        case CoverState::BadlyDamaged:
+            return "badly damaged";
+        case CoverState::Destroyed:
+            return "destroyed";
+        case CoverState::Hidden:
+            return "hidden";
+        default:
+            return "unknown";
+    }
+}
+
+/** Advance the shared cover state, wrapping hidden back to intact. */
+CoverState NextCoverState(CoverState state) {
+    std::uint8_t next = static_cast<std::uint8_t>(state) + 1;
+    if (next >= static_cast<std::uint8_t>(CoverState::Count)) {
+        next = 0;
+    }
+    return static_cast<CoverState>(next);
+}
+
+/** Apply one state to every destructible cover on the current map. */
+std::uint32_t SetCoverState(LoadedMap &loaded, CoverState state) {
+    std::uint32_t changed = 0;
+    for (std::size_t i = 0; i < loaded.props.size(); ++i) {
+        PlacedProp &prop = loaded.props[i];
+        if (!prop.sprite->isDestructibleCover) {
+            continue;
+        }
+
+        prop.coverState = state;
+        const PropSlot *background = BackgroundSlotFor(prop);
+        if (background == nullptr) {
+            prop.background.SetAnimation(nullptr);
+        } else {
+            prop.background.SetAnimation(&background->stepDurationsMs);
+        }
+        changed++;
+    }
+    return changed;
+}
+
+/** The original disables both collision shapes in the destroyed state. */
+bool CoverHasCollision(const PlacedProp &prop) {
+    if (!prop.sprite->isDestructibleCover) {
+        return true;
+    }
+    return static_cast<std::uint8_t>(prop.coverState) <
+           static_cast<std::uint8_t>(CoverState::Destroyed);
 }
 
 /** Order props the way CRenderQueue does: by group, then down the screen. */
@@ -864,6 +991,9 @@ void BuildCollisionScene(LoadedMap &loaded) {
     std::uint32_t propShapes = 0;
     for (std::size_t i = 0; i < loaded.props.size(); ++i) {
         const PlacedProp &prop = loaded.props[i];
+        if (!CoverHasCollision(prop)) {
+            continue;
+        }
         if (prop.sprite->collision.GetEdges().empty()) {
             continue;
         }
@@ -1320,8 +1450,11 @@ void BuildGeometry(const LoadedMap &loaded, CQuadBatch &batch, bool showTiles,
     if (showProps) {
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
             const PlacedProp &prop = loaded.props[i];
-            AddSpriteQuads(prop, CurrentQuads(prop.sprite->background, prop.background),
-                           batch);
+            const PropSlot *background = BackgroundSlotFor(prop);
+            if (background != nullptr) {
+                AddSpriteQuads(prop, CurrentQuads(*background, prop.background),
+                               batch);
+            }
         }
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
             const PlacedProp &prop = loaded.props[i];
@@ -1788,6 +1921,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     bool showProps = true;
     bool showSpawns = startWithSpawns;
     bool showCollisions = startWithCollisions;
+    CoverState coverState = CoverState::Intact;
 
     // The props animate, so the geometry is rebuilt every frame from here on.
     // This flag only decides whether a rebuild says anything about itself.
@@ -1811,12 +1945,12 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
     if (gameView) {
         std::printf("\n[gameview] WASD: move, arrows: change map, "
-                    "T: tiles, P: props, K: spawns, C: collision, "
+                    "T: tiles, P: props, K: spawns, B: covers, C: collision, "
                     "space: pause, '.': one step, Esc: quit\n");
     } else {
         std::printf("\n[preview] arrows: change map, Home: refit, "
                     "drag: pan, wheel: zoom, T: tiles, P: props, "
-                    "K: spawns, C: collision, space: pause, "
+                    "K: spawns, B: covers, C: collision, space: pause, "
                     "'.': one step, Esc: quit\n");
     }
 
@@ -1832,6 +1966,13 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (key == KeyCode::T) {
                 showTiles = !showTiles;
                 reportGeometry = true;
+            } else if (key == KeyCode::B) {
+                coverState = NextCoverState(coverState);
+                const std::uint32_t changed = SetCoverState(loaded, coverState);
+                BuildCollisionScene(loaded);
+                reportGeometry = true;
+                std::printf("[m4] %u covers: %s\n", changed,
+                            CoverStateName(coverState));
             } else if (key == KeyCode::C) {
                 showCollisions = !showCollisions;
                 std::printf("[m4] collision %s\n",
@@ -1880,6 +2021,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
                         replacement)) {
                 LoadProps(tocManager, replacement);
+                coverState = CoverState::Intact;
                 BuildCollisionScene(replacement);
                 LoadPlacedEnemies(tocManager, program, replacement);
                 LoadPlacedPlayers(tocManager, program, replacement);
