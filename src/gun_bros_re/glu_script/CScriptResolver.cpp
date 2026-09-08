@@ -21,11 +21,26 @@ std::int16_t ResolveFunction(IScriptObject *host, std::uint16_t functionId,
     const std::uint8_t classId = static_cast<std::uint8_t>((functionId >> 8) & 0xFF);
     const std::uint8_t function = static_cast<std::uint8_t>(functionId & 0xFF);
 
+    // CGame functions 1 and 2 are Utility::Random (:74375), callable by every
+    // host. Returning zero here silently freezes scripts that randomise speed.
+    if (classId == kScriptClassGame) {
+        if ((function == 1 || function == 2) && argumentCount >= 2) {
+            return host->RandomInteger(arguments[0], arguments[1]);
+        }
+        return 0;
+    }
+
     if (classId == kScriptClassLevel) {
         // The cast is the original's, made explicit: the host is whatever the
         // id says it is. Every script running today belongs to a CLevel.
-        return static_cast<CLevel *>(host)->FunctionResolver(function, arguments,
-                                                             argumentCount);
+        CLevel *level = dynamic_cast<CLevel *>(host);
+        if (level != nullptr) { return level->FunctionResolver(function, arguments, argumentCount); }
+        // Original level natives resolve the global level, not the enemy host.
+        // Arena has no level objectives/music controller. Never cast an enemy
+        // into CLevel: even its diagnostic counter would corrupt actor memory.
+        if (function == 14 || function == 74) { return 0; }
+        std::printf("[arena] level native %u has no level context\n", function);
+        return 0;
     }
     if (classId == kScriptClassEnemy) {
         return static_cast<CEnemy *>(host)->FunctionResolver(function, arguments,
@@ -55,7 +70,9 @@ std::int16_t *ResolveVariable(IScriptObject *host, std::uint16_t variableId) {
     const std::uint8_t variable = static_cast<std::uint8_t>(variableId & 0xFF);
 
     if (classId == kScriptClassLevel) {
-        return static_cast<CLevel *>(host)->VariableResolver(variable);
+        CLevel *level = dynamic_cast<CLevel *>(host);
+        if (level != nullptr) { return level->VariableResolver(variable); }
+        return nullptr;
     }
     if (classId == kScriptClassEnemy) {
         return static_cast<CEnemy *>(host)->VariableResolver(variable);

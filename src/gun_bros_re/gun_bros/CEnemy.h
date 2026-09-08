@@ -39,6 +39,7 @@
 #include "gun_bros/CMesh.h"
 #include "gun_bros/CMoveSetMesh.h"
 #include "gun_bros/CMoveSetMeshController.h"
+#include "gun_bros/EnemyCombat.h"
 
 #include <cstdint>
 #include <vector>
@@ -89,6 +90,9 @@ struct EnemyPart {
     // Collision radius, set by 0x0C. Kept because the script writes it and
     // dropping it would silently lose data; nothing reads it until M5.
     float radius;
+    bool visible = true;
+    bool followsFacing = true;
+    float hitFlash = 0;
 
     EnemyPart();
 };
@@ -160,6 +164,20 @@ public:
      */
     void Update(std::int32_t deltaMs);
 
+    // Arena enables world simulation before loading the model. Existing model
+    // viewers still execute scripts, but do not move their display objects.
+    EnemyCombat combat;
+    void ConfigureTemplate(float radius, bool targetable,
+        const GameObjectRef &bullet, const CCollisionData &collision);
+    void SetTarget(CombatId id, float x, float y, bool alive);
+    bool CanReceiveProjectile(int ownerType, CombatId owner) const;
+    HitResult ReceiveHit(const CombatHit &hit);
+    void Damage(float amount);
+    bool TriggerEvent(std::uint8_t event);
+    void OnScriptStateEntered() override;
+    std::vector<EnemyAction> TakeActions();
+    std::size_t GetUnsupportedFunctionCount() const;
+
     // --- the script's view of this object ---
 
     std::int16_t FunctionResolver(std::uint8_t function,
@@ -197,7 +215,18 @@ public:
     bool IsScriptSequenceFrameFinished() override;
 
 private:
+    bool ResolveCombatFunction(std::uint8_t function, const std::int16_t *arguments,
+        std::uint8_t argumentCount, std::int16_t &result);
+    void UpdateCombatBeforeAnimation(int deltaMs);
+    void UpdateCombatAfterAnimation(int deltaMs);
+    void SetBehaviour(const std::int16_t *arguments, int count);
+    void QueueBullet(const GameObjectRef &resource, int part, int node, float direction);
+    GameObjectRef ScriptResource(int index) const;
+    float Random(float minimum, float maximum);
+    float TargetAngle() const;
+    void ResolvePendingHit(bool apply);
     const CMoveSetMesh *m_moveSet;
+    std::vector<const CMesh *> m_configMeshes;
     EnemyPart m_parts[kEnemyPartSlots];
 
     // Bind leaves this at one: an enemy is a single model until its script

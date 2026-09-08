@@ -330,6 +330,8 @@ MeshBounds PlayerBounds(const PlayerModel &model) {
 
 void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
                 const float *base) {
+    float flash = 0;
+    if (model.vitals != nullptr) { flash = model.vitals->flash; }
     if (model.parts.empty()) {
         return;
     }
@@ -341,11 +343,11 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
             PlayerPart *part = nullptr;
             if (weapon.brother.TorsoUsesWeapon()) { part = weapon.configs[torsoIndex].get(); }
             else { part = model.parts[torsoIndex].get(); }
-            part->buffer.Draw(program, base, part->texture);
+            part->buffer.Draw(program, base, part->texture, flash);
         }
         if (legsIndex >= 0) {
             PlayerPart &part = *model.parts[legsIndex];
-            part.buffer.Draw(program, base, part.texture);
+            part.buffer.Draw(program, base, part.texture, flash);
         }
         const int handedness = weapon.data.GetHandedness();
         int count = 1;
@@ -462,6 +464,7 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
         owner.c_str(), weapon->brother.TorsoUsesWeapon(), weapon->brother.GetTorso().GetMoveIndex(),
         weapon->brother.GetLegs().GetMoveIndex(), data.GetHandedness(), weapon->brother.GetStateId());
     out.weapon = std::move(weapon);
+    out.weapon->brother.SetVitals(out.vitals);
     return true;
 }
 

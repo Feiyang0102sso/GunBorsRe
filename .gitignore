@@ -68,6 +68,8 @@ _Big_tool/
 #  nothing in the project reads it -- the interpreter works off the compiled
 #  bytecode in big/, per PLAN.md M3.4.
 flow scripts/
+saves/
+10-17-2011/
 
 # ============================================================
 #  Third-party binaries we DO commit

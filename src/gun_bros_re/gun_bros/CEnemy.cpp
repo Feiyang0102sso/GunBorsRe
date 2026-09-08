@@ -45,6 +45,7 @@ CEnemy::CEnemy()
 void CEnemy::Bind(const CScript &script, const CMoveSetMesh &moveSet,
                   const std::vector<const CMesh *> &configMeshes) {
     m_moveSet = &moveSet;
+    m_configMeshes = configMeshes;
 
     // One part until the script says otherwise. This is the line that makes
     // the script, not the template, the authority on an enemy's shape.
@@ -80,7 +81,16 @@ bool CEnemy::Spawn() {
         std::printf("[enemy] no script; the model stays as bound\n");
         return false;
     }
-    return m_interpreter.CallExportFunction(kExportSpawn);
+    // Spawn seeds ten health before the script supplies the real value.
+    // Reference: :73239. Keep the template's collision radius and ownership.
+    combat.health = 10;
+    combat.dead = false;
+    combat.removed = false;
+    combat.variables[6] = 100;
+    combat.variables[15] = 1;
+    const bool ran = m_interpreter.CallExportFunction(kExportSpawn);
+    combat.maxHealth = combat.health;
+    return ran;
 }
 
 bool CEnemy::SetState(std::uint8_t stateId) {
@@ -89,9 +99,13 @@ bool CEnemy::SetState(std::uint8_t stateId) {
 }
 
 void CEnemy::Update(std::int32_t deltaMs) {
+    if (combat.enabled) {
+        UpdateCombatBeforeAnimation(deltaMs);
+    }
     const float deltaSeconds = static_cast<float>(deltaMs) * 0.001f;
 
     for (std::uint32_t i = 0; i < m_partCount && i < kEnemyPartSlots; ++i) {
+        m_parts[i].hitFlash = std::fmax(0.0f, m_parts[i].hitFlash - deltaSeconds * 4);
         m_parts[i].controller.Update(deltaMs);
 
         // The spin. Every part with a non-zero speed turns forever; the
@@ -106,17 +120,28 @@ void CEnemy::Update(std::int32_t deltaMs) {
     // After the clocks, not before: Refresh asks whether the current move has
     // finished, and it is this update that decides.
     m_interpreter.Refresh();
+    if (combat.enabled) {
+        UpdateCombatAfterAnimation(deltaMs);
+    }
 }
 
 void CEnemy::SetScriptSequenceFrame(std::uint8_t frame) {
     if (m_bodyMoveLocked) {
         return;
     }
-    m_parts[kEnemyScriptedPart].controller.SetMove(frame);
+    std::size_t part = kEnemyScriptedPart;
+    if (combat.enabled && combat.variables[14] >= 0 && combat.variables[14] < kEnemyPartSlots) {
+        part = static_cast<std::size_t>(combat.variables[14]);
+    }
+    m_parts[part].controller.SetMove(frame);
 }
 
 bool CEnemy::IsScriptSequenceFrameFinished() {
-    return m_parts[kEnemyScriptedPart].controller.GetAnimation().IsFinished();
+    std::size_t part = kEnemyScriptedPart;
+    if (combat.enabled && combat.variables[14] >= 0 && combat.variables[14] < kEnemyPartSlots) {
+        part = static_cast<std::size_t>(combat.variables[14]);
+    }
+    return m_parts[part].controller.GetAnimation().IsFinished();
 }
 
 std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
@@ -155,6 +180,8 @@ std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
 
         // The original also clears the part's tint here (offset 164, the hit
         // flash). Nothing draws a tint yet, so there is nothing to clear.
+        // Arena now consumes this tint; preserve the original reset as well.
+        part.hitFlash = 0;
         return 0;
     }
 
@@ -193,6 +220,11 @@ std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
         return 0;
     }
 
+    std::int16_t result = 0;
+    if (ResolveCombatFunction(function, arguments, argumentCount, result)) {
+        return result;
+    }
+
     // Once per id, not once per call: a running script calls the same few
     // handlers many times a second, and a line each buries everything else.
     // One line per id is the list of what to build next, which is why these
@@ -209,6 +241,12 @@ std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
 }
 
 std::int16_t *CEnemy::VariableResolver(std::uint8_t variable) {
+    if (variable < combat.variables.size()) {
+        if (variable == 8) {
+            combat.variables[8] = static_cast<std::int16_t>(combat.facing);
+        }
+        return &combat.variables[variable];
+    }
     if (!m_reportedVariable[variable]) {
         m_reportedVariable[variable] = true;
         std::printf("[enemy] variable %u -- not implemented, reading scratch\n",

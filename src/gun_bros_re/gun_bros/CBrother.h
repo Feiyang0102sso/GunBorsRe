@@ -30,6 +30,7 @@
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CMoveSetMesh.h"
 #include "gun_bros/CGun.h"
+#include "gun_bros/CombatTypes.h"
 #include "gun_bros/CMoveSetMeshController.h"
 #include "gun_bros/CProp.h"  // CGameSpriteGluRef lives here, next to its first user
 
@@ -73,6 +74,10 @@ public:
     };
 
     CBrother();
+    void SetVitals(PlayerVitals *vitals) { m_vitals = vitals; }
+    HitResult ReceiveDamage(float damage);
+    void Stun(int durationMs);
+    std::vector<GunCue> TakeCues();
     /** Run player and weapon scripts against decoded, stable mesh banks. */
     void Bind(const CScript &script, const CMoveSetMesh &moves,
         const std::vector<const CMesh *> &bodyMeshes, CGun &gun,
@@ -91,6 +96,8 @@ public:
     int GetStateId() const { return m_interpreter.GetStateId(); }
 
 private:
+    PlayerVitals *m_vitals = nullptr;
+    std::vector<GunCue> m_cues;
     void SetShooting(bool shooting);
     bool m_triggerHeld;
     CScriptInterpreter m_interpreter;

@@ -99,6 +99,8 @@ bool CBrother::IsScriptSequenceFrameFinished() {
 void CBrother::OnScriptStateEntered() { m_timer = 0; }
 
 void CBrother::SetInput(bool moving, bool shooting) {
+    if (m_vitals != nullptr && m_vitals->dead) { return; }
+    if (m_vitals != nullptr && m_vitals->stunMs > 0) { moving = false; shooting = false; }
     if (moving != m_moving) {
         m_moving = moving;
         if (moving) { m_interpreter.HandleEvent(5, 0); }
@@ -126,6 +128,13 @@ void CBrother::SetShooting(bool shooting) {
 
 void CBrother::Update(std::int32_t deltaMs) {
     if (deltaMs <= 0) { return; }
+    if (m_vitals != nullptr) {
+        m_vitals->flash = std::max(0.0f, m_vitals->flash - deltaMs * 0.004f);
+        if (m_vitals->stunMs > 0) {
+            m_vitals->stunMs = std::max(0, m_vitals->stunMs - deltaMs);
+            if (m_vitals->stunMs == 0) { m_interpreter.HandleEvent(5, 8); }
+        }
+    }
     if (m_triggerHeld) { SetShooting(true); }
     m_torso.Update(deltaMs);
     m_legs.Update(deltaMs);
@@ -185,6 +194,32 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         m_timer = static_cast<int>(arguments[0] * (1000.0f / 256.0f));
         break;
     case 10:
+        if (m_vitals != nullptr && !m_vitals->dead && argumentCount > 0) {
+            m_vitals->health = m_vitals->maximum * std::clamp<int>(arguments[0], 0, 100) / 100.0f;
+        }
+        break;
+    case 6:
+        SetShooting(false);
+        break;
+    case 7:
+        if (m_vitals != nullptr) { m_vitals->stunMs = std::max(0, static_cast<int>(arguments[0])); }
+        break;
+    case 8:
+        if (m_vitals != nullptr) { m_vitals->stunMs = 0; }
+        break;
+    case 11: {
+        GunCue cue;
+        cue.kind = GunCue::Kind::Effect;
+        std::uint32_t ordinal = 0;
+        if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
+            cue.resource.localIndex = static_cast<std::uint8_t>(ordinal);
+            m_cues.push_back(cue);
+        }
+        break;
+    }
+    case 1:
+        // The death export calls this when its animation has finished.
+        break;
     case 15:
     case 18:
         // Health reset, control mode and spawn visibility do not alter this
@@ -195,4 +230,38 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         break;
     }
     return 0;
+}
+
+HitResult CBrother::ReceiveDamage(float damage) {
+    if (m_vitals == nullptr || m_vitals->dead || damage <= 0) {
+        return HitResult::Ignored;
+    }
+    m_vitals->lastDamage = damage;
+    m_vitals->incomingDamage += damage;
+    m_vitals->flash = 1;
+    ++m_vitals->hits;
+    if (m_vitals->invincible) { return HitResult::Hit; }
+    m_vitals->health = std::max(0.0f, m_vitals->health - damage);
+    if (m_vitals->health <= 0) {
+        SetInput(false, false);
+        m_vitals->dead = true;
+        ++m_vitals->deaths;
+        m_interpreter.CallExportFunction(2);
+        return HitResult::Killed;
+    }
+    m_interpreter.HandleEvent(5, 4);
+    return HitResult::Hit;
+}
+
+void CBrother::Stun(int durationMs) {
+    if (m_vitals == nullptr || m_vitals->dead || durationMs <= 0) { return; }
+    SetInput(false, false);
+    m_vitals->stunMs = durationMs;
+    m_interpreter.CallExportFunction(5, static_cast<std::int16_t>(durationMs));
+}
+
+std::vector<GunCue> CBrother::TakeCues() {
+    std::vector<GunCue> cues;
+    cues.swap(m_cues);
+    return cues;
 }

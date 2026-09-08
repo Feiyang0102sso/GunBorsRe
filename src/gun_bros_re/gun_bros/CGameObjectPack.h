@@ -44,6 +44,7 @@ enum class GameSection {
     Level = 8,
     ParticleEffect = 12,
     Player = 16,
+    PlayerProgress = 17,
     Prop = 20,
     SoundEffect = 22,
     TileLayer = 24,

@@ -63,6 +63,10 @@ bool ReadEnemyTemplate(PackTables &tables, std::uint32_t packHash,
     out.radius116 = stream.ReadUInt8();
     out.gameScale = static_cast<float>(stream.ReadUInt16());
     out.uiScalePercent = static_cast<float>(stream.ReadUInt16());
+    // M5 consumes the final field which the assembly-only reader skipped.
+    if (!out.collision.Load(stream)) {
+        return false;
+    }
     if (stream.Overran()) {
         std::printf("[enemy] %s: template truncated before its scales\n",
                     owner.c_str());
@@ -71,8 +75,28 @@ bool ReadEnemyTemplate(PackTables &tables, std::uint32_t packHash,
 
     // A move set names one pack for every model in it, and that is the pack an
     // enemy's parts come out of -- not necessarily the one the template is in.
-    out.packHash = out.moveSet.GetPackHash();
+    // Keep the template's pack identity. Individual mesh configs are addressed
+    // through the move set's pack, which can differ from the template's pack.
     return true;
+}
+
+bool LoadEnemyCatalog(CResTOCManager &toc, PackTables &tables,
+    std::vector<EnemyTemplateData> &entries) {
+    entries.clear();
+    bool complete = true;
+    for (std::uint32_t i = 0; i < toc.GetPackCount(); ++i) {
+        CResPackTOC *pack = toc.GetPack(static_cast<int>(i));
+        const std::uint32_t count = tables.GetObjectPack(static_cast<int>(i)).GetObjectCount(GameSection::Enemy);
+        for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
+            EnemyTemplateData entry;
+            const std::string label = pack->GetShortName() + " enemy " + std::to_string(ordinal);
+            if (!ReadEnemyTemplate(tables, pack->GetPackHash(), ordinal, label, entry)) {
+                complete = false;
+            }
+            entries.push_back(std::move(entry));
+        }
+    }
+    return complete;
 }
 
 bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
@@ -85,7 +109,7 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
         std::unique_ptr<EnemyModelConfig> loaded(new EnemyModelConfig());
 
         std::vector<std::uint8_t> meshPayload;
-        if (!tables.ReadSectionResource(entry.packHash, GameSection::Mesh,
+        if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), GameSection::Mesh,
                                         config.meshOrdinal, meshPayload)) {
             std::printf("[enemy] %s: mesh %u unreadable\n", entry.owner.c_str(),
                         config.meshOrdinal);
@@ -102,7 +126,7 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
         if (createBuffers) {
             std::vector<std::uint8_t> imagePayload;
             PNGImage decoded;
-            if (!tables.ReadSectionResource(entry.packHash, GameSection::Png,
+            if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), GameSection::Png,
                                             config.imageOrdinal, imagePayload) ||
                 !PNGDecode(imagePayload, decoded) ||
                 !loaded->texture.Create(decoded, GL_REPEAT)) {
@@ -137,6 +161,8 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
     }
 
     out.enemy.Bind(entry.script, entry.moveSet, out.configMeshes);
+    out.enemy.ConfigureTemplate(static_cast<float>(entry.radius116), entry.flag117 != 0,
+        entry.objectRef104, entry.collision);
     if (spawnMode == EnemySpawnMode::Level) {
         out.enemy.Spawn();
     } else {
@@ -147,7 +173,7 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
     // Enter the first state that gives it something to play -- a state is what
     // the game would put it in, so this is closer than picking a move out of
     // the list would be.
-    if (out.enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex) {
+    if (!out.enemy.combat.enabled && out.enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex) {
         for (std::size_t stateId = 0; stateId < entry.script.GetStates().size();
              ++stateId) {
             out.enemy.SetState(static_cast<std::uint8_t>(stateId));
@@ -200,6 +226,9 @@ void DrawEnemyModel(EnemyModel &model, const CShaderProgram &program,
         }
 
         const EnemyPart &part = model.enemy.GetPart(i);
+        if (!part.visible) {
+            continue;
+        }
         MeshPart placement;
         placement.extraAngleDegrees = part.extraAngleDegrees;
         placement.extraAxisX = part.extraAxisX;
@@ -211,8 +240,25 @@ void DrawEnemyModel(EnemyModel &model, const CShaderProgram &program,
         }
 
         float mvp[kMatrix4dElements];
-        MeshCameraBuildPartMatrix(placement, base, mvp);
-        config.buffer.Draw(program, mvp, config.texture);
+        const float *partBase = base;
+        float unrotated[16];
+        if (model.enemy.combat.enabled && !part.followsFacing) {
+            // Undo actor-facing rotation without changing the attachment or
+            // independent part rotation. Turret bases stay aligned to ground.
+            float pivot[16], rotation[16], translated[16], local[16], next[16];
+            const int bodyConfig = EnemyPartConfig(model, 0);
+            MeshBounds bounds{};
+            if (bodyConfig >= 0) { bounds = model.configs[bodyConfig]->mesh.GetBounds(); }
+            Matrix4dTranslation(bounds.centerX, bounds.centerY, bounds.centerZ, pivot);
+            Matrix4dRotationZ(-model.enemy.combat.facing * kDegreesToRadians, rotation);
+            Matrix4dTranslation(-bounds.centerX, -bounds.centerY, -bounds.centerZ, translated);
+            Matrix4dMultiply(pivot, rotation, next);
+            Matrix4dMultiply(next, translated, local);
+            Matrix4dMultiply(base, local, unrotated);
+            partBase = unrotated;
+        }
+        MeshCameraBuildPartMatrix(placement, partBase, mvp);
+        config.buffer.Draw(program, mvp, config.texture, part.hitFlash);
     }
 }
 

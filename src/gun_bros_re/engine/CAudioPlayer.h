@@ -23,7 +23,8 @@ public:
     bool Load(std::uint64_t key, const std::vector<std::uint8_t> &wavBytes);
 
     /** Start one cached sound. Return whether playback was successfully queued. */
-    bool Play(std::uint64_t key, bool loop = false);
+    bool Play(std::uint64_t key, bool loop = false, std::uint64_t owner = 0);
+    void StopOwner(std::uint64_t owner);
     void Stop(std::uint64_t key);
     void StopAll();
     void SetPaused(bool paused);

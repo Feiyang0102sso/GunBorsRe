@@ -24,6 +24,7 @@ struct PlayingSound {
     std::uint64_t finishMs;
     std::uint64_t key;
     bool loop;
+    std::uint64_t owner;
 };
 
 }  // namespace
@@ -74,7 +75,7 @@ bool CAudioPlayer::Load(std::uint64_t key,
     return true;
 }
 
-bool CAudioPlayer::Play(std::uint64_t key, bool loop) {
+bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
     const std::map<std::uint64_t, DecodedSound>::const_iterator found =
         m_impl->sounds.find(key);
     if (found == m_impl->sounds.end()) {
@@ -118,6 +119,7 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop) {
     playing.finishMs = SDL_GetTicks() + durationMs + 150u;
     playing.key = key;
     playing.loop = loop;
+    playing.owner = owner;
     m_impl->playing.push_back(playing);
     if (m_impl->paused) { SDL_PauseAudioStreamDevice(stream); }
     return true;
@@ -160,6 +162,15 @@ void CAudioPlayer::Stop(std::uint64_t key) {
 void CAudioPlayer::StopAll() {
     for (const PlayingSound &sound : m_impl->playing) { SDL_DestroyAudioStream(sound.stream); }
     m_impl->playing.clear();
+}
+
+void CAudioPlayer::StopOwner(std::uint64_t owner) {
+    for (std::size_t i = 0; i < m_impl->playing.size();) {
+        if (m_impl->playing[i].owner == owner && m_impl->playing[i].loop) {
+            SDL_DestroyAudioStream(m_impl->playing[i].stream);
+            m_impl->playing.erase(m_impl->playing.begin() + i);
+        } else { ++i; }
+    }
 }
 
 void CAudioPlayer::SetPaused(bool paused) {

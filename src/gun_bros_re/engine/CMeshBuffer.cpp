@@ -123,6 +123,9 @@ bool CMeshBuffer::SetMesh(const CMesh &mesh) {
                  texCoords.data(), GL_STATIC_DRAW);
 
     glBindVertexArray(0);
+    // A new actor can be drawn before its first update (also while paused).
+    // Allocate positions now; drawing an empty vertex buffer can crash drivers.
+    SetFrame(mesh, 0);
     return GLCheckErrors("mesh buffer upload");
 }
 

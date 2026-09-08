@@ -98,6 +98,7 @@ struct PlayerModel {
     CMoveSetMesh moveSet;
     std::vector<std::unique_ptr<PlayerPart>> parts;
     std::unique_ptr<PlayerWeaponState> weapon;
+    PlayerVitals *vitals = nullptr;
 };
 
 /**

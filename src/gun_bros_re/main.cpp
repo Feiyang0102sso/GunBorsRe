@@ -12,6 +12,7 @@
 #include "milestones/M3Map.h"
 #include "milestones/M35Mesh.h"
 #include "milestones/M38Enemy.h"
+#include "milestones/Arena.h"
 #include "runtime/WeaponCatalog.h"
 
 #include <cstdio>
@@ -46,7 +47,9 @@ void PrintUsage() {
         "  --player-weapon [n]       weapon preview: 1-7 category, N/M weapon\n"
         "  --weapons                 list weapon templates and holding overrides\n"
         "  --weapon-check            verify all weapon models and input transitions\n"
-        "  --weapon <n>              initial weapon in --gameview\n"
+        "  --arena [n]               combat arena for enemy template n\n"
+        "  --arena-check             verify enemy catalogue and combat contracts\n"
+        "  --weapon <n>              initial weapon in --gameview / --arena\n"
         "  --fire                    hold fire during preview / screenshot\n"
         "  --enemy <n>               M3.8: enemy <n>, assembled by its script\n"
         "  --enemies                 run every enemy script, list its parts\n"
@@ -101,6 +104,7 @@ int PromptForHarness() {
         " 13  list every level script\n"
         " 14  resource addressing self-check\n"
         " 15  player weapon    -- all weapon categories, holding poses and firing\n"
+        " 16  Arena            -- enemies, damage and player health\n"
         "\n"
         "choice [1]: ");
     std::fflush(stdout);
@@ -111,7 +115,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 15) {
+    if (choice < 1 || choice > 16) {
         return 1;
     }
     return choice;
@@ -123,6 +127,8 @@ int main(int argc, char **argv) {
     std::string bigDirectory = std::string(ASSET_ROOT) + "/big";
     bool surveyWeapons = false;
     bool checkWeapons = false;
+    bool arena = false;
+    bool checkArena = false;
     std::string dumpPackName;
     std::string screenshotPath;
     std::uint32_t advanceMs = 0;
@@ -166,6 +172,14 @@ int main(int argc, char **argv) {
             surveyWeapons = true;
         } else if (std::strcmp(argument, "--weapon-check") == 0) {
             checkWeapons = true;
+        } else if (std::strcmp(argument, "--arena-check") == 0) {
+            arena = true;
+            checkArena = true;
+        } else if (std::strcmp(argument, "--arena") == 0) {
+            arena = true;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                enemyIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 10));
+            }
         } else if (std::strcmp(argument, "--weapon") == 0 && i + 1 < argc) {
             gunIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argument, "--m2") == 0) {
@@ -292,8 +306,12 @@ int main(int argc, char **argv) {
         if (choice == 15) {
             return RunM37Character(bigDirectory, 0, 0.0f, screenshotPath, advanceMs);
         }
+        if (choice == 16) {
+            return RunArena(bigDirectory, 0, 0, screenshotPath, advanceMs, false, false, showCollisions);
+        }
     }
 
+    if (arena) { return RunArena(bigDirectory, enemyIndex, gunIndex, screenshotPath, advanceMs, firePreview, checkArena, showCollisions); }
     if (!dumpPackName.empty()) {
         return RunPackDump(bigDirectory, dumpPackName);
     }

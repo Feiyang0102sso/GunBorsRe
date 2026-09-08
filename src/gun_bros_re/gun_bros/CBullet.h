@@ -41,6 +41,7 @@
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CProp.h"  // CGameSpriteGluRef
 #include "gun_bros/CGun.h"
+#include "gun_bros/CombatTypes.h"
 
 #include <cstdint>
 
@@ -68,6 +69,8 @@ public:
         float GetSpriteScale() const { return m_scalar24; }
         float GetMeshScale() const { return m_scalar256; }
         float GetAcceleration() const { return m_scalar116 * 100.0f; }
+        float GetBaseDamage() const { return static_cast<float>(m_flag32); }
+        float GetRadius() const { return m_value20 * m_scalar24; }
 
     private:
         CGameSpriteGluRef m_sprite;
@@ -97,6 +100,8 @@ public:
     void Bind(const Template &data, bool alternate);
     void Update(int deltaMs, int animationDurationMs);
     void Hit();
+    void OnCollision(HitResult result);
+    float GetDamage() const;
     void SetScriptSequenceFrame(std::uint8_t frame) override;
     bool IsScriptSequenceFrameFinished() override { return animationFinished; }
     std::int16_t FunctionResolver(std::uint8_t function,
@@ -114,13 +119,19 @@ public:
     std::uint32_t flags = 0;
     float velocityScale = 1.0f;
     float acceleration = 0.0f;
+    bool collisionEnabled = true;
+    float seekRadius = 0;
+    int ricochets = 0;
 
 private:
     CScriptInterpreter m_interpreter;
     std::vector<GunCue> m_cues;
     int m_timer = 0;
     std::uint8_t m_timerFunction = 0;
-    std::int16_t m_variables[2] = {0, 0};
+    std::int16_t m_masteryLevel = 0;
+    std::int16_t m_damagePeriodMs = 0;
+    int m_damageDeltaMs = 0;
+    float m_damage = 0;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CBULLET_H

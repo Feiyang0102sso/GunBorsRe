@@ -35,6 +35,8 @@ enum class KeyCode {
     T,
     P,
     G,
+    X,
+    R,
     K,
     M,
     N,

@@ -73,6 +73,7 @@ void CBullet::Bind(const Template &data, bool alternate) {
     animation = data.GetSpriteRef().animation;
     flags = data.GetFlags();
     acceleration = data.GetAcceleration();
+    m_damage = data.GetBaseDamage();
     // UpdateBeam is attached to the gun; only direct projectiles time out.
     if ((data.GetFlags() & 0x100) != 0) { lifetimeMs = std::numeric_limits<int>::max(); }
     m_interpreter.SetScript(data.GetScript(), *this);
@@ -86,6 +87,9 @@ void CBullet::SetScriptSequenceFrame(std::uint8_t frame) {
 }
 
 void CBullet::Update(int deltaMs, int animationDurationMs) {
+    // Variable 1 is the authored damage period. The elapsed time is a separate
+    // runtime field; overwriting the period makes beams frame-rate dependent.
+    m_damageDeltaMs = deltaMs;
     ageMs += deltaMs;
     // CBullet::Update advances CSpritePlayer both before and after seeking.
     animationAgeMs += deltaMs * 2;
@@ -105,8 +109,29 @@ void CBullet::Hit() {
     if ((flags & 0x100) == 0) { removed = true; }
 }
 
+float CBullet::GetDamage() const {
+    if (m_damagePeriodMs >= 1) {
+        return m_damage * m_damageDeltaMs / m_damagePeriodMs;
+    }
+    return m_damage;
+}
+
+void CBullet::OnCollision(HitResult result) {
+    if (result == HitResult::Pending || removed) { return; }
+    int event = 0;
+    if (result == HitResult::Killed) { event = 1; }
+    if (result == HitResult::Ignored) { event = 2; }
+    m_interpreter.HandleEvent(8, static_cast<std::uint8_t>(event));
+    // Enemy reflection is flag 0x1000; native 9 counts terrain ricochets.
+    // Ignored contacts remove ordinary bullets even when they can penetrate.
+    if (result == HitResult::Ignored) {
+        if ((flags & 0x100) == 0) { removed = true; }
+    } else if ((flags & 0x1140) == 0) { removed = true; }
+}
+
 std::int16_t *CBullet::VariableResolver(std::uint8_t variable) {
-    if (variable < 2) { return &m_variables[variable]; }
+    if (variable == 0) { return &m_masteryLevel; }
+    if (variable == 1) { return &m_damagePeriodMs; }
     return nullptr;
 }
 
@@ -160,16 +185,41 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         lifetimeMs = ageMs + arguments[0];
         break;
     case 19:
-        visible = true;
+        collisionEnabled = true;
         break;
     case 20:
-        visible = false;
+        collisionEnabled = false;
         break;
     case 15:
         // TODO: CLightningArc geometry; the original beam sprite is drawn now.
         break;
-    case 0: case 7: case 8: case 9: case 16:
-    case 12: case 13: case 21: case 22: case 23:
+    case 0: case 7: case 23:
+        cue.kind = GunCue::Kind::Splash;
+        cue.damage = arguments[0];
+        cue.radius = arguments[1];
+        if (function == 7) { cue.cone = arguments[2]; }
+        else if (argumentCount > 2) {
+            cue.force = arguments[2] / 256.0f;
+            if (argumentCount > 3) { cue.forceMs = arguments[3]; }
+        }
+        m_cues.push_back(cue);
+        break;
+    case 22: {
+        cue.kind = GunCue::Kind::SpawnEnemy;
+        std::uint32_t ordinal = 0;
+        if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
+            cue.resource.localIndex = static_cast<std::uint8_t>(ordinal);
+            m_cues.push_back(cue);
+        }
+        break;
+    }
+    case 8:
+        seekRadius = arguments[0];
+        break;
+    case 9:
+        ricochets = arguments[0];
+        break;
+    case 16: case 12: case 13: case 21:
         // Combat, homing and ribbon geometry are outside this visual host.
         break;
     default:

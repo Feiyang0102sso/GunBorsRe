@@ -66,6 +66,7 @@ struct EnemyTemplateData {
     std::uint16_t value114;
     std::uint8_t flag117;
     std::uint8_t radius116;
+    CCollisionData collision;
 
     EnemyTemplateData();
 };
@@ -74,6 +75,10 @@ struct EnemyTemplateData {
 bool ReadEnemyTemplate(PackTables &tables, std::uint32_t packHash,
                        std::uint32_t ordinal, const std::string &owner,
                        EnemyTemplateData &out);
+
+/** Stable full ENEMY directory, including unused templates without scripts. */
+bool LoadEnemyCatalog(CResTOCManager &toc, PackTables &tables,
+    std::vector<EnemyTemplateData> &entries);
 
 /** One mesh config of a move set, decoded and -- optionally -- uploaded. */
 struct EnemyModelConfig {

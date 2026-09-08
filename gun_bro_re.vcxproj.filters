@@ -16,6 +16,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\gun_bros_re\main.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\EnemyCombat.cpp" />
+    <ClCompile Include="src\gun_bros_re\runtime\CombatScene.cpp" />
+    <ClCompile Include="src\gun_bros_re\milestones\Arena.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\WeaponCatalog.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\WeaponEffects.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CCollisionData.cpp" />
@@ -131,6 +134,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\runtime\WeaponCatalog.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CombatTypes.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\EnemyCombat.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\CombatScene.h" />
+    <ClInclude Include="src\gun_bros_re\milestones\Arena.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\WeaponEffects.h" />
   </ItemGroup>
 </Project>

@@ -29,6 +29,16 @@ public:
     void Draw(const float *sceneMvp, const float *previewProjection = nullptr, float meshCameraScale = 1.0f,
               WeaponDrawPass pass = WeaponDrawPass::All);
     void Clear();
+    void SetCombatWorld(IProjectileWorld *world);
+    /** Enemy/manual projectile speed is in world units per second. */
+    CombatId SpawnProjectile(const GameObjectRef &resource, float x, float y, float z,
+        float direction, float speed, CombatId owner, int ownerType, int part = 0, int node = 0);
+    void ResolveHit(CombatId projectile, HitResult result);
+    void Emit(const GunCue &cue, float x, float y, float z, float direction,
+        CombatId actor = 0, int slot = 0, int part = 0, int node = 0);
+    bool RemoveOldestProjectile(CombatId owner);
+    void RetireOwner(CombatId owner);
+    void PlayMoveSound(const GameObjectRef &sound);
     void SetPaused(bool paused);
     std::size_t GetBulletCount() const;
     std::size_t GetParticleCount() const;

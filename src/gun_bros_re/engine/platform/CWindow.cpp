@@ -61,6 +61,8 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_T:      return KeyCode::T;
         case SDLK_P:      return KeyCode::P;
         case SDLK_G:      return KeyCode::G;
+        case SDLK_X:      return KeyCode::X;
+        case SDLK_R:      return KeyCode::R;
         case SDLK_K:      return KeyCode::K;
         case SDLK_M:      return KeyCode::M;
         case SDLK_N:      return KeyCode::N;

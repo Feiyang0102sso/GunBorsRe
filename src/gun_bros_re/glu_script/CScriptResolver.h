@@ -61,6 +61,15 @@ constexpr std::uint8_t kScriptClassPowerup = 15;
 class IScriptObject {
 public:
     virtual ~IScriptObject() {}
+    /** Per-host deterministic random stream; independent spawns get own seeds. */
+    void SetRandomSeed(std::uint32_t seed) { m_randomState = seed; }
+    std::int16_t RandomInteger(std::int16_t minimum, std::int16_t maximum) {
+        int first = minimum;
+        int last = maximum;
+        if (first > last) { first = maximum; last = minimum; }
+        m_randomState = m_randomState * 1664525u + 1013904223u;
+        return static_cast<std::int16_t>(first + (m_randomState >> 8) % (last - first + 1));
+    }
 
     /** A state has just become current. */
     virtual void OnScriptStateEntered() {}
@@ -70,6 +79,8 @@ public:
 
     /** Whether the frame on screen is finished, so the sequence may advance. */
     virtual bool IsScriptSequenceFrameFinished() { return false; }
+private:
+    std::uint32_t m_randomState = 1;
 };
 
 namespace ScriptResolver {

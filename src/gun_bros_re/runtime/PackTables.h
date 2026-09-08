@@ -42,6 +42,7 @@ public:
                              std::uint32_t ordinal,
                              std::vector<std::uint8_t> &payload) {
         const int packIndex = m_tocManager.GetPackIndexFromHash(packHash);
+        if (packIndex < 0) { return false; }
         const std::uint32_t handle =
             m_objectPacks[packIndex].GetHandle(section, ordinal);
         if (handle == 0) {
