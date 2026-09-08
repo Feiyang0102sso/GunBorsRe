@@ -12,6 +12,7 @@
 #include "milestones/M3Map.h"
 #include "milestones/M35Mesh.h"
 #include "milestones/M38Enemy.h"
+#include "runtime/WeaponCatalog.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -42,6 +43,11 @@ void PrintUsage() {
         "  --movesets                follow every model to the atlas it wears\n"
         "  --mesh <n>                M3.5: show model <n> of the catalogue\n"
         "  --character [n]           M3.7: the player, his legs, and gun <n>\n"
+        "  --player-weapon [n]       weapon preview: 1-7 category, N/M weapon\n"
+        "  --weapons                 list weapon templates and holding overrides\n"
+        "  --weapon-check            verify all weapon models and input transitions\n"
+        "  --weapon <n>              initial weapon in --gameview\n"
+        "  --fire                    hold fire during preview / screenshot\n"
         "  --enemy <n>               M3.8: enemy <n>, assembled by its script\n"
         "  --enemies                 run every enemy script, list its parts\n"
         "  --enemyanim <n>           M3.8: enemy <n>, M/N walking the script's\n"
@@ -94,6 +100,7 @@ int PromptForHarness() {
         " 12  list what each enemy script animates\n"
         " 13  list every level script\n"
         " 14  resource addressing self-check\n"
+        " 15  player weapon    -- all weapon categories, holding poses and firing\n"
         "\n"
         "choice [1]: ");
     std::fflush(stdout);
@@ -104,7 +111,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 14) {
+    if (choice < 1 || choice > 15) {
         return 1;
     }
     return choice;
@@ -114,6 +121,8 @@ int PromptForHarness() {
 
 int main(int argc, char **argv) {
     std::string bigDirectory = std::string(ASSET_ROOT) + "/big";
+    bool surveyWeapons = false;
+    bool checkWeapons = false;
     std::string dumpPackName;
     std::string screenshotPath;
     std::uint32_t advanceMs = 0;
@@ -132,6 +141,7 @@ int main(int argc, char **argv) {
     bool surveyMoveSets = false;
     bool runM35 = false;
     bool runM37 = false;
+    bool firePreview = false;
     bool runM38 = false;
     bool surveyEnemies = false;
     bool surveyEnemyAnimations = false;
@@ -152,6 +162,12 @@ int main(int argc, char **argv) {
 
         if (std::strcmp(argument, "--m1") == 0) {
             runM1 = true;
+        } else if (std::strcmp(argument, "--weapons") == 0) {
+            surveyWeapons = true;
+        } else if (std::strcmp(argument, "--weapon-check") == 0) {
+            checkWeapons = true;
+        } else if (std::strcmp(argument, "--weapon") == 0 && i + 1 < argc) {
+            gunIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argument, "--m2") == 0) {
             runM2 = true;
         } else if (std::strcmp(argument, "--maps") == 0) {
@@ -190,7 +206,10 @@ int main(int argc, char **argv) {
         } else if (std::strcmp(argument, "--mesh") == 0 && i + 1 < argc) {
             runM35 = true;
             meshIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
-        } else if (std::strcmp(argument, "--character") == 0) {
+        } else if (std::strcmp(argument, "--fire") == 0) {
+            firePreview = true;
+        } else if (std::strcmp(argument, "--character") == 0 ||
+                   std::strcmp(argument, "--player-weapon") == 0) {
             // The gun index is optional: there is only one player, so the
             // number after it is the only thing left to choose.
             runM37 = true;
@@ -270,6 +289,9 @@ int main(int argc, char **argv) {
         if (choice == 14) {
             return RunM1Resources(bigDirectory);
         }
+        if (choice == 15) {
+            return RunM37Character(bigDirectory, 0, 0.0f, screenshotPath, advanceMs);
+        }
     }
 
     if (!dumpPackName.empty()) {
@@ -298,9 +320,11 @@ int main(int argc, char **argv) {
                            screenshotPath, advanceMs, bodyMoveIndex, stepStates,
                            stateIndex);
     }
+    if (surveyWeapons) { return RunWeaponSurvey(bigDirectory); }
+    if (checkWeapons) { return RunWeaponCheck(bigDirectory); }
     if (runM37) {
         return RunM37Character(bigDirectory, gunIndex, meshSpinDegrees,
-                               screenshotPath, advanceMs);
+                               screenshotPath, advanceMs, firePreview);
     }
     if (runM35) {
         return RunM35Mesh(bigDirectory, meshIndex, meshSpinDegrees,
@@ -317,5 +341,5 @@ int main(int argc, char **argv) {
         mapViewMode = MapViewMode::GameView;
     }
     return RunM3Map(bigDirectory, mapPackName, mapIndex, screenshotPath,
-                    advanceMs, showSpawns, showCollisions, mapViewMode);
+                    advanceMs, showSpawns, showCollisions, mapViewMode, gunIndex, firePreview);
 }

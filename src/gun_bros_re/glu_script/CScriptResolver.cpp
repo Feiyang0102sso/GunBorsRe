@@ -7,6 +7,9 @@
 
 #include "gun_bros/CEnemy.h"
 #include "gun_bros/CLevel.h"
+#include "gun_bros/CBrother.h"
+#include "gun_bros/CGun.h"
+#include "gun_bros/CBullet.h"
 
 #include <cstdio>
 
@@ -28,6 +31,15 @@ std::int16_t ResolveFunction(IScriptObject *host, std::uint16_t functionId,
         return static_cast<CEnemy *>(host)->FunctionResolver(function, arguments,
                                                              argumentCount);
     }
+    if (classId == kScriptClassGun) {
+        return static_cast<CGun *>(host)->FunctionResolver(function, arguments, argumentCount);
+    }
+    if (classId == kScriptClassBullet) {
+        return static_cast<CBullet *>(host)->FunctionResolver(function, arguments, argumentCount);
+    }
+    if (classId == kScriptClassBrother) {
+        return static_cast<CBrother *>(host)->FunctionResolver(function, arguments, argumentCount);
+    }
 
     std::printf("[script] class %u function %u, %u args:", classId, function,
                 argumentCount);
@@ -48,6 +60,9 @@ std::int16_t *ResolveVariable(IScriptObject *host, std::uint16_t variableId) {
     if (classId == kScriptClassEnemy) {
         return static_cast<CEnemy *>(host)->VariableResolver(variable);
     }
+    if (classId == kScriptClassGun) { return static_cast<CGun *>(host)->VariableResolver(variable); }
+    if (classId == kScriptClassBullet) { return static_cast<CBullet *>(host)->VariableResolver(variable); }
+    if (classId == kScriptClassBrother) { return static_cast<CBrother *>(host)->VariableResolver(variable); }
 
     // Null is a legitimate answer here, not an error: the original returns it
     // for every class it does not recognise, and the interpreter carries on.

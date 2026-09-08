@@ -39,7 +39,7 @@ enum class ParticleSpawnVelocity : std::uint8_t {
 /** One emitter from a CParticleEffect template. */
 struct ParticleEmitterTemplate {
     std::uint8_t archetype;
-    std::uint32_t randomSeed;
+    std::uint32_t animationMask;
     float intervalMinimumSeconds;
     float intervalMaximumSeconds;
     float startSeconds;
@@ -59,6 +59,8 @@ struct ParticleEmitterTemplate {
 
     /** Latest interpolator end, which is the lifetime of one particle. */
     std::uint32_t GetParticleLifetimeMs() const;
+    /** Utility::RandomBit chooses one set bit, which is an animation ordinal. */
+    int SelectAnimation(float random) const;
 };
 
 /** A complete Section 12 particle effect. */

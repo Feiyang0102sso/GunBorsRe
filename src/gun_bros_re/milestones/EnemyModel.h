@@ -25,7 +25,7 @@
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CMesh.h"
 #include "gun_bros/CMoveSetMesh.h"
-#include "milestones/PackTables.h"
+#include "runtime/PackTables.h"
 
 #include <cstdint>
 #include <memory>

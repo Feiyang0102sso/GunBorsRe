@@ -39,6 +39,7 @@ bool CMeshBuffer::Create(const CShaderProgram &program) {
 
     m_mvpLocation = program.GetUniformLocation("mvp");
     m_tex0Location = program.GetUniformLocation("tex0");
+    m_overlayLocation = program.GetUniformLocation("meshOverlay");
     if (m_mvpLocation < 0) {
         std::printf("[meshbuf] shader has no mvp uniform\n");
         return false;
@@ -146,12 +147,14 @@ void CMeshBuffer::SetVertices(const std::vector<float> &vertices) {
 }
 
 void CMeshBuffer::Draw(const CShaderProgram &program, const float *mvp,
-                       const CTexture &texture) const {
+                       const CTexture &texture, float heatIntensity) const {
     if (m_indexCount == 0) {
         return;
     }
 
     program.Use();
+    float overlay[] = {1.0f, 0.0f, 0.0f, heatIntensity};
+    if (m_overlayLocation >= 0) { glUniform4fv(m_overlayLocation, 1, overlay); }
 
     // Transposed on upload: mvp is stored row-major so it reads like a matrix.
     glUniformMatrix4fv(m_mvpLocation, 1, GL_TRUE, mvp);
@@ -170,5 +173,8 @@ void CMeshBuffer::Draw(const CShaderProgram &program, const float *mvp,
     }
     glDrawElements(GL_TRIANGLE_STRIP, static_cast<GLsizei>(m_indexCount),
                    GL_UNSIGNED_SHORT, nullptr);
+    // The same program draws map sprites next; never leak the weapon's tint.
+    overlay[3] = 0.0f;
+    if (m_overlayLocation >= 0) { glUniform4fv(m_overlayLocation, 1, overlay); }
     glBindVertexArray(0);
 }

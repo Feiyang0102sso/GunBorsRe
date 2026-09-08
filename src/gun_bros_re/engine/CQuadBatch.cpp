@@ -170,17 +170,19 @@ void CQuadBatch::AddTransformedQuad(
     const CTexture &texture, float x, float y, float width, float height,
     const SourceRect &source, bool flipHorizontal, bool flipVertical,
     BlendMode blend, float pivotX, float pivotY, float scaleX, float scaleY,
-    float rotationDegrees, float alpha) {
+    float rotationDegrees, float alpha, bool rotateTexture) {
     if (!texture.IsValid() || texture.GetWidth() == 0 || texture.GetHeight() == 0) {
         return;
     }
 
     const float uScale = kTexCoordScale / static_cast<float>(texture.GetWidth());
     const float vScale = kTexCoordScale / static_cast<float>(texture.GetHeight());
-    float u0 = static_cast<float>(source.x) * uScale;
-    float v0 = static_cast<float>(source.y) * vScale;
-    float u1 = static_cast<float>(source.x + source.width) * uScale;
-    float v1 = static_cast<float>(source.y + source.height) * vScale;
+    // Sample texel centres. Filtering beyond an atlas rectangle picks up the
+    // separator row or the neighbouring effect, exposing beam tile seams.
+    float u0 = (static_cast<float>(source.x) + 0.5f) * uScale;
+    float v0 = (static_cast<float>(source.y) + 0.5f) * vScale;
+    float u1 = (static_cast<float>(source.x + source.width) - 0.5f) * uScale;
+    float v1 = (static_cast<float>(source.y + source.height) - 0.5f) * vScale;
     if (flipHorizontal) {
         const float swap = u0;
         u0 = u1;
@@ -206,10 +208,17 @@ void CQuadBatch::AddTransformedQuad(
         transformedY[corner] = pivotY + localX * sine + localY * cosine;
     }
 
-    const Vertex topLeft = {transformedX[0], transformedY[0], u0, v0, alpha};
-    const Vertex topRight = {transformedX[1], transformedY[1], u1, v0, alpha};
-    const Vertex bottomLeft = {transformedX[2], transformedY[2], u0, v1, alpha};
-    const Vertex bottomRight = {transformedX[3], transformedY[3], u1, v1, alpha};
+    Vertex topLeft = {transformedX[0], transformedY[0], u0, v0, alpha};
+    Vertex topRight = {transformedX[1], transformedY[1], u1, v0, alpha};
+    Vertex bottomLeft = {transformedX[2], transformedY[2], u0, v1, alpha};
+    Vertex bottomRight = {transformedX[3], transformedY[3], u1, v1, alpha};
+    if (rotateTexture) {
+        // SpriteGlu packs long sprites sideways; restore the 90-degree blit.
+        topLeft.u = u1; topLeft.v = v0;
+        topRight.u = u1; topRight.v = v1;
+        bottomLeft.u = u0; bottomLeft.v = v0;
+        bottomRight.u = u0; bottomRight.v = v1;
+    }
     AddVertices(texture, blend, topLeft, topRight, bottomLeft, bottomRight);
 }
 
@@ -283,12 +292,15 @@ void CQuadBatch::Draw(const CShaderProgram &program, const float *mvp) const {
     glBindVertexArray(m_vertexArray);
     for (std::size_t i = 0; i < m_groupFirst.size(); ++i) {
         ApplyBlendMode(m_groupBlend[i]);
+        glUniform1i(program.GetUniformLocation("additiveOpaque"),
+                    m_groupBlend[i] == BlendMode::AdditiveOpaque);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_groupTexture[i]);
         glDrawArrays(GL_TRIANGLES, m_groupFirst[i], m_groupCount[i]);
     }
     glBindVertexArray(0);
+    glUniform1i(program.GetUniformLocation("additiveOpaque"), 0);
 }
 
 std::uint32_t CQuadBatch::GetQuadCount() const {

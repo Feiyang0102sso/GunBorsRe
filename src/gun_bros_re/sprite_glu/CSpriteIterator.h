@@ -41,7 +41,10 @@ struct SpriteQuad {
     std::int32_t offsetY;
     bool flipHorizontal;
     bool flipVertical;
+    bool rotateTexture = false;
     BlendMode blend;
+    int Width() const { if (rotateTexture) { return source.height; } return source.width; }
+    int Height() const { if (rotateTexture) { return source.width; } return source.height; }
 };
 
 /**

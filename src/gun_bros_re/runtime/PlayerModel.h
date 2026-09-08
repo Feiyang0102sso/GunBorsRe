@@ -28,7 +28,8 @@
 #include "gun_bros/CMesh.h"
 #include "gun_bros/CMoveSetMesh.h"
 #include "gun_bros/CMoveSetMeshController.h"
-#include "milestones/PackTables.h"
+#include "runtime/PackTables.h"
+#include "gun_bros/CBrother.h"
 
 #include <cstdint>
 #include <memory>
@@ -76,6 +77,16 @@ struct PlayerPart {
     PlayerPart() : moveSlot(0), attached(false), boneIndex(0) {}
 };
 
+/** Equipped state owns the script inputs so every runtime pointer stays valid. */
+struct PlayerWeaponState {
+    CScript playerScript;
+    CGun::Template data;
+    std::vector<std::unique_ptr<PlayerPart>> configs;
+    PlayerPart gunPart;
+    CGun gun;
+    CBrother brother;
+};
+
 /**
  * A player and his parts.
  *
@@ -86,6 +97,7 @@ struct PlayerModel {
     // Owned here so the controllers can point at it.
     CMoveSetMesh moveSet;
     std::vector<std::unique_ptr<PlayerPart>> parts;
+    std::unique_ptr<PlayerWeaponState> weapon;
 };
 
 /**
@@ -102,6 +114,7 @@ struct PlayerTemplateData {
 
     CMoveSetMesh moveSet;
     float gameScale;
+    CScript script;
 
     PlayerTemplateData();
 };
@@ -123,6 +136,13 @@ bool FindPlayerTemplate(CResTOCManager &tocManager, PackTables &tables,
  */
 bool BuildPlayerBody(PackTables &tables, const CMoveSetMesh &moveSet,
                      PlayerModel &out);
+
+/** Equip the actual template, including its player move overrides and scripts. */
+bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
+    const CGun::Template &weapon, const std::string &owner, PlayerModel &out);
+void SetPlayerInput(PlayerModel &model, bool moving, bool shooting);
+/** Compose a muzzle in the same raw coordinate space as DrawPlayer. */
+bool GetPlayerMuzzle(PlayerModel &model, int hand, int node, MeshBoneTransform &out);
 
 /**
  * Hang a weapon model off the torso's gun bone.

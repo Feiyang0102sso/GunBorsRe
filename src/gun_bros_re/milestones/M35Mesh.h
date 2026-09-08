@@ -54,6 +54,10 @@ int RunMeshSurvey(const std::string &bigDirectory);
  * @return 0 when every pair resolved and no player template had bytes left.
  */
 int RunMoveSetSurvey(const std::string &bigDirectory);
+/** Print the archive weapon catalogue for inspection. */
+int RunWeaponSurvey(const std::string &bigDirectory);
+/** Exercise every weapon through equip, movement, firing and release with real assets. */
+int RunWeaponCheck(const std::string &bigDirectory);
 
 /**
  * M3.7: stand a whole player up -- torso, legs and a gun in his hand.
@@ -70,6 +74,6 @@ int RunMoveSetSurvey(const std::string &bigDirectory);
  */
 int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
                     float spinDegrees, const std::string &screenshotPath,
-                    std::uint32_t advanceMs);
+                    std::uint32_t advanceMs, bool firePreview = false);
 
 #endif  // GUN_BROS_RE_MILESTONES_M35MESH_H

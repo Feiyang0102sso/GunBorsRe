@@ -50,6 +50,14 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
         SetCollisionLayer(arguments, argumentCount);
         return 0;
     }
+    if (function == 6 && m_map != nullptr && argumentCount > 0) {
+        if (!m_map->SetBulletCollisionLayer(arguments[0])) {
+            std::printf("[level] invalid bullet collision layer %d\n", arguments[0]);
+        } else {
+            std::printf("[level] setBulletCollisionLayer( %d )\n", arguments[0]);
+        }
+        return 0;
+    }
 
     if (function == kLevelFunctionSetTileLayerSpeed) {
         SetTileLayerSpeed(arguments, argumentCount);

@@ -79,6 +79,9 @@ public:
 
     /** Collision selected by the level script, or null when none exists. */
     const CLayerCollision *GetCurrentCollisionLayer() const;
+    /** CLevel native 6 selects the walls used by ordinary bullets. */
+    bool SetBulletCollisionLayer(std::uint32_t layerIndex);
+    const CLayerCollision *GetCurrentBulletCollisionLayer() const;
 
     std::uint32_t GetObjectLayerCount() const {
         return static_cast<std::uint32_t>(m_objectLayers.size());
@@ -156,6 +159,7 @@ private:
     // a script calls setCameraLayer.
     std::uint32_t m_currentCameraLayer;
     std::uint32_t m_currentCollisionLayer;
+    std::uint32_t m_currentBulletCollisionLayer = UINT32_MAX;
 
     std::uint16_t m_canvasWidth;
     std::uint16_t m_canvasHeight;

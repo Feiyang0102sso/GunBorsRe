@@ -93,6 +93,7 @@ bool CMap::Init(CArrayInputStream &stream) {
     m_cameraLayers.clear();
     m_currentCameraLayer = 0;
     m_currentCollisionLayer = 0;
+    m_currentBulletCollisionLayer = UINT32_MAX;
     m_canvasWidth = 0;
     m_canvasHeight = 0;
 
@@ -210,6 +211,21 @@ const CLayerCollision *CMap::GetCurrentCollisionLayer() const {
         return nullptr;
     }
     return &m_collisionLayers[m_currentCollisionLayer];
+}
+
+bool CMap::SetBulletCollisionLayer(std::uint32_t layerIndex) {
+    for (std::size_t i = 0; i < m_collisionLayers.size(); ++i) {
+        if (m_collisionLayers[i].GetLayerIndex() == layerIndex) {
+            m_currentBulletCollisionLayer = static_cast<std::uint32_t>(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+const CLayerCollision *CMap::GetCurrentBulletCollisionLayer() const {
+    if (m_currentBulletCollisionLayer >= m_collisionLayers.size()) { return nullptr; }
+    return &m_collisionLayers[m_currentBulletCollisionLayer];
 }
 
 MapRectangle CMap::GetCameraExtent() const {

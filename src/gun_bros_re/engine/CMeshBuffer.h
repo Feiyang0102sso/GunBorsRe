@@ -92,7 +92,7 @@ public:
      * @param mvp Row-major 4x4; uploaded transposed.
      */
     void Draw(const CShaderProgram &program, const float *mvp,
-              const CTexture &texture) const;
+              const CTexture &texture, float heatIntensity = 0.0f) const;
 
     std::uint32_t GetIndexCount() const { return m_indexCount; }
 
@@ -107,6 +107,7 @@ private:
     GLint m_alphaLocation;
     GLint m_mvpLocation;
     GLint m_tex0Location;
+    GLint m_overlayLocation = -1;
 
     std::uint32_t m_indexCount;
 };

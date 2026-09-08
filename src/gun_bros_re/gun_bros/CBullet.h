@@ -40,13 +40,14 @@
 #include "glu_script/CScript.h"
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CProp.h"  // CGameSpriteGluRef
+#include "gun_bros/CGun.h"
 
 #include <cstdint>
 
 // What a CGameAssetRef holds when it points at nothing.
 constexpr std::int32_t kNoAssetId = -1;
 
-class CBullet {
+class CBullet : public IScriptObject {
 public:
     class Template {
     public:
@@ -63,6 +64,10 @@ public:
 
         const CGameSpriteGluRef &GetSpriteRef() const { return m_sprite; }
         const CScript &GetScript() const { return m_script; }
+        std::uint32_t GetFlags() const { return m_value128; }
+        float GetSpriteScale() const { return m_scalar24; }
+        float GetMeshScale() const { return m_scalar256; }
+        float GetAcceleration() const { return m_scalar116 * 100.0f; }
 
     private:
         CGameSpriteGluRef m_sprite;
@@ -87,6 +92,35 @@ public:
         std::uint16_t m_value264;
         std::uint8_t m_flag266;
     };
+
+    /** Visual script host; damage and enemy spawning belong to combat logic. */
+    void Bind(const Template &data, bool alternate);
+    void Update(int deltaMs, int animationDurationMs);
+    void Hit();
+    void SetScriptSequenceFrame(std::uint8_t frame) override;
+    bool IsScriptSequenceFrameFinished() override { return animationFinished; }
+    std::int16_t FunctionResolver(std::uint8_t function,
+        const std::int16_t *arguments, std::uint8_t argumentCount);
+    std::int16_t *VariableResolver(std::uint8_t variable);
+    std::vector<GunCue> TakeCues();
+
+    int ageMs = 0;
+    int lifetimeMs = 3000;
+    int animation = 0;
+    int animationAgeMs = 0;
+    bool animationFinished = false;
+    bool removed = false;
+    bool visible = true;
+    std::uint32_t flags = 0;
+    float velocityScale = 1.0f;
+    float acceleration = 0.0f;
+
+private:
+    CScriptInterpreter m_interpreter;
+    std::vector<GunCue> m_cues;
+    int m_timer = 0;
+    std::uint8_t m_timerFunction = 0;
+    std::int16_t m_variables[2] = {0, 0};
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CBULLET_H

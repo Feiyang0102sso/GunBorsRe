@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file M38Enemy.cpp
  * @brief M3.8 harness: enemies, assembled by their own scripts.
  *
@@ -31,7 +31,7 @@
 #include "gun_bros/CMeshCamera.h"
 #include "gun_bros/CMoveSetMesh.h"
 #include "gun_bros/CResTOCManager.h"
-#include "milestones/PackTables.h"
+#include "runtime/PackTables.h"
 
 #include <cmath>
 #include <cstdio>

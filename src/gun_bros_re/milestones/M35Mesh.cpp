@@ -18,6 +18,8 @@
  * a gun hangs off now live in PlayerModel.h, which the map viewer shares. What
  * stays is the weapon CATALOGUE, which is a viewer feature -- the game hands a
  * player one gun and never a list to page through.
+ * The new WeaponCatalog now shares that list with GameView's equipment keys;
+ * the original catalogue-only helpers below remain as historical reference.
  *
  * PackTables has already moved out to its own header, which M3.8 shares. The
  * walk itself should follow the next time something outside this file needs
@@ -27,8 +29,11 @@
 
 #include "milestones/M35Mesh.h"
 
-#include "milestones/PackTables.h"
-#include "milestones/PlayerModel.h"
+#include "runtime/PackTables.h"
+#include "runtime/PlayerModel.h"
+#include "runtime/WeaponCatalog.h"
+#include "gun_bros/WeaponEffects.h"
+#include "gun_bros/CParticleEffect.h"
 
 #include "engine/CArrayInputStream.h"
 #include "engine/CMatrix4d.h"
@@ -1355,9 +1360,231 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     return 0;
 }
 
+int RunWeaponCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    std::vector<WeaponEntry> weapons;
+    PlayerTemplateData playerTemplate;
+    if (!LoadWeaponCatalog(toc, tables, weapons) ||
+        !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
+
+    // Test the input mapping independently of each category's catalogue size.
+    for (std::size_t i = 0; i < weapons.size(); ++i) {
+        const std::size_t next = SelectWeaponKey(weapons, i, KeyCode::M);
+        if (weapons[next].category != weapons[i].category ||
+            SelectWeaponKey(weapons, next, KeyCode::N) != i ||
+            SelectWeaponKey(weapons, i, KeyCode::E) != i ||
+            SelectWeaponKey(weapons, i, KeyCode::Digit8) != i ||
+            SelectWeaponKey(weapons, i, KeyCode::Digit9) != i) { return 1; }
+        for (int category = 0; category < kWeaponCategoryCount; ++category) {
+            const KeyCode key = static_cast<KeyCode>(static_cast<int>(KeyCode::Digit1) + category);
+            if (weapons[SelectWeaponKey(weapons, i, key)].category != category) { return 1; }
+        }
+    }
+    CWindow window;
+    if (!window.Open("Weapon verification", 800, 600)) { return 1; }
+    CShaderProgram program;
+    if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
+    WeaponEffects effects(toc, tables, program);
+    // The observed Kraken failure: particle templates 0x10/0x20 must select
+    // explosion animations 4/5, never laser animations 0/1 from the same atlas.
+    ParticleEmitterTemplate emitter;
+    emitter.animationMask = 0x10;
+    if (emitter.SelectAnimation(0) != 4 || emitter.SelectAnimation(1) != 4) { return 1; }
+    emitter.animationMask = 0x20;
+    if (emitter.SelectAnimation(0.5f) != 5) { return 1; }
+    if (weapons[57].category != 2 || !weapons[59].unused || !weapons[64].unused) {
+        std::printf("[weapon-check] retail category / unused entry regression\n");
+        return 1;
+    }
+    float identity[kMatrix4dElements];
+    float modelToScene[kMatrix4dElements];
+    float sceneMvp[kMatrix4dElements];
+    Matrix4dIdentity(identity);
+    Matrix4dOrthoTopLeft(800, 600, 1000, sceneMvp);
+    std::size_t placeholders = 0;
+    // A wall ahead of the muzzle exercises impact callbacks before the fuse.
+    const std::vector<std::uint8_t> wallBytes = {
+        2, 0, 0, 0, 0, 0, 100, 0, 0, 0,
+        32, 3, 0, 0, 100, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0
+    };
+    WeaponCollision impactScene;
+    CArrayInputStream wallStream(wallBytes);
+    if (!impactScene.walls.Load(wallStream)) { return 1; }
+    impactScene.terrain = impactScene.walls;
+    for (std::size_t i = 0; i < weapons.size(); ++i) {
+        if (!window.PumpEvents()) { return 1; }
+        effects.Clear();
+        PlayerModel player;
+        const WeaponEntry &entry = weapons[i];
+        if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
+            !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
+            !CreatePlayerBuffers(player, program)) { return 1; }
+        BuildPlayerGameMatrix(identity, 400, 450,
+            PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
+        if (i == 0) {
+            // Regression: the default pistols must use the gun's player moves
+            // and two distinct hands, even though the mesh is shared with rifles.
+            MeshBoneTransform right{}, left{};
+            if (!player.weapon->brother.TorsoUsesWeapon() || entry.data.GetHandedness() != 2 ||
+                !GetPlayerMuzzle(player, 0, 0, right) || !GetPlayerMuzzle(player, 1, 0, left) ||
+                (right.posX == left.posX && right.posY == left.posY && right.posZ == left.posZ)) {
+                std::printf("[weapon-check] pistol holding regression\n");
+                return 1;
+            }
+        }
+        // Stationary, collision-free launch probes cannot pass on footsteps
+        // or distant impact sounds. Cover the reported silent weapon groups.
+        const bool checkLaunch = (entry.category == 0 && !entry.unused) ||
+            (i >= 12 && i <= 15) || (i >= 24 && i <= 26) ||
+            i == 33 || i == 34 || i == 36 || i == 44 || i == 46 || i == 68 || i == 69;
+        if (checkLaunch) {
+            const std::size_t launchSounds = effects.GetSoundCueCount();
+            SetPlayerInput(player, false, true);
+            for (int elapsed = 0; elapsed < 160; elapsed += 16) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16);
+            }
+            if (effects.GetSoundCueCount() == launchSounds) {
+                std::printf("[weapon-check] FAIL %zu launch has no audio: %s\n", i, entry.name.c_str());
+                return 1;
+            }
+            std::printf("[weapon-check] %zu launch audio queued before impact\n", i);
+            effects.Clear();
+            if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
+                !CreatePlayerBuffers(player, program)) { return 1; }
+        }
+        // Reloading weapons must not loop attack sounds ahead of their next
+        // shot. Use real scripts, no movement/impacts, and a held trigger.
+        if ((i >= 12 && i <= 15) || (i >= 24 && i <= 26)) {
+            const std::size_t startShots = effects.GetShotCount();
+            const std::size_t startSounds = effects.GetSoundCueCount();
+            SetPlayerInput(player, false, true);
+            for (int elapsed = 0; elapsed < 3200; elapsed += 16) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16);
+                if (effects.GetSoundCueCount() - startSounds > effects.GetShotCount() - startShots) {
+                    std::printf("[weapon-check] FAIL %zu held attack precedes its projectile at %d ms\n", i, elapsed + 16);
+                    return 1;
+                }
+            }
+            if (effects.GetShotCount() - startShots < 2) {
+                std::printf("[weapon-check] FAIL %zu held trigger never resumes after reload\n", i);
+                return 1;
+            }
+            const std::size_t releaseShots = effects.GetShotCount();
+            SetPlayerInput(player, false, false);
+            for (int elapsed = 0; elapsed < 1600; elapsed += 16) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16);
+            }
+            if (effects.GetShotCount() != releaseShots) {
+                std::printf("[weapon-check] FAIL %zu released trigger resumes after reload\n", i);
+                return 1;
+            }
+            std::printf("[weapon-check] %zu reload keeps attack cues aligned with shots; release stops\n", i);
+            effects.Clear();
+            if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
+                !CreatePlayerBuffers(player, program)) { return 1; }
+        }
+        const std::size_t before = effects.GetShotCount();
+        const std::size_t soundBefore = effects.GetSoundCueCount();
+        if (i == 21) {
+            SetPlayerInput(player, false, true);
+            int elapsed = 0;
+            while (elapsed < 12000 && player.weapon->gun.CanFire()) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16, &impactScene);
+                elapsed += 16;
+            }
+            if (elapsed >= 12000) { std::printf("[weapon-check] Gatling never overheated\n"); return 1; }
+            const std::size_t coolingShots = effects.GetShotCount();
+            SetPlayerInput(player, false, false);
+            AdvancePlayer(player, 16);
+            effects.Update(player, modelToScene, 0, 16);
+            SetPlayerInput(player, false, true);
+            for (int cooling = 0; cooling < 960; cooling += 16) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16);
+            }
+            if (effects.GetShotCount() != coolingShots) {
+                std::printf("[weapon-check] release/repress bypassed Gatling cooling\n"); return 1;
+            }
+            for (int cooling = 0; cooling < 1000; cooling += 16) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16);
+            }
+            if (effects.GetShotCount() == coolingShots) { return 1; }
+            SetPlayerInput(player, false, false);
+            std::printf("[weapon-check] Gatling cooldown blocks repress and resumes automatically\n");
+        }
+        // Idle -> walk -> fire while walking -> stationary fire -> release -> fire again.
+        const bool moving[] = {false, true, true, false, false, false, false};
+        const bool shooting[] = {false, false, true, true, false, true, false};
+        const int durations[] = {400, 400, 1600, 1600, 800, 800, 4000};
+        for (int phase = 0; phase < 7; ++phase) {
+            SetPlayerInput(player, moving[phase], shooting[phase]);
+            for (int elapsed = 0; elapsed < durations[phase]; elapsed += 16) {
+                AdvancePlayer(player, 16);
+                effects.Update(player, modelToScene, 0, 16, &impactScene);
+                if (i == 12 && phase == 2 && elapsed == 144 && effects.GetParticleCount() > 40) {
+                    std::printf("[weapon-check] zero-interval shotgun emitter overproduced particles\n");
+                    return 1;
+                }
+                if ((i == 29 || i == 32) && phase == 2 && elapsed == 16 && effects.GetTrailCount() == 0) {
+                    std::printf("[weapon-check] FAIL flame trail stopped before its next emission\n");
+                    return 1;
+                }
+            }
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            float modelMvp[kMatrix4dElements];
+            Matrix4dMultiply(sceneMvp, modelToScene, modelMvp);
+            effects.Draw(sceneMvp, nullptr, 1.0f, WeaponDrawPass::BehindPlayer);
+            glEnable(GL_DEPTH_TEST);
+            DrawPlayer(player, program, modelMvp);
+            effects.Draw(sceneMvp, nullptr, 1.0f, WeaponDrawPass::InFrontOfPlayer);
+            if (glGetError() != GL_NO_ERROR) { return 1; }
+        }
+        const std::size_t emitted = effects.GetShotCount() - before;
+        if (i >= 24 && i <= 26 && effects.GetSoundCueCount() == soundBefore) {
+            std::printf("[weapon-check] shoulder launcher explosion sound missing\n"); return 1;
+        }
+        if (entry.visualOnly) {
+            ++placeholders;
+            std::printf("[weapon-check] %zu visual-only: archive has no firing script or projectile reference\n", i);
+        }
+        else if (emitted == 0) {
+            std::printf("[weapon-check] %zu failed to fire: %s\n", i, entry.name.c_str());
+            std::printf("  mode=%d ammo=%d defaultBullet=%08x:%u exports:", player.weapon->gun.GetFireMode(),
+                *player.weapon->gun.VariableResolver(0), entry.data.GetBulletRef().packHash,
+                entry.data.GetBulletRef().localIndex);
+            for (int value : entry.data.GetScript().GetExportFunctions()) { std::printf(" %d", value); }
+            std::printf("\n");
+            for (const CScriptCode &code : entry.data.GetScript().GetFunctions()) {
+                std::printf("  code:");
+                for (int byte = 0; byte <= code.GetByteLength(); ++byte) {
+                    std::printf(" %02x", code.Begin()[byte]);
+                }
+                std::printf("\n");
+            }
+            return 1;
+        }
+        if (player.weapon->gun.IsShooting() || effects.GetBulletCount() != 0) {
+            std::printf("[weapon-check] %zu release left live bullets=%zu\n", i, effects.GetBulletCount());
+            return 1;
+        }
+        std::printf("[weapon-check] %zu PASS shots=%zu %s\n", i, emitted, entry.name.c_str());
+    }
+    std::printf("[weapon-check] PASS %zu templates, %zu visual-only entries; keys and transitions verified\n",
+        weapons.size(), placeholders);
+    return 0;
+}
+
 int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
                     float spinDegrees, const std::string &screenshotPath,
-                    std::uint32_t advanceMs) {
+                    std::uint32_t advanceMs, bool firePreview) {
     std::printf("=== M3.7: a whole character ===\n\n");
 
     CResTOCManager tocManager;
@@ -1366,22 +1593,23 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     }
 
     PackTables tables(tocManager);
-    CharacterSink catalog;
-    WalkMeshPairs(tocManager, tables, catalog);
+    std::vector<WeaponEntry> weapons;
+    PlayerTemplateData playerTemplate;
+    if (!LoadWeaponCatalog(tocManager, tables, weapons)) { return 1; }
 
-    if (!catalog.HavePlayer()) {
+    if (!FindPlayerTemplate(tocManager, tables, playerTemplate)) {
         std::printf("[m37] no player template found\n");
         return 1;
     }
-    if (catalog.GetGuns().empty()) {
+    if (weapons.empty()) {
         std::printf("[m37] no gun names a weapon model\n");
         return 1;
     }
-    std::printf("\n[m37] %s, %zu weapon models\n", catalog.GetPlayerOwner().c_str(),
-                catalog.GetGuns().size());
+    std::printf("\n[m37] %s, %zu weapon models\n", playerTemplate.owner.c_str(),
+                weapons.size());
 
     std::size_t gunSlot = gunIndex;
-    if (gunSlot >= catalog.GetGuns().size()) {
+    if (gunSlot >= weapons.size()) {
         gunSlot = 0;
     }
 
@@ -1399,17 +1627,20 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     // Held by pointer for the same reason one part is: swapping the gun
     // rebuilds the whole thing, and nothing in it can be moved.
     std::unique_ptr<PlayerModel> character(new PlayerModel());
-    if (!BuildViewerCharacter(tables, catalog, gunSlot, *character) ||
+    if (!BuildPlayerBody(tables, playerTemplate.moveSet, *character) ||
+        !EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
+                           weapons[gunSlot].owner, *character) ||
         !CreatePlayerBuffers(*character, program)) {
         return 1;
     }
 
     std::size_t moveSlot = 0;
     SelectPlayerMoveSlot(*character, moveSlot, true);
-    for (std::uint32_t elapsed = 0; elapsed < advanceMs; elapsed += kWarmUpFrameMs) {
-        AdvancePlayer(*character, kWarmUpFrameMs);
-    }
+    SetPlayerInput(*character, false, firePreview);
+    window.SetRightDrag(false);
+    window.SetTitle("player weapon | " + WeaponSelectionLabel(weapons, gunSlot));
     PosePlayer(*character);
+    WeaponEffects effects(tocManager, tables, program);
 
     glEnable(GL_DEPTH_TEST);
 
@@ -1424,14 +1655,15 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     view.extraTilt = 0.0f;
     view.zoom = 1.0f;
 
-    std::printf("\n[m37] left/right: weapon, M/N: move, space: pause, "
-                "period: step, drag: turn, wheel: zoom, G: game tilt, "
+    std::printf("\n[m37] 1-7: category, N/M: weapon, F: fire, WASD: walk, space: pause, "
+                "period: step, left drag: turn, wheel: zoom, G: game tilt, "
                 "Home: reset view, Esc: quit\n");
 
     std::uint64_t previousTicks = window.GetTicksMs();
     bool paused = false;
     bool singleStep = false;
     bool reportedFirstFrame = false;
+    std::uint32_t warmUpRemaining = advanceMs;
 
     while (window.PumpEvents()) {
         int drawableWidth = 0;
@@ -1439,10 +1671,10 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
         window.GetDrawableSize(drawableWidth, drawableHeight);
 
         const std::size_t previousGunSlot = gunSlot;
-        bool moveChanged = false;
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
              key = window.TakeKeyPress()) {
-            const std::size_t gunCount = catalog.GetGuns().size();
+            const std::size_t gunCount = weapons.size();
+            gunSlot = SelectWeaponKey(weapons, gunSlot, key);
             if (key == KeyCode::Right) {
                 gunSlot = (gunSlot + 1) % gunCount;
             } else if (key == KeyCode::Left) {
@@ -1452,14 +1684,11 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
             } else if (key == KeyCode::Up) {
                 gunSlot = (gunSlot + gunCount - 10) % gunCount;
             } else if (key == KeyCode::M) {
-                moveSlot++;
-                moveChanged = true;
+                // N/M now select equipment through the shared catalogue above.
             } else if (key == KeyCode::N) {
                 // The torso has the longest move list, so step by it and let
                 // the shorter ones wrap inside SelectMoveSlot.
-                const std::size_t count = character->parts[0]->moves.size();
-                moveSlot = (moveSlot + count - 1) % count;
-                moveChanged = true;
+                // The old synchronized slot convention is superseded by scripts.
             } else if (key == KeyCode::Space) {
                 paused = !paused;
                 std::printf("[m37] %s\n", paused ? "paused" : "playing");
@@ -1481,21 +1710,22 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
 
         if (gunSlot != previousGunSlot) {
             std::printf("\n[m37] --- weapon %zu of %zu ---\n", gunSlot + 1,
-                        catalog.GetGuns().size());
+                        weapons.size());
 
             std::unique_ptr<PlayerModel> replacement(new PlayerModel());
-            if (BuildViewerCharacter(tables, catalog, gunSlot, *replacement) &&
+            if (BuildPlayerBody(tables, playerTemplate.moveSet, *replacement) &&
+                EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
+                                  weapons[gunSlot].owner, *replacement) &&
                 CreatePlayerBuffers(*replacement, program)) {
                 character = std::move(replacement);
+                effects.Clear();
                 SelectPlayerMoveSlot(*character, moveSlot, true);
                 PosePlayer(*character);
+                window.SetTitle("player weapon | " + WeaponSelectionLabel(weapons, gunSlot));
             } else {
                 std::printf("[m37] staying on the previous weapon\n");
                 gunSlot = previousGunSlot;
             }
-        } else if (moveChanged) {
-            SelectPlayerMoveSlot(*character, moveSlot, true);
-            PosePlayer(*character);
         }
 
         const std::uint64_t nowTicks = window.GetTicksMs();
@@ -1512,7 +1742,12 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
             elapsedMs = static_cast<std::uint64_t>(kSingleStepMs);
             singleStep = false;
         }
+        // Screenshots advance by the requested fixed steps, independent of loading time.
+        if (!screenshotPath.empty()) { elapsedMs = 0; }
         if (elapsedMs > 0) {
+            const bool moving = window.IsKeyDown(KeyCode::W) || window.IsKeyDown(KeyCode::A) ||
+                window.IsKeyDown(KeyCode::S) || window.IsKeyDown(KeyCode::D);
+            SetPlayerInput(*character, moving, firePreview || window.IsKeyDown(KeyCode::F));
             AdvancePlayer(*character, static_cast<std::int32_t>(elapsedMs));
         }
 
@@ -1543,13 +1778,50 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
         float base[kMatrix4dElements];
         BuildModelViewProjection(PlayerBounds(*character), view, drawableWidth,
                                  drawableHeight, base);
+        float viewport[kMatrix4dElements];
+        Matrix4dIdentity(viewport);
+        viewport[0] = drawableWidth * 0.5f;
+        viewport[3] = drawableWidth * 0.5f;
+        viewport[5] = -drawableHeight * 0.5f;
+        viewport[7] = drawableHeight * 0.5f;
+        float modelToScreen[kMatrix4dElements];
+        Matrix4dMultiply(viewport, base, modelToScreen);
+        // Simulate both viewers in the same world units. The turntable only
+        // projects the result; spread is applied before the camera rotation.
+        const float worldScale = PlayerModelWorldScale(*character, playerTemplate.gameScale, 1);
+        float modelToWorld[kMatrix4dElements];
+        Matrix4dScale(worldScale, modelToWorld);
+        float inverseScale[kMatrix4dElements];
+        Matrix4dScale(1.0f / worldScale, inverseScale);
+        float worldToScreen[kMatrix4dElements];
+        Matrix4dMultiply(modelToScreen, inverseScale, worldToScreen);
+        // Looking straight into a barrel projects its travel to a point.
+        // Do not turn floating-point noise at 90 degrees into diagonal shots.
+        while (warmUpRemaining > 0) {
+            const int step = static_cast<int>(std::min<std::uint32_t>(warmUpRemaining, kWarmUpFrameMs));
+            AdvancePlayer(*character, step);
+            effects.Update(*character, modelToWorld, 0, step);
+            warmUpRemaining -= step;
+        }
+        effects.SetPaused(paused);
+        effects.Update(*character, modelToWorld, 0, static_cast<int>(elapsedMs));
+        float screenMvp[kMatrix4dElements];
+        Matrix4dOrthoTopLeft(static_cast<float>(drawableWidth), static_cast<float>(drawableHeight), 1000.0f, screenMvp);
+        effects.Draw(screenMvp, worldToScreen, 1.0f, WeaponDrawPass::BehindPlayer);
+        glEnable(GL_DEPTH_TEST);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         DrawPlayer(*character, program, base);
+        effects.Draw(screenMvp, worldToScreen, 1.0f, WeaponDrawPass::InFrontOfPlayer);
 
         if (!reportedFirstFrame) {
             GLCheckErrors("first frame");
             reportedFirstFrame = true;
 
             if (!screenshotPath.empty()) {
+                std::printf("[weapon-render] shots=%zu live=%zu torsoMove=%d legsMove=%d\n",
+                    effects.GetShotCount(), effects.GetBulletCount(),
+                    character->weapon->brother.GetTorso().GetMoveIndex(),
+                    character->weapon->brother.GetLegs().GetMoveIndex());
                 if (!window.SaveFrame(screenshotPath)) {
                     return 1;
                 }
@@ -1562,5 +1834,37 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     }
 
     std::printf("[m37] done\n");
+    return 0;
+}
+
+int RunWeaponSurvey(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    std::vector<WeaponEntry> weapons;
+    if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
+    for (std::size_t i = 0; i < weapons.size(); ++i) {
+        const WeaponEntry &entry = weapons[i];
+        CGun gun;
+        gun.Bind(entry.data, nullptr);
+        gun.OnEquip();
+        std::printf("[weapon] %zu %s category=%d hand=%u interval=%u %s overrides:",
+            i, entry.owner.c_str(), entry.category, entry.data.GetHandedness(),
+            entry.data.GetFireIntervalMs(), entry.name.c_str());
+        for (int move : gun.GetOverrides()) { std::printf(" %d", move); }
+        std::printf("\n");
+        if (entry.data.GetBulletRef().IsNull()) {
+            std::printf("  default bullet: null; script resources:");
+            for (const ScriptResourceRef &ref : entry.data.GetScript().GetResources()) {
+                std::printf(" %08x:%u:%u", ref.packHash, ref.sectionOrType, ref.resourceId);
+            }
+            std::printf("\n");
+        }
+        for (const MeshConfig &config : entry.data.GetMoveSet().GetMeshConfigs()) {
+            std::printf("  config mesh=%u atlas=%u pack=%08x\n", config.meshOrdinal,
+                config.imageOrdinal, entry.data.GetMoveSet().GetPackHash());
+        }
+    }
+    std::printf("[weapons] %zu templates parsed\n", weapons.size());
     return 0;
 }

@@ -22,8 +22,11 @@ public:
     /** Decode and cache a RIFF/WAVE resource under a caller-owned key. */
     bool Load(std::uint64_t key, const std::vector<std::uint8_t> &wavBytes);
 
-    /** Start one cached sound. Several instances may overlap. */
-    void Play(std::uint64_t key);
+    /** Start one cached sound. Return whether playback was successfully queued. */
+    bool Play(std::uint64_t key, bool loop = false);
+    void Stop(std::uint64_t key);
+    void StopAll();
+    void SetPaused(bool paused);
 
     /** Release device streams whose queued samples have finished. */
     void Update();

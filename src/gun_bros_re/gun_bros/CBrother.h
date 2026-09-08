@@ -29,9 +29,11 @@
 #include "glu_script/CScript.h"
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CMoveSetMesh.h"
+#include "gun_bros/CGun.h"
+#include "gun_bros/CMoveSetMeshController.h"
 #include "gun_bros/CProp.h"  // CGameSpriteGluRef lives here, next to its first user
 
-class CBrother {
+class CBrother : public IScriptObject {
 public:
     class Template {
     public:
@@ -69,6 +71,43 @@ public:
 
         CGameSpriteGluRef m_shadowSprite;
     };
+
+    CBrother();
+    /** Run player and weapon scripts against decoded, stable mesh banks. */
+    void Bind(const CScript &script, const CMoveSetMesh &moves,
+        const std::vector<const CMesh *> &bodyMeshes, CGun &gun,
+        const std::vector<const CMesh *> &weaponMeshes);
+    void SetInput(bool moving, bool shooting);
+    void Update(std::int32_t deltaMs);
+    void SetScriptSequenceFrame(std::uint8_t frame) override;
+    bool IsScriptSequenceFrameFinished() override;
+    void OnScriptStateEntered() override;
+    std::int16_t FunctionResolver(std::uint8_t function,
+        const std::int16_t *arguments, std::uint8_t argumentCount);
+    std::int16_t *VariableResolver(std::uint8_t variable);
+    CMoveSetMeshController &GetTorso() { return m_torso; }
+    CMoveSetMeshController &GetLegs() { return m_legs; }
+    bool TorsoUsesWeapon() const { return m_torsoUsesWeapon; }
+    int GetStateId() const { return m_interpreter.GetStateId(); }
+
+private:
+    void SetShooting(bool shooting);
+    bool m_triggerHeld;
+    CScriptInterpreter m_interpreter;
+    CMoveSetMeshController m_torso;
+    CMoveSetMeshController m_legs;
+    const CMoveSetMesh *m_baseMoves;
+    CGun *m_gun;
+    std::vector<const CMesh *> m_bodyMeshes;
+    std::vector<const CMesh *> m_weaponMeshes;
+    std::int32_t m_moveAliases[11];
+    std::int16_t m_variables[7];
+    std::int32_t m_timer;
+    std::int32_t m_fireElapsed;
+    bool m_torsoUsesWeapon;
+    bool m_moving;
+    bool m_shooting;
+    bool m_canFire;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CBROTHER_H

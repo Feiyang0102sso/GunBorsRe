@@ -58,6 +58,7 @@ bool CMoveSetMeshController::SetMove(std::int32_t moveIndex) {
 }
 
 void CMoveSetMeshController::Update(std::int32_t deltaMs) {
+    m_sounds.clear();
     if (m_moveSet == nullptr || m_moveIndex == kNoMoveIndex) {
         return;
     }
@@ -84,9 +85,31 @@ void CMoveSetMeshController::Update(std::int32_t deltaMs) {
         }
     }
 
+    const std::int32_t previousMs = m_animation.GetTimeMs();
     m_animation.Update(step);
 
     // TODO: the original also asks CMoveSetMesh::GetSound whether a sound
     // frame falls in the window this update just crossed, and queues it.
     // Audio is not in the project yet; the move's sound list is parsed.
+    // Implemented below: CMoveSetMesh::GetSound (:123129) returns the first
+    // cue in [previous, current), and the owning viewer plays its direct WAV.
+    const CMesh *mesh = m_animation.GetMesh();
+    if (mesh == nullptr) { return; }
+    for (const MoveSound &sound : move.sounds) {
+        if (sound.frame >= mesh->GetFrames().size() || sound.soundId == 255) { continue; }
+        const std::int32_t time = mesh->GetFrames()[sound.frame].timeMs;
+        if (time >= previousMs && time < m_animation.GetTimeMs()) {
+            GameObjectRef cue;
+            cue.packHash = m_moveSet->GetPackHash();
+            cue.localIndex = sound.soundId;
+            m_sounds.push_back(cue);
+            break;
+        }
+    }
+}
+
+std::vector<GameObjectRef> CMoveSetMeshController::TakeSounds() {
+    std::vector<GameObjectRef> sounds;
+    sounds.swap(m_sounds);
+    return sounds;
 }

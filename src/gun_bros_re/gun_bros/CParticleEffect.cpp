@@ -23,7 +23,7 @@ float ReadFloat(CArrayInputStream &stream) {
 
 ParticleEmitterTemplate::ParticleEmitterTemplate()
     : archetype(255),
-      randomSeed(0),
+      animationMask(0),
       intervalMinimumSeconds(0.0f),
       intervalMaximumSeconds(0.0f),
       startSeconds(0.0f),
@@ -68,7 +68,7 @@ bool CParticleEffect::Init(CArrayInputStream &stream) {
 bool CParticleEffect::ReadEmitter(CArrayInputStream &stream,
                                   ParticleEmitterTemplate &emitter) {
     emitter.archetype = stream.ReadUInt8();
-    emitter.randomSeed = stream.ReadUInt32();
+    emitter.animationMask = stream.ReadUInt32();
     emitter.intervalMinimumSeconds = ReadFloat(stream);
     emitter.intervalMaximumSeconds = ReadFloat(stream);
     emitter.startSeconds = ReadFloat(stream);
@@ -118,4 +118,19 @@ void CParticleEffect::ReadInterpolator(
     }
     interpolator.endMinimum = ReadFloat(stream);
     interpolator.endMaximum = ReadFloat(stream);
+}
+
+int ParticleEmitterTemplate::SelectAnimation(float random) const {
+    int count = 0;
+    for (int bit = 0; bit < 32; ++bit) {
+        if ((animationMask & (1u << bit)) != 0) { ++count; }
+    }
+    if (count == 0) { return -1; }
+    int selected = std::min(count - 1, static_cast<int>(random * count));
+    for (int bit = 0; bit < 32; ++bit) {
+        if ((animationMask & (1u << bit)) == 0) { continue; }
+        if (selected == 0) { return bit; }
+        --selected;
+    }
+    return -1;
 }

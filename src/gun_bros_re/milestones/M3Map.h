@@ -35,7 +35,8 @@ enum class MapViewMode {
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
              std::uint32_t advanceMs, bool showSpawns, bool showCollisions,
-             MapViewMode viewMode);
+             MapViewMode viewMode, std::uint32_t weaponIndex = 0,
+             bool firePreview = false);
 
 /** List every pack that holds maps, and how many. */
 int RunMapList(const std::string &bigDirectory);

@@ -100,7 +100,7 @@ public:
                             float width, float height, const SourceRect &source,
                             bool flipHorizontal, bool flipVertical, BlendMode blend,
                             float pivotX, float pivotY, float scaleX, float scaleY,
-                            float rotationDegrees, float alpha);
+                            float rotationDegrees, float alpha, bool rotateTexture = false);
 
     /** Push the accumulated geometry to the GPU. */
     void Upload();

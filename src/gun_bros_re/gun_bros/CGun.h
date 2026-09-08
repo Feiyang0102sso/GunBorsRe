@@ -32,6 +32,9 @@
  * The move set is the **last** thing this reads, which is why guns cost a
  * whole template port to reach while players and enemies do not.
  *
+ * Runtime clarification: this trailing move set overrides the PLAYER's upper
+ * body. The weapon mesh itself has an independent animation clock.
+ *
  * The six tables are per-tier stats. The original keeps only the first three
  * entries of each and floors three of the tables at 100; that is upgrade
  * logic, not parsing, so it stays out of here until M5 needs it.
@@ -44,6 +47,8 @@
 #include "glu_script/CScript.h"
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CMoveSetMesh.h"
+#include "glu_script/CScriptInterpreter.h"
+#include "gun_bros/CMeshAnimationController.h"
 
 #include <cstdint>
 #include <vector>
@@ -51,7 +56,21 @@
 // Stat tables in a gun template, all read the same way.
 constexpr std::uint32_t kGunStatTableCount = 6;
 
-class CGun {
+/** A visual cue emitted by the original weapon script. */
+struct GunCue {
+    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, RemoveBullet };
+    Kind kind = Kind::Bullet;
+    GameObjectRef resource;
+    int hand = 0;
+    int node = 0;
+    float minimumAngle = 0.0f;
+    float maximumAngle = 0.0f;
+    float speed = 1.0f;
+    bool alternate = false;
+    bool alignEffect = false;
+};
+
+class CGun : public IScriptObject {
 public:
     class Template {
     public:
@@ -65,6 +84,10 @@ public:
         const CGameAssetRef &GetMeshRef() const { return m_meshRef; }
         const CGameAssetRef &GetImageRef() const { return m_imageRef; }
         const CMoveSetMesh &GetMoveSet() const { return m_moveSet; }
+        std::uint8_t GetCategory() const { return m_flag104; }
+        std::uint8_t GetHandedness() const { return m_flag256; }
+        const GameObjectRef &GetBulletRef() const { return m_objectRef132; }
+        std::uint16_t GetFireIntervalMs() const { return m_value140; }
 
     private:
         std::uint8_t m_flag104;
@@ -81,6 +104,46 @@ public:
         std::vector<std::uint32_t> m_statTables[kGunStatTableCount];
         CMoveSetMesh m_moveSet;
     };
+
+    CGun();
+    /** Bind before OnEquip; overrides refer to this template's move set. */
+    void Bind(const Template &data, const CMesh *mesh, bool beam = false);
+    void OnEquip();
+    void SetShooting(bool shooting);
+    void Fire();
+    void Update(std::int32_t deltaMs);
+    void OnScriptStateEntered() override;
+    std::int16_t FunctionResolver(std::uint8_t function,
+        const std::int16_t *arguments, std::uint8_t argumentCount);
+    std::int16_t *VariableResolver(std::uint8_t variable);
+
+    const Template *GetTemplate() const { return m_template; }
+    const std::vector<std::int32_t> &GetOverrides() const { return m_overrides; }
+    CMeshAnimationController &GetAnimation() { return m_animation; }
+    const CMeshAnimationController &GetAnimation() const { return m_animation; }
+    int GetFireMode() const { return m_fireMode; }
+    bool CanFire() const { return m_ammo != 0; }
+    bool IsBeam() const { return m_beam; }
+    bool IsShooting() const { return m_shooting; }
+    float GetHeatIntensity() const { return m_heatIntensity; }
+    std::vector<GunCue> TakeCues();
+
+private:
+    const Template *m_template;
+    CScriptInterpreter m_interpreter;
+    CMeshAnimationController m_animation;
+    std::vector<std::int32_t> m_overrides;
+    std::vector<GunCue> m_cues;
+    std::int16_t m_ammo;
+    std::int16_t m_mastery;
+    std::int32_t m_functionTimer;
+    std::uint8_t m_timerFunction;
+    std::int32_t m_eventTimer;
+    int m_fireMode;
+    bool m_shooting;
+    bool m_beam;
+    float m_heatIntensity;
+    float m_targetHeat;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CGUN_H

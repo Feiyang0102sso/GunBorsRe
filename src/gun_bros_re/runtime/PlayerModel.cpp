@@ -3,13 +3,14 @@
  * @brief The player, assembled out of the models a player actually is.
  */
 
-#include "milestones/PlayerModel.h"
+#include "runtime/PlayerModel.h"
 
 #include "engine/CArrayInputStream.h"
 #include "engine/CMatrix4d.h"
 #include "engine/CPNG.h"
 #include "engine/platform/GLLoader.h"
 #include "gun_bros/CBrother.h"
+#include "gun_bros/CBullet.h"
 #include "gun_bros/CMeshCamera.h"
 
 #include <cstdio>
@@ -143,6 +144,7 @@ bool FindPlayerTemplate(CResTOCManager &tocManager, PackTables &tables,
             out.ordinal = ordinal;
             out.owner = label;
             out.moveSet = brother.GetMoveSet();
+            out.script = brother.GetScript();
             out.gameScale = brother.GetGameScale();
             return true;
         }
@@ -152,6 +154,7 @@ bool FindPlayerTemplate(CResTOCManager &tocManager, PackTables &tables,
 
 bool BuildPlayerBody(PackTables &tables, const CMoveSetMesh &moveSet,
                      PlayerModel &out) {
+    out.weapon.reset();
     out.parts.clear();
     out.moveSet = moveSet;
 
@@ -217,10 +220,22 @@ bool CreatePlayerBuffers(PlayerModel &model, const CShaderProgram &program) {
             return false;
         }
     }
+    if (model.weapon) {
+        for (auto &config : model.weapon->configs) {
+            if (!config->buffer.Create(program) || !config->buffer.SetMesh(config->mesh)) { return false; }
+        }
+        PlayerPart &gun = model.weapon->gunPart;
+        if (!gun.buffer.Create(program) || !gun.buffer.SetMesh(gun.mesh)) { return false; }
+    }
     return true;
 }
 
 void AdvancePlayer(PlayerModel &model, std::int32_t deltaMs) {
+    if (model.weapon) {
+        model.weapon->brother.Update(deltaMs);
+        PosePlayer(model);
+        return;
+    }
     for (std::size_t i = 0; i < model.parts.size(); ++i) {
         PlayerPart &part = *model.parts[i];
         if (part.moves.empty()) {
@@ -235,6 +250,26 @@ void AdvancePlayer(PlayerModel &model, std::int32_t deltaMs) {
 }
 
 void PosePlayer(PlayerModel &model) {
+    if (model.weapon) {
+        PlayerWeaponState &weapon = *model.weapon;
+        CMoveSetMeshController &torso = weapon.brother.GetTorso();
+        const int torsoIndex = torso.GetMeshConfigIndex();
+        if (torsoIndex >= 0) {
+            PlayerPart *part = nullptr;
+            if (weapon.brother.TorsoUsesWeapon()) { part = weapon.configs[torsoIndex].get(); }
+            else { part = model.parts[torsoIndex].get(); }
+            if (torso.GetAnimation().Evaluate(part->pose)) { part->buffer.SetVertices(part->pose); }
+        }
+        CMoveSetMeshController &legs = weapon.brother.GetLegs();
+        const int legsIndex = legs.GetMeshConfigIndex();
+        if (legsIndex >= 0) {
+            PlayerPart &part = *model.parts[legsIndex];
+            if (legs.GetAnimation().Evaluate(part.pose)) { part.buffer.SetVertices(part.pose); }
+        }
+        PlayerPart &gun = weapon.gunPart;
+        if (weapon.gun.GetAnimation().Evaluate(gun.pose)) { gun.buffer.SetVertices(gun.pose); }
+        return;
+    }
     for (std::size_t i = 0; i < model.parts.size(); ++i) {
         PlayerPart &part = *model.parts[i];
         if (part.moves.empty()) {
@@ -298,6 +333,34 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
     if (model.parts.empty()) {
         return;
     }
+    if (model.weapon) {
+        PlayerWeaponState &weapon = *model.weapon;
+        const int torsoIndex = weapon.brother.GetTorso().GetMeshConfigIndex();
+        const int legsIndex = weapon.brother.GetLegs().GetMeshConfigIndex();
+        if (torsoIndex >= 0) {
+            PlayerPart *part = nullptr;
+            if (weapon.brother.TorsoUsesWeapon()) { part = weapon.configs[torsoIndex].get(); }
+            else { part = model.parts[torsoIndex].get(); }
+            part->buffer.Draw(program, base, part->texture);
+        }
+        if (legsIndex >= 0) {
+            PlayerPart &part = *model.parts[legsIndex];
+            part.buffer.Draw(program, base, part.texture);
+        }
+        const int handedness = weapon.data.GetHandedness();
+        int count = 1;
+        if (handedness == 2) { count = 2; }
+        for (int i = 0; i < count; ++i) {
+            std::size_t bone = kGunBoneIndex;
+            if (handedness == 1 || i == 1) { bone = kGunLeftBoneIndex; }
+            MeshPart placement;
+            if (!weapon.brother.GetTorso().GetAnimation().GetNodeAt(bone, placement.attachment)) { continue; }
+            float mvp[kMatrix4dElements];
+            MeshCameraBuildPartMatrix(placement, base, mvp);
+            weapon.gunPart.buffer.Draw(program, mvp, weapon.gunPart.texture, weapon.gun.GetHeatIntensity());
+        }
+        return;
+    }
 
     const CMeshAnimationController &parent =
         model.parts[0]->controller.GetAnimation();
@@ -317,6 +380,9 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
 }
 
 void SelectPlayerMoveSlot(PlayerModel &model, std::size_t slot, bool report) {
+    // Equipped actors are driven by the original player script, independently
+    // for torso and legs. The old manual slot browser remains for bare bodies.
+    if (model.weapon) { return; }
     for (std::size_t i = 0; i < model.parts.size(); ++i) {
         PlayerPart &part = *model.parts[i];
         if (part.moves.empty()) {
@@ -349,7 +415,79 @@ float PlayerModelWorldScale(const PlayerModel &model, float gameScale,
     }
 
     const float inverseExtent = model.parts[0]->mesh.GetBounds().inverseExtent;
+    if (model.weapon) {
+        const CMesh *torso = model.weapon->brother.GetTorso().GetAnimation().GetMesh();
+        if (torso != nullptr) {
+            return torso->GetBounds().inverseExtent * kPlayerRuntimeScale * gameScale * cameraScale;
+        }
+    }
     return inverseExtent * kPlayerRuntimeScale * gameScale * cameraScale;
+}
+
+bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
+    const CGun::Template &data, const std::string &owner, PlayerModel &out) {
+    std::unique_ptr<PlayerWeaponState> weapon(new PlayerWeaponState());
+    weapon->playerScript = playerScript;
+    weapon->data = data;
+    const CMoveSetMesh &moves = weapon->data.GetMoveSet();
+    std::vector<const CMesh *> meshes;
+    for (const MeshConfig &config : moves.GetMeshConfigs()) {
+        std::unique_ptr<PlayerPart> part(new PlayerPart());
+        if (!LoadMeshAndAtlas(tables, "weapon torso", moves.GetPackHash(), config.meshOrdinal,
+            moves.GetPackHash(), config.imageOrdinal, part->mesh, part->texture)) { return false; }
+        meshes.push_back(&part->mesh);
+        weapon->configs.push_back(std::move(part));
+    }
+    const CGameAssetRef &mesh = data.GetMeshRef();
+    const CGameAssetRef &atlas = data.GetImageRef();
+    if (!LoadMeshAndAtlas(tables, owner.c_str(), mesh.packHash, mesh.assetId,
+        atlas.packHash, atlas.assetId, weapon->gunPart.mesh, weapon->gunPart.texture)) { return false; }
+    std::vector<const CMesh *> bodyMeshes;
+    for (auto &part : out.parts) { bodyMeshes.push_back(&part->mesh); }
+    // CBrother::UpdateNormal treats continuous beams specially when the gun
+    // script clears its ready flag. Resolve that property from the real bullet.
+    bool beam = false;
+    const GameObjectRef &bulletRef = data.GetBulletRef();
+    if (bulletRef.localIndex != 255) {
+        std::vector<std::uint8_t> payload;
+        if (!tables.ReadSectionResource(bulletRef.packHash, GameSection::Bullet, bulletRef.localIndex, payload)) { return false; }
+        CArrayInputStream stream(payload);
+        CBullet::Template bullet;
+        if (!bullet.Init(stream)) { return false; }
+        beam = (bullet.GetFlags() & 0x100) != 0;
+    }
+    weapon->gun.Bind(weapon->data, &weapon->gunPart.mesh, beam);
+    weapon->brother.Bind(weapon->playerScript, out.moveSet, bodyMeshes, weapon->gun, meshes);
+    std::printf("[player] equipped %s: weaponTorso=%d move=%d legs=%d hand=%u state=%d\n",
+        owner.c_str(), weapon->brother.TorsoUsesWeapon(), weapon->brother.GetTorso().GetMoveIndex(),
+        weapon->brother.GetLegs().GetMoveIndex(), data.GetHandedness(), weapon->brother.GetStateId());
+    out.weapon = std::move(weapon);
+    return true;
+}
+
+void SetPlayerInput(PlayerModel &model, bool moving, bool shooting) {
+    if (model.weapon) { model.weapon->brother.SetInput(moving, shooting); }
+}
+
+bool GetPlayerMuzzle(PlayerModel &model, int hand, int node, MeshBoneTransform &out) {
+    if (!model.weapon) { return false; }
+    MeshPart placement;
+    std::size_t bone = kGunBoneIndex;
+    if (hand == 1) { bone = kGunLeftBoneIndex; }
+    if (!model.weapon->brother.GetTorso().GetAnimation().GetNodeAt(bone, placement.attachment)) { return false; }
+    MeshBoneTransform muzzle{};
+    // CGun::FireBullet zero-initializes the node and retains that origin when
+    // a model has no named muzzle (for example pack5 gun 60).
+    model.weapon->gun.GetAnimation().GetNodeAt(node, muzzle);
+    float identity[kMatrix4dElements];
+    Matrix4dIdentity(identity);
+    float transform[kMatrix4dElements];
+    MeshCameraBuildPartMatrix(placement, identity, transform);
+    out = muzzle;
+    out.posX = transform[0] * muzzle.posX + transform[1] * muzzle.posY + transform[2] * muzzle.posZ + transform[3];
+    out.posY = transform[4] * muzzle.posX + transform[5] * muzzle.posY + transform[6] * muzzle.posZ + transform[7];
+    out.posZ = transform[8] * muzzle.posX + transform[9] * muzzle.posY + transform[10] * muzzle.posZ + transform[11];
+    return true;
 }
 
 void BuildPlayerGameMatrix(const float *base, float x, float y, float scale,

@@ -48,6 +48,15 @@ enum class KeyCode {
     C,
     E,
     F,
+    Digit1,
+    Digit2,
+    Digit3,
+    Digit4,
+    Digit5,
+    Digit6,
+    Digit7,
+    Digit8,
+    Digit9,
     Count,
 };
 
@@ -117,6 +126,8 @@ public:
      * tracking button state itself.
      */
     void TakeDragDelta(int &deltaX, int &deltaY);
+    /** Weapon previews reserve left click for firing and rotate with right drag. */
+    void SetRightDrag(bool enabled) { m_rightDrag = enabled; }
 
     /** Wheel notches since the last call, positive away from the user. */
     float TakeWheelDelta();
@@ -130,6 +141,10 @@ public:
 
     /** Whether a key is currently held. Intended for continuous movement. */
     bool IsKeyDown(KeyCode key) const;
+    /** Mouse position in drawable pixels, including HiDPI scaling. */
+    bool GetMousePosition(float &x, float &y) const;
+    bool IsLeftMouseDown() const;
+    void SetTitle(const std::string &title);
 
 private:
     SDL_Window *m_window;
@@ -140,6 +155,7 @@ private:
     // Input accumulators, drained by the Take* methods.
     int m_dragDeltaX;
     int m_dragDeltaY;
+    bool m_rightDrag = false;
     float m_wheelDelta;
     std::vector<KeyCode> m_keyPresses;
     bool m_keyDown[static_cast<int>(KeyCode::Count)];

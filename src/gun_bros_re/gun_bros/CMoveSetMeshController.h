@@ -25,6 +25,7 @@
 
 #include "gun_bros/CMeshAnimationController.h"
 #include "gun_bros/CMoveSetMesh.h"
+#include "gun_bros/CGameAssetRef.h"
 
 #include <cstdint>
 #include <vector>
@@ -57,6 +58,8 @@ public:
 
     /** Move the clock on. The move's own speed scales `deltaMs`. */
     void Update(std::int32_t deltaMs);
+    /** Direct WAV references emitted by crossed move frames (not sound templates). */
+    std::vector<GameObjectRef> TakeSounds();
 
     std::int32_t GetMoveIndex() const { return m_moveIndex; }
 
@@ -71,6 +74,7 @@ private:
     std::vector<const CMesh *> m_meshes;
     std::int32_t m_moveIndex;
     CMeshAnimationController m_animation;
+    std::vector<GameObjectRef> m_sounds;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMOVESETMESHCONTROLLER_H

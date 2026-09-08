@@ -137,6 +137,9 @@ void CSpriteIterator::ExpandSprite(std::uint16_t spriteIndex, std::int32_t offse
         const std::uint8_t transform = m_glu.GetSpriteMapTransform(part.spriteMapIndex);
         if (!TransformToFlips(transform, quad.flipHorizontal, quad.flipVertical)) {
             m_unsupportedTransforms++;
+            // Keep the historical count for older axis-aligned consumers.
+            // Transformed batches can now reproduce the quarter-turn blit.
+            quad.rotateTexture = true;
         }
         quad.blend =
             BlendFlagsToMode(m_glu.GetSpriteMapBlendFlags(part.spriteMapIndex));

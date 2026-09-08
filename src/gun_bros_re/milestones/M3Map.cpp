@@ -31,8 +31,10 @@
 #include "milestones/M3Map.h"
 
 #include "milestones/EnemyModel.h"
-#include "milestones/PlayerModel.h"
-#include "milestones/PackTables.h"
+#include "runtime/PlayerModel.h"
+#include "runtime/WeaponCatalog.h"
+#include "gun_bros/WeaponEffects.h"
+#include "runtime/PackTables.h"
 
 #include "engine/CArrayInputStream.h"
 #include "engine/CAudioPlayer.h"
@@ -86,11 +88,10 @@ constexpr float kMaxZoom = 4.0f;
 // small overview smaller; exact fit keeps the whole map without dead padding.
 constexpr float kFitMargin = 1.0f;
 
-// GameView keeps the original 4:3 logical field of view independent of the
-// desktop window's pixel size. A 1600x1200 window therefore renders the same
-// world area as 1024x768 instead of zooming the game farther in or out.
-constexpr float kGameViewWorldWidth = 1024.0f;
-constexpr float kGameViewWorldHeight = 768.0f;
+// GameView uses a fixed 4:3 world view independent of window pixels and map
+// bounds. The framing matches the default stage, not an original engine constant.
+constexpr float kGameViewWorldWidth = 572.0f;
+constexpr float kGameViewWorldHeight = 429.0f;
 
 // Temporary keyboard locomotion until the original control-stick module is
 // ported. The movement and collision time step are frame-rate independent.
@@ -205,6 +206,7 @@ struct PropSprite {
     std::array<PropVisualState, kMaximumInteractiveStateCount> states;
     std::vector<ScriptResourceRef> transitionResources;
     CCollisionData collision;
+    CCollisionData bulletCollision;
     InteractivePropKind interactiveKind;
     std::uint8_t stateCount;
     int zOrderGroup;
@@ -254,7 +256,7 @@ struct PackResources {
 
 /** Sprite animations belonging to one emitter in a particle template. */
 struct ParticleEmitterVisual {
-    std::array<PropSlot, 2> animations;
+    std::array<PropSlot, 32> animations;
 };
 
 /** Parsed particle data plus the already-expanded atlas quads it draws. */
@@ -329,6 +331,7 @@ struct LoadedMap {
     // Effective player collision: the level-selected map layer plus every
     // placed prop's local collision translated into world space.
     CCollisionData collisionScene;
+    WeaponCollision weaponCollision;
 
     // The enemies the object layer places. Held by pointer because an
     // EnemyModel owns GL buffers and points at its own meshes.
@@ -792,6 +795,7 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
                    out.foreground);
     }
     out.collision = propTemplate.GetCollision();
+    out.bulletCollision = propTemplate.GetBulletCollision();
 
     out.skippedParts = iterator.GetSkippedPartCount();
     out.unsupportedTransforms = iterator.GetUnsupportedTransformCount();
@@ -1100,10 +1104,12 @@ bool EnsureParticleEffectVisual(CResTOCManager &tocManager, LoadedMap &loaded,
         }
 
         CSpriteIterator iterator(spritePack->spriteGlu, *archetype);
-        ExpandSlot(iterator, *archetype, 0,
-                   visual.emitters[emitterIndex].animations[0]);
-        ExpandSlot(iterator, *archetype, 1,
-                   visual.emitters[emitterIndex].animations[1]);
+        for (int animation = 0; animation < 32; ++animation) {
+            if ((emitters[emitterIndex].animationMask & (1u << animation)) != 0) {
+                ExpandSlot(iterator, *archetype, static_cast<std::uint8_t>(animation),
+                           visual.emitters[emitterIndex].animations[animation]);
+            }
+        }
     }
 
     loaded.particleEffects.insert(std::make_pair(visualKey, visual));
@@ -1152,8 +1158,7 @@ void StartParticleEffect(LoadedMap &loaded, std::uint64_t visualKey,
             startMs = 0.0f;
         }
         active.nextSpawnMs[emitter] = startMs;
-        active.randomState ^= emitters[emitter].randomSeed +
-                              static_cast<std::uint32_t>(emitter * 7919u);
+        active.randomState ^= static_cast<std::uint32_t>(emitter * 7919u);
     }
     loaded.activeParticleEffects.push_back(active);
 }
@@ -1229,10 +1234,9 @@ void SpawnParticle(ActiveParticleEffect &active,
 
     LiveParticle particle;
     particle.emitterIndex = emitterIndex;
-    particle.animationIndex = 0;
-    if (NextParticleRandom(active.randomState) >= 0.5f) {
-        particle.animationIndex = 1;
-    }
+    const int animation = emitter.SelectAnimation(NextParticleRandom(active.randomState));
+    if (animation < 0) { return; }
+    particle.animationIndex = static_cast<std::uint8_t>(animation);
     particle.x = active.x;
     particle.y = active.y;
     particle.velocityX = 0.0f;
@@ -1390,7 +1394,9 @@ void AdvanceParticleEffects(LoadedMap &loaded, std::uint16_t deltaMs) {
                     emitter.intervalMaximumSeconds) *
                                    kSecondsToMilliseconds;
                 if (intervalMs < 1.0f) {
-                    intervalMs = 1.0f;
+                    // Original UpdateEmitters emits once per update at zero interval.
+                    nextSpawnMs = active.ageMs + 1.0f;
+                    break;
                 }
                 nextSpawnMs += intervalMs;
             }
@@ -1496,11 +1502,6 @@ void AddParticleQuads(const LoadedMap &loaded, CQuadBatch &batch,
             const PropSlot *animation =
                 &emitterVisual.animations[particle.animationIndex];
             if (animation->quadsByStep.empty()) {
-                const std::uint8_t fallback =
-                    static_cast<std::uint8_t>(1 - particle.animationIndex);
-                animation = &emitterVisual.animations[fallback];
-            }
-            if (animation->quadsByStep.empty()) {
                 continue;
             }
 
@@ -1538,11 +1539,11 @@ void AddParticleQuads(const LoadedMap &loaded, CQuadBatch &batch,
                     *quad.page,
                     particle.x + static_cast<float>(quad.offsetX),
                     particle.y + static_cast<float>(quad.offsetY),
-                    static_cast<float>(quad.source.width),
-                    static_cast<float>(quad.source.height), quad.source,
+                    static_cast<float>(quad.Width()),
+                    static_cast<float>(quad.Height()), quad.source,
                     quad.flipHorizontal, quad.flipVertical, quad.blend,
                     particle.x, particle.y, scaleX * uniformScale,
-                    scaleY * uniformScale, rotation, alpha);
+                    scaleY * uniformScale, rotation, alpha, quad.rotateTexture);
             }
         }
     }
@@ -1787,11 +1788,18 @@ void BuildMarkers(const LoadedMap &loaded, CMarkerBatch &markers,
  */
 void BuildCollisionScene(LoadedMap &loaded) {
     loaded.collisionScene.Clear();
+    loaded.weaponCollision.walls.Clear();
+    loaded.weaponCollision.terrain.Clear();
+    const CLayerCollision *bulletLayer = loaded.map.GetCurrentBulletCollisionLayer();
+    if (bulletLayer != nullptr) {
+        loaded.weaponCollision.walls.AppendTranslated(bulletLayer->GetCollision(), 0, 0);
+    }
 
     const CLayerCollision *mapLayer = loaded.map.GetCurrentCollisionLayer();
     if (mapLayer != nullptr) {
         loaded.collisionScene.AppendTranslated(mapLayer->GetCollision(), 0.0f,
                                                0.0f);
+        loaded.weaponCollision.terrain.AppendTranslated(mapLayer->GetCollision(), 0, 0);
     }
 
     std::uint32_t propShapes = 0;
@@ -1800,6 +1808,8 @@ void BuildCollisionScene(LoadedMap &loaded) {
         if (!PropHasCollision(prop)) {
             continue;
         }
+        loaded.weaponCollision.walls.AppendTranslated(prop.sprite->bulletCollision, prop.x, prop.y);
+        loaded.weaponCollision.terrain.AppendTranslated(prop.sprite->bulletCollision, prop.x, prop.y);
         if (prop.sprite->collision.GetEdges().empty()) {
             continue;
         }
@@ -1995,6 +2005,19 @@ void AdvancePlayers(LoadedMap &loaded, std::int32_t deltaMs) {
  * Maps contain one real player spawn. A few abandoned campaign maps contain
  * none; those remain valid viewers and simply ignore movement input.
  */
+/** Swap equipment only after every referenced asset has loaded. */
+bool EquipControlledPlayer(PackTables &tables, LoadedMap &loaded,
+    const CShaderProgram &program, const WeaponEntry &weapon) {
+    if (loaded.players.empty()) { return true; }
+    std::unique_ptr<PlayerModel> replacement(new PlayerModel());
+    if (!BuildPlayerBody(tables, loaded.playerTemplate->moveSet, *replacement) ||
+        !EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapon.data, weapon.owner, *replacement) ||
+        !CreatePlayerBuffers(*replacement, program)) { return false; }
+    PosePlayer(*replacement);
+    loaded.players[0].model = std::move(replacement);
+    return true;
+}
+
 bool UpdateControlledPlayer(LoadedMap &loaded, const CWindow &window,
                             std::uint64_t elapsedMs) {
     if (loaded.players.empty()) {
@@ -2034,7 +2057,7 @@ bool UpdateControlledPlayer(LoadedMap &loaded, const CWindow &window,
                                             directionY * directionY);
     directionX /= directionLength;
     directionY /= directionLength;
-    player.facingDegrees = std::atan2(directionY, directionX) * kRadiansToDegrees;
+    player.facingDegrees = std::atan2(directionY, directionX) * kRadiansToDegrees + 90.0f;
 
     const float elapsedSeconds = static_cast<float>(elapsedMs) * 0.001f;
     CollisionPoint movement(directionX * kPlayerMovementUnitsPerSecond *
@@ -2082,12 +2105,22 @@ bool UpdateControlledPlayer(LoadedMap &loaded, const CWindow &window,
  * the same map at two different times and diff them. Deterministic, because
  * the bite size is fixed rather than taken from the wall clock.
  */
-void WarmUp(LoadedMap &loaded, std::uint32_t totalMs) {
+void WarmUp(LoadedMap &loaded, std::uint32_t totalMs,
+            WeaponEffects *effects = nullptr, bool firing = false) {
+    if (effects && !loaded.players.empty()) { SetPlayerInput(*loaded.players[0].model, false, firing); }
     for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
         AdvanceProps(loaded.props, kWarmUpFrameMs);
         AdvanceTileLayers(loaded.map, kWarmUpFrameMs);
         AdvanceEnemies(loaded, kWarmUpFrameMs);
         AdvancePlayers(loaded, kWarmUpFrameMs);
+        if (effects && !loaded.players.empty()) {
+            PlacedPlayer &player = loaded.players[0];
+            float identity[kMatrix4dElements], modelToWorld[kMatrix4dElements];
+            Matrix4dIdentity(identity);
+            const float scale = PlayerModelWorldScale(*player.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
+            BuildPlayerGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
+            effects->Update(*player.model, modelToWorld, player.facingDegrees, kWarmUpFrameMs, &loaded.weaponCollision);
+        }
     }
 }
 
@@ -2470,16 +2503,10 @@ void FollowPlayerCamera(const LoadedMap &loaded, int viewWidth, int viewHeight,
     }
 }
 
-/**
- * Pick a close gameplay scale that never reveals empty space around the
- * current camera region.
- *
- * The original 1024x768 logical view is the floor. Narrow stage-specific
- * camera regions may need a larger scale to cover the 4:3 window; cropping
- * those regions is correct for a following game camera and avoids revealing
- * space outside the playable region.
+/** Keep the default stage's framing across maps; bounds only limit panning.
+ * This viewer setting is deliberately independent of stage dimensions.
  */
-float GameViewCameraZoom(const LoadedMap &loaded, int viewWidth,
+float GameViewCameraZoom(int viewWidth,
                          int viewHeight) {
     const float logicalScaleX = static_cast<float>(viewWidth) /
                                 kGameViewWorldWidth;
@@ -2488,21 +2515,6 @@ float GameViewCameraZoom(const LoadedMap &loaded, int viewWidth,
     float zoom = logicalScaleX;
     if (logicalScaleY > zoom) {
         zoom = logicalScaleY;
-    }
-    const MapRectangle bounds = loaded.map.GetVisibleBounds();
-    if (bounds.IsEmpty() || bounds.width <= 0 || bounds.height <= 0) {
-        return zoom;
-    }
-
-    const float fillX = static_cast<float>(viewWidth) /
-                        static_cast<float>(bounds.width);
-    const float fillY = static_cast<float>(viewHeight) /
-                        static_cast<float>(bounds.height);
-    if (fillX > zoom) {
-        zoom = fillX;
-    }
-    if (fillY > zoom) {
-        zoom = fillY;
     }
     return zoom;
 }
@@ -2628,7 +2640,8 @@ int RunMapList(const std::string &bigDirectory) {
 int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
              std::uint32_t advanceMs, bool startWithSpawns,
-             bool startWithCollisions, MapViewMode viewMode) {
+             bool startWithCollisions, MapViewMode viewMode, std::uint32_t weaponIndex,
+             bool firePreview) {
     const bool gameView = viewMode == MapViewMode::GameView;
     const char *modeName = "Preview";
     if (gameView) {
@@ -2704,6 +2717,16 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         return 1;
     }
     CAudioPlayer audio;
+    PackTables weaponTables(tocManager);
+    std::vector<WeaponEntry> weapons;
+    std::size_t weaponSlot = weaponIndex;
+    std::unique_ptr<WeaponEffects> weaponEffects;
+    if (gameView) {
+        if (!LoadWeaponCatalog(tocManager, weaponTables, weapons)) { return 1; }
+        if (weaponSlot >= weapons.size()) { weaponSlot = 0; }
+        weaponEffects.reset(new WeaponEffects(tocManager, weaponTables, program));
+        window.SetTitle("GameView | " + WeaponSelectionLabel(weapons, weaponSlot));
+    }
 
     int drawableWidth = 0;
     int drawableHeight = 0;
@@ -2722,8 +2745,9 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     BuildCollisionScene(loaded);
     LoadPlacedEnemies(tocManager, program, loaded);
     LoadPlacedPlayers(tocManager, program, loaded);
+    if (gameView && !EquipControlledPlayer(weaponTables, loaded, program, weapons[weaponSlot])) { return 1; }
     ReportSpawns(loaded);
-    WarmUp(loaded, advanceMs);
+    WarmUp(loaded, advanceMs, weaponEffects.get(), firePreview);
 
     // Either layer can be hidden, which is how "is that rock in the right\n// place or is the ground wrong?" gets answered without a debugger.
     bool showTiles = true;
@@ -2740,7 +2764,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
     Camera camera = FitCamera(loaded, drawableWidth, drawableHeight);
     bool followPlayer = gameView && !loaded.players.empty();
     if (followPlayer) {
-        camera.zoom = GameViewCameraZoom(loaded, drawableWidth, drawableHeight);
+        camera.zoom = GameViewCameraZoom(drawableWidth, drawableHeight);
         FollowPlayerCamera(loaded, drawableWidth, drawableHeight, camera);
     }
 
@@ -2756,6 +2780,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
     if (gameView) {
         std::printf("\n[gameview] WASD: move, arrows: change map, "
+                    "1-7: weapon category, N/M: weapon, mouse: aim, left mouse: fire, "
                     "T: tiles, P: props, K: spawns, B: covers, E: barrels, "
                     "F: spires, C: collision, "
                     "space: pause, '.': one step, Esc: quit\n");
@@ -2776,6 +2801,15 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         bool refit = false;
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
              key = window.TakeKeyPress()) {
+            if (gameView) {
+                const std::size_t nextWeapon = SelectWeaponKey(weapons, weaponSlot, key);
+                if (nextWeapon != weaponSlot && EquipControlledPlayer(weaponTables, loaded, program, weapons[nextWeapon])) {
+                    weaponEffects->Clear();
+                    weaponSlot = nextWeapon;
+                    window.SetTitle("GameView | " + WeaponSelectionLabel(weapons, weaponSlot));
+                    std::printf("[weapon] %s\n", WeaponSelectionLabel(weapons, weaponSlot).c_str());
+                }
+            }
             if (key == KeyCode::T) {
                 showTiles = !showTiles;
                 reportGeometry = true;
@@ -2874,14 +2908,18 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
                 BuildCollisionScene(replacement);
                 LoadPlacedEnemies(tocManager, program, replacement);
                 LoadPlacedPlayers(tocManager, program, replacement);
+                if (gameView) {
+                    if (!EquipControlledPlayer(weaponTables, replacement, program, weapons[weaponSlot])) { return 1; }
+                    weaponEffects->Clear();
+                }
                 ReportSpawns(replacement);
-                WarmUp(replacement, advanceMs);
+                WarmUp(replacement, advanceMs, weaponEffects.get(), firePreview);
                 loaded = std::move(replacement);
                 reportGeometry = true;
                 followPlayer = gameView && !loaded.players.empty();
                 if (followPlayer) {
                     camera.zoom = GameViewCameraZoom(
-                        loaded, drawableWidth, drawableHeight);
+                        drawableWidth, drawableHeight);
                     FollowPlayerCamera(loaded, drawableWidth, drawableHeight,
                                        camera);
                     refit = false;
@@ -2916,11 +2954,33 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 
         if (gameView) {
             UpdateControlledPlayer(loaded, window, elapsedMs);
+            if (!loaded.players.empty()) {
+                PlacedPlayer &player = loaded.players[0];
+                float mouseX = 0, mouseY = 0;
+                if (elapsedMs > 0 && window.GetMousePosition(mouseX, mouseY) && screenshotPath.empty()) {
+                    const float aimX = camera.x + mouseX / camera.zoom - player.x;
+                    const float aimY = camera.y + mouseY / camera.zoom - player.y;
+                    if (aimX != 0 || aimY != 0) {
+                        player.facingDegrees = std::atan2(aimY, aimX) * kRadiansToDegrees + 90.0f;
+                    }
+                }
+                SetPlayerInput(*player.model, player.moving, firePreview || window.IsLeftMouseDown());
+                weaponEffects->SetPaused(elapsedMs == 0);
+            }
         }
         AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
         AdvanceParticleEffects(loaded, static_cast<std::uint16_t>(elapsedMs));
         AdvanceEnemies(loaded, static_cast<std::int32_t>(elapsedMs));
         AdvancePlayers(loaded, static_cast<std::int32_t>(elapsedMs));
+        if (gameView && !loaded.players.empty()) {
+            PlacedPlayer &player = loaded.players[0];
+            float identity[kMatrix4dElements], modelToWorld[kMatrix4dElements];
+            Matrix4dIdentity(identity);
+            const float scale = PlayerModelWorldScale(*player.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
+            BuildPlayerGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
+            weaponEffects->Update(*player.model, modelToWorld, player.facingDegrees,
+                static_cast<int>(elapsedMs), &loaded.weaponCollision);
+        }
         AdvanceTileLayers(loaded.map, static_cast<std::uint16_t>(elapsedMs));
         audio.Update();
         BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
@@ -2929,7 +2989,7 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         if (gameView) {
             // Window resizing changes only pixel scale, never the game field
             // of view. The camera remains entirely owned by GameView.
-            camera.zoom = GameViewCameraZoom(loaded, drawableWidth,
+            camera.zoom = GameViewCameraZoom(drawableWidth,
                                              drawableHeight);
         }
 
@@ -2996,7 +3056,13 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
         }
 
         batch.Draw(program, mvp);
+        if (weaponEffects) {
+            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::BehindPlayer);
+        }
         DrawModels(loaded, program, mvp);
+        if (weaponEffects) {
+            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::InFrontOfPlayer);
+        }
 
         if (showSpawns) {
             // On top of the terrain, and outside the prop batch, because a
@@ -3022,6 +3088,10 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
             reportedFirstFrame = true;
 
             if (!screenshotPath.empty()) {
+                if (gameView) {
+                    std::printf("[gameview-camera] zoom=%.4f world=%.1fx%.1f\n", camera.zoom,
+                        drawableWidth / camera.zoom, drawableHeight / camera.zoom);
+                }
                 if (!window.SaveFrame(screenshotPath)) {
                     return 1;
                 }

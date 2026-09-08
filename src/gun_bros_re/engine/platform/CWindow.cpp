@@ -74,6 +74,15 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_C:      return KeyCode::C;
         case SDLK_E:      return KeyCode::E;
         case SDLK_F:      return KeyCode::F;
+        case SDLK_1:      return KeyCode::Digit1;
+        case SDLK_2:      return KeyCode::Digit2;
+        case SDLK_3:      return KeyCode::Digit3;
+        case SDLK_4:      return KeyCode::Digit4;
+        case SDLK_5:      return KeyCode::Digit5;
+        case SDLK_6:      return KeyCode::Digit6;
+        case SDLK_7:      return KeyCode::Digit7;
+        case SDLK_8:      return KeyCode::Digit8;
+        case SDLK_9:      return KeyCode::Digit9;
         default:          return KeyCode::None;
     }
 }
@@ -199,12 +208,19 @@ bool CWindow::PumpEvents() {
         } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
             // SDL reports the button state with the motion, so there is no
             // need to track presses and releases separately.
-            if ((event.motion.state & SDL_BUTTON_LMASK) != 0) {
+            SDL_MouseButtonFlags dragButton = SDL_BUTTON_LMASK;
+            if (m_rightDrag) { dragButton = SDL_BUTTON_RMASK; }
+            if ((event.motion.state & dragButton) != 0) {
                 m_dragDeltaX += static_cast<int>(event.motion.xrel);
                 m_dragDeltaY += static_cast<int>(event.motion.yrel);
             }
         } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
             m_wheelDelta += event.wheel.y;
+        } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+            for (int i = 0; i < static_cast<int>(KeyCode::Count); ++i) {
+                m_keyDown[i] = false;
+            }
+            m_keyPresses.clear();
         }
     }
     return !m_quitRequested;
@@ -243,6 +259,27 @@ bool CWindow::IsKeyDown(KeyCode key) const {
 
 void CWindow::Present() {
     SDL_GL_SwapWindow(m_window);
+}
+
+bool CWindow::GetMousePosition(float &x, float &y) const {
+    if (SDL_GetMouseFocus() != m_window) { return false; }
+    SDL_GetMouseState(&x, &y);
+    int width = 0, height = 0, drawableWidth = 0, drawableHeight = 0;
+    SDL_GetWindowSize(m_window, &width, &height);
+    GetDrawableSize(drawableWidth, drawableHeight);
+    if (width <= 0 || height <= 0) { return false; }
+    x *= static_cast<float>(drawableWidth) / width;
+    y *= static_cast<float>(drawableHeight) / height;
+    return true;
+}
+
+bool CWindow::IsLeftMouseDown() const {
+    return SDL_GetKeyboardFocus() == m_window &&
+        (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) != 0;
+}
+
+void CWindow::SetTitle(const std::string &title) {
+    SDL_SetWindowTitle(m_window, title.c_str());
 }
 
 bool CWindow::SaveFrame(const std::string &path) const {
