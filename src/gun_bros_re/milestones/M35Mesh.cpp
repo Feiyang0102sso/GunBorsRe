@@ -31,6 +31,7 @@
 
 #include "runtime/PackTables.h"
 #include "runtime/PlayerModel.h"
+#include "runtime/ArmorCatalog.h"
 #include "runtime/WeaponCatalog.h"
 #include "gun_bros/WeaponEffects.h"
 #include "gun_bros/CParticleEffect.h"
@@ -1584,7 +1585,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
 
 int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
                     float spinDegrees, const std::string &screenshotPath,
-                    std::uint32_t advanceMs, bool firePreview) {
+                    std::uint32_t advanceMs, bool firePreview, int armorIndex) {
     std::printf("=== M3.7: a whole character ===\n\n");
 
     CResTOCManager tocManager;
@@ -1596,6 +1597,15 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     std::vector<WeaponEntry> weapons;
     PlayerTemplateData playerTemplate;
     if (!LoadWeaponCatalog(tocManager, tables, weapons)) { return 1; }
+
+    std::vector<ArmorEntry> armors;
+    if (armorIndex >= 0 && !LoadArmorCatalog(tocManager, tables, armors)) {
+        return 1;
+    }
+    if (armorIndex >= static_cast<int>(armors.size()) && armorIndex >= 0) {
+        std::printf("[armor] index %d out of range\n", armorIndex);
+        return 1;
+    }
 
     if (!FindPlayerTemplate(tocManager, tables, playerTemplate)) {
         std::printf("[m37] no player template found\n");
@@ -1639,6 +1649,14 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     SetPlayerInput(*character, false, firePreview);
     window.SetRightDrag(false);
     window.SetTitle("player weapon | " + WeaponSelectionLabel(weapons, gunSlot));
+    if (armorIndex >= 0) {
+        if (!EquipPlayerArmor(tables, armors[armorIndex].data, program, *character)) {
+            return 1;
+        }
+        window.SetTitle("armor " + std::to_string(armorIndex) + "/" +
+            std::to_string(armors.size() - 1) + " | " + armors[armorIndex].owner);
+        std::printf("[armor] Left/Right: armor; B: remove all; 1-7,N/M: weapon; F: fire; WASD: walk\n");
+    }
     PosePlayer(*character);
     WeaponEffects effects(tocManager, tables, program);
 
@@ -1673,6 +1691,24 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
         const std::size_t previousGunSlot = gunSlot;
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
              key = window.TakeKeyPress()) {
+            if (armorIndex >= 0 && (key == KeyCode::Left || key == KeyCode::Right)) {
+                int next = armorIndex + 1;
+                if (key == KeyCode::Left) {
+                    next = armorIndex + static_cast<int>(armors.size()) - 1;
+                }
+                next %= static_cast<int>(armors.size());
+                if (!EquipPlayerArmor(tables, armors[next].data, program, *character)) {
+                    return 1;
+                }
+                armorIndex = next;
+                window.SetTitle("armor " + std::to_string(armorIndex) + "/" +
+                    std::to_string(armors.size() - 1) + " | " + armors[armorIndex].owner);
+                continue;
+            }
+            if (armorIndex >= 0 && key == KeyCode::B) {
+                ClearPlayerArmor(*character);
+                continue;
+            }
             const std::size_t gunCount = weapons.size();
             gunSlot = SelectWeaponKey(weapons, gunSlot, key);
             if (key == KeyCode::Right) {
@@ -1717,6 +1753,10 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
                 EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
                                   weapons[gunSlot].owner, *replacement) &&
                 CreatePlayerBuffers(*replacement, program)) {
+                // Weapon changes preserve all independently equipped armour slots.
+                for (std::uint32_t slot = 0; slot < kArmorSlotCount; ++slot) {
+                    replacement->armor[slot] = std::move(character->armor[slot]);
+                }
                 character = std::move(replacement);
                 effects.Clear();
                 SelectPlayerMoveSlot(*character, moveSlot, true);

@@ -19,6 +19,10 @@ public:
     CAudioPlayer(const CAudioPlayer &) = delete;
     CAudioPlayer &operator=(const CAudioPlayer &) = delete;
 
+    /** Process-wide startup option: validate WAVs without opening playback streams. */
+    static void SetMuted(bool muted);
+    static bool IsMuted();
+
     /** Decode and cache a RIFF/WAVE resource under a caller-owned key. */
     bool Load(std::uint64_t key, const std::vector<std::uint8_t> &wavBytes);
 

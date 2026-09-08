@@ -41,4 +41,13 @@ int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
 /** List every pack that holds maps, and how many. */
 int RunMapList(const std::string &bigDirectory);
 
+/** Retail survival on the same terrain renderer; research viewers stay separate. */
+struct SurvivalGameContext;
+struct MissionEntry;
+int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
+    unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
+    unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
+    SurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
+    const MissionEntry *archiveMission = nullptr);
+
 #endif  // GUN_BROS_RE_MILESTONES_M3MAP_H

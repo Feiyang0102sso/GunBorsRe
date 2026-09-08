@@ -32,10 +32,20 @@
 #include "gun_bros/CGun.h"
 #include "gun_bros/CombatTypes.h"
 #include "gun_bros/CMoveSetMeshController.h"
-#include "gun_bros/CProp.h"  // CGameSpriteGluRef lives here, next to its first user
+// CGameSpriteGluRef lives here, next to its first user
+// Historical location above; now declared in original gameAssetRef module.
 
 class CBrother : public IScriptObject {
 public:
+    /** Actor-owned state survives equipment changes, as in original CBrother. */
+    struct PowerupState {
+        int shieldMs = 0;
+        int autoFireMs = 0;
+        bool turretActive = false;
+        int frenzyMs[3]{};
+        float frenzyMultiplier[3]{1, 1, 1};
+        GameObjectRef effects[5];
+    };
     class Template {
     public:
         Template();
@@ -75,8 +85,31 @@ public:
 
     CBrother();
     void SetVitals(PlayerVitals *vitals) { m_vitals = vitals; }
+    void SetPowerupState(PowerupState *powerups);
+    void StartShield(const GameObjectRef &effect, int durationMs);
+    void StartAutoFire(const GameObjectRef &effect, int durationSeconds);
+    bool IsAutoFire() const { return m_powerups != nullptr && m_powerups->autoFireMs > 0; }
+    bool IsTurretActive() const { return m_powerups != nullptr && m_powerups->turretActive; }
+    void SetTurretIsActive(bool active) { if (m_powerups != nullptr) { m_powerups->turretActive = active; } }
+    void StartFrenzyType(const GameObjectRef &effect, int durationMs, float multiplier, unsigned type);
+    bool IsShield() const { return m_powerups != nullptr && m_powerups->shieldMs > 0; }
+    bool IsFrenzyType(unsigned type) const { return type < 3 && m_powerups != nullptr && m_powerups->frenzyMs[type] > 0; }
+    float GetFrenzyMultiplier(unsigned type) const;
+    float GetProjectilePowerupMultiplier() const;
+    void SetHuman(bool human) { m_variables[2] = human; }
+    bool CanMove() const { return m_variables[1] != 0; }
+    bool CanShoot() const { return m_variables[0] != 0; }
     HitResult ReceiveDamage(float damage);
     void Stun(int durationMs);
+    /** Original CBrother::OnWaveCleared (:135964), including script recovery. */
+    void OnWaveCleared();
+    /** Queue original events 10/11; inventory is committed only after spawning. */
+    void SetGrenade(unsigned slot, const GameObjectRef &resource, unsigned count);
+    bool OnThrowGrenade(unsigned slot);
+    bool CanThrowGrenade(unsigned slot) const;
+    void OnGrenadeThrown(unsigned slot);
+    unsigned TakeThrownGrenades(unsigned slot);
+    bool HasGrenadeRequest(unsigned slot) const { return slot < 2 && (m_grenadePending[slot] || m_grenadeAnimating[slot]); }
     std::vector<GunCue> TakeCues();
     /** Run player and weapon scripts against decoded, stable mesh banks. */
     void Bind(const CScript &script, const CMoveSetMesh &moves,
@@ -97,6 +130,13 @@ public:
 
 private:
     PlayerVitals *m_vitals = nullptr;
+    PowerupState *m_powerups = nullptr;
+    void PowerupEffect(const GameObjectRef &effect, int slot, bool active);
+    GameObjectRef m_grenades[2];
+    unsigned m_grenadeStock[2]{};
+    unsigned m_grenadesThrown[2]{};
+    bool m_grenadePending[2]{};
+    bool m_grenadeAnimating[2]{};
     std::vector<GunCue> m_cues;
     void SetShooting(bool shooting);
     bool m_triggerHeld;

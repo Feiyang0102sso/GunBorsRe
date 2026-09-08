@@ -3,6 +3,7 @@
  * Reference: CEnemy::Spawn :73239, Update :67720, resolver :71692.
  */
 #include "gun_bros/CEnemy.h"
+#include "gun_bros/CLevel.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -165,6 +166,12 @@ bool CEnemy::TriggerEvent(std::uint8_t event) {
     return m_interpreter.HandleEvent(6, event);
 }
 
+void CEnemy::HandleMessage(int message) {
+    // CEnemy::HandleMessage :68024: messages 0..5 map to 4,9,10,11,12,13.
+    if (message == 0) { TriggerEvent(4); }
+    else if (message >= 1 && message <= 5) { TriggerEvent(static_cast<std::uint8_t>(message + 8)); }
+}
+
 void CEnemy::OnScriptStateEntered() {
     // OnStateChanged clears only the event timer (:67310), not the function timer.
     combat.eventTimer = 0;
@@ -261,15 +268,24 @@ void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
     }
     // Death scripts may deliberately choose a movement/rotation behaviour.
     if (combat.behaviour == 0 && combat.targetAlive && !combat.dead) {
-        const float dx = combat.targetX - combat.x;
-        const float dy = combat.targetY - combat.y;
+        float dx = combat.targetX - combat.x;
+        float dy = combat.targetY - combat.y;
         const float distance = std::hypot(dx, dy);
         if (distance > combat.arrivalDistance && distance > 0) {
             combat.arrived = false;
-            const float travel = std::min(distance - combat.arrivalDistance,
+            float remaining = distance - combat.arrivalDistance;
+            if (combat.hasNavigationTarget) {
+                dx = combat.navigationX - combat.x;
+                dy = combat.navigationY - combat.y;
+                remaining = std::hypot(dx, dy);
+            }
+            const float directionLength = std::hypot(dx, dy);
+            const float travel = std::min(remaining,
                 std::max(0.0f, combat.variables[0] * seconds));
-            combat.x += dx / distance * travel;
-            combat.y += dy / distance * travel;
+            if (directionLength > 0) {
+                combat.x += dx / directionLength * travel;
+                combat.y += dy / directionLength * travel;
+            }
         } else if (!combat.arrived) {
             combat.arrived = true;
             TriggerEvent(0);
@@ -337,6 +353,17 @@ void CEnemy::UpdateCombatAfterAnimation(int deltaMs) {
     if (combat.removed) {
         return;
     }
+    UpdateCombatTimers(deltaMs);
+    if (!combat.dead && combat.triggerDistance > 0 && combat.targetAlive) {
+        const float distance = std::hypot(combat.targetX - combat.x, combat.targetY - combat.y);
+        if ((combat.triggerInside && distance < combat.triggerDistance) ||
+            (!combat.triggerInside && distance > combat.triggerDistance)) {
+            TriggerEvent(1);
+        }
+    }
+}
+
+void CEnemy::UpdateCombatTimers(int deltaMs) {
     if (combat.functionTimer > 0) {
         combat.functionTimer -= deltaMs;
         if (combat.functionTimer <= 0) {
@@ -349,13 +376,6 @@ void CEnemy::UpdateCombatAfterAnimation(int deltaMs) {
         if (combat.eventTimer <= 0) {
             combat.eventTimer = 0;
             TriggerEvent(3);
-        }
-    }
-    if (!combat.dead && combat.triggerDistance > 0 && combat.targetAlive) {
-        const float distance = std::hypot(combat.targetX - combat.x, combat.targetY - combat.y);
-        if ((combat.triggerInside && distance < combat.triggerDistance) ||
-            (!combat.triggerInside && distance > combat.triggerDistance)) {
-            TriggerEvent(1);
         }
     }
 }
@@ -550,9 +570,16 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         result = static_cast<std::int16_t>(std::min(32767.0f, std::abs(combat.targetY - combat.y)));
         return true;
     case 46:
+        action.kind = EnemyAction::Kind::LevelEvent;
+        action.slot = 1;
+        break;
     case 47:
-    case 56:
         return true; // Level objectives/teleport notifications have no Arena owner.
+    case 56:
+        // CEnemy native 0x38 forwards its argument to CLevel::HandleEvent.
+        action.kind = EnemyAction::Kind::LevelEvent;
+        action.slot = args[0];
+        break;
     case 48:
         result = static_cast<std::int16_t>(TargetAngle());
         return true;
@@ -563,11 +590,21 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         return true;
     case 50:
         combat.health = std::max(0.0f, static_cast<float>(args[0]));
+        if (GetLevelContext() != nullptr) {
+            combat.health *= GetLevelContext()->GetEnemyMultiplier(combat.templateRef, 1);
+        }
         combat.maxHealth = std::max(combat.maxHealth, combat.health);
         return true;
-    case 51:
-        result = static_cast<std::int16_t>(std::min(32767.0f, combat.health));
+    case 51: {
+        float health = combat.health;
+        if (GetLevelContext() != nullptr) {
+            const float multiplier = GetLevelContext()->GetEnemyMultiplier(combat.templateRef, 1);
+            if (multiplier > 0) { health /= multiplier; }
+        }
+        // GetHealth :68315 reports script units, rounded and never below one.
+        result = static_cast<std::int16_t>(std::clamp(std::round(health), 1.0f, 32767.0f));
         return true;
+    }
     case 52:
         result = static_cast<std::int16_t>(std::round(combat.pendingHit.damage));
         return true;
@@ -592,8 +629,11 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         return true;
     case 62:
         // SpawnItem is the original kill reward, deliberately excluded.
-        combat.deferredMechanisms |= 4;
-        return true;
+        // Correction: :68644 creates a CPickup at the enemy's location;
+        // its collection script grants the reward later, independently of XP.
+        action.kind = EnemyAction::Kind::SpawnPickup;
+        action.resource = ScriptResource(args[0]);
+        break;
     case 57:
         combat.eventTimer = 1000 * args[0];
         return true;
@@ -611,6 +651,17 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         action.kind = EnemyAction::Kind::RemoveBullet;
         result = 1;
         break;
+    case 66: {
+        int amplitude = 2;
+        if (argumentCount == 2 && args[1] <= 0) { amplitude = 0; }
+        if (argumentCount == 1 || argumentCount == 2) {
+            stun.SetStunned(1000 * args[0] / 256, 50, amplitude);
+        }
+        return true;
+    }
+    case 67:
+        stun.ClearStunned();
+        return true;
     case 69:
         // The scene resolves the animated node's direction as well as position.
         QueueBullet(ScriptResource(args[0]), action.part, args[1], combat.facing);
@@ -622,7 +673,11 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         combat.turret = true;
         return true;
     case 71:
-        return true; // Owner turret-availability UI; no inventory in Arena.
+        // Owner turret-availability UI; no inventory in Arena.
+        // The original offline owner index is -1, selecting the local player.
+        action.kind = EnemyAction::Kind::TurretActive;
+        action.slot = args[0] != 0;
+        break;
     default:
         return false;
     }

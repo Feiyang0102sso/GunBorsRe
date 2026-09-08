@@ -12,6 +12,7 @@
 using CombatId = std::uint64_t;
 constexpr CombatId kNoCombatId = 0;
 constexpr CombatId kPlayerCombatId = 1;
+constexpr CombatId kBrotherCombatId = UINT64_MAX;
 
 enum class HitResult { Pending, Ignored, Hit, Killed };
 
@@ -52,6 +53,9 @@ struct CombatHit {
     int part = -1;
     int edge = -1;
     bool splash = false;
+    bool percentDamage = false;
+    int spawnObjectId = -1;
+    bool forceSpawn = false;
 };
 
 struct CombatTrace {
@@ -70,6 +74,8 @@ public:
     virtual CombatTrace Trace(const CombatHit &hit, float x, float y,
         float dx, float dy, float radius, const std::vector<CombatId> &skipTargets) = 0;
     virtual HitResult ApplyHit(CombatId target, const CombatHit &hit) = 0;
+    virtual float GetDamageMultiplier(CombatId owner, float fallback = 1) const { return fallback; }
+    virtual float GetProjectilePowerupMultiplier(CombatId owner) const { return 1; }
     virtual void Splash(const CombatHit &hit, float radius, float coneDegrees,
         float force, int forceMs) = 0;
     virtual void SpawnFromProjectile(const GameObjectRef &resource,

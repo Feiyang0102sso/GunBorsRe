@@ -78,4 +78,27 @@ struct RequirementList {
     void Init(CArrayInputStream &stream);
 };
 
+/**
+ * Reference to a SpriteGlu character.
+ *
+ * Port of CGameSpriteGluRef (src/gunbros/gameAssetRef.cpp).
+ * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:191859
+ *
+ * Wire format: uint32 packHash, uint8 archetype, uint8 action, uint8 animation.
+ *
+ * Unlike CGameAssetRef this carries no resource id at all -- the archetype
+ * index is resolved against whichever pack the hash names. That is why the
+ * sprite atlases looked unaddressable from the section tables alone.
+ */
+struct CGameSpriteGluRef {
+    std::uint32_t packHash;
+    std::uint8_t archetype;
+    std::uint8_t action;
+    std::uint8_t animation;
+
+    CGameSpriteGluRef();
+
+    void Init(CArrayInputStream &stream);
+};
+
 #endif  // GUN_BROS_RE_GUN_BROS_CGAMEASSETREF_H

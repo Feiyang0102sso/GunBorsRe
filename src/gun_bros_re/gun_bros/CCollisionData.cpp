@@ -5,6 +5,12 @@
 
 #include "gun_bros/CCollisionData.h"
 
+void CCollisionData::SetGroupEnabled(int group, bool enabled) {
+    for (CollisionEdge &edge : m_edges) {
+        if (edge.group == group) { edge.enabled = enabled; }
+    }
+}
+
 #include <cmath>
 #include <cstdio>
 #include <limits>

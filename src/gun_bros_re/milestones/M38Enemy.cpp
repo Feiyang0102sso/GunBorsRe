@@ -105,8 +105,8 @@ struct EnemyTemplate {
     // Named for their template offsets, which is the one thing certainly true
     // about them. Read so the two scales land at the right place.
     GameObjectRef objectRef104;
-    std::uint16_t value112;
-    std::uint16_t value114;
+    std::uint16_t experienceReward;
+    std::uint16_t xplodiumReward;
     std::uint8_t flag117;
     std::uint8_t radius116;
 
@@ -115,8 +115,8 @@ struct EnemyTemplate {
           ordinal(0),
           gameScale(0.0f),
           uiScalePercent(0.0f),
-          value112(0),
-          value114(0),
+          experienceReward(0),
+          xplodiumReward(0),
           flag117(0),
           radius116(0) {}
 };
@@ -163,8 +163,8 @@ void CollectEnemies(CResTOCManager &tocManager, PackTables &tables,
             }
 
             entry.objectRef104.Init(stream);
-            entry.value112 = stream.ReadUInt16();
-            entry.value114 = stream.ReadUInt16();
+            entry.experienceReward = stream.ReadUInt16();
+            entry.xplodiumReward = stream.ReadUInt16();
             entry.flag117 = stream.ReadUInt8();
             entry.radius116 = stream.ReadUInt8();
             entry.gameScale = static_cast<float>(stream.ReadUInt16());

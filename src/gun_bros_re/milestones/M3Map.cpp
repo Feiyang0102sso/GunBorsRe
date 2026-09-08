@@ -28,11 +28,21 @@
  * belongs to. That is what M4a needs before it can put anything anywhere.
  */
 
+#define NOMINMAX
 #include "milestones/M3Map.h"
 
 #include "milestones/EnemyModel.h"
+#include "milestones/SurvivalPilot.h"
 #include "runtime/PlayerModel.h"
 #include "runtime/WeaponCatalog.h"
+#include "runtime/ArmorCatalog.h"
+#include "runtime/SurvivalSession.h"
+#include "runtime/CombatGeometry.h"
+#include "runtime/StoreCatalog.h"
+#include <sstream>
+#include "runtime/SurvivalGameContext.h"
+#include "runtime/HudText.h"
+#include "runtime/MissionCatalog.h"
 #include "gun_bros/WeaponEffects.h"
 #include "runtime/PackTables.h"
 
@@ -200,6 +210,10 @@ struct PropVisualState {
  * PlacedProp.
  */
 struct PropSprite {
+    CProp::Template data;
+    GameObjectRef resource;
+    std::vector<PropSlot> animations;
+    std::vector<std::vector<std::uint16_t>> durations;
     PropSlot background;
     PropSlot main;
     PropSlot foreground;
@@ -226,6 +240,9 @@ struct PropSprite {
 
 /** One prop standing on the map, each of its three slots playing its own. */
 struct PlacedProp {
+    std::shared_ptr<CProp> runtime;
+    int objectId = -1;
+    CombatId lastDamager = 0;
     float x;
     float y;
     const PropSprite *sprite;
@@ -768,6 +785,9 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     if (!propTemplate.Init(stream)) {
         return false;
     }
+    out.data = propTemplate;
+    out.resource.packHash = propPackHash;
+    out.resource.localIndex = localIndex;
 
     // The sprite lives in whichever pack the reference names, which need not
     // be the one the template came from.
@@ -785,6 +805,14 @@ bool BuildPropSprite(CResTOCManager &tocManager, LoadedMap &loaded,
     }
 
     CSpriteIterator iterator(gluPack->spriteGlu, *archetype);
+    if (propTemplate.GetScript().IsPresent()) {
+        out.animations.resize(archetype->GetAnimationCount());
+        out.durations.resize(archetype->GetAnimationCount());
+        for (unsigned animation = 0; animation < archetype->GetAnimationCount(); ++animation) {
+            ExpandSlot(iterator, *archetype, static_cast<std::uint8_t>(animation), out.animations[animation]);
+            out.durations[animation] = out.animations[animation].stepDurationsMs;
+        }
+    }
     BuildInteractiveStates(propPackHash, localIndex, iterator, *archetype, out);
     out.transitionResources = propTemplate.GetScript().GetResources();
     if (out.interactiveKind == InteractivePropKind::None) {
@@ -850,7 +878,16 @@ std::uint32_t StartStepFor(std::size_t propOrdinal, std::size_t stepCount) {
 }
 
 /** Background slot selected by a prop's current cover state. */
+const PropSlot *RuntimeSlotFor(const PlacedProp &prop, unsigned slot) {
+    static const PropSlot empty;
+    if (prop.runtime->IsRemoved()) { return &empty; }
+    const int animation = prop.runtime->GetAnimation(slot);
+    if (animation < 0 || animation >= static_cast<int>(prop.sprite->animations.size())) { return &empty; }
+    return &prop.sprite->animations[animation];
+}
+
 const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
+    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 2); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->background;
     }
@@ -861,6 +898,7 @@ const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
 }
 
 const PropSlot *MainSlotFor(const PlacedProp &prop) {
+    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 1); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->main;
     }
@@ -871,6 +909,7 @@ const PropSlot *MainSlotFor(const PlacedProp &prop) {
 }
 
 const PropSlot *ForegroundSlotFor(const PlacedProp &prop) {
+    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 0); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->foreground;
     }
@@ -1551,6 +1590,7 @@ void AddParticleQuads(const LoadedMap &loaded, CQuadBatch &batch,
 
 /** The original disables both collision shapes in the destroyed state. */
 bool PropHasCollision(const PlacedProp &prop) {
+    if (prop.runtime != nullptr) { return !prop.runtime->IsRemoved(); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return true;
     }
@@ -1575,7 +1615,7 @@ bool PropDrawsBefore(const PlacedProp &left, const PlacedProp &right) {
  * load: a prop whose template or sprite will not resolve is dropped and
  * reported, because one bad rock should not cost the whole level.
  */
-void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
+void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded, int selectedObjectLayer = -1) {
     loaded.props.clear();
     loaded.propSprites.clear();
 
@@ -1585,6 +1625,9 @@ void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
 
     for (std::uint32_t layerIndex = 0; layerIndex < loaded.map.GetObjectLayerCount();
          ++layerIndex) {
+        if (selectedObjectLayer >= 0 && static_cast<int>(loaded.map.GetObjectLayer(layerIndex).GetLayerIndex()) != selectedObjectLayer) {
+            continue;
+        }
         const std::vector<PlacedObject> &objects =
             loaded.map.GetObjectLayer(layerIndex).GetObjects();
 
@@ -1620,6 +1663,7 @@ void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
             prop.x = static_cast<float>(object.x);
             prop.y = static_cast<float>(object.y);
             prop.sprite = &found->second;
+            prop.objectId = static_cast<int>(i);
             loaded.props.push_back(prop);
             placed++;
         }
@@ -1659,6 +1703,7 @@ void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded) {
 /** Move every prop's three players on by one frame's worth of time. */
 void AdvanceProps(std::vector<PlacedProp> &props, std::uint16_t deltaMs) {
     for (std::size_t i = 0; i < props.size(); ++i) {
+        if (props[i].runtime != nullptr) { continue; }
         props[i].background.Update(deltaMs);
         props[i].main.Update(deltaMs);
         props[i].foreground.Update(deltaMs);
@@ -1808,12 +1853,15 @@ void BuildCollisionScene(LoadedMap &loaded) {
         if (!PropHasCollision(prop)) {
             continue;
         }
-        loaded.weaponCollision.walls.AppendTranslated(prop.sprite->bulletCollision, prop.x, prop.y);
-        loaded.weaponCollision.terrain.AppendTranslated(prop.sprite->bulletCollision, prop.x, prop.y);
-        if (prop.sprite->collision.GetEdges().empty()) {
+        const CCollisionData *body = &prop.sprite->collision;
+        const CCollisionData *bullets = &prop.sprite->bulletCollision;
+        if (prop.runtime != nullptr) { body = &prop.runtime->GetCollision(); bullets = &prop.runtime->GetCollision(true); }
+        loaded.weaponCollision.walls.AppendTranslated(*bullets, prop.x, prop.y);
+        loaded.weaponCollision.terrain.AppendTranslated(*bullets, prop.x, prop.y);
+        if (body->GetEdges().empty()) {
             continue;
         }
-        if (!loaded.collisionScene.AppendTranslated(prop.sprite->collision,
+        if (!loaded.collisionScene.AppendTranslated(*body,
                                                     prop.x, prop.y)) {
             break;
         }
@@ -1830,6 +1878,215 @@ void BuildCollisionScene(LoadedMap &loaded) {
                 loaded.collisionScene.GetVertices().size(),
                 loaded.collisionScene.GetEdges().size());
 }
+
+/** Original script state lives beside the map instance, never in shared quads. */
+class MapPropWorld : public IPropWorld {
+public:
+    MapPropWorld(LoadedMap &map, CombatScene &scene, CLevel &level, WeaponEffects &effects)
+        : m_map(map), m_scene(scene), m_level(level), m_effects(effects) {
+        for (PlacedProp &prop : m_map.props) {
+            if (prop.sprite->data.GetScript().IsPresent()) { prop.runtime = std::make_shared<CProp>(); }
+        }
+    }
+
+    void Reset() override {
+        unsigned scripted = 0;
+        for (PlacedProp &prop : m_map.props) {
+            if (prop.runtime == nullptr) { continue; }
+            ++scripted;
+            prop.runtime->SetLevelContext(&m_level);
+            prop.runtime->Bind(prop.sprite->data, &prop.sprite->durations);
+            SyncPlayers(prop);
+        }
+        BuildCollisionScene(m_map);
+        std::printf("[prop] runtime scripts=%u\n", scripted);
+    }
+
+    void SendMessage(int objectId, int message) override {
+        for (PlacedProp &prop : m_map.props) {
+            if (prop.objectId != objectId || prop.runtime == nullptr) { continue; }
+            const unsigned previous = prop.runtime->GetStateId();
+            prop.runtime->HandleMessage(message);
+            SyncPlayers(prop);
+            std::printf("[prop] id=%d message=%d state=%u->%u\n", objectId, message, previous, prop.runtime->GetStateId());
+            return;
+        }
+    }
+
+    void Update(int deltaMs) override {
+        const CLayerCollision *bodyLayer = m_map.map.GetCurrentCollisionLayer();
+        const CLayerCollision *bulletLayer = m_map.map.GetCurrentBulletCollisionLayer();
+        bool changed = bodyLayer != m_bodyLayer || bulletLayer != m_bulletLayer;
+        m_bodyLayer = bodyLayer;
+        m_bulletLayer = bulletLayer;
+        for (PlacedProp &prop : m_map.props) {
+            if (prop.runtime == nullptr) { continue; }
+            prop.runtime->Update(deltaMs, PlayerInside(prop));
+            SyncPlayers(prop);
+            for (const PropAction &action : prop.runtime->TakeActions()) { ApplyAction(prop, action); }
+            if (prop.runtime->CollisionChanged()) { changed = true; prop.runtime->ClearCollisionChanged(); }
+        }
+        if (changed) { BuildCollisionScene(m_map); }
+    }
+
+    CombatTrace Trace(const CombatHit &hit, float x, float y, float dx, float dy,
+        float radius, const std::vector<CombatId> &skip) override {
+        CombatTrace nearest;
+        for (const PlacedProp &prop : m_map.props) {
+            if (prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0 || hit.ownerType != 0) { continue; }
+            const CombatId id = kPropIdBase + prop.objectId;
+            if (std::find(skip.begin(), skip.end(), id) != skip.end()) { continue; }
+            const auto &shape = prop.runtime->GetCollision(true);
+            const auto &vertices = shape.GetVertices();
+            for (const CollisionEdge &edge : shape.GetEdges()) {
+                if (!edge.enabled) { continue; }
+                const CollisionPoint &first = vertices[edge.firstVertex], &second = vertices[edge.secondVertex];
+                const float fraction = CombatGeometry::EdgeFraction(x - prop.x, y - prop.y, dx, dy, first, second, radius);
+                if (fraction < nearest.fraction) {
+                    nearest = {id, fraction, -1, edge.group, first.y - second.y, second.x - first.x};
+                }
+            }
+        }
+        return nearest;
+    }
+
+    HitResult ApplyHit(CombatId target, const CombatHit &hit) override {
+        for (PlacedProp &prop : m_map.props) {
+            if (kPropIdBase + prop.objectId != target || prop.runtime == nullptr || prop.runtime->IsRemoved()) { continue; }
+            prop.lastDamager = hit.owner;
+            prop.runtime->Damage(hit.damage, hit.flags);
+            SyncPlayers(prop);
+            ++m_hitCount;
+            return HitResult::Hit;
+        }
+        return HitResult::Ignored;
+    }
+
+    void Splash(const CombatHit &hit, float radius) override {
+        // CProp::CanCollide accepts human/AI gun ownership, not enemy shots.
+        if (hit.ownerType != 0) { return; }
+        for (PlacedProp &prop : m_map.props) {
+            if (prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0) { continue; }
+            const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
+            if (vertices.empty()) { continue; }
+            float left = vertices[0].x, right = left, top = vertices[0].y, bottom = top;
+            for (const CollisionPoint &point : vertices) {
+                left = std::min(left, point.x); right = std::max(right, point.x);
+                top = std::min(top, point.y); bottom = std::max(bottom, point.y);
+            }
+            const float x = prop.x + (left + right) * 0.5f;
+            const float y = prop.y + (top + bottom) * 0.5f;
+            const float extent = std::max(right - left, bottom - top) * 0.5f;
+            if (std::hypot(hit.x - x, hit.y - y) > radius + extent) { continue; }
+            m_scene.ApplyHit(kPropIdBase + prop.objectId, hit);
+        }
+    }
+
+    unsigned GetFailures() const {
+        unsigned failures = 0;
+        for (const PlacedProp &prop : m_map.props) {
+            if (prop.runtime != nullptr) { failures += prop.runtime->GetUnsupportedCount(); }
+        }
+        return failures;
+    }
+
+    unsigned GetHitCount() const { return m_hitCount; }
+
+    unsigned CheckDamageContracts() {
+        unsigned tested = 0, failures = 0;
+        for (const PlacedProp &prop : m_map.props) {
+            if (prop.runtime == nullptr || prop.runtime->GetHealth() <= 0) { continue; }
+            // Independent instance: checking a barrel must not damage the
+            // account or change its real level-script progress.
+            CProp probe;
+            probe.Bind(prop.sprite->data, &prop.sprite->durations);
+            const unsigned initialState = probe.GetStateId();
+            const float initialHealth = probe.GetHealth();
+            probe.Damage(10000, 0xffffffffu);
+            for (int elapsed = 0; elapsed < 2500; elapsed += 16) { probe.Update(16, false); }
+            if (probe.GetStateId() == initialState && probe.GetHealth() == initialHealth) { ++failures; }
+            failures += probe.GetUnsupportedCount();
+            ++tested;
+        }
+        std::printf("[prop-check] independent damage/timer/animation templates=%u failures=%u\n", tested, failures);
+        return failures;
+    }
+
+private:
+    static constexpr CombatId kPropIdBase = 1ull << 62;
+    void SyncPlayers(PlacedProp &prop) {
+        prop.foreground = prop.runtime->GetPlayer(0);
+        prop.main = prop.runtime->GetPlayer(1);
+        prop.background = prop.runtime->GetPlayer(2);
+    }
+
+    bool PlayerInside(const PlacedProp &prop) const {
+        const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
+        if (vertices.empty()) { return false; }
+        bool inside = false;
+        std::size_t previous = vertices.size() - 1;
+        const float x = m_scene.playerX - prop.x;
+        const float y = m_scene.playerY - prop.y;
+        for (std::size_t index = 0; index < vertices.size(); ++index) {
+            const auto &first = vertices[index];
+            const auto &second = vertices[previous];
+            if ((first.y > y) != (second.y > y)) {
+                const float crossing = first.x + (second.x - first.x) * (y - first.y) / (second.y - first.y);
+                if (x < crossing) { inside = !inside; }
+            }
+            previous = index;
+        }
+        return inside;
+    }
+
+    void ApplyAction(PlacedProp &prop, const PropAction &action) {
+        if (action.kind == PropAction::Kind::Entered || action.kind == PropAction::Kind::Destroyed) {
+            m_level.OnPropEvent(prop.objectId, prop.sprite->resource, action.kind == PropAction::Kind::Entered);
+            return;
+        }
+        if (action.kind == PropAction::Kind::Splash) {
+            CombatHit hit;
+            hit.x = prop.x;
+            hit.y = prop.y;
+            hit.damage = static_cast<float>(action.damage);
+            hit.owner = kPlayerCombatId;
+            if (action.damageOwner == 1 && prop.lastDamager != 0) { hit.owner = prop.lastDamager; }
+            // Self-owned environmental explosions can hurt both sides; the
+            // original knockback native explicitly visits only the brothers.
+            if (!action.playersOnly) { m_scene.Splash(hit, static_cast<float>(action.radius), 360, 0, 0); }
+            if (action.playersOnly || action.damageOwner == 0) {
+                hit.owner = 0;
+                hit.ownerType = 1;
+                m_scene.Splash(hit, static_cast<float>(action.radius), 360, static_cast<float>(action.force), action.forceMs);
+            }
+            return;
+        }
+        GunCue cue;
+        cue.kind = GunCue::Kind::Effect;
+        cue.resource = action.resource;
+        float x = prop.x, y = prop.y;
+        CombatId owner = 0;
+        if (action.kind == PropAction::Kind::Sound) { cue.kind = GunCue::Kind::Sound; }
+        if (action.kind == PropAction::Kind::Portal || action.kind == PropAction::Kind::AttachedEffect) {
+            x = m_scene.playerX; y = m_scene.playerY;
+        }
+        if (action.kind == PropAction::Kind::AttachedEffect || action.kind == PropAction::Kind::StopEffect) {
+            owner = kPlayerCombatId;
+            cue.kind = GunCue::Kind::Trail;
+            if (action.kind == PropAction::Kind::StopEffect) { cue.kind = GunCue::Kind::StopTrail; }
+        }
+        m_effects.Emit(cue, x, y, 0, 0, owner, prop.objectId + 1000);
+        if (action.kind == PropAction::Kind::Portal) { m_level.HandleEvent(3); }
+    }
+
+    LoadedMap &m_map;
+    const CLayerCollision *m_bodyLayer = nullptr;
+    const CLayerCollision *m_bulletLayer = nullptr;
+    CombatScene &m_scene;
+    CLevel &m_level;
+    WeaponEffects &m_effects;
+    unsigned m_hitCount = 0;
+};
 
 /** Collect the exact collision scene used by player movement. */
 void BuildCollisionMarkers(const LoadedMap &loaded, CMarkerBatch &markers) {
@@ -2009,12 +2266,12 @@ void AdvancePlayers(LoadedMap &loaded, std::int32_t deltaMs) {
 bool EquipControlledPlayer(PackTables &tables, LoadedMap &loaded,
     const CShaderProgram &program, const WeaponEntry &weapon) {
     if (loaded.players.empty()) { return true; }
-    std::unique_ptr<PlayerModel> replacement(new PlayerModel());
-    if (!BuildPlayerBody(tables, loaded.playerTemplate->moveSet, *replacement) ||
-        !EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapon.data, weapon.owner, *replacement) ||
-        !CreatePlayerBuffers(*replacement, program)) { return false; }
-    PosePlayer(*replacement);
-    loaded.players[0].model = std::move(replacement);
+    // CombatScene retains this model's address. EquipPlayerWeapon stages the
+    // weapon atomically and preserves the body, vitals pointer and armour.
+    PlayerModel &player = *loaded.players[0].model;
+    if (!EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapon.data, weapon.owner, player) ||
+        !CreatePlayerBuffers(player, program)) { return false; }
+    PosePlayer(player);
     return true;
 }
 
@@ -2634,6 +2891,969 @@ int RunMapList(const std::string &bigDirectory) {
         std::printf("  %2zu  %-8s map %u\n", i + 1, catalog[i].packName.c_str(),
                     catalog[i].mapIndex);
     }
+    return 0;
+}
+
+/** Checkpoint the rebuilt profile only. Research harnesses pass no context. */
+bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &progress,
+    const CombatScene &scene, unsigned wave, std::uint64_t &accountedXplodium) {
+    if (context == nullptr) { return true; }
+    CProfileManager &profile = context->profile;
+    profile.experience = progress.GetExperience();
+    profile.xplodium += scene.GetXplodium() - accountedXplodium;
+    accountedXplodium = scene.GetXplodium();
+    profile.clearedWaves[context->planet] = std::max(profile.clearedWaves[context->planet], wave);
+    return profile.SaveToDisk(context->savePath);
+}
+
+int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
+    unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
+    unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
+    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission) {
+    std::string capturePath = screenshotPath;
+    unsigned checkFailures = 0;
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
+    const int packIndex = toc.GetPackIndexFromName(packShortName.c_str());
+    if (packIndex < 0) { return 1; }
+    PackTables tables(toc);
+    std::vector<WeaponEntry> weapons;
+    std::vector<EnemyTemplateData> enemies;
+    PlayerVitals vitals;
+    vitals.invincible = false;
+    CPlayerProgress::Template progressData;
+    CPlayerProgress progress;
+    if (!LoadPlayerProgress(toc, tables, progressData)) { return 1; }
+    progress.Bind(progressData);
+    if (gameContext != nullptr) { progress.SetExperience(gameContext->profile.experience); }
+    if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
+        !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
+    CWindow window;
+    if (!window.Open("Gun Bros - Survival", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    CShaderProgram program, markerProgram;
+    if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0") ||
+        !markerProgram.Load(kShaderDirectory, "ogles_vs_mvp_constcolor", "ogles_ps_constcolor")) { return 1; }
+    CQuadBatch batch;
+    CMarkerBatch markers;
+    if (!batch.Create(program) || !markers.Create(markerProgram)) { return 1; }
+    LoadedMap loaded;
+    if (!LoadMap(toc, packIndex, mapIndex, loaded)) { return 1; }
+    LoadPlacedPlayers(toc, program, loaded);
+    if (loaded.players.empty()) { return 1; }
+    // The second brother will be driven by the partner system, not a stationary clone.
+    loaded.players.resize(1);
+    PlayerModel &player = *loaded.players[0].model;
+    player.vitals = &vitals;
+    std::size_t weaponSlot = weaponIndex % weapons.size();
+    unsigned equippedWeaponSlot = 0;
+    if (gameContext != nullptr) {
+        const GameObjectRef &ref = gameContext->profile.configuration.guns[0];
+        bool found = false;
+        for (std::size_t index = 0; index < weapons.size(); ++index) {
+            if (weapons[index].packHash == ref.packHash && weapons[index].ordinal == ref.localIndex) {
+                weaponSlot = index;
+                found = true;
+                break;
+            }
+        }
+        if (!found) { return 1; }
+    }
+    if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
+    if (armorIndex >= 0) {
+        std::vector<ArmorEntry> armors;
+        if (!LoadArmorCatalog(toc, tables, armors) || armorIndex >= static_cast<int>(armors.size()) ||
+            !EquipPlayerArmor(tables, armors[armorIndex].data, program, player)) { return 1; }
+    }
+    if (gameContext != nullptr) {
+        std::vector<ArmorEntry> armors;
+        if (!LoadArmorCatalog(toc, tables, armors)) { return 1; }
+        for (const GameObjectRef &ref : gameContext->profile.configuration.armor) {
+            if (ref.IsNull()) { continue; }
+            bool found = false;
+            for (const ArmorEntry &entry : armors) {
+                if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) {
+                    if (!EquipPlayerArmor(tables, entry.data, program, player)) { return 1; }
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) { return 1; }
+        }
+    }
+    WeaponEffects effects(toc, tables, program);
+    if (check) {
+        // A separate world exercises empty-wave minimums and damage rejection
+        // without putting fixture currency into the actual survival/profile run.
+        CombatScene rewardProbe(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+        rewardProbe.Reset();
+        rewardProbe.OnWaveCleared(10);
+        rewardProbe.OnWaveCleared(100);
+        if (rewardProbe.GetXplodium() != 2 || rewardProbe.GetPerfectWaves() != 2) { ++checkFailures; }
+        CombatHit wound;
+        wound.ownerType = 1;
+        wound.damage = 0.25f;
+        rewardProbe.ApplyHit(kPlayerCombatId, wound);
+        rewardProbe.OnWaveCleared(10);
+        if (rewardProbe.GetLastWaveBonus() != 0 || rewardProbe.GetXplodium() != 2 ||
+            rewardProbe.GetPerfectWaves() != 2 || rewardProbe.GetClearedWaves() != 3) { ++checkFailures; }
+        rewardProbe.OnWaveCleared(10);
+        if (rewardProbe.GetLastWaveBonus() != 1 || rewardProbe.GetXplodium() != 3) { ++checkFailures; }
+        std::printf("[survival-check] minimum/previous-bonus/damage/next-wave failures=%u\n", checkFailures);
+        CPlayerProgress pickupProgress;
+        pickupProgress.Bind(progressData);
+        rewardProbe.SetPlayerProgress(&pickupProgress);
+        CRefinementManager::Template pickupRefinement;
+        if (!LoadRefinementTemplate(toc, tables, pickupRefinement)) { return 1; }
+        CProfileManager pickupProfile;
+        pickupProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), pickupRefinement);
+        PickupScene pickupProbe(toc, tables, program, &pickupProfile);
+        if (!pickupProbe.Init()) { return 1; }
+        GameObjectRef pickupRef;
+        pickupRef.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+        pickupRef.localIndex = 2;
+        vitals.health = 1;
+        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupProbe.Update(16, rewardProbe, effects);
+        if (vitals.health != vitals.maximum) { ++checkFailures; }
+        pickupRef.localIndex = 0;
+        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupRef.localIndex = 1;
+        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupRef.localIndex = 7;
+        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupProbe.Update(16, rewardProbe, effects);
+        pickupProbe.Update(16, rewardProbe, effects);
+        GameObjectRef grenade = pickupRef;
+        grenade.localIndex = 13;
+        if (pickupProgress.GetExperience() != 500 || rewardProbe.GetXplodium() != 153 ||
+            pickupProbe.collected != 4 || pickupProbe.GetCount() != 0 || pickupProbe.failures != 0 ||
+            pickupProfile.GetPowerupCount(grenade) != 1) { ++checkFailures; }
+        CProfileManager restoredPickupProfile;
+        restoredPickupProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), pickupRefinement);
+        if (!pickupProfile.SaveToDisk("out/pickup-profile-check.dat") ||
+            !restoredPickupProfile.LoadFromDisk("out/pickup-profile-check.dat") ||
+            restoredPickupProfile.GetPowerupCount(grenade) != 1) { ++checkFailures; }
+        std::printf("[pickup-check] health/experience/xplodium/grenade/save-once failures=%u\n", checkFailures);
+    }
+    CombatScene scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+    CBrotherAI brother;
+    PlayerModel brotherModel;
+    if (withBrother) {
+        brother.vitals.maximum = progress.GetHealth();
+        brother.vitals.invincible = false;
+        brotherModel.vitals = &brother.vitals;
+        brotherModel.human = false;
+        brotherModel.brotherIndex = 1;
+        if (!BuildPlayerBody(tables, player.moveSet, brotherModel) ||
+            !EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapons[weaponSlot].data,
+                "AI brother", brotherModel) || !CreatePlayerBuffers(brotherModel, program)) { return 1; }
+        for (const auto &armor : player.armor) {
+            if (armor != nullptr && !EquipPlayerArmor(tables, armor->data, program, brotherModel)) { return 1; }
+        }
+        scene.SetBrother(&brotherModel, &brother);
+    }
+    scene.SetPlayerProgress(&progress);
+    SurvivalSession session(scene, loaded.map, enemies);
+    CProfileManager researchProfile;
+    CProfileManager *pickupProfile = nullptr;
+    if (gameContext != nullptr) { pickupProfile = &gameContext->profile; }
+    else { pickupProfile = &researchProfile; }
+    PowerupScene powerups(toc, tables, player, vitals, scene, effects, *pickupProfile);
+    if (!powerups.Init()) { return 1; }
+    if (powerupStudy) {
+        GameObjectRef item;
+        item.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+        for (unsigned index = 0; index < 20; ++index) {
+            item.localIndex = static_cast<std::uint8_t>(index);
+            if (IsPlayablePowerup(item)) { researchProfile.AddPowerup(item, 10); }
+        }
+        std::printf("[powerup-study] isolated inventory: 10 of each supported item\n");
+    }
+    session.SetPowerups(&powerups);
+    PickupScene pickups(toc, tables, program, pickupProfile);
+    if (!pickups.Init()) { return 1; }
+    session.SetPickups(&pickups, &effects);
+    const GameObjectRef *archiveLevel = nullptr;
+    if (archiveMission != nullptr) { archiveLevel = &archiveMission->data.level; }
+    if (!session.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel)) { return 1; }
+    const float startX = loaded.players[0].x;
+    const float startY = loaded.players[0].y;
+    session.SetStartWave(static_cast<int>(startWave));
+    scene.SetMap(loaded.map, loaded.collisionScene, loaded.weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
+    session.Restart(startX, startY);
+    std::uint64_t accountedXplodium = 0;
+    int lastSavedWave = session.GetLevel().GetWave();
+    bool savedDeath = false;
+    // CMap::SetObjectLayer (:91935) activates one layer. Preview may combine
+    // layers, but survival must not inherit deathmatch/campaign obstacles.
+    LoadProps(toc, loaded, session.GetLevel().GetObjectLayer());
+    BuildCollisionScene(loaded);
+    MapPropWorld props(loaded, scene, session.GetLevel(), effects);
+    session.SetProps(&props);
+    scene.SetProps(&props);
+    session.Restart(startX, startY);
+    if (check) { checkFailures += session.CheckLevelSounds(); }
+    if (check && archiveMission == nullptr) {
+        checkFailures += props.CheckDamageContracts();
+        // Original character animation, real bullet scripts and actual stock.
+        // This account is isolated even when the full-menu check owns a profile.
+        CProfileManager consumableProbe;
+        CRefinementManager::Template consumableRefinement;
+        if (!LoadRefinementTemplate(toc, tables, consumableRefinement)) { return 1; }
+        consumableProbe.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), consumableRefinement);
+        PowerupScene powerupProbe(toc, tables, player, vitals, scene, effects, consumableProbe);
+        if (!powerupProbe.Init()) { return 1; }
+        GameObjectRef consumable;
+        consumable.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+        for (unsigned index = 13; index <= 15; ++index) {
+            session.Restart(startX, startY);
+            consumable.localIndex = static_cast<std::uint8_t>(index);
+            consumableProbe.AddPowerup(consumable, 2);
+            powerupProbe.Select(index);
+            const std::size_t before = effects.GetShotCount();
+            if (!powerupProbe.Use() || powerupProbe.Use() || consumableProbe.GetPowerupCount(consumable) != 2) { ++checkFailures; }
+            for (int elapsed = 0; elapsed < 5000; elapsed += 16) {
+                scene.Update(16, 0, 0, false);
+                powerupProbe.Update(16);
+            }
+            if (effects.GetShotCount() != before + 1 || consumableProbe.GetPowerupCount(consumable) != 1) { ++checkFailures; }
+            std::printf("[powerup-play-check] item=%u shots=%zu stock=%u state=%d failures=%u\n", index,
+                effects.GetShotCount() - before, consumableProbe.GetPowerupCount(consumable), player.weapon->brother.GetStateId(), checkFailures);
+            if (!powerupProbe.Use()) { ++checkFailures; }
+            CombatHit cancel;
+            cancel.ownerType = 1;
+            cancel.damage = 10000;
+            scene.ApplyHit(kPlayerCombatId, cancel);
+            for (int elapsed = 0; elapsed < 1000; elapsed += 16) {
+                scene.Update(16, 0, 0, false);
+                powerupProbe.Update(16);
+            }
+            if (consumableProbe.GetPowerupCount(consumable) != 1 || effects.GetShotCount() != before + 1) { ++checkFailures; }
+        }
+        session.Restart(startX, startY);
+        consumable.localIndex = 1;
+        consumableProbe.AddPowerup(consumable, 1);
+        powerupProbe.Select(1);
+        if (powerupProbe.Use()) { ++checkFailures; }
+        vitals.health = 1;
+        if (!powerupProbe.Use() || vitals.health != std::min(vitals.maximum, 9.0f) || powerupProbe.GetCount() != 0) { ++checkFailures; }
+        checkFailures += powerupProbe.failures;
+        std::printf("[powerup-play-check] healing/cancel/repeat consumed=%u failures=%u\n", powerupProbe.consumed, checkFailures);
+        session.Restart(startX, startY);
+        consumable.localIndex = 5;
+        consumableProbe.AddPowerup(consumable, 2);
+        powerupProbe.Select(5);
+        if (!powerupProbe.Use() || powerupProbe.Use() || !player.weapon->brother.IsShield() || powerupProbe.GetCount() != 1) { ++checkFailures; }
+        const float shieldHealth = vitals.health;
+        player.weapon->brother.ReceiveDamage(1);
+        if (vitals.health != shieldHealth) { ++checkFailures; }
+        // Equipment must not reset an actor's active shield timer.
+        const int shieldMs = player.powerups.shieldMs;
+        if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) || player.powerups.shieldMs != shieldMs) { ++checkFailures; }
+        AdvancePlayer(player, shieldMs);
+        if (player.weapon->brother.IsShield()) { ++checkFailures; }
+        player.weapon->brother.ReceiveDamage(1);
+        if (std::abs(vitals.health - (shieldHealth - 1)) > 0.001f) { ++checkFailures; }
+        session.Restart(startX, startY);
+        {
+            // Auto Aim: a real stationary enemy, ordinary rifle and actual
+            // projectiles. No caller-supplied aim or automatic pilot firing.
+            if (!EquipControlledPlayer(tables, loaded, program, weapons[0])) { return 1; }
+            WeaponEffects aimEffects(toc, tables, program);
+            CombatScene aimScene(tables, program, enemies, player, vitals, aimEffects, loaded.playerTemplate->gameScale);
+            aimScene.Reset();
+            aimScene.playerX = 600;
+            aimScene.playerY = 650;
+            aimScene.facing = 270;
+            CombatEnemy *target = aimScene.Spawn(0, 700, 650);
+            if (target == nullptr) { return 1; }
+            for (int elapsed = 0; elapsed < 1000; elapsed += 16) { target->model.enemy.Update(16); }
+            // Maturation can queue an enemy shot before this fixture begins.
+            // Discard only those setup actions; measured scene updates remain real.
+            target->model.enemy.TakeActions();
+            target->model.enemy.combat.health = 100000;
+            target->model.enemy.combat.maxHealth = 100000;
+            target->model.enemy.stun.SetStunned(6000, 0, 0);
+            consumable.localIndex = 12;
+            consumableProbe.AddPowerup(consumable, 2);
+            PowerupScene aimPowerup(toc, tables, player, vitals, aimScene, aimEffects, consumableProbe);
+            if (!aimPowerup.Init() || !aimPowerup.Select(12) || !aimPowerup.Use() || aimPowerup.Use() ||
+                aimPowerup.GetCount() != 1 || player.powerups.autoFireMs != 90000) { ++checkFailures; }
+            std::printf("[autoaim-probe] use stock=%u timer=%d failures=%u\n", aimPowerup.GetCount(), player.powerups.autoFireMs, checkFailures);
+            for (int elapsed = 0; elapsed < 800; elapsed += 16) { aimScene.Update(16, 0, 0, false); }
+            if (aimEffects.GetShotCount() != 0 || aimScene.GetAutoAimTarget() != 0) { ++checkFailures; }
+            std::printf("[autoaim-probe] idle shots=%zu target=%llu failures=%u\n", aimEffects.GetShotCount(),
+                static_cast<unsigned long long>(aimScene.GetAutoAimTarget()), checkFailures);
+            for (int elapsed = 0; elapsed < 1800; elapsed += 16) { aimScene.Update(16, 0, 0, true); }
+            if (aimEffects.GetShotCount() == 0 || target->model.enemy.combat.hitCount == 0 ||
+                aimScene.GetAutoAimTarget() == 0 || std::abs(aimScene.facing - 90) > 5.1f) { ++checkFailures; }
+            std::printf("[autoaim-probe] hold facing=%.2f target=%.1f,%.1f shots=%zu hits=%d failures=%u\n",
+                aimScene.facing, target->model.enemy.combat.x, target->model.enemy.combat.y,
+                aimEffects.GetShotCount(), target->model.enemy.combat.hitCount, checkFailures);
+            aimScene.Update(16, 0, 0, false);
+            const auto releasedShots = aimEffects.GetShotCount();
+            for (int elapsed = 0; elapsed < 320; elapsed += 16) { aimScene.Update(16, 0, 0, false); }
+            if (aimEffects.GetShotCount() != releasedShots || aimScene.GetAutoAimTarget() != 0) { ++checkFailures; }
+            std::printf("[autoaim-probe] release shots=%zu previous=%zu failures=%u\n", aimEffects.GetShotCount(), releasedShots, checkFailures);
+            const int remainingMs = player.powerups.autoFireMs;
+            if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) ||
+                player.powerups.autoFireMs != remainingMs) { ++checkFailures; }
+            AdvancePlayer(player, remainingMs - 1);
+            if (!player.weapon->brother.IsAutoFire()) { ++checkFailures; }
+            AdvancePlayer(player, 1);
+            if (player.weapon->brother.IsAutoFire()) { ++checkFailures; }
+            std::printf("[autoaim-play-check] shots=%zu hits=%d hold/release/swap/90sec/expiry failures=%u\n",
+                releasedShots, target->model.enemy.combat.hitCount, checkFailures);
+        }
+        session.Restart(startX, startY);
+        {
+            WeaponEffects turretEffects(toc, tables, program);
+            CombatScene turretScene(tables, program, enemies, player, vitals, turretEffects, loaded.playerTemplate->gameScale);
+            turretScene.Reset();
+            CombatEnemy *target = turretScene.Spawn(0, 600, 460);
+            if (target == nullptr) { return 1; }
+            for (int elapsed = 0; elapsed < 1000; elapsed += 16) { target->model.enemy.Update(16); }
+            target->model.enemy.TakeActions();
+            target->model.enemy.combat.x = 600;
+            target->model.enemy.combat.y = 460;
+            target->model.enemy.combat.health = 100000;
+            target->model.enemy.combat.maxHealth = 100000;
+            target->model.enemy.stun.SetStunned(60000, 0, 0);
+            consumable.localIndex = 19;
+            consumableProbe.AddPowerup(consumable, 2);
+            PowerupScene turretPowerup(toc, tables, player, vitals, turretScene, turretEffects, consumableProbe);
+            if (!turretPowerup.Init() || !turretPowerup.Select(19) || !turretPowerup.Use() ||
+                turretPowerup.GetCount() != 2 || !player.weapon->brother.IsTurretActive() || turretPowerup.Use()) { ++checkFailures; }
+            int firstActiveMs = -1, stoppedMs = -1;
+            unsigned peakTurrets = 0;
+            for (int elapsed = 0; elapsed < 40000; elapsed += 16) {
+                turretScene.Update(16, 0, 0, false);
+                turretPowerup.Update(16);
+                unsigned liveTurrets = 0;
+                for (const auto &actor : turretScene.enemies) {
+                    if (actor->model.enemy.combat.turret && !actor->model.enemy.combat.removed) { ++liveTurrets; }
+                }
+                peakTurrets = std::max(peakTurrets, liveTurrets);
+                if (player.weapon->brother.IsTurretActive() && liveTurrets == 1 && firstActiveMs < 0) {
+                    firstActiveMs = elapsed + 16;
+                    if (turretPowerup.Use() || turretPowerup.GetCount() != 1) { ++checkFailures; }
+                }
+                if (firstActiveMs >= 0 && !player.weapon->brother.IsTurretActive()) {
+                    stoppedMs = elapsed + 16;
+                    break;
+                }
+            }
+            if (firstActiveMs < 0 || stoppedMs <= firstActiveMs || peakTurrets != 1 ||
+                target->model.enemy.combat.hitCount == 0 || turretPowerup.GetCount() != 1 ||
+                turretPowerup.consumed != 1 || turretPowerup.failures != 0) { ++checkFailures; }
+            if (!turretPowerup.Use()) { ++checkFailures; }
+            // Cancelled pre-throw requests release their reservation, without
+            // consuming another item or replacing a live turret's state.
+            if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
+            turretPowerup.Update(16);
+            if (player.weapon->brother.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
+            if (!turretPowerup.Use()) { ++checkFailures; }
+            vitals.dead = true;
+            turretPowerup.Update(16);
+            if (player.weapon->brother.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
+            std::printf("[turret-play-check] active=%d stopped=%d peak=%u shots=%zu hits=%d stock=%u failures=%u\n",
+                firstActiveMs, stoppedMs, peakTurrets, turretEffects.GetShotCount(),
+                target->model.enemy.combat.hitCount, turretPowerup.GetCount(), checkFailures);
+        }
+        session.Restart(startX, startY);
+        const unsigned boosts[] = {18, 17, 16};
+        for (unsigned type = 0; type < 3; ++type) {
+            consumable.localIndex = static_cast<std::uint8_t>(boosts[type]);
+            consumableProbe.AddPowerup(consumable, 2);
+            powerupProbe.Select(boosts[type]);
+            if (!powerupProbe.Use() || powerupProbe.Use() || !player.weapon->brother.IsFrenzyType(type)) { ++checkFailures; }
+            float expected = 332 / 256.0f;
+            if (type == 2) { expected = 1.5f; }
+            if (std::abs(scene.GetProjectilePowerupMultiplier(kPlayerCombatId) - expected) > 0.001f) { ++checkFailures; }
+        }
+        const float beforeDefense = vitals.health;
+        player.weapon->brother.ReceiveDamage(1);
+        if (std::abs(vitals.health - (beforeDefense - 256.0f / 332)) > 0.001f) { ++checkFailures; }
+        AdvancePlayer(player, 15000);
+        if (scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1 || player.weapon->brother.IsFrenzyType(2)) { ++checkFailures; }
+        if (!consumableProbe.SaveToDisk("out/powerup-profile-check.dat")) { ++checkFailures; }
+        CProfileManager restoredConsumables;
+        restoredConsumables.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), consumableRefinement);
+        if (!restoredConsumables.LoadFromDisk("out/powerup-profile-check.dat") ||
+            restoredConsumables.GetPowerupCount(consumable) != 1) { ++checkFailures; }
+        std::printf("[powerup-play-check] shield/defense/priority/expiry/weapon-swap/save failures=%u\n", checkFailures);
+        session.Restart(startX, startY);
+        {
+            // Isolate impact contracts from steering: a stationary original
+            // enemy receives real CBullet -> CombatScene -> script splash hits.
+            WeaponEffects blastEffects(toc, tables, program);
+            CombatScene blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
+            const unsigned grenadeBullets[] = {90, 93, 94};
+            for (unsigned bulletIndex : grenadeBullets) {
+                blastScene.Reset();
+                CombatEnemy *target = blastScene.Spawn(0, 600, 450);
+                if (target == nullptr) { return 1; }
+                CEnemy &enemy = target->model.enemy;
+                // Let the original spawn sequence reach its ordinary hit handler.
+                for (int elapsed = 0; elapsed < 1000; elapsed += 16) { enemy.Update(16); }
+                enemy.combat.health = 10000;
+                enemy.combat.maxHealth = 10000;
+                GameObjectRef bulletRef = consumable;
+                bulletRef.localIndex = static_cast<std::uint8_t>(bulletIndex);
+                if (blastEffects.SpawnProjectile(bulletRef, 600, 350, 0, 0, 0, kPlayerCombatId, 0) == 0) { ++checkFailures; }
+                float matrix[16];
+                blastScene.PlayerMatrix(matrix);
+                unsigned impactState = 255;
+                int maximumStunMs = 0;
+                for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
+                    enemy.combat.x = 600;
+                    enemy.combat.y = 450;
+                    enemy.combat.targetAlive = false;
+                    blastEffects.Update(player, matrix, 0, 16);
+                    maximumStunMs = std::max(maximumStunMs, enemy.stun.GetRemainingMs());
+                    enemy.Update(16);
+                    if (enemy.combat.hitCount > 0 && impactState == 255) { impactState = enemy.GetStateId(); }
+                }
+                float expectedDamage = 100;
+                if (bulletIndex == 93) { expectedDamage = 30; }
+                expectedDamage *= PlayerArmorMultiplier(player, 1);
+                if (std::abs(enemy.combat.totalDamage - expectedDamage) > 0.01f) { ++checkFailures; }
+                int expectedStunMs = 0;
+                if (bulletIndex == 93) { expectedStunMs = 750; }
+                if (bulletIndex == 94) { expectedStunMs = 2000; }
+                if (maximumStunMs != expectedStunMs || enemy.stun.IsActive()) { ++checkFailures; }
+                std::printf("[powerup-impact-check] bullet=%u damage=%.3f expected=%.3f hits=%d state=%u failures=%u\n",
+                    bulletIndex, enemy.combat.totalDamage, expectedDamage, enemy.combat.hitCount, impactState, checkFailures);
+                std::printf("[powerup-impact-check] stun=%d expected=%d expired=%d\n", maximumStunMs, expectedStunMs, !enemy.stun.IsActive());
+            }
+            if (powerupStudy) {
+                std::ofstream attributeReport("out/powerup-enemy-attributes.txt");
+                const unsigned attributes[] = {19, 6171, 23};
+                for (unsigned enemyIndex = 0; enemyIndex < enemies.size(); ++enemyIndex) {
+                    if (!enemies[enemyIndex].script.IsPresent()) { continue; }
+                    for (unsigned flags : attributes) {
+                        blastScene.Reset();
+                        CombatEnemy *target = blastScene.Spawn(enemyIndex, 600, 450);
+                        if (target == nullptr) { return 1; }
+                        CEnemy &enemy = target->model.enemy;
+                        for (int elapsed = 0; elapsed < 1000; elapsed += 16) { enemy.Update(16); }
+                        enemy.combat.health = 10000;
+                        enemy.combat.maxHealth = 10000;
+                        const unsigned before = enemy.GetStateId();
+                        CombatHit probe;
+                        probe.owner = kPlayerCombatId;
+                        probe.ownerType = 0;
+                        probe.x = 600;
+                        probe.y = 350;
+                        probe.flags = flags;
+                        probe.damage = 1;
+                        probe.splash = true;
+                        enemy.ReceiveHit(probe);
+                        const unsigned immediately = enemy.GetStateId();
+                        const int durationMs = enemy.stun.GetRemainingMs();
+                        if (durationMs > 100) {
+                            const float frozenX = enemy.combat.x, frozenY = enemy.combat.y;
+                            const int frozenTime = enemy.GetPart(0).controller.GetAnimation().GetTimeMs();
+                            enemy.Update(100);
+                            if (enemy.combat.x != frozenX || enemy.combat.y != frozenY ||
+                                enemy.GetPart(0).controller.GetAnimation().GetTimeMs() != frozenTime ||
+                                enemy.stun.GetRemainingMs() != durationMs - 100) { ++checkFailures; }
+                        }
+                        for (int elapsed = 0; elapsed < 4000; elapsed += 16) { enemy.Update(16); }
+                        checkFailures += static_cast<unsigned>(enemy.GetUnsupportedFunctionCount());
+                        if (enemy.stun.IsActive()) { ++checkFailures; }
+                        attributeReport << enemyIndex << ' ' << enemies[enemyIndex].owner << " flags=" << flags
+                            << " before=" << before << " impact=" << immediately << " end=" << unsigned(enemy.GetStateId())
+                            << " stun=" << durationMs << " damage=" << enemy.combat.totalDamage << " unsupported=" << enemy.GetUnsupportedFunctionCount() << '\n';
+                    }
+                }
+                // Controller phase is based on remaining time, with no expiry
+                // event for CEnemy's original empty callback methods.
+                CStunController clock;
+                clock.SetStunned(750, 50, 2);
+                clock.Update(50);
+                if (clock.GetOffset() != -2) { ++checkFailures; }
+                clock.Update(50);
+                if (clock.GetOffset() != 2) { ++checkFailures; }
+                if (!clock.Update(650) || clock.IsActive() || clock.GetOffset() != 0) { ++checkFailures; }
+                if (clock.Update(16)) { ++checkFailures; }
+                std::printf("[powerup-attribute-check] combinations=228 timing/movement/animation/expiry failures=%u\n", checkFailures);
+            }
+        }
+        session.Restart(startX, startY);
+        CombatHit forceProbe;
+        const float originalMaximum = vitals.maximum;
+        const float originalBrotherMaximum = brother.vitals.maximum;
+        for (float maximum : {20.0f, 100.0f, 205.0f}) {
+            session.Restart(startX, startY);
+            vitals.maximum = maximum;
+            vitals.health = maximum;
+            vitals.invincible = false;
+            if (withBrother) {
+                brother.vitals.maximum = maximum;
+                brother.vitals.health = maximum;
+                brother.vitals.invincible = false;
+            }
+            CombatHit percentage;
+            percentage.ownerType = 1;
+            percentage.damage = 10;
+            percentage.percentDamage = true;
+            percentage.x = scene.playerX;
+            percentage.y = scene.playerY;
+            scene.Splash(percentage, 200, 360, 0, 0);
+            const float expected = std::max(0.0f, maximum * 0.1f * (2 - PlayerArmorMultiplier(player, 0)));
+            if (std::abs(vitals.health - (maximum - expected)) > 0.001f) { ++checkFailures; }
+            if (withBrother) {
+                const float brotherExpected = std::max(0.0f, maximum * 0.1f * (2 - PlayerArmorMultiplier(brotherModel, 0)));
+                if (std::abs(brother.vitals.health - (maximum - brotherExpected)) > 0.001f) { ++checkFailures; }
+            }
+            std::printf("[splash-check] maximum=%.0f percent=10 damage=%.3f brother=%d failures=%u\n",
+                maximum, maximum - vitals.health, withBrother, checkFailures);
+        }
+        vitals.maximum = originalMaximum;
+        brother.vitals.maximum = originalBrotherMaximum;
+        session.Restart(startX, startY);
+        forceProbe.ownerType = 1;
+        forceProbe.x = startX - 40;
+        forceProbe.y = startY;
+        scene.Splash(forceProbe, 60, 360, 100, 100);
+        if (scene.playerX != startX || scene.playerY != startY) { ++checkFailures; }
+        scene.Update(16, 0, 0, false);
+        if (std::hypot(scene.playerX - startX, scene.playerY - startY) > 4) { ++checkFailures; }
+        std::printf("[survival-check] map force gradual displacement=%.2f failures=%u\n",
+            std::hypot(scene.playerX - startX, scene.playerY - startY), checkFailures);
+        session.Restart(startX, startY);
+        const std::size_t initialActors = scene.AliveCount();
+        if (gameContext == nullptr) {
+            vitals.health = vitals.maximum * 0.5f;
+            scene.AddExperience(progress.GetExperienceDelta());
+            if (progress.GetLevel() != 2 || vitals.maximum != 9 || vitals.health != 4.5f) { ++checkFailures; }
+            progress.SetExperience(0);
+            scene.SetPlayerProgress(&progress);
+            vitals.Reset();
+        }
+        const PlayerModel *stablePlayer = &player;
+        const float armorBefore = PlayerArmorMultiplier(player, 0);
+        const std::size_t alternateWeapon = (weaponSlot + 1) % weapons.size();
+        if (!EquipControlledPlayer(tables, loaded, program, weapons[alternateWeapon]) ||
+            !EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
+        if (loaded.players[0].model.get() != stablePlayer || player.vitals != &vitals ||
+            PlayerArmorMultiplier(player, 0) != armorBefore) { ++checkFailures; }
+        // Kill through the actual shared hit path, then exercise the same R action.
+        CombatHit fatal;
+        fatal.ownerType = 1;
+        fatal.damage = 10000;
+        scene.ApplyHit(kPlayerCombatId, fatal);
+        if (!vitals.dead || vitals.health != 0 || vitals.deaths != 1) { ++checkFailures; }
+        session.Restart(startX, startY);
+        if (vitals.dead || vitals.health != vitals.maximum || session.GetLevel().GetWave() != static_cast<int>(startWave) ||
+            scene.AliveCount() != initialActors || effects.GetBulletCount() != 0 ||
+            PlayerArmorMultiplier(player, 0) != armorBefore || scene.playerX != startX || scene.playerY != startY) { ++checkFailures; }
+        std::printf("[survival-check] equipment/death/restart failures=%u\n", checkFailures);
+        if (withBrother) {
+            // A fatal shared hit must not kill the human. Run the original
+            // death animation to its hold state, then the actual wave export.
+            scene.ApplyHit(kBrotherCombatId, fatal);
+            if (!brother.vitals.dead || vitals.dead) { ++checkFailures; }
+            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+            const int deadState = brotherModel.weapon->brother.GetStateId();
+            brotherModel.weapon->brother.OnWaveCleared();
+            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+            if (brother.vitals.dead || brother.vitals.health != brother.vitals.maximum ||
+                !brotherModel.weapon->brother.CanMove() || !brotherModel.weapon->brother.CanShoot()) { ++checkFailures; }
+            std::printf("[brother-check] death-state=%d revived-state=%d health=%.1f failures=%u\n",
+                deadState, brotherModel.weapon->brother.GetStateId(), brother.vitals.health, checkFailures);
+            session.Restart(startX, startY);
+            brother.vitals.invincible = true;
+        }
+        // This harness uses real projectiles and enemy death scripts, with
+        // invincibility only to keep the automated pilot running deterministically.
+        vitals.invincible = true;
+        const int targetWave = std::min(static_cast<int>(startWave + checkWaves), session.GetLevel().GetWaveLimit());
+        SurvivalPilot pilot(scene, loaded.map.GetVisibleBounds());
+        float previousDamage = 0;
+        int stalledMs = 0;
+        // Late waves contain hundreds of actors. Bound a wave generously, but
+        // stop promptly when actual damage and kills cease for two minutes.
+        for (int elapsed = 0; elapsed < static_cast<int>(checkWaves * 600000); elapsed += 16) {
+            float moveX = 0;
+            float moveY = 0;
+            pilot.Update(16, moveX, moveY);
+            session.Update(16, moveX, moveY, !withBrother || gameContext != nullptr);
+            float damage = scene.damageDealt;
+            for (const auto &actor : scene.enemies) { damage += actor->model.enemy.combat.totalDamage; }
+            stalledMs += 16;
+            if (damage != previousDamage) { stalledMs = 0; previousDamage = damage; }
+            if (stalledMs > 120000) {
+                std::printf("[survival-check] stopped: no damage progress for 120 seconds\n");
+                break;
+            }
+            if (session.GetLevel().GetWave() >= targetWave) { break; }
+        }
+        pilot.Report();
+        checkFailures += pickups.failures;
+        std::printf("[pickup-check] spawned=%u collected=%u remaining=%zu failures=%u\n",
+            pickups.spawned, pickups.collected, pickups.GetCount(), pickups.failures);
+        if (withBrother) {
+            // AI-only research must acquire targets. In a profile run the
+            // human's long-range gun may kill everything before the 200px AI scan.
+            if (gameContext == nullptr && brother.GetTargetCount() == 0) { ++checkFailures; }
+            std::printf("[brother-check] targets=%u shots=%zu position=%.1f,%.1f hp=%.1f failures=%u\n",
+                brother.GetTargetCount(), effects.GetShotCount(), brother.x, brother.y, brother.vitals.health, checkFailures);
+        }
+        if (session.GetLevel().GetWave() < targetWave || session.GetKills() == 0 || scene.invalidSpawns != 0) { ++checkFailures; }
+        if (targetWave == session.GetLevel().GetWaveLimit() && !session.GetLevel().IsCleared()) { ++checkFailures; }
+        if (scene.GetClearedWaves() != targetWave - startWave) { ++checkFailures; }
+        // AI-only kills grant XP but not the human's Xplodium kill streak.
+        // CLevel::OnEnemyKilled :119566 tests GetBrotherType, not IsPlayer.
+        if (progress.GetExperience() == 0 || progress.GetLevel() < 2 || (!withBrother && scene.GetXplodium() == 0) ||
+            vitals.maximum != progress.GetHealth()) { ++checkFailures; }
+        std::printf("[survival-check] progress level=%u xp=%llu xplodium=%llu\n",
+            progress.GetLevel(), progress.GetExperience(), scene.GetXplodium());
+        checkFailures += props.GetFailures();
+        std::printf("[prop-check] actual-hits=%u failures=%u\n", props.GetHitCount(), props.GetFailures());
+        std::printf("[survival-check] wave=%d kills=%u alive=%d spawned=%u invalid=%u failures=%u\n",
+            session.GetLevel().GetWave(), session.GetKills(), session.CountEnemies(), scene.spawned, scene.invalidSpawns, checkFailures);
+        std::printf("[survival-check] shots=%zu player=%.1f,%.1f stun=%d brother=%d\n",
+            effects.GetShotCount(), scene.playerX, scene.playerY, vitals.stunMs, player.weapon->brother.GetStateId());
+        for (const auto &actor : scene.enemies) {
+            const EnemyCombat &enemy = actor->model.enemy.combat;
+            if (!enemy.dead) {
+                std::printf("[survival-check] alive %s pos=%.1f,%.1f health=%.1f state=%d behaviour=%d\n",
+                    actor->data->owner.c_str(), enemy.x, enemy.y, enemy.health,
+                    actor->model.enemy.GetStateId(), enemy.behaviour);
+                ILayerPath *path = loaded.map.GetPathLayer(session.GetLevel().GetPathLayer());
+                if (path != nullptr) {
+                    const int first = path->FindNearest(enemy.x, enemy.y);
+                    const int last = path->FindNearest(scene.playerX, scene.playerY);
+                    std::printf("[survival-check] navigation=%d to=%.1f,%.1f radius=%.1f path=%d->%d next=%d\n",
+                        enemy.hasNavigationTarget, enemy.navigationX, enemy.navigationY, actor->model.enemy.GetPart(0).radius,
+                        first, last, path->FindNext(first, last));
+                    const int containing = path->FindNode(enemy.x, enemy.y);
+                    const int goal = path->FindNode(scene.playerX, scene.playerY);
+                    const int next = path->FindNext(containing, goal);
+                    if (next >= 0) {
+                        const auto &point = path->GetNodes()[next];
+                        std::printf("[survival-check] containing=%d goal=%d next=%d center=%.1f,%.1f\n", containing, goal, next, point.x, point.y);
+                    }
+                    const auto &vertices = loaded.collisionScene.GetVertices();
+                    for (const auto &edge : loaded.collisionScene.GetEdges()) {
+                        const CollisionPoint &a = vertices[edge.firstVertex];
+                        const CollisionPoint &b = vertices[edge.secondVertex];
+                        if (std::hypot((a.x + b.x) * 0.5f - enemy.x, (a.y + b.y) * 0.5f - enemy.y) < 85) {
+                            std::printf("[survival-check] nearby edge %.1f,%.1f -> %.1f,%.1f\n", a.x, a.y, b.x, b.y);
+                        }
+                    }
+                }
+            }
+        }
+        capturePath = "out/survival-check-" + packShortName + ".png";
+    }
+    if (check && archiveMission != nullptr) {
+        // Research input pilot: visit authored pickups and trigger edges without
+        // teleporting actors or directly invoking trigger/death callbacks.
+        vitals.invincible = true;
+        std::vector<CollisionPoint> goals;
+        for (unsigned index = 0; index < loaded.map.GetObjectLayerCount(); ++index) {
+            const CLayerObject &layer = loaded.map.GetObjectLayer(index);
+            if (static_cast<int>(layer.GetLayerIndex()) != session.GetLevel().GetObjectLayer()) { continue; }
+            for (const PlacedObject &object : layer.GetObjects()) {
+                if (object.objectType == static_cast<unsigned>(PlacedObjectType::Pickup)) { goals.emplace_back(object.x, object.y); }
+            }
+        }
+        for (unsigned index = 0; index < loaded.map.GetCollisionLayerCount(); ++index) {
+            const CLayerCollision &layer = loaded.map.GetCollisionLayer(index);
+            if (static_cast<int>(layer.GetLayerIndex()) != session.GetLevel().GetTriggerLayer()) { continue; }
+            for (const CollisionEdge &edge : layer.GetCollision().GetEdges()) {
+                const auto &a = layer.GetCollision().GetVertices()[edge.firstVertex];
+                const auto &b = layer.GetCollision().GetVertices()[edge.secondVertex];
+                const float length = std::hypot(b.x - a.x, b.y - a.y);
+                if (length < 1) { continue; }
+                const float normalX = (a.y - b.y) / length * 40;
+                const float normalY = (b.x - a.x) / length * 40;
+                goals.emplace_back((a.x + b.x) * 0.5f + normalX, (a.y + b.y) * 0.5f + normalY);
+                goals.emplace_back((a.x + b.x) * 0.5f - normalX, (a.y + b.y) * 0.5f - normalY);
+            }
+        }
+        SurvivalPilot pilot(scene, loaded.map.GetVisibleBounds());
+        unsigned goal = 0, reached = 0;
+        int goalElapsed = 0;
+        for (int elapsed = 0; elapsed < 360000 && !session.GetLevel().IsCleared(); elapsed += 16) {
+            float moveX = 0, moveY = 0;
+            pilot.Update(16, moveX, moveY);
+            if (goal < goals.size()) {
+                goalElapsed += 16;
+                const CollisionPoint &target = goals[goal];
+                float waypointX = target.x, waypointY = target.y;
+                scene.GetBrotherWaypoint(scene.playerX, scene.playerY, target.x, target.y, waypointX, waypointY);
+                moveX = waypointX - scene.playerX;
+                moveY = waypointY - scene.playerY;
+                if (std::hypot(target.x - scene.playerX, target.y - scene.playerY) < 20 || goalElapsed > 20000) {
+                    const bool arrived = goalElapsed <= 20000;
+                    if (arrived) { ++reached; }
+                    std::printf("[campaign-check] goal=%u target=%.0f,%.0f reached=%d player=%.1f,%.1f\n",
+                        goal, target.x, target.y, arrived, scene.playerX, scene.playerY);
+                    ++goal;
+                    goalElapsed = 0;
+                }
+            }
+            session.Update(16, moveX, moveY, true);
+            AdvanceProps(loaded.props, 16);
+            AdvanceTileLayers(loaded.map, 16);
+        }
+        if (scene.spawned == 0 || session.GetKills() == 0 || scene.invalidSpawns != 0) { ++checkFailures; }
+        std::printf("[campaign-check] goals=%u/%zu spawned=%u kills=%u pickups=%u cleared=%d failures=%u\n",
+            reached, goals.size(), scene.spawned, session.GetKills(), pickups.collected, session.GetLevel().IsCleared(), checkFailures);
+        capturePath = "out/campaign-check-" + packShortName + "-" + std::to_string(mapIndex) + ".png";
+    }
+    for (unsigned elapsed = 0; elapsed < advanceMs; elapsed += 16) {
+        session.Update(16, 0, 0, firePreview);
+        AdvanceProps(loaded.props, 16);
+        AdvanceTileLayers(loaded.map, 16);
+    }
+    if (powerupStudy && !capturePath.empty()) {
+        powerups.Select(5);
+        powerups.Use();
+        powerups.Select(16);
+        powerups.Use();
+        for (int elapsed = 0; elapsed < 256; elapsed += 16) {
+            scene.Update(16, 0, 0, false);
+            powerups.Update(16);
+        }
+        powerups.Select(19);
+        powerups.Use();
+        for (int elapsed = 0; elapsed < 1400; elapsed += 16) {
+            scene.Update(16, 0, 0, false);
+            powerups.Update(16);
+        }
+        capturePath = "out/powerup-play-check.png";
+    }
+    bool paused = false;
+    int accumulator = 0;
+    std::uint64_t previous = window.GetTicksMs();
+    Camera camera;
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    std::printf("[survival] WASD move, mouse aim/fire, R restart, space pause, 1-7/N/M weapon, C collision\n");
+    while (window.PumpEvents()) {
+        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+            if (key == KeyCode::Space) {
+                if (!session.GetDialogText().empty()) { session.CompleteDialog(); }
+                else { paused = !paused; }
+            }
+            if (key == KeyCode::C) { showCollisions = !showCollisions; }
+            if (key == KeyCode::G && !paused && !session.IsTransitioning()) { powerups.Use(); }
+            if (key == KeyCode::F) { powerups.Cycle(); }
+            if (key == KeyCode::R) {
+                if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+                session.Restart(startX, startY);
+                savedDeath = false;
+                paused = false;
+            }
+            std::size_t nextWeapon = weaponSlot;
+            if (gameContext == nullptr) { nextWeapon = SelectWeaponKey(weapons, weaponSlot, key); }
+            else if (key == KeyCode::Digit1 || key == KeyCode::Digit2 || key == KeyCode::N || key == KeyCode::M) {
+                equippedWeaponSlot = 1 - equippedWeaponSlot;
+                if (key == KeyCode::Digit1) { equippedWeaponSlot = 0; }
+                if (key == KeyCode::Digit2) { equippedWeaponSlot = 1; }
+                const GameObjectRef &ref = gameContext->profile.configuration.guns[equippedWeaponSlot];
+                for (std::size_t index = 0; index < weapons.size(); ++index) {
+                    if (weapons[index].packHash == ref.packHash && weapons[index].ordinal == ref.localIndex) { nextWeapon = index; break; }
+                }
+            }
+            if (nextWeapon != weaponSlot && !vitals.dead) {
+                if (!EquipControlledPlayer(tables, loaded, program, weapons[nextWeapon])) { return 1; }
+                // In-flight bullets and timed powerup effects belong to the
+                // actor world. Only the old gun's beam/loop sound ends here.
+                effects.RetireOwner(kPlayerCombatId);
+                weaponSlot = nextWeapon;
+            }
+        }
+        int width = 0, height = 0;
+        window.GetDrawableSize(width, height);
+        loaded.players[0].x = scene.playerX;
+        loaded.players[0].y = scene.playerY;
+        const float baselineZoom = GameViewCameraZoom(width, height);
+        camera.zoom = baselineZoom * loaded.map.GetCamera().GetScale() / kLevelCameraScale;
+        session.SetViewSize(width / baselineZoom, height / baselineZoom);
+        FollowPlayerCamera(loaded, width, height, camera);
+        float mouseX = 0, mouseY = 0;
+        if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead) {
+            scene.facing = std::atan2(camera.y + mouseY / camera.zoom - scene.playerY,
+                camera.x + mouseX / camera.zoom - scene.playerX) * kRadiansToDegrees + 90;
+        }
+        float moveX = 0, moveY = 0;
+        if (window.IsKeyDown(KeyCode::A)) { --moveX; }
+        if (window.IsKeyDown(KeyCode::D)) { ++moveX; }
+        if (window.IsKeyDown(KeyCode::W)) { --moveY; }
+        if (window.IsKeyDown(KeyCode::S)) { ++moveY; }
+        const std::uint64_t now = window.GetTicksMs();
+        if (!paused && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
+        previous = now;
+        effects.SetPaused(paused);
+        while (accumulator >= 16) {
+            if (!vitals.dead) { session.Update(16, moveX, moveY, firePreview || window.IsLeftMouseDown()); }
+            else { scene.Update(16, 0, 0, false); }
+            AdvanceProps(loaded.props, 16);
+            AdvanceTileLayers(loaded.map, 16);
+            accumulator -= 16;
+        }
+        if (session.GetLevel().GetWave() != lastSavedWave || (vitals.dead && !savedDeath)) {
+            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+            lastSavedWave = session.GetLevel().GetWave();
+            savedDeath = vitals.dead;
+        }
+        loaded.players[0].x = scene.playerX;
+        loaded.players[0].y = scene.playerY;
+        loaded.players[0].facingDegrees = scene.facing;
+        camera.zoom = baselineZoom * loaded.map.GetCamera().GetScale() / kLevelCameraScale;
+        FollowPlayerCamera(loaded, width, height, camera);
+        BuildGeometry(loaded, batch, true, true, false);
+        glViewport(0, 0, width, height);
+        glClearColor(0.04f, 0.05f, 0.07f, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        float mvp[kMatrix4dElements];
+        Matrix4dOrthoTopLeft(width / camera.zoom, height / camera.zoom, kMapDepthRange, mvp);
+        Matrix4dTranslate(mvp, -camera.x, -camera.y);
+        batch.Draw(program, mvp);
+        pickups.Draw(mvp, kLevelCameraScale);
+        effects.Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::BehindPlayer);
+        DrawModels(loaded, program, mvp);
+        if (withBrother) {
+            float world[kMatrix4dElements], modelMvp[kMatrix4dElements];
+            scene.BrotherMatrix(world);
+            Matrix4dMultiply(mvp, world, modelMvp);
+            DrawPlayer(brotherModel, program, modelMvp);
+        }
+        glEnable(GL_DEPTH_TEST);
+        for (auto &actor : scene.enemies) {
+            float world[kMatrix4dElements], modelMvp[kMatrix4dElements];
+            scene.EnemyMatrix(*actor, world);
+            Matrix4dMultiply(mvp, world, modelMvp);
+            // Original stun shake is a screen-pixel draw offset, never collision motion.
+            modelMvp[3] += 2.0f * actor->model.enemy.stun.GetOffset() / width;
+            DrawEnemyModel(actor->model, program, modelMvp);
+        }
+        glDisable(GL_DEPTH_TEST);
+        effects.Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::InFrontOfPlayer);
+        if (check) {
+            GLint sourceBlend = 0, destinationBlend = 0;
+            glGetIntegerv(GL_BLEND_SRC, &sourceBlend);
+            glGetIntegerv(GL_BLEND_DST, &destinationBlend);
+            if (sourceBlend != GL_SRC_ALPHA || destinationBlend != GL_ONE_MINUS_SRC_ALPHA) { ++checkFailures; }
+            std::printf("[render-check] after-particles blend=%x/%x failures=%u\n", sourceBlend, destinationBlend, checkFailures);
+        }
+        if (showCollisions) {
+            BuildCollisionMarkers(loaded, markers);
+            markers.Draw(markerProgram, mvp, 0.15f, 0.85f, 1, 0.8f);
+        }
+        float hud[kMatrix4dElements];
+        Matrix4dOrthoTopLeft(800, 600, 100, hud);
+        markers.Begin();
+        markers.AddRect(0, 0, 800, 67);
+        markers.AddRect(0, 67, 800, 28);
+        markers.AddRect(0, 565, 800, 35);
+        markers.Draw(markerProgram, hud, 0.015f, 0.025f, 0.04f, 0.88f);
+        char line[192];
+        const int displayWave = std::min(session.GetLevel().GetWave(), session.GetLevel().GetWaveLimit() - 1);
+        std::snprintf(line, sizeof(line), "REVOLUTION %d/10    WAVE %d/50    ENEMIES %d",
+            displayWave / 50 + 1, displayWave % 50 + 1, session.CountEnemies());
+        if (archiveMission != nullptr) {
+            std::snprintf(line, sizeof(line), "ARCHIVE  %s  ENEMIES %d", archiveMission->title.c_str(), session.CountEnemies());
+        }
+        markers.Begin();
+        DrawHudText(markers, 20, 12, line, 2);
+        std::snprintf(line, sizeof(line), "HP %.0f/%.0f  KILLS %u", vitals.health, vitals.maximum, session.GetKills());
+        DrawHudText(markers, 20, 37, line, 2);
+        if (withBrother) {
+            std::snprintf(line, sizeof(line), "BRO %.0f/%.0f", brother.vitals.health, brother.vitals.maximum);
+            DrawHudText(markers, 260, 40, line, 1.5f);
+        }
+        std::snprintf(line, sizeof(line), "LEVEL %u  XP %llu/%u    XPLODIUM %llu",
+            progress.GetLevel(), progress.GetExperienceInLevel(), progress.GetExperienceDelta(), scene.GetXplodium());
+        DrawHudText(markers, 20, 73, line, 1.7f);
+        DrawHudText(markers, 20, 577, "WASD MOVE  MOUSE FIRE  1/2 GUN  G ITEM  F NEXT  R RETRY  SPACE PAUSE  ESC MENU", 1.25f);
+        const char *buffNames[] = {"SHIELD", "ATTACK", "DEFENSE", "SPEED", "AUTO AIM"};
+        const int buffTimers[] = {player.powerups.shieldMs, player.powerups.frenzyMs[0],
+            player.powerups.frenzyMs[1], player.powerups.frenzyMs[2], player.powerups.autoFireMs};
+        std::string activePowerups;
+        for (unsigned index = 0; index < 5; ++index) {
+            if (buffTimers[index] <= 0) { continue; }
+            if (!activePowerups.empty()) { activePowerups += "   "; }
+            activePowerups += buffNames[index];
+            activePowerups += " " + std::to_string((buffTimers[index] + 999) / 1000) + "S";
+        }
+        if (player.weapon->brother.IsTurretActive()) { activePowerups += "   TURRET ACTIVE"; }
+        if (!activePowerups.empty()) { DrawHudText(markers, 20, 520, activePowerups.c_str(), 1.3f); }
+        if (powerups.GetSelected() != nullptr) {
+            std::snprintf(line, sizeof(line), "G: %s  X%u", powerups.GetSelected()->name.c_str(), powerups.GetCount());
+            DrawHudText(markers, 20, 548, line, 1.7f);
+        }
+        markers.Draw(markerProgram, hud, 0.85f, 0.92f, 1, 1);
+        markers.Begin();
+        markers.AddRect(400, 39, 360 * std::clamp(vitals.health / vitals.maximum, 0.0f, 1.0f), 12);
+        markers.Draw(markerProgram, hud, 0.25f, 0.9f, 0.45f, 1);
+        if (paused || session.GetLevel().IsCleared() || vitals.dead) {
+            markers.Begin();
+            markers.AddRect(170, 215, 480, 105);
+            markers.Draw(markerProgram, hud, 0.015f, 0.025f, 0.04f, 0.9f);
+        }
+        markers.Begin();
+        if (session.IsTransitioning()) { DrawHudText(markers, 230, 230, "GET READY", 6); }
+        if (session.IsTransitioning() && scene.GetLastWaveBonus() > 0) {
+            std::snprintf(line, sizeof(line), "PERFECT WAVE  +%llu XPLODIUM", scene.GetLastWaveBonus());
+            DrawHudText(markers, 175, 285, line, 2.5f);
+        }
+        if (paused) { DrawHudText(markers, 290, 260, "PAUSED", 5); }
+        if (withBrother && brother.vitals.dead && !vitals.dead) {
+            DrawHudText(markers, 170, 533, "BRO RETURNS AFTER THIS WAVE", 2.5f);
+        }
+        if (session.GetLevel().IsCleared()) {
+            if (archiveMission != nullptr) { DrawHudText(markers, 200, 235, "MISSION COMPLETE", 4); }
+            else {
+                DrawHudText(markers, 200, 235, "SURVIVAL COMPLETE", 4);
+                DrawHudText(markers, 255, 280, "500 WAVES CLEARED", 3);
+            }
+        }
+        if (vitals.dead) {
+            DrawHudText(markers, 230, 235, "MISSION FAILED", 4);
+            DrawHudText(markers, 250, 280, "PRESS R TO RETRY", 3);
+        }
+        markers.Draw(markerProgram, hud, 1, 0.75f, 0.25f, 1);
+        if (!session.GetDialogText().empty()) {
+            markers.Begin();
+            markers.AddRect(25, 405, 750, 132);
+            markers.Draw(markerProgram, hud, 0.02f, 0.03f, 0.05f, 0.95f);
+            markers.Begin();
+            std::istringstream words(session.GetDialogText());
+            std::string word, textLine;
+            float textY = 417;
+            while (words >> word) {
+                if (textLine.size() + word.size() > 70) {
+                    DrawHudText(markers, 40, textY, textLine.c_str(), 1.65f);
+                    textY += 17;
+                    textLine.clear();
+                }
+                if (!textLine.empty()) { textLine += ' '; }
+                textLine += word;
+            }
+            if (!textLine.empty()) { DrawHudText(markers, 40, textY, textLine.c_str(), 1.65f); }
+            DrawHudText(markers, 40, 518, "SPACE: CONTINUE", 1.5f);
+            markers.Draw(markerProgram, hud, 0.9f, 0.95f, 1, 1);
+        }
+        if (!capturePath.empty()) {
+            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+            const unsigned errors = glGetError();
+            if (errors != 0 || !window.SaveFrame(capturePath)) { return 1; }
+            std::printf("[survival] wave=%d alive=%d spawned=%u kills=%u hp=%.1f\n",
+                session.GetLevel().GetWave(), session.CountEnemies(), scene.spawned, session.GetKills(), vitals.health);
+            window.Present();
+            if (checkFailures != 0) { return 1; }
+            return 0;
+        }
+        window.Present();
+    }
+    if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
     return 0;
 }
 

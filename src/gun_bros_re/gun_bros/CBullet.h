@@ -38,8 +38,7 @@
 
 #include "engine/CArrayInputStream.h"
 #include "glu_script/CScript.h"
-#include "gun_bros/CGameAssetRef.h"
-#include "gun_bros/CProp.h"  // CGameSpriteGluRef
+#include "gun_bros/CGameAssetRef.h"  // CGameSpriteGluRef
 #include "gun_bros/CGun.h"
 #include "gun_bros/CombatTypes.h"
 
@@ -71,6 +70,9 @@ public:
         float GetAcceleration() const { return m_scalar116 * 100.0f; }
         float GetBaseDamage() const { return static_cast<float>(m_flag32); }
         float GetRadius() const { return m_value20 * m_scalar24; }
+        float GetTrajectoryHeight() const { return m_scalar260; }
+        unsigned GetTrajectoryDurationMs() const { return m_value264; }
+        unsigned GetTrajectoryType() const { return m_flag266; }
 
     private:
         CGameSpriteGluRef m_sprite;
@@ -100,8 +102,15 @@ public:
     void Bind(const Template &data, bool alternate);
     void Update(int deltaMs, int animationDurationMs);
     void Hit();
+    void OnWallCollision();
     void OnCollision(HitResult result);
     float GetDamage() const;
+    /** Original pseudo-height: no collision-coordinate displacement. */
+    float GetTrajectoryFraction() const;
+    float GetTrajectoryPhaseScale() const;
+    float GetTrajectoryHeight() const { const float phase = GetTrajectoryPhaseScale(); return m_trajectoryHeight * phase * phase * GetTrajectoryFraction(); }
+    bool HasActiveCollision() const { return collisionEnabled && GetTrajectoryHeight() < m_collisionHeightThreshold; }
+    unsigned GetTrajectoryEvents() const { return m_trajectoryEvents; }
     void SetScriptSequenceFrame(std::uint8_t frame) override;
     bool IsScriptSequenceFrameFinished() override { return animationFinished; }
     std::int16_t FunctionResolver(std::uint8_t function,
@@ -121,7 +130,7 @@ public:
     float acceleration = 0.0f;
     bool collisionEnabled = true;
     float seekRadius = 0;
-    int ricochets = 0;
+    int zOrderGroup = 3;
 
 private:
     CScriptInterpreter m_interpreter;
@@ -132,6 +141,11 @@ private:
     std::int16_t m_damagePeriodMs = 0;
     int m_damageDeltaMs = 0;
     float m_damage = 0;
+    float m_trajectoryHeight = 0;
+    unsigned m_trajectoryDurationMs = 0;
+    unsigned m_trajectoryType = 0;
+    unsigned m_trajectoryEvents = 0;
+    float m_collisionHeightThreshold = 0.25f;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CBULLET_H

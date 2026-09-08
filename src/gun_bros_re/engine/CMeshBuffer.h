@@ -92,7 +92,8 @@ public:
      * @param mvp Row-major 4x4; uploaded transposed.
      */
     void Draw(const CShaderProgram &program, const float *mvp,
-              const CTexture &texture, float heatIntensity = 0.0f) const;
+              const CTexture &texture, float heatIntensity = 0.0f,
+              const float *overlayRgb = nullptr) const;
 
     std::uint32_t GetIndexCount() const { return m_indexCount; }
 

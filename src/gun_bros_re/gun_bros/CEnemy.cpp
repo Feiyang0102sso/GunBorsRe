@@ -4,6 +4,7 @@
  */
 
 #include "gun_bros/CEnemy.h"
+#include "gun_bros/CLevel.h"
 
 #include <cmath>
 #include <cstdio>
@@ -43,7 +44,8 @@ CEnemy::CEnemy()
 }
 
 void CEnemy::Bind(const CScript &script, const CMoveSetMesh &moveSet,
-                  const std::vector<const CMesh *> &configMeshes) {
+                    const std::vector<const CMesh *> &configMeshes) {
+    stun.ClearStunned();
     m_moveSet = &moveSet;
     m_configMeshes = configMeshes;
 
@@ -99,6 +101,23 @@ bool CEnemy::SetState(std::uint8_t stateId) {
 }
 
 void CEnemy::Update(std::int32_t deltaMs) {
+    if (combat.enabled && !combat.dead && GetLevelContext() != nullptr && deltaMs > 0) {
+        // Original Update :67783 scales the whole actor clock, rounded to ms.
+        deltaMs = static_cast<int>(std::round(deltaMs * GetLevelContext()->GetEnemyMultiplier(combat.templateRef, 4)));
+        if (deltaMs < 1) { deltaMs = 1; }
+    }
+    if (combat.enabled && stun.IsActive()) {
+        // UpdateStun (:68399) keeps script timers but freezes movement and all
+        // part animation clocks. Original CEnemy stun callbacks are bx lr stubs
+        // at 0x397a0 / 0x397a8, so expiry emits no invented script event.
+        combat.previousX = combat.x;
+        combat.previousY = combat.y;
+        combat.hitFlash = std::fmax(0.0f, combat.hitFlash - deltaMs * 0.004f);
+        UpdateCombatTimers(deltaMs);
+        stun.Update(deltaMs);
+        m_interpreter.Refresh();
+        return;
+    }
     if (combat.enabled) {
         UpdateCombatBeforeAnimation(deltaMs);
     }
@@ -244,6 +263,9 @@ std::int16_t *CEnemy::VariableResolver(std::uint8_t variable) {
     if (variable < combat.variables.size()) {
         if (variable == 8) {
             combat.variables[8] = static_cast<std::int16_t>(combat.facing);
+        }
+        if (variable == 20 && GetLevelContext() != nullptr) {
+            combat.variables[20] = static_cast<std::int16_t>(GetLevelContext()->GetRealWave());
         }
         return &combat.variables[variable];
     }

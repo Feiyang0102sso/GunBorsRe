@@ -36,3 +36,15 @@ void RequirementList::Init(CArrayInputStream &stream) {
         }
     }
 }
+
+CGameSpriteGluRef::CGameSpriteGluRef()
+    : packHash(kNullPackHash), archetype(255), action(255), animation(255) {}
+
+void CGameSpriteGluRef::Init(CArrayInputStream &stream) {
+    // All four fields are always present, unlike GameObjectRef, whose index
+    // byte disappears when its hash is zero.
+    packHash = stream.ReadUInt32();
+    archetype = stream.ReadUInt8();
+    action = stream.ReadUInt8();
+    animation = stream.ReadUInt8();
+}

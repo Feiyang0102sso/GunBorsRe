@@ -23,6 +23,7 @@
 #define GUN_BROS_RE_MILESTONES_PLAYERMODEL_H
 
 #include "engine/CMeshBuffer.h"
+#include "gun_bros/CArmor.h"
 #include "engine/CShaderProgram.h"
 #include "engine/CTexture.h"
 #include "gun_bros/CMesh.h"
@@ -87,6 +88,14 @@ struct PlayerWeaponState {
     CBrother brother;
 };
 
+/** Each equipment slot owns its template, script state and optional attachments. */
+struct PlayerArmorState {
+    CArmor::Template data;
+    CArmor armor;
+    CTexture images[kArmorVariantCount];
+    std::unique_ptr<PlayerPart> parts[kArmorVariantCount];
+};
+
 /**
  * A player and his parts.
  *
@@ -98,7 +107,11 @@ struct PlayerModel {
     CMoveSetMesh moveSet;
     std::vector<std::unique_ptr<PlayerPart>> parts;
     std::unique_ptr<PlayerWeaponState> weapon;
+    std::unique_ptr<PlayerArmorState> armor[kArmorSlotCount];
     PlayerVitals *vitals = nullptr;
+    CBrother::PowerupState powerups;
+    bool human = true;
+    unsigned brotherIndex = 0;
 };
 
 /**
@@ -141,6 +154,11 @@ bool BuildPlayerBody(PackTables &tables, const CMoveSetMesh &moveSet,
 /** Equip the actual template, including its player move overrides and scripts. */
 bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
     const CGun::Template &weapon, const std::string &owner, PlayerModel &out);
+/** Replace only the template's own armour slot; other equipment stays equipped. */
+bool EquipPlayerArmor(PackTables &tables, const CArmor::Template &data,
+    const CShaderProgram &program, PlayerModel &out);
+void ClearPlayerArmor(PlayerModel &model);
+float PlayerArmorMultiplier(const PlayerModel &model, std::uint32_t attribute);
 void SetPlayerInput(PlayerModel &model, bool moving, bool shooting);
 /** Compose a muzzle in the same raw coordinate space as DrawPlayer. */
 bool GetPlayerMuzzle(PlayerModel &model, int hand, int node, MeshBoneTransform &out);

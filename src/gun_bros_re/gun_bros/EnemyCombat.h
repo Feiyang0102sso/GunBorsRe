@@ -14,7 +14,7 @@ struct EnemyAction {
     enum class Kind {
         Bullet, Effect, LinkedEffect, StopEffect, Sound, LoopSound, StopSound,
         Splash, Broadcast, SpawnEnemy, RemoveBullet, CollisionResolved,
-        Shake, Reward, Stun
+        Shake, Reward, Stun, LevelEvent, SpawnPickup, TurretActive
     };
     Kind kind = Kind::Effect;
     GameObjectRef resource;
@@ -34,6 +34,7 @@ struct EnemyAction {
 };
 
 struct EnemyCombat {
+    GameObjectRef templateRef;
     // IDs are the original class 7 variable IDs (:68982), not field offsets.
     // 0 move speed; 1 facing mode; 2 hit part; 3 damage /256;
     // 4 splash-hit flag; 5 hit world angle; 6 bullet speed; 7 hit edge group;
@@ -62,6 +63,9 @@ struct EnemyCombat {
     CombatId targetId = 0;
     float targetX = 0;
     float targetY = 0;
+    bool hasNavigationTarget = false;
+    float navigationX = 0;
+    float navigationY = 0;
     bool targetAlive = false;
     float targetRange = 100000;
     int behaviour = 7;

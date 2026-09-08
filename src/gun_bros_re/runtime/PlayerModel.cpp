@@ -113,6 +113,71 @@ bool LoadMeshAndAtlas(PackTables &tables, const char *label,
     return true;
 }
 
+bool EquipPlayerArmor(PackTables &tables, const CArmor::Template &data,
+    const CShaderProgram &program, PlayerModel &out) {
+    if (data.GetSlot() >= kArmorSlotCount) {
+        return false;
+    }
+    std::unique_ptr<PlayerArmorState> replacement(new PlayerArmorState());
+    replacement->data = data;
+    replacement->armor.Bind(replacement->data);
+    replacement->armor.Equip();
+    for (std::uint32_t index = 0; index < kArmorVariantCount; ++index) {
+        const CGameAssetRef &image = data.GetLoadedImageRef(index);
+        if (image.assetId >= 0 && !image.IsNull()) {
+            std::vector<std::uint8_t> payload;
+            PNGImage decoded;
+            if (!tables.ReadSectionResource(image.packHash, GameSection::Png, image.assetId, payload) ||
+                !PNGDecode(payload, decoded) || !replacement->images[index].Create(decoded, GL_REPEAT)) {
+                return false;
+            }
+        }
+        if (!data.HasMesh(index)) {
+            continue;
+        }
+        std::unique_ptr<PlayerPart> part(new PlayerPart());
+        const CGameAssetRef &mesh = data.GetMeshRef(index);
+        std::vector<std::uint8_t> payload;
+        if (!tables.ReadSectionResource(mesh.packHash, GameSection::Mesh, mesh.assetId, payload)) {
+            return false;
+        }
+        CArrayInputStream stream(payload);
+        if (!part->mesh.Init(stream) || !part->buffer.Create(program) || !part->buffer.SetMesh(part->mesh)) {
+            return false;
+        }
+        part->attached = true;
+        part->boneIndex = data.GetAttachmentNode(index);
+        // CArmor::Bind holds each attachment at time zero; the torso node
+        // supplies its animated placement, independently of the gun's pose.
+        if (!part->mesh.GetVerticesAt(0, part->pose)) {
+            return false;
+        }
+        part->buffer.SetVertices(part->pose);
+        replacement->parts[index] = std::move(part);
+    }
+    out.armor[data.GetSlot()] = std::move(replacement);
+    std::printf("[armor] equipped slot %u defense=%.0f%% damage=%.0f%% speed=%.0f%%\n",
+        data.GetSlot(), (PlayerArmorMultiplier(out, 0) - 1) * 100,
+        (PlayerArmorMultiplier(out, 1) - 1) * 100, (PlayerArmorMultiplier(out, 2) - 1) * 100);
+    return true;
+}
+
+void ClearPlayerArmor(PlayerModel &model) {
+    for (auto &armor : model.armor) {
+        armor.reset();
+    }
+}
+
+float PlayerArmorMultiplier(const PlayerModel &model, std::uint32_t attribute) {
+    float result = 1.0f;
+    for (const auto &armor : model.armor) {
+        if (armor) {
+            result += armor->armor.GetAttribute(attribute) / 100.0f;
+        }
+    }
+    return result;
+}
+
 PlayerTemplateData::PlayerTemplateData()
     : packHash(0), ordinal(0), gameScale(0.0f) {}
 
@@ -154,6 +219,7 @@ bool FindPlayerTemplate(CResTOCManager &tocManager, PackTables &tables,
 
 bool BuildPlayerBody(PackTables &tables, const CMoveSetMesh &moveSet,
                      PlayerModel &out) {
+    ClearPlayerArmor(out);
     out.weapon.reset();
     out.parts.clear();
     out.moveSet = moveSet;
@@ -343,11 +409,20 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
             PlayerPart *part = nullptr;
             if (weapon.brother.TorsoUsesWeapon()) { part = weapon.configs[torsoIndex].get(); }
             else { part = model.parts[torsoIndex].get(); }
-            part->buffer.Draw(program, base, part->texture, flash);
+            const CTexture *texture = &part->texture;
+            if (model.armor[1] && model.armor[1]->images[model.brotherIndex].IsValid()) {
+                texture = &model.armor[1]->images[model.brotherIndex];
+            }
+            part->buffer.Draw(program, base, *texture, flash);
         }
         if (legsIndex >= 0) {
             PlayerPart &part = *model.parts[legsIndex];
-            part.buffer.Draw(program, base, part.texture, flash);
+            const CTexture *texture = &part.texture;
+            // CBrother::Draw :134795 always uses the first legs image.
+            if (model.armor[0] && model.armor[0]->images[0].IsValid()) {
+                texture = &model.armor[0]->images[0];
+            }
+            part.buffer.Draw(program, base, *texture, flash);
         }
         const int handedness = weapon.data.GetHandedness();
         int count = 1;
@@ -360,6 +435,33 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
             float mvp[kMatrix4dElements];
             MeshCameraBuildPartMatrix(placement, base, mvp);
             weapon.gunPart.buffer.Draw(program, mvp, weapon.gunPart.texture, weapon.gun.GetHeatIntensity());
+        }
+        // Original order after weapons: head, then both torso attachments.
+        const std::uint32_t slots[] = {2, 1};
+        for (std::uint32_t slot : slots) {
+            if (!model.armor[slot]) {
+                continue;
+            }
+            PlayerArmorState &armor = *model.armor[slot];
+            std::uint32_t partCount = kArmorVariantCount;
+            if (slot == 2) {
+                partCount = 1;
+            }
+            for (std::uint32_t index = 0; index < partCount; ++index) {
+                if (!armor.parts[index]) {
+                    continue;
+                }
+                PlayerPart &part = *armor.parts[index];
+                MeshPart placement;
+                if (!weapon.brother.GetTorso().GetAnimation().GetNodeAt(part.boneIndex, placement.attachment)) {
+                    continue;
+                }
+                float mvp[kMatrix4dElements];
+                MeshCameraBuildPartMatrix(placement, base, mvp);
+                unsigned imageIndex = model.brotherIndex;
+                if (slot == 2) { imageIndex = 0; }
+                part.buffer.Draw(program, mvp, armor.images[imageIndex], flash);
+            }
         }
         return;
     }
@@ -459,12 +561,14 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
         beam = (bullet.GetFlags() & 0x100) != 0;
     }
     weapon->gun.Bind(weapon->data, &weapon->gunPart.mesh, beam);
+    weapon->brother.SetHuman(out.human);
     weapon->brother.Bind(weapon->playerScript, out.moveSet, bodyMeshes, weapon->gun, meshes);
     std::printf("[player] equipped %s: weaponTorso=%d move=%d legs=%d hand=%u state=%d\n",
         owner.c_str(), weapon->brother.TorsoUsesWeapon(), weapon->brother.GetTorso().GetMoveIndex(),
         weapon->brother.GetLegs().GetMoveIndex(), data.GetHandedness(), weapon->brother.GetStateId());
     out.weapon = std::move(weapon);
     out.weapon->brother.SetVitals(out.vitals);
+    out.weapon->brother.SetPowerupState(&out.powerups);
     return true;
 }
 

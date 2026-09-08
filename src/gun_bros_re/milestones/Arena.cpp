@@ -3,11 +3,14 @@
  */
 #define NOMINMAX
 #include "milestones/Arena.h"
+#include "runtime/ArmorCatalog.h"
+#include "runtime/HudText.h"
 #include "runtime/CombatScene.h"
 #include "runtime/WeaponCatalog.h"
 #include "engine/CMarkerBatch.h"
 #include "engine/CMatrix4d.h"
 #include "gun_bros/CBullet.h"
+#include "gun_bros/CLevel.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -18,47 +21,6 @@ namespace {
 constexpr int kStepMs = 16;
 constexpr float kRadians = 3.14159265f / 180;
 const char *const kShaders = ASSET_ROOT "/src/gun_bros_re/shaders";
-
-/** Tiny diagnostic font: five columns per glyph, low bit at the top. */
-void Text(CMarkerBatch &batch, float x, float y, const std::string &text, float scale = 2) {
-    static const unsigned char digits[10][5] = {
-        {62,81,73,69,62},{0,66,127,64,0},{66,97,81,73,70},{33,65,69,75,49},{24,20,18,127,16},
-        {39,69,69,69,57},{60,74,73,73,48},{1,113,9,5,3},{54,73,73,73,54},{6,73,73,41,30}
-    };
-    static const unsigned char letters[26][5] = {
-        {126,17,17,17,126},{127,73,73,73,54},{62,65,65,65,34},{127,65,65,34,28},
-        {127,73,73,73,65},{127,9,9,9,1},{62,65,73,73,122},{127,8,8,8,127},
-        {0,65,127,65,0},{32,64,65,63,1},{127,8,20,34,65},{127,64,64,64,64},
-        {127,2,12,2,127},{127,4,8,16,127},{62,65,65,65,62},{127,9,9,9,6},
-        {62,65,81,33,94},{127,9,25,41,70},{70,73,73,73,49},{1,1,127,1,1},
-        {63,64,64,64,63},{31,32,64,32,31},{63,64,56,64,63},{99,20,8,20,99},
-        {7,8,112,8,7},{97,81,73,69,67}
-    };
-    const float startX = x;
-    for (char c : text) {
-        if (c == '\n') { y += 10 * scale; x = startX; continue; }
-        if (c >= 'a' && c <= 'z') { c -= 'a' - 'A'; }
-        const unsigned char *glyph = nullptr;
-        if (c >= '0' && c <= '9') { glyph = digits[c - '0']; }
-        if (c >= 'A' && c <= 'Z') { glyph = letters[c - 'A']; }
-        if (glyph != nullptr) {
-            for (int column = 0; column < 5; ++column) {
-                for (int row = 0; row < 7; ++row) {
-                    if ((glyph[column] & (1 << row)) != 0) {
-                        batch.AddRect(x + column * scale, y + row * scale, scale, scale);
-                    }
-                }
-            }
-        } else if (c == '-' || c == '_') { batch.AddRect(x, y + 3 * scale, 5 * scale, scale); }
-        else if (c == '.' || c == ':') {
-            batch.AddRect(x + 2 * scale, y + 6 * scale, scale, scale);
-            if (c == ':') { batch.AddRect(x + 2 * scale, y + 2 * scale, scale, scale); }
-        } else if (c == '/') {
-            for (int i = 0; i < 5; ++i) { batch.AddRect(x + i * scale, y + (5 - i) * scale, scale, scale); }
-        }
-        x += 6 * scale;
-    }
-}
 
 void Circle(CMarkerBatch &batch, float x, float y, float radius) {
     for (int i = 0; i < 32; ++i) {
@@ -76,7 +38,7 @@ bool Equip(PackTables &tables, const PlayerTemplateData &data, const WeaponEntry
 }
 
 /** Exercise actual archive scripts, then write a per-entry audit for inspection. */
-int CheckArena(CWindow &window, PackTables &tables, const CShaderProgram &program,
+int CheckArena(CWindow &window, CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,
     const std::vector<EnemyTemplateData> &catalog, const std::vector<WeaponEntry> &weapons,
     const PlayerTemplateData &playerData, PlayerModel &player, PlayerVitals &vitals,
     WeaponEffects &effects, CombatScene &scene) {
@@ -312,7 +274,136 @@ int CheckArena(CWindow &window, PackTables &tables, const CShaderProgram &progra
         const float maximum = std::max(damage[0], std::max(damage[1], damage[2]));
         if (minimum <= 0 || maximum - minimum > maximum * 0.02f) { ++failures; }
     } else { std::printf("[arena-check] FAIL no beam tested\n"); ++failures; }
+    // Use a known three-slot archive outfit, independently checked in the
+    // original scripts: defense 4+8+2, attack 0+0+5, speed -1-3-3.
+    std::vector<ArmorEntry> armorCatalog;
+    if (!LoadArmorCatalog(toc, tables, armorCatalog) || armorCatalog.size() <= 11) {
+        return 1;
+    }
+    scene.Reset();
+    const std::size_t outfit[] = {7, 11, 4};
+    for (std::size_t index : outfit) {
+        if (!EquipPlayerArmor(tables, armorCatalog[index].data, program, player)) {
+            return 1;
+        }
+    }
+    if (std::abs(PlayerArmorMultiplier(player, 0) - 1.14f) > 0.0001f ||
+        std::abs(PlayerArmorMultiplier(player, 1) - 1.05f) > 0.0001f ||
+        std::abs(PlayerArmorMultiplier(player, 2) - 0.93f) > 0.0001f) {
+        ++failures;
+    }
+    const float originalMaximum = vitals.maximum;
+    vitals.maximum = 100;
+    vitals.Reset();
+    vitals.invincible = false;
+    CombatHit armorHit;
+    armorHit.ownerType = 1;
+    armorHit.damage = 10;
+    scene.ApplyHit(kPlayerCombatId, armorHit);
+    const float armoredIncoming = vitals.lastDamage;
+    if (std::abs(vitals.health - 91.4f) > 0.001f) {
+        ++failures;
+    }
+    actor = scene.Spawn(0, 600, 300);
+    if (actor == nullptr) {
+        return 1;
+    }
+    actor->model.enemy.combat.health = 100;
+    actor->model.enemy.combat.maxHealth = 100;
+    armorHit.owner = kPlayerCombatId;
+    armorHit.ownerType = 0;
+    scene.ApplyHit(actor->model.enemy.combat.id, armorHit);
+    const float armoredOutgoing = 100 - actor->model.enemy.combat.health;
+    if (std::abs(armoredOutgoing - 10.5f) > 0.001f) {
+        ++failures;
+    }
+    scene.Reset();
+    const float beforeMove = scene.playerX;
+    scene.Update(100, 1, 0, false);
+    const float armoredTravel = scene.playerX - beforeMove;
+    if (std::abs(armoredTravel - 20.46f) > 0.001f) {
+        ++failures;
+    }
+    if (!Equip(tables, playerData, weapons[0], player, program) ||
+        std::abs(PlayerArmorMultiplier(player, 0) - 1.14f) > 0.0001f ||
+        std::abs(PlayerArmorMultiplier(player, 1) - 1.05f) > 0.0001f) {
+        ++failures;
+    }
+    ClearPlayerArmor(player);
+    if (std::abs(PlayerArmorMultiplier(player, 0) - 1.0f) > 0.0001f) {
+        ++failures;
+    }
+    vitals.maximum = originalMaximum;
+    vitals.Reset();
+    std::printf("[armor-combat] incoming=%.3f expected=8.600 outgoing=%.3f expected=10.500 travel=%.3f expected=20.460\n",
+        armoredIncoming, armoredOutgoing, armoredTravel);
     failures += unsupported;
+    // Independent numbers exercise the original native units: 5 * 1.5 * 2 HP,
+    // 100 units/s * 2 speed for 100 ms, and 1.5 * 2 outgoing damage.
+    scene.Reset();
+    CMap multiplierMap;
+    CLevel::Template multiplierTemplate;
+    CLevel multiplierLevel;
+    multiplierLevel.Bind(multiplierTemplate, multiplierMap);
+    const std::int16_t localHealth[] = {0, 1, 384};
+    const std::int16_t globalHealth[] = {1, 512};
+    const std::int16_t localDamage[] = {0, 0, 384};
+    const std::int16_t globalDamage[] = {0, 512};
+    const std::int16_t globalSpeed[] = {4, 512};
+    multiplierLevel.FunctionResolver(54, localHealth, 3);
+    multiplierLevel.FunctionResolver(55, globalHealth, 2);
+    multiplierLevel.FunctionResolver(54, localDamage, 3);
+    multiplierLevel.FunctionResolver(55, globalDamage, 2);
+    multiplierLevel.FunctionResolver(55, globalSpeed, 2);
+    scene.SetLevel(&multiplierLevel);
+    actor = scene.Spawn(0, 600, 300);
+    if (actor == nullptr) { return 1; }
+    CEnemy &scaledEnemy = actor->model.enemy;
+    const float scaledHealth = scaledEnemy.combat.health;
+    const int scriptHealth = scaledEnemy.FunctionResolver(51, nullptr, 0);
+    scaledEnemy.combat.variables[0] = 100;
+    scaledEnemy.combat.triggerDistance = 0;
+    const std::int16_t follow[] = {0, 0};
+    scaledEnemy.FunctionResolver(0, follow, 2);
+    scene.Update(100, 0, 0, false);
+    const float scaledTravel = std::hypot(scaledEnemy.combat.x - 600, scaledEnemy.combat.y - 300);
+    const float scaledDamage = scene.GetDamageMultiplier(scaledEnemy.combat.id);
+    if (std::abs(scaledHealth - 15) > 0.001f || scriptHealth != 5 ||
+        std::abs(scaledTravel - 20) > 0.001f || std::abs(scaledDamage - 3) > 0.001f) { ++failures; }
+    std::printf("[level-multipliers] health=%.3f script=%d travel=%.3f damage=%.3f\n",
+        scaledHealth, scriptHealth, scaledTravel, scaledDamage);
+    scene.Reset();
+    scene.SetLevel(nullptr);
+    // Render the same original mesh twice: plain and native-29 hit flash.
+    // This catches confusing an enemy's white overlay with a gun's red heat.
+    CombatEnemy *plain = scene.Spawn(0, 400, 450);
+    CombatEnemy *flashed = scene.Spawn(0, 800, 450);
+    if (plain == nullptr || flashed == nullptr) { return 1; }
+    plain->model.enemy.Update(1000);
+    flashed->model.enemy.Update(1000);
+    plain->model.enemy.combat.x = 400;
+    plain->model.enemy.combat.y = 450;
+    flashed->model.enemy.combat.x = 800;
+    flashed->model.enemy.combat.y = 450;
+    flashed->model.enemy.FunctionResolver(29, nullptr, 0);
+    int renderWidth = 0, renderHeight = 0;
+    window.GetDrawableSize(renderWidth, renderHeight);
+    glViewport(0, 0, renderWidth, renderHeight);
+    glClearColor(0.04f, 0.05f, 0.07f, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_DEPTH_TEST);
+    float renderProjection[16];
+    Matrix4dOrthoTopLeft(kArenaWidth, kArenaHeight, 4000, renderProjection);
+    for (const auto &actor : scene.enemies) {
+        float world[16], model[16];
+        scene.EnemyMatrix(*actor, world);
+        Matrix4dMultiply(renderProjection, world, model);
+        DrawEnemyModel(actor->model, program, model);
+    }
+    glDisable(GL_DEPTH_TEST);
+    if (glGetError() != 0 || !window.SaveFrame("out/enemy-hit-flash-check.png")) { ++failures; }
     std::printf("[arena-check] catalog=%zu scripted=%u no_script=%u unknown_calls=%u failures=%u\n",
         catalog.size(), scripted, unused, unsupported, failures);
     if (failures != 0) { return 1; }
@@ -322,7 +413,7 @@ int CheckArena(CWindow &window, PackTables &tables, const CShaderProgram &progra
 
 int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     std::uint32_t weaponIndex, const std::string &screenshot, std::uint32_t advanceMs,
-    bool fire, bool check, bool showCollisions) {
+    bool fire, bool check, bool showCollisions, int armorIndex) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
     PackTables tables(toc);
@@ -349,7 +440,14 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     WeaponEffects effects(toc, tables, program);
     CombatScene scene(tables, program, catalog, player, vitals, effects,
         playerData.gameScale);
-    if (check) { return CheckArena(window, tables, program, catalog, weapons, playerData, player, vitals, effects, scene); }
+    if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, playerData, player, vitals, effects, scene); }
+    if (armorIndex >= 0) {
+        std::vector<ArmorEntry> armor;
+        if (!LoadArmorCatalog(toc, tables, armor) || armorIndex >= static_cast<int>(armor.size()) ||
+            !EquipPlayerArmor(tables, armor[armorIndex].data, program, player)) {
+            return 1;
+        }
+    }
     scene.Reset();
     scene.Spawn(entry, 600, 330);
     for (std::uint32_t time = 0; time < advanceMs; time += kStepMs) {
@@ -433,6 +531,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
             if (actor->model.enemy.combat.removed) { continue; }
             scene.EnemyMatrix(*actor, model);
             Matrix4dMultiply(projection, model, mvp);
+            mvp[3] += 2.0f * actor->model.enemy.stun.GetOffset() / width;
             DrawEnemyModel(actor->model, program, mvp);
         }
         Matrix4dMultiply(projection, playerMatrix, mvp);
@@ -458,12 +557,12 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
             markers.Begin();
             char health[64];
             std::snprintf(health, sizeof(health), "%.0f/%.0f", state.health, state.maxHealth);
-            Text(markers, state.x - 32, barY - 12, health, 1.2f);
+            DrawHudText(markers, state.x - 32, barY - 12, health, 1.2f);
             markers.Draw(markerProgram, projection, 0.82f, 0.88f, 0.9f, 1);
         }
         if (collisions) {
             markers.Begin();
-            Circle(markers, scene.playerX, scene.playerY, kPlayerCollisionRadius);
+            Circle(markers, scene.playerX, scene.playerY, scene.GetPlayerRadius());
             for (const auto &actor : scene.enemies) {
                 const CEnemy &enemy = actor->model.enemy;
                 const EnemyCombat &state = enemy.combat;
@@ -503,27 +602,27 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         char line[256];
         std::snprintf(line, sizeof(line), "ARENA %zu/%zu - %s", entry, catalog.size() - 1, catalog[entry].owner.c_str());
         markers.Begin();
-        Text(markers, 20, 16, line);
+        DrawHudText(markers, 20, 16, line);
         const char *godLabel = "GOD OFF";
         if (vitals.invincible) { godLabel = "GOD ON"; }
         std::snprintf(line, sizeof(line), "HP %.1f/%.0f   INCOMING %.1f   LAST %.1f   G: %s", vitals.health, vitals.maximum,
             vitals.incomingDamage, vitals.lastDamage, godLabel);
-        Text(markers, 20, 42, line, 1.6f);
+        DrawHudText(markers, 20, 42, line, 1.6f);
         std::snprintf(line, sizeof(line), "ALIVE %zu   HITS %u   KILLS %u   DAMAGE %.1f   LAST %.1f", scene.AliveCount(), hits, kills, damage, scene.lastDamage);
-        Text(markers, 20, 62, line, 1.6f);
-        Text(markers, 20, 83, WeaponSelectionLabel(weapons, weapon).substr(0, 95), 1.4f);
-        Text(markers, 20, 106, "ARROWS ENEMY  X SPAWN  R RESET  1-7/N/M WEAPON  WASD MOVE  SPACE PAUSE  . STEP  C COLLISION", 1.3f);
-        if (paused) { Text(markers, 985, 18, "PAUSED", 2); }
+        DrawHudText(markers, 20, 62, line, 1.6f);
+        DrawHudText(markers, 20, 83, WeaponSelectionLabel(weapons, weapon).substr(0, 95), 1.4f);
+        DrawHudText(markers, 20, 106, "ARROWS ENEMY  X SPAWN  R RESET  1-7/N/M WEAPON  WASD MOVE  SPACE PAUSE  . STEP  C COLLISION", 1.3f);
+        if (paused) { DrawHudText(markers, 985, 18, "PAUSED", 2); }
         if (!scene.enemies.empty()) {
             const EnemyCombat &state = scene.enemies.front()->model.enemy.combat;
             std::snprintf(line, sizeof(line), "FILTER %d  TARGET TYPE %d", state.variables[16], state.targetType);
-            Text(markers, 20, 145, line, 1.4f);
+            DrawHudText(markers, 20, 145, line, 1.4f);
         }
-        if ((deferred & 3) != 0) { Text(markers, 20, 167, "BOSS / LEVEL MECHANISMS DEFERRED", 1.4f); }
-        if (now < noticeUntil) { Text(markers, 380, 220, "NO FREE SPAWN POSITION", 2); }
-        if (!catalog[entry].script.IsPresent()) { Text(markers, 380, 180, "UNUSED - NO SCRIPT", 3); }
-        else if (catalog[entry].gameScale == 0) { Text(markers, 380, 180, "NO VISIBLE MODEL", 3); }
-        if (vitals.dead) { Text(markers, 400, 450, "PLAYER DEAD - R RESET", 3); }
+        if ((deferred & 3) != 0) { DrawHudText(markers, 20, 167, "BOSS / LEVEL MECHANISMS DEFERRED", 1.4f); }
+        if (now < noticeUntil) { DrawHudText(markers, 380, 220, "NO FREE SPAWN POSITION", 2); }
+        if (!catalog[entry].script.IsPresent()) { DrawHudText(markers, 380, 180, "UNUSED - NO SCRIPT", 3); }
+        else if (catalog[entry].gameScale == 0) { DrawHudText(markers, 380, 180, "NO VISIBLE MODEL", 3); }
+        if (vitals.dead) { DrawHudText(markers, 400, 450, "PLAYER DEAD - R RESET", 3); }
         markers.Draw(markerProgram, projection, 0.84f, 0.91f, 0.94f, 1);
         markers.Begin();
         markers.AddRect(20, 124, 260 * std::clamp(vitals.health / vitals.maximum, 0.0f, 1.0f), 4);

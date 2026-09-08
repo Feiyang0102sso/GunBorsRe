@@ -1,5 +1,7 @@
 # Gun Bros 重写计划
 
+> 2026-09-08 当前可玩入口、操作和边界见 [游戏验收](docs/acceptance.md)，本轮逆向证据与分阶段验证见 [整夜进度记录](docs/overnight-progress.md)。以下保留原重写计划，历史里程碑继续可用。
+
 用 C++ 在 Windows 上重写 Glu Mobile 的自研引擎，**运行时直接读原版 `.big`**，让游戏跑起来。
 
 参考资料：

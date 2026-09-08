@@ -1,5 +1,7 @@
 # Arena 敌人战斗测试
 
+> 正式游戏使用菜单 26；当前入口和完整操作见 [游戏验收](acceptance.md)。本文描述永久保留的独立 Arena 研究模式。
+
 2026-09-07：菜单 **16 — Arena** 已接入通用敌人战斗、双方伤害与玩家生命。
 一个空白场地按 ENEMY 目录切换，不需要维护 78 份相同地图。
 
@@ -67,10 +69,10 @@ HUD 中 `HP` 是当前／最大生命；`INCOMING` 是累计应受伤害，`LAST
 ## 可重复验证
 
 ```powershell
-.\bin\x64\Release\gun_bros_re.exe --arena-check
-.\bin\x64\Release\gun_bros_re.exe --weapon-check
-.\bin\x64\Release\gun_bros_re.exe --arena 0 --weapon 0 --fire --collisions --advance 600 --screenshot out/arena-collisions.png
-.\bin\x64\Release\gun_bros_re.exe --arena 15 --screenshot out/arena-unused-initial.png
+.\bin\x64\Release\gun_bros_re.exe --mute --arena-check
+.\bin\x64\Release\gun_bros_re.exe --mute --weapon-check
+.\bin\x64\Release\gun_bros_re.exe --mute --arena 0 --weapon 0 --fire --collisions --advance 600 --screenshot out/arena-collisions.png
+.\bin\x64\Release\gun_bros_re.exe --mute --arena 15 --screenshot out/arena-unused-initial.png
 ```
 
 `--arena-check` 写入 `out/arena-check.csv` 和 `out/arena-weapons.csv`，失败返回非零。
@@ -89,7 +91,9 @@ HUD 中 `HP` 是当前／最大生命；`INCOMING` 是累计应受伤害，`LAST
 目录调查是有限运行覆盖，不代表穷尽每个脚本的所有条件分支。报告中的 `deferred` 位：
 1 为 Boss 表现，2 为关卡上下文，4 为奖励。孤立友方没有敌方目标时不射击，不能据此判失败。
 
-## 仍待完成的边界
+## 2026-09-07 历史边界
+
+以下保留旧阶段的验收范围。2026-09-08 已接入原手雷控制器、奖励和正式关卡导航／波次；当前尚未完成的事项以 [未解行为](unresolved-behavior.md) 为准。
 
 本轮明确排除：**Boss 特殊机制、手雷造成的眩晕、击杀奖励**。Boss 条目仍可浏览和测试其通用部分，
 涉及 Boss／关卡依赖时显示提示；不会借用错误资源强行生成它依赖的关卡对象。

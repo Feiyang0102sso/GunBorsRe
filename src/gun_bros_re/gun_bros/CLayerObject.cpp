@@ -17,14 +17,15 @@ namespace {
  * types set hasExtra and write nothing, so their objects are the plain 11
  * bytes -- see the switch at _IDA_OUT/gunbros_3.6.0_IOS.c:126540.
  */
-void ReadObjectExtra(CArrayInputStream &stream, std::uint8_t objectType) {
+void ReadObjectExtra(CArrayInputStream &stream, PlacedObject &object) {
+    const std::uint8_t objectType = object.objectType;
     if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Player)) {
-        stream.ReadUInt16();
+        object.playerConfiguration = stream.ReadUInt16();
     } else if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Enemy)) {
-        stream.ReadUInt8();
-        stream.ReadInt16();
+        object.pathLayer = stream.ReadUInt8();
+        object.facing = stream.ReadInt16();
     } else if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Platform)) {
-        stream.ReadUInt8();
+        object.platformPath = stream.ReadUInt8();
     }
 }
 
@@ -56,7 +57,7 @@ bool CLayerObject::Init(CArrayInputStream &stream) {
             object.spawnTag = stream.ReadUInt8();
 
             if (hasExtra != 0) {
-                ReadObjectExtra(stream, objectType);
+                ReadObjectExtra(stream, object);
             }
 
             m_objects.push_back(object);

@@ -3,8 +3,11 @@
  */
 #define NOMINMAX
 #include "runtime/CombatScene.h"
+#include "runtime/CombatGeometry.h"
 #include "engine/CMatrix4d.h"
 #include "gun_bros/CMeshCamera.h"
+#include "gun_bros/CLevel.h"
+#include "runtime/StoreCatalog.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -19,45 +22,8 @@ bool Skipped(CombatId id, const std::vector<CombatId> &ids) {
     return std::find(ids.begin(), ids.end(), id) != ids.end();
 }
 
-// Earliest point where a moving circle overlaps a stationary one.
-float CircleFraction(float x, float y, float dx, float dy, float cx, float cy, float radius) {
-    const float ox = x - cx, oy = y - cy;
-    const float c = ox * ox + oy * oy - radius * radius;
-    if (c <= 0) { return 0; }
-    const float a = dx * dx + dy * dy;
-    if (a <= 0) { return 2; }
-    const float b = ox * dx + oy * dy;
-    const float discriminant = b * b - a * c;
-    if (discriminant < 0) { return 2; }
-    const float fraction = (-b - std::sqrt(discriminant)) / a;
-    if (fraction < 0 || fraction > 1) { return 2; }
-    return fraction;
-}
-
-// A swept circle against a finite edge is its strip plus both endpoint caps.
-float EdgeFraction(float x, float y, float dx, float dy,
-    const CollisionPoint &a, const CollisionPoint &b, float radius) {
-    float nearest = std::min(CircleFraction(x, y, dx, dy, a.x, a.y, radius),
-        CircleFraction(x, y, dx, dy, b.x, b.y, radius));
-    const float ex = b.x - a.x, ey = b.y - a.y;
-    const float length = std::hypot(ex, ey);
-    if (length <= 0) { return nearest; }
-    const float nx = -ey / length, ny = ex / length;
-    const float distance = (x - a.x) * nx + (y - a.y) * ny;
-    const float velocity = dx * nx + dy * ny;
-    for (int side = -1; side <= 1; side += 2) {
-        float fraction = 0;
-        if (std::abs(distance) > radius) {
-            if (std::abs(velocity) < 0.00001f) { continue; }
-            fraction = (side * radius - distance) / velocity;
-        }
-        if (fraction < 0 || fraction > 1) { continue; }
-        const float along = ((x + dx * fraction - a.x) * ex +
-            (y + dy * fraction - a.y) * ey) / length;
-        if (along >= 0 && along <= length) { nearest = std::min(nearest, fraction); }
-    }
-    return nearest;
-}
+using CombatGeometry::CircleFraction;
+using CombatGeometry::EdgeFraction;
 
 void Transform(const float *matrix, float localX, float localY, float localZ,
     float &x, float &y, float &z) {
@@ -68,27 +34,83 @@ void Transform(const float *matrix, float localX, float localY, float localZ,
 }
 
 bool LoadInitialPlayerHealth(CResTOCManager &toc, PackTables &tables, float &health) {
-    for (std::uint32_t p = 0; p < toc.GetPackCount(); ++p) {
-        // Progress is a singleton data table, not a script-spawned object;
-        // OBJECT_SCRIPT_COUNTS can report zero while its section exists.
-        std::vector<std::uint8_t> payload;
-        if (!tables.ReadSectionResource(toc.GetPack(p)->GetPackHash(), GameSection::PlayerProgress, 0, payload)) { continue; }
-        CArrayInputStream stream(payload);
-        const unsigned xpCount = stream.ReadUInt16();
-        stream.Skip(xpCount * 4);
-        const unsigned healthCount = stream.ReadUInt16();
-        if (healthCount < 2) { continue; }
-        // Progress is indexed by the displayed level. Entry zero is a sentinel;
-        // a new player starts at level one.
-        stream.ReadUInt32();
-        health = static_cast<float>(static_cast<std::int16_t>(stream.ReadUInt32()));
-        if (!stream.Overran() && health > 0) {
-            std::printf("[combat] initial player health %.0f from PLAYER_PROGRESS\n", health);
-            return true;
-        }
+    CPlayerProgress::Template progress;
+    if (!LoadPlayerProgress(toc, tables, progress)) { return false; }
+    // Progress is indexed by the displayed level. Entry zero is a sentinel;
+    // a new player starts at level one.
+    health = static_cast<float>(progress.health[1]);
+    std::printf("[combat] initial player health %.0f from PLAYER_PROGRESS\n", health);
+    return true;
+}
+
+void CombatScene::SetPlayerProgress(CPlayerProgress *progress) {
+    m_progress = progress;
+    if (progress != nullptr) { m_vitals.maximum = progress->GetHealth(); }
+}
+
+void CombatScene::AddExperience(unsigned amount) {
+    if (m_progress == nullptr) { return; }
+    const float fraction = m_vitals.health / m_vitals.maximum;
+    if (!m_progress->AddExperience(amount)) { return; }
+    // CPlayer::AddExperience (:101250) preserves the current health fraction.
+    m_vitals.maximum = m_progress->GetHealth();
+    m_vitals.health = m_vitals.maximum * fraction;
+    if (m_brother != nullptr) {
+        const float brotherFraction = m_brother->vitals.health / m_brother->vitals.maximum;
+        m_brother->vitals.maximum = m_progress->GetHealth();
+        m_brother->vitals.health = m_brother->vitals.maximum * brotherFraction;
     }
-    std::printf("[combat] initial player health missing\n");
-    return false;
+    std::printf("[progress] level-up=%u health=%.1f/%.1f xp=%llu\n",
+        m_progress->GetLevel(), m_vitals.health, m_vitals.maximum, m_progress->GetExperience());
+}
+
+void CombatScene::RewardEnemy(const CombatEnemy &actor) {
+    if (m_progress == nullptr || m_level == nullptr) { return; }
+    // CLevel::OnEnemyKilled (:119609): offset 912 is XP, 876 is Xplodium.
+    // Multiplier attribute 2 is Xplodium; attribute 3 is XP. Both round UP.
+    const GameObjectRef &ref = actor.model.enemy.combat.templateRef;
+    const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
+        m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(m_player, 3)));
+    AddExperience(experience);
+    if (actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId) {
+        const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
+            m_level->GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(m_player, 4)));
+        m_xplodium += xplodium;
+    }
+}
+
+void CombatScene::AddHealth(unsigned amount) {
+    if (!m_vitals.dead) { m_vitals.health = std::min(m_vitals.maximum, m_vitals.health + amount); }
+}
+
+bool CombatScene::TouchesPickup(float x, float y) const {
+    // CPickup::Bind :99937 sets its fixed collision radius to 10.
+    if (!m_vitals.dead && CircleFraction(playerX, playerY,
+        m_previousPlayerX - playerX, m_previousPlayerY - playerY, x, y, m_playerRadius + 10) <= 1) { return true; }
+    return m_brother != nullptr && !m_brother->vitals.dead &&
+        CircleFraction(m_brother->x, m_brother->y, m_brother->previousX - m_brother->x,
+            m_brother->previousY - m_brother->y, x, y, m_playerRadius + 10) <= 1;
+}
+
+void CombatScene::OnWaveCleared(unsigned perfectRewardPercent) {
+    if (m_player.weapon != nullptr) { m_player.weapon->brother.OnWaveCleared(); }
+    if (m_brotherModel != nullptr) { m_brotherModel->weapon->brother.OnWaveCleared(); }
+    m_lastWaveBonus = 0;
+    // CLevel::OnWaveCleared (:116980): integer percentage, at least one.
+    // Count accepted damage contacts even in the invincible test pilot.
+    if (m_vitals.hits == m_waveHits) {
+        m_lastWaveBonus = std::max<std::uint64_t>(1,
+            (m_xplodium - m_waveXplodium) * perfectRewardPercent / 100);
+        m_xplodium += m_lastWaveBonus;
+        ++m_perfectWaves;
+    }
+    ++m_clearedWaves;
+    std::printf("[progress] wave reward=%llu percent=%u hits=%u perfect=%u/%u\n",
+        m_lastWaveBonus, perfectRewardPercent, m_vitals.hits - m_waveHits,
+        m_perfectWaves, m_clearedWaves);
+    // The next wave excludes this wave's bonus from its reward basis.
+    m_waveXplodium = m_xplodium;
+    m_waveHits = m_vitals.hits;
 }
 
 CombatScene::CombatScene(PackTables &tables, const CShaderProgram &program,
@@ -99,11 +121,119 @@ CombatScene::CombatScene(PackTables &tables, const CShaderProgram &program,
     m_effects.SetCombatWorld(this);
 }
 
+void CombatScene::SetMap(CMap &map, const CCollisionData &collision, WeaponCollision &weaponCollision,
+    float cameraScale, float playerRadius) {
+    m_map = &map;
+    m_collision = &collision;
+    m_weaponCollision = &weaponCollision;
+    m_cameraScale = cameraScale;
+    m_playerRadius = playerRadius;
+    const MapRectangle bounds = map.GetCameraExtent();
+    m_left = bounds.x + playerRadius;
+    m_top = bounds.y + playerRadius;
+    m_right = bounds.x + bounds.width - playerRadius;
+    m_bottom = bounds.y + bounds.height - playerRadius;
+}
+
+void CombatScene::ResolveMovement(float previousX, float previousY, float &x, float &y, float radius, bool player) const {
+    // CEnemy::UpdatePathFinder (:70142) advances on its navigation path;
+    // TestCollisions (:73079) tests bullets/player, not the player's wall
+    // circle resolver. Applying that resolver again can block authored portals.
+    if (m_collision != nullptr && player) {
+        const CollisionPoint position = m_collision->ResolveCircleMovement(
+            CollisionPoint(previousX, previousY), CollisionPoint(x - previousX, y - previousY), radius);
+        x = position.x;
+        y = position.y;
+    }
+    // Camera bounds constrain the player. Authored enemy spawn nodes can be
+    // outside the visible rectangle and must remain there until they enter.
+    if (player || m_map == nullptr) {
+        x = std::clamp(x, m_left, m_right);
+        y = std::clamp(y, m_top, m_bottom);
+    }
+}
+
+bool CombatScene::HasClearPath(float x, float y, float targetX, float targetY, float radius) const {
+    if (m_collision == nullptr) { return true; }
+    const auto &vertices = m_collision->GetVertices();
+    for (const CollisionEdge &edge : m_collision->GetEdges()) {
+        if (!edge.enabled) { continue; }
+        if (EdgeFraction(x, y, targetX - x, targetY - y, vertices[edge.firstVertex], vertices[edge.secondVertex], radius) < 1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CombatScene::CanWalkTo(float x, float y, float targetX, float targetY) const {
+    const float distance = std::hypot(targetX - x, targetY - y);
+    const int steps = std::max(1, static_cast<int>(std::ceil(distance / 4)));
+    const float dx = (targetX - x) / steps, dy = (targetY - y) / steps;
+    for (int step = 0; step < steps; ++step) {
+        const float previousX = x, previousY = y;
+        x += dx; y += dy;
+        ResolveMovement(previousX, previousY, x, y, m_playerRadius);
+    }
+    return std::hypot(targetX - x, targetY - y) < 1;
+}
+
+void CombatScene::ResolveBrotherForce(float previousX, float previousY, float &x, float &y) {
+    ResolveMovement(previousX, previousY, x, y, m_playerRadius);
+}
+
+void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
+    EnemyCombat &state = actor.model.enemy.combat;
+    if (m_map == nullptr || state.behaviour != 0 || state.dead) {
+        state.hasNavigationTarget = false;
+        return;
+    }
+    actor.navigationTimer -= deltaMs;
+    if (actor.navigationTimer > 0 && state.hasNavigationTarget &&
+        std::hypot(state.navigationX - state.x, state.navigationY - state.y) > 10) { return; }
+    actor.navigationTimer = 240;
+    state.hasNavigationTarget = false;
+    const float radius = actor.model.enemy.GetPart(0).radius * m_cameraScale;
+    if (HasClearPath(state.x, state.y, state.targetX, state.targetY, radius)) { return; }
+    ILayerPath *path = m_map->GetPathLayer(m_pathLayer);
+    if (path == nullptr) { return; }
+    const int start = path->FindNode(state.x, state.y);
+    const int destination = path->FindNode(state.targetX, state.targetY);
+    const auto &nodes = path->GetNodes();
+    if (start < 0 || destination < 0) { return; }
+    int next = path->FindNext(start, destination);
+    if (next < 0) { return; }
+    const int adjacent = next;
+    // Skip centres only when the actual collision sweep has a clear corridor.
+    for (int lookAhead = 0; lookAhead < 8 && next != destination; ++lookAhead) {
+        const int farther = path->FindNext(next, destination);
+        if (farther < 0 || farther == next ||
+            !HasClearPath(state.x, state.y, nodes[farther].x, nodes[farther].y, radius)) { break; }
+        next = farther;
+    }
+    state.hasNavigationTarget = true;
+    state.navigationX = nodes[next].x;
+    state.navigationY = nodes[next].y;
+    if (next == adjacent && next != start) {
+        path->GetConnectionPoint(start, next, state.navigationX, state.navigationY);
+    }
+}
+
 void CombatScene::Reset() {
     m_effects.Clear();
     enemies.clear();
+    deaths.clear();
+    levelEvents.clear();
+    pickupSpawns.clear();
     m_pendingSpawns.clear();
     m_vitals.Reset();
+    m_player.powerups = {};
+    m_autoAim.Reset();
+    if (m_brotherModel != nullptr) { m_brotherModel->powerups = {}; }
+    m_waveXplodium = m_xplodium;
+    m_waveHits = 0;
+    m_lastWaveBonus = 0;
+    m_perfectWaves = 0;
+    m_clearedWaves = 0;
     if (m_player.weapon != nullptr) {
         // Reset the script and gun state as well as health. The replacement
         // copies templates before retiring the old equipment.
@@ -113,6 +243,13 @@ void CombatScene::Reset() {
         }
     }
     m_playerForceMs = 0;
+    if (m_brotherModel != nullptr) {
+        m_brother->Reset(playerX, playerY);
+        if (EquipPlayerWeapon(m_tables, m_brotherModel->weapon->playerScript,
+            m_brotherModel->weapon->data, "brother reset", *m_brotherModel)) {
+            CreatePlayerBuffers(*m_brotherModel, m_program);
+        }
+    }
     playerX = 600;
     playerY = 650;
     m_previousPlayerX = playerX;
@@ -130,13 +267,20 @@ CombatEnemy *CombatScene::Spawn(std::size_t entry, float x, float y) {
     if (entry >= m_catalog.size()) { return nullptr; }
     std::unique_ptr<CombatEnemy> actor(new CombatEnemy());
     actor->data = &m_catalog[entry];
+    actor->model.enemy.SetLevelContext(m_level);
     EnemyCombat &state = actor->model.enemy.combat;
+    state.templateRef.packHash = actor->data->packHash;
+    state.templateRef.localIndex = static_cast<std::uint8_t>(actor->data->ordinal);
     state.enabled = actor->data->script.IsPresent();
     state.id = m_nextId++;
     state.randomState = static_cast<std::uint32_t>(state.id * 7919);
     actor->model.enemy.SetRandomSeed(state.randomState);
     state.x = std::clamp(x, 70.0f, kArenaWidth - 70);
     state.y = std::clamp(y, 150.0f, kArenaHeight - 70);
+    if (m_map != nullptr) {
+        state.x = x;
+        state.y = y;
+    }
     state.previousX = state.x;
     state.previousY = state.y;
     if (!LoadEnemyModel(m_tables, *actor->data, true, &m_program, EnemySpawnMode::Level, actor->model)) {
@@ -194,15 +338,78 @@ std::size_t CombatScene::AliveCount() const {
 void CombatScene::PlayerMatrix(float *matrix) const {
     float identity[16];
     Matrix4dIdentity(identity);
-    const float scale = PlayerModelWorldScale(m_player, m_playerGameScale, 1);
+    const float scale = PlayerModelWorldScale(m_player, m_playerGameScale, m_cameraScale);
     BuildPlayerGameMatrix(identity, playerX, playerY, scale, facing, matrix);
+}
+
+void CombatScene::SetBrother(PlayerModel *model, CBrotherAI *brother) {
+    m_brotherModel = model;
+    m_brother = brother;
+}
+
+void CombatScene::ResetBrotherPosition(float x, float y) {
+    if (m_brother != nullptr) { m_brother->Reset(x, y); }
+}
+
+void CombatScene::BrotherMatrix(float *matrix) const {
+    float identity[16];
+    Matrix4dIdentity(identity);
+    const float scale = PlayerModelWorldScale(*m_brotherModel, m_playerGameScale, m_cameraScale);
+    BuildPlayerGameMatrix(identity, m_brother->x, m_brother->y, scale, m_brother->facing, matrix);
+}
+
+CombatId CombatScene::FindBrotherTarget(float x, float y, float radius) {
+    CombatId nearest = 0;
+    for (const auto &actor : enemies) {
+        float targetX = 0;
+        float targetY = 0;
+        const CombatId id = actor->model.enemy.combat.id;
+        if (!GetBrotherTarget(id, targetX, targetY)) { continue; }
+        const float distance = std::hypot(targetX - x, targetY - y);
+        if (distance < radius) { radius = distance; nearest = id; }
+    }
+    return nearest;
+}
+
+bool CombatScene::GetBrotherTarget(CombatId id, float &x, float &y) {
+    CombatEnemy *actor = Find(id);
+    if (actor == nullptr) { return false; }
+    const CEnemy &enemy = actor->model.enemy;
+    if (!enemy.combat.enabled || !enemy.combat.targetable ||
+        !enemy.CanReceiveProjectile(0, kBrotherCombatId)) { return false; }
+    x = enemy.combat.x;
+    y = enemy.combat.y;
+    return true;
+}
+
+bool CombatScene::GetBrotherWaypoint(float x, float y, float targetX, float targetY,
+    float &waypointX, float &waypointY) {
+    waypointX = targetX;
+    waypointY = targetY;
+    if (HasClearPath(x, y, targetX, targetY, m_playerRadius)) { return true; }
+    if (m_map == nullptr) { return false; }
+    ILayerPath *path = m_map->GetPathLayer(m_pathLayer);
+    if (path == nullptr) { return false; }
+    const int start = path->FindNode(x, y);
+    const int destination = path->FindNode(targetX, targetY);
+    if (start < 0 || destination < 0) { return false; }
+    const int next = path->FindNext(start, destination);
+    if (next < 0) { return false; }
+    waypointX = path->GetNodes()[next].x;
+    waypointY = path->GetNodes()[next].y;
+    if (next != start) { path->GetConnectionPoint(start, next, waypointX, waypointY); }
+    if (std::hypot(waypointX - x, waypointY - y) < 5) {
+        waypointX = path->GetNodes()[next].x;
+        waypointY = path->GetNodes()[next].y;
+    }
+    return true;
 }
 
 void CombatScene::EnemyMatrix(const CombatEnemy &actor, float *matrix) const {
     float identity[16];
     Matrix4dIdentity(identity);
     const EnemyCombat &state = actor.model.enemy.combat;
-    const float scale = EnemyModelWorldScale(actor.model, actor.data->gameScale, 1) * state.scaleFactor;
+    const float scale = EnemyModelWorldScale(actor.model, actor.data->gameScale, m_cameraScale) * state.scaleFactor;
     BuildEnemyGameMatrix(actor.model, identity, state.x, state.y, scale, state.facing, matrix);
 }
 
@@ -215,7 +422,7 @@ void CombatScene::PartMatrix(const CombatEnemy &actor, int index, float *matrix)
         Matrix4dIdentity(identity);
         const EnemyCombat &state = actor.model.enemy.combat;
         BuildEnemyGameMatrix(actor.model, identity, state.x, state.y,
-            EnemyModelWorldScale(actor.model, actor.data->gameScale, 1) * state.scaleFactor, 0, base);
+            EnemyModelWorldScale(actor.model, actor.data->gameScale, m_cameraScale) * state.scaleFactor, 0, base);
     }
     MeshPart placement;
     placement.extraAngleDegrees = part.extraAngleDegrees;
@@ -229,6 +436,24 @@ void CombatScene::PartMatrix(const CombatEnemy &actor, int index, float *matrix)
 }
 
 bool CombatScene::Anchor(CombatId id, int part, int node, float &x, float &y, float &z, float &direction) {
+    if (id == kPlayerCombatId && part < 0) {
+        x = playerX; y = playerY; z = 0; direction = facing - 90;
+        return !m_vitals.dead;
+    }
+    if (id == kBrotherCombatId && m_brotherModel != nullptr) {
+        if (part < 0) {
+            x = m_brother->x; y = m_brother->y; z = 0; direction = m_brother->facing - 90;
+            return !m_brother->vitals.dead;
+        }
+        if (m_brother->vitals.dead || !m_brotherModel->weapon->gun.IsShooting()) { return false; }
+        MeshBoneTransform muzzle;
+        if (!GetPlayerMuzzle(*m_brotherModel, part, node, muzzle)) { return false; }
+        float matrix[16];
+        BrotherMatrix(matrix);
+        Transform(matrix, muzzle.posX, muzzle.posY, muzzle.posZ, x, y, z);
+        direction = m_brother->facing - 90;
+        return true;
+    }
     CombatEnemy *actor = Find(id);
     if (actor == nullptr || actor->model.enemy.combat.removed || actor->model.enemy.combat.dead) { return false; }
     CEnemy &enemy = actor->model.enemy;
@@ -296,15 +521,32 @@ CombatTrace CombatScene::Trace(const CombatHit &hit, float x, float y, float dx,
     float radius, const std::vector<CombatId> &skipTargets) {
     CombatTrace result;
     float nearest = 2;
+    if (m_props != nullptr) {
+        result = m_props->Trace(hit, x, y, dx, dy, radius, skipTargets);
+        if (result.target != 0) { nearest = result.fraction; }
+    }
     if (hit.ownerType == 1 && hit.owner != kPlayerCombatId && !m_vitals.dead && !Skipped(kPlayerCombatId, skipTargets)) {
         float moveX = playerX - m_previousPlayerX, moveY = playerY - m_previousPlayerY;
         if ((hit.flags & 0x100) != 0) { moveX = 0; moveY = 0; }
-        nearest = CircleFraction(x, y, dx - moveX, dy - moveY,
-            playerX - moveX, playerY - moveY, kPlayerCollisionRadius + radius);
-        if (nearest <= 1) {
+        const float fraction = CircleFraction(x, y, dx - moveX, dy - moveY,
+            playerX - moveX, playerY - moveY, m_playerRadius + radius);
+        if (fraction <= 1 && fraction < nearest) {
+            nearest = fraction;
             result.target = kPlayerCombatId; result.fraction = nearest;
             result.normalX = x + dx * nearest - playerX;
             result.normalY = y + dy * nearest - playerY;
+        }
+    }
+    if (hit.ownerType == 1 && m_brother != nullptr && !m_brother->vitals.dead && !Skipped(kBrotherCombatId, skipTargets)) {
+        float moveX = m_brother->x - m_brother->previousX;
+        float moveY = m_brother->y - m_brother->previousY;
+        if ((hit.flags & 0x100) != 0) { moveX = 0; moveY = 0; }
+        const float fraction = CircleFraction(x, y, dx - moveX, dy - moveY,
+            m_brother->x - moveX, m_brother->y - moveY, m_playerRadius + radius);
+        if (fraction <= 1 && fraction < nearest) {
+            nearest = fraction;
+            result = {kBrotherCombatId, fraction, -1, -1,
+                x + dx * fraction - m_brother->x, y + dy * fraction - m_brother->y};
         }
     }
     for (auto &actor : enemies) {
@@ -356,13 +598,56 @@ CombatTrace CombatScene::Trace(const CombatHit &hit, float x, float y, float dx,
 }
 
 HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
+    if (target == kBrotherCombatId && m_brotherModel != nullptr) {
+        if (hit.ownerType != 1) { return HitResult::Ignored; }
+        const float reduction = PlayerArmorMultiplier(*m_brotherModel, 0) - 1;
+        float damage = hit.damage;
+        if (hit.splash && hit.percentDamage) { damage *= m_brother->vitals.maximum * 0.01f; }
+        return m_brotherModel->weapon->brother.ReceiveDamage(std::max(0.0f, damage * (1 - reduction)));
+    }
     if (target == kPlayerCombatId) {
         if (hit.ownerType != 1 || m_player.weapon == nullptr) { return HitResult::Ignored; }
-        return m_player.weapon->brother.ReceiveDamage(hit.damage);
+        // CBrother::Damage (:136667): add slot percentages, then reduce the
+        // incoming amount. Defence does not increase the player's max health.
+        const float reduction = PlayerArmorMultiplier(m_player, 0) - 1.0f;
+        // CBrother::OnSplashDamage :135359 interprets native 23 as a percent
+        // of maximum health before the ordinary armor / frenzy reductions.
+        float damage = hit.damage;
+        if (hit.splash && hit.percentDamage) { damage *= m_vitals.maximum * 0.01f; }
+        damage = std::max(0.0f, damage * (1.0f - reduction));
+        return m_player.weapon->brother.ReceiveDamage(damage);
+    }
+    CombatHit adjusted = hit;
+    if (hit.owner == kPlayerCombatId) {
+        adjusted.damage *= PlayerArmorMultiplier(m_player, 1);
+    }
+    if (hit.owner == kBrotherCombatId && m_brotherModel != nullptr) {
+        adjusted.damage *= PlayerArmorMultiplier(*m_brotherModel, 1);
     }
     CombatEnemy *actor = Find(target);
-    if (actor == nullptr) { return HitResult::Ignored; }
-    return actor->model.enemy.ReceiveHit(hit);
+    if (actor == nullptr) {
+        if (m_props != nullptr) { return m_props->ApplyHit(target, adjusted); }
+        return HitResult::Ignored;
+    }
+    return actor->model.enemy.ReceiveHit(adjusted);
+}
+
+float CombatScene::GetDamageMultiplier(CombatId owner, float fallback) const {
+    if (m_level == nullptr) { return fallback; }
+    for (const auto &actor : enemies) {
+        if (actor->model.enemy.combat.id == owner) {
+            return m_level->GetEnemyMultiplier(actor->model.enemy.combat.templateRef, 0);
+        }
+    }
+    return fallback;
+}
+
+float CombatScene::GetProjectilePowerupMultiplier(CombatId owner) const {
+    if (owner == kPlayerCombatId && m_player.weapon) { return m_player.weapon->brother.GetProjectilePowerupMultiplier(); }
+    if (owner == kBrotherCombatId && m_brotherModel != nullptr && m_brotherModel->weapon) {
+        return m_brotherModel->weapon->brother.GetProjectilePowerupMultiplier();
+    }
+    return 1;
 }
 
 bool CombatScene::FindTarget(const CombatHit &hit, float radius, float &x, float &y) {
@@ -380,20 +665,23 @@ bool CombatScene::FindTarget(const CombatHit &hit, float radius, float &x, float
 }
 
 void CombatScene::Splash(const CombatHit &hit, float radius, float coneDegrees, float force, int forceMs) {
+    if (m_props != nullptr) { m_props->Splash(hit, radius); }
     std::vector<CombatId> targets;
     if (hit.ownerType == 1 && !m_vitals.dead) { targets.push_back(kPlayerCombatId); }
+    if (hit.ownerType == 1 && m_brother != nullptr && !m_brother->vitals.dead) { targets.push_back(kBrotherCombatId); }
     for (const auto &actor : enemies) {
         if (actor->model.enemy.CanReceiveProjectile(hit.ownerType, hit.owner)) { targets.push_back(actor->model.enemy.combat.id); }
     }
     for (CombatId id : targets) {
         float x = playerX, y = playerY;
+        if (id == kBrotherCombatId) { x = m_brother->x; y = m_brother->y; }
         CombatEnemy *actor = Find(id);
         if (actor != nullptr) { x = actor->model.enemy.combat.x; y = actor->model.enemy.combat.y; }
         const float dx = x - hit.x, dy = y - hit.y;
         const float distance = std::hypot(dx, dy);
         // CLevel includes the target's collision radius in the blast test.
         // Testing only its centre drops explosions at the surface of big units.
-        float targetRadius = kPlayerCollisionRadius;
+        float targetRadius = m_playerRadius;
         if (actor != nullptr) {
             targetRadius = actor->model.enemy.GetPart(0).radius * actor->model.enemy.combat.scaleFactor;
         }
@@ -408,12 +696,17 @@ void CombatScene::Splash(const CombatHit &hit, float radius, float coneDegrees, 
         splash.splash = true;
         splash.part = -1;
         ApplyHit(id, splash);
-        if (force > 0 && distance > 0) {
-            const float travel = force * forceMs * 0.001f;
-            x = std::clamp(x + dx / distance * travel, 40.0f, kArenaWidth - 40);
-            y = std::clamp(y + dy / distance * travel, 150.0f, kArenaHeight - 40);
-            if (actor != nullptr) { actor->model.enemy.combat.x = x; actor->model.enemy.combat.y = y; }
-            else { playerX = x; playerY = y; }
+        if (force > 0 && forceMs > 0 && distance > 0 && actor == nullptr) {
+            // CBrother::OnSplashDamage :135359 uses SetForce over time.
+            // CEnemy::OnSplashDamage :67945 does not apply positional force.
+            // In particular, a full-size map must never clamp to Arena bounds.
+            if (id == kBrotherCombatId && !m_brother->vitals.dead) {
+                m_brother->SetForce(dx / distance * force, dy / distance * force, forceMs);
+            } else if (id == kPlayerCombatId && !m_vitals.dead) {
+                m_playerForceX = dx / distance * force;
+                m_playerForceY = dy / distance * force;
+                m_playerForceMs = forceMs;
+            }
         }
     }
 }
@@ -421,7 +714,7 @@ void CombatScene::Splash(const CombatHit &hit, float radius, float coneDegrees, 
 void CombatScene::SpawnFromProjectile(const GameObjectRef &resource, const CombatHit &hit) {
     for (std::size_t i = 0; i < m_catalog.size(); ++i) {
         if (m_catalog[i].packHash == resource.packHash && m_catalog[i].ordinal == resource.localIndex) {
-            m_pendingSpawns.push_back({i, hit.x, hit.y});
+            m_pendingSpawns.push_back({i, hit.x, hit.y, hit.spawnObjectId, hit.forceSpawn});
             return;
         }
     }
@@ -432,7 +725,10 @@ void CombatScene::SpawnFromProjectile(const GameObjectRef &resource, const Comba
 void CombatScene::FinishSpawns() {
     std::vector<PendingSpawn> pending;
     pending.swap(m_pendingSpawns);
-    for (const PendingSpawn &spawn : pending) { Spawn(spawn.entry, spawn.x, spawn.y); }
+    for (const PendingSpawn &spawn : pending) {
+        CombatEnemy *actor = Spawn(spawn.entry, spawn.x, spawn.y);
+        if (actor != nullptr) { actor->objectId = spawn.objectId; }
+    }
 }
 
 void CombatScene::Actions(CombatEnemy &actor) {
@@ -445,13 +741,24 @@ void CombatScene::Actions(CombatEnemy &actor) {
         if (!state.dead) { Anchor(state.id, action.part, action.node, x, y, z, direction); }
         int ownerType = 1;
         if (state.targetType == 2) { ownerType = 0; }
-        if (action.kind == EnemyAction::Kind::Bullet) {
+        if (action.kind == EnemyAction::Kind::LevelEvent) {
+            levelEvents.push_back(static_cast<std::uint8_t>(action.slot));
+        } else if (action.kind == EnemyAction::Kind::TurretActive) {
+            // CEnemy native 71 :72744 selects the local player when offline.
+            m_player.weapon->brother.SetTurretIsActive(action.slot != 0);
+            std::printf("[turret] actor=%llu active=%d\n", static_cast<unsigned long long>(state.id), action.slot != 0);
+        } else if (action.kind == EnemyAction::Kind::SpawnPickup) {
+            pickupSpawns.push_back({action.resource, x, y});
+        } else if (action.kind == EnemyAction::Kind::Bullet) {
             if (action.slot != 1) { direction = action.direction - 90; }
             m_effects.SpawnProjectile(action.resource, x, y, z, direction,
                 action.speed, state.id, ownerType, action.part, action.node);
         } else if (action.kind == EnemyAction::Kind::Stun) {
             if (ownerType == 1 && std::hypot(playerX - x, playerY - y) < action.radius) {
                 m_player.weapon->brother.Stun(action.durationMs);
+            }
+            if (ownerType == 1 && m_brother != nullptr && std::hypot(m_brother->x - x, m_brother->y - y) < action.radius) {
+                m_brotherModel->weapon->brother.Stun(action.durationMs);
             }
         } else if (action.kind == EnemyAction::Kind::CollisionResolved) {
             m_effects.ResolveHit(action.projectile, action.result);
@@ -467,7 +774,8 @@ void CombatScene::Actions(CombatEnemy &actor) {
             CombatHit hit;
             hit.owner = state.id;
             hit.ownerType = ownerType;
-            hit.x = x; hit.y = y; hit.direction = direction; hit.damage = action.damage;
+            hit.x = x; hit.y = y; hit.direction = direction;
+            hit.damage = action.damage * GetDamageMultiplier(state.id);
             if (action.kind == EnemyAction::Kind::Splash) { Splash(hit, action.radius, 360, action.force, action.durationMs); }
             else { SpawnFromProjectile(action.resource, hit); }
         } else {
@@ -487,41 +795,77 @@ void CombatScene::Actions(CombatEnemy &actor) {
 
 void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     if (deltaMs <= 0) { return; }
+    deaths.clear();
+    levelEvents.clear();
+    pickupSpawns.clear();
     m_previousPlayerX = playerX;
     m_previousPlayerY = playerY;
     if (!m_vitals.dead && m_vitals.stunMs == 0) {
         const float length = std::hypot(moveX, moveY);
-        if (length > 0) {
-            playerX = std::clamp(playerX + moveX / length * kPlayerSpeed * deltaMs * 0.001f, 35.0f, kArenaWidth - 35);
-            playerY = std::clamp(playerY + moveY / length * kPlayerSpeed * deltaMs * 0.001f, 150.0f, kArenaHeight - 35);
+        if (length > 0 && m_player.weapon->brother.CanMove()) {
+            const float speed = kPlayerSpeed * PlayerArmorMultiplier(m_player, 2) * m_player.weapon->brother.GetFrenzyMultiplier(2);
+            playerX += moveX / length * speed * deltaMs * 0.001f;
+            playerY += moveY / length * speed * deltaMs * 0.001f;
         }
+        // CPlayer::UpdateShooting :101312 only targets while the fire stick is
+        // active. Desktop mouse-held fire supplies that intent; idle never fires.
+        if (m_player.weapon->brother.IsAutoFire()) {
+            if (shoot) { shoot = m_autoAim.Update(deltaMs, playerX, playerY, facing, *this); }
+            else { m_autoAim.ClearTarget(facing); }
+        } else if (m_autoAim.GetTarget() != 0) { m_autoAim.ClearTarget(facing); }
         SetPlayerInput(m_player, length > 0, shoot);
     }
     AdvancePlayer(m_player, deltaMs);
     if (m_playerForceMs > 0 && !m_vitals.dead) {
         const float seconds = std::min(deltaMs, m_playerForceMs) * 0.001f;
-        playerX = std::clamp(playerX + m_playerForceX * seconds, 35.0f, kArenaWidth - 35);
-        playerY = std::clamp(playerY + m_playerForceY * seconds, 150.0f, kArenaHeight - 35);
+        playerX += m_playerForceX * seconds;
+        playerY += m_playerForceY * seconds;
         m_playerForceMs = std::max(0, m_playerForceMs - deltaMs);
+    }
+    ResolveMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY, m_playerRadius);
+    if (m_brotherModel != nullptr) {
+        m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
+            playerX, playerY, PlayerArmorMultiplier(*m_brotherModel, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2));
+        AdvancePlayer(*m_brotherModel, deltaMs);
     }
     for (auto &actor : enemies) {
         CEnemy &enemy = actor->model.enemy;
         EnemyCombat &state = enemy.combat;
         if (!state.enabled || state.removed) { continue; }
         SelectTarget(*actor);
+        UpdateNavigation(*actor, deltaMs);
         enemy.Update(deltaMs);
         for (std::uint32_t part = 0; part < enemy.GetPartCount(); ++part) {
             for (const GameObjectRef &sound : enemy.GetPart(part).controller.TakeSounds()) {
                 m_effects.PlayMoveSound(sound);
             }
         }
-        state.x = std::clamp(state.x, 35.0f, kArenaWidth - 35);
-        state.y = std::clamp(state.y, 150.0f, kArenaHeight - 35);
+        ResolveMovement(state.previousX, state.previousY, state.x, state.y,
+            enemy.GetPart(0).radius * m_cameraScale, false);
         actor->contactTimer = std::max(0, actor->contactTimer - deltaMs);
+        actor->brotherContactTimer = std::max(0, actor->brotherContactTimer - deltaMs);
+        if (m_brother != nullptr && !m_brother->vitals.dead && !state.dead &&
+            state.variables[16] != 1 && state.targetType != 2 && state.variables[12] > 0 &&
+            state.variables[13] > 0 && actor->brotherContactTimer == 0 &&
+            std::hypot(state.x - m_brother->x, state.y - m_brother->y) < enemy.GetPart(0).radius + m_playerRadius) {
+            CombatHit contact;
+            contact.owner = state.id;
+            contact.ownerType = 1;
+            contact.damage = state.variables[17] * GetDamageMultiplier(state.id);
+            ApplyHit(kBrotherCombatId, contact);
+            actor->brotherContactTimer = state.variables[13];
+            enemy.TriggerEvent(8);
+        }
         if (!state.dead && state.variables[16] != 1 && state.targetType != 2 && !m_vitals.dead &&
             state.variables[12] > 0 && state.variables[13] > 0 &&
-            actor->contactTimer == 0 && std::hypot(state.x - playerX, state.y - playerY) < enemy.GetPart(0).radius + kPlayerCollisionRadius) {
-            if (state.variables[17] > 0) { m_player.weapon->brother.ReceiveDamage(static_cast<float>(state.variables[17])); }
+            actor->contactTimer == 0 && std::hypot(state.x - playerX, state.y - playerY) < enemy.GetPart(0).radius + m_playerRadius) {
+            if (state.variables[17] > 0) {
+                CombatHit contact;
+                contact.owner = state.id;
+                contact.ownerType = 1;
+                contact.damage = state.variables[17] * GetDamageMultiplier(state.id);
+                ApplyHit(kPlayerCombatId, contact);
+            }
             const float angle = (state.facing - 90) * kRadians;
             m_playerForceX = std::cos(angle) * state.variables[12];
             m_playerForceY = std::sin(angle) * state.variables[12];
@@ -532,8 +876,12 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         Actions(*actor);
     }
     float matrix[16];
+    if (m_brotherModel != nullptr) {
+        BrotherMatrix(matrix);
+        m_effects.EmitBrother(*m_brotherModel, matrix, m_brother->facing, kBrotherCombatId, m_weaponCollision);
+    }
     PlayerMatrix(matrix);
-    m_effects.Update(m_player, matrix, facing, deltaMs);
+    m_effects.Update(m_player, matrix, facing, deltaMs, m_weaponCollision);
     for (auto &actor : enemies) {
         Actions(*actor);
         EnemyCombat &state = actor->model.enemy.combat;
@@ -546,6 +894,15 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // Accumulate completed actor statistics before erasing removed instances.
     for (std::size_t i = 0; i < enemies.size();) {
         EnemyCombat &state = enemies[i]->model.enemy.combat;
+        if (state.dead && !enemies[i]->deathReported) {
+            RewardEnemy(*enemies[i]);
+            CombatDeath death;
+            death.objectId = enemies[i]->objectId;
+            death.enemy.packHash = enemies[i]->data->packHash;
+            death.enemy.localIndex = static_cast<std::uint8_t>(enemies[i]->data->ordinal);
+            deaths.push_back(death);
+            enemies[i]->deathReported = true;
+        }
         if (state.hitFlash > 0) { lastDamage = state.lastDamage; }
         if (state.removed) {
             m_effects.RetireOwner(state.id);

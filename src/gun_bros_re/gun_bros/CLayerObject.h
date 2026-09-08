@@ -53,6 +53,11 @@ struct PlacedObject {
     std::int16_t x;
     std::int16_t y;
     std::uint8_t spawnTag;
+    // CEnemy::Spawn :73292 consumes the authored path and initial facing.
+    std::uint8_t pathLayer = 255;
+    std::int16_t facing = 0;
+    std::uint16_t playerConfiguration = 0;
+    std::uint8_t platformPath = 255;
 };
 
 /**
@@ -69,12 +74,15 @@ public:
     bool Init(CArrayInputStream &stream);
 
     const std::vector<PlacedObject> &GetObjects() const { return m_objects; }
+    void SetLayerIndex(unsigned index) { m_layerIndex = index; }
+    unsigned GetLayerIndex() const { return m_layerIndex; }
 
     /** What the header claimed, for comparison against the groups. */
     std::uint16_t GetDeclaredCount() const { return m_declaredCount; }
 
 private:
     std::uint16_t m_declaredCount;
+    unsigned m_layerIndex = 0;
     std::vector<PlacedObject> m_objects;
 };
 

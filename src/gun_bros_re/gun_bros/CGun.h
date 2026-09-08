@@ -58,7 +58,7 @@ constexpr std::uint32_t kGunStatTableCount = 6;
 
 /** A visual cue emitted by the original weapon script. */
 struct GunCue {
-    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, RemoveBullet, Splash, SpawnEnemy };
+    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, RemoveBullet, Splash, SpawnEnemy, Grenade };
     Kind kind = Kind::Bullet;
     GameObjectRef resource;
     int hand = 0;
@@ -69,6 +69,9 @@ struct GunCue {
     bool alternate = false;
     bool alignEffect = false;
     float damage = 0;
+    bool percentDamage = false;
+    int spawnObjectId = -1;
+    bool forceSpawn = false;
     float radius = 0;
     float cone = 360;
     float force = 0;

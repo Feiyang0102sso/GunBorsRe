@@ -53,6 +53,8 @@ public:
     const std::vector<std::uint8_t> &GetOwnSequence() const { return m_sequence; }
 
     const std::vector<ScriptStateExport> &GetExports() const { return m_exports; }
+    /** Raw state entry bytecode retained for the permanent script research harness. */
+    const CScriptCode &GetEnterCode() const { return m_enterCode; }
 
     /**
      * How many frames the current sequence has, following the parent chain.

@@ -18,10 +18,13 @@
 #define GUN_BROS_RE_GUN_BROS_CMAP_H
 
 #include "gun_bros/CGameAssetRef.h"
+#include "gun_bros/CCamera.h"
 #include "gun_bros/CLayerCamera.h"
 #include "gun_bros/CLayerCollision.h"
 #include "gun_bros/CLayerObject.h"
 #include "gun_bros/CLayerTile.h"
+#include "gun_bros/CLayerPathLink.h"
+#include "gun_bros/CLayerPathMesh.h"
 
 #include <cstdint>
 #include <vector>
@@ -53,6 +56,8 @@ public:
     bool Init(CArrayInputStream &stream);
 
     const GameObjectRef &GetTileSetRef() const { return m_tileSetRef; }
+    CCamera &GetCamera() { return m_camera; }
+    const CCamera &GetCamera() const { return m_camera; }
 
     std::uint32_t GetTileLayerCount() const {
         return static_cast<std::uint32_t>(m_tileLayers.size());
@@ -144,7 +149,14 @@ public:
 
     const RequirementList &GetRequirements() const { return m_requirements; }
 
+    /** Whole map-layer index, matching level/spawner native arguments. */
+    CLayerPathLink *GetPathLinkLayer(int layerIndex);
+    ILayerPath *GetPathLayer(int layerIndex);
+    void UnlockAllPathNodes();
+    const std::vector<CLayerPathLink> &GetPathLinkLayers() const { return m_pathLinkLayers; }
+
 private:
+    CCamera m_camera;
     GameObjectRef m_tileSetRef;
     RequirementList m_requirements;
 
@@ -154,6 +166,8 @@ private:
     std::vector<CLayerCollision> m_collisionLayers;
     std::vector<CLayerObject> m_objectLayers;
     std::vector<CLayerCamera> m_cameraLayers;
+    std::vector<CLayerPathLink> m_pathLinkLayers;
+    std::vector<CLayerPathMesh> m_pathMeshLayers;
 
     // Index into m_cameraLayers, not into the layer stack. Stays at zero until
     // a script calls setCameraLayer.

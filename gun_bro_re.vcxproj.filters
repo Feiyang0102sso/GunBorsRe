@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="engine">
@@ -134,10 +134,62 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\runtime\WeaponCatalog.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\ArmorCatalog.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CombatTypes.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\EnemyCombat.h" />
     <ClInclude Include="src\gun_bros_re\runtime\CombatScene.h" />
     <ClInclude Include="src\gun_bros_re\milestones\Arena.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\WeaponEffects.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\gun_bros_re\runtime\ArmorCatalog.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gun_bros_re\gun_bros\CLayerPathLink.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CLayerPathLink.cpp" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CEnemySpawner.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CEnemySpawner.cpp" />
+    <ClInclude Include="src\gun_bros_re\milestones\M5LevelFlow.h" />
+    <ClCompile Include="src\gun_bros_re\milestones\M5LevelFlow.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gun_bros_re\runtime\HudText.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\SurvivalSession.h" />
+    <ClCompile Include="src\gun_bros_re\runtime\SurvivalSession.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gun_bros_re\gun_bros\ILayerPath.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\ILayerPath.cpp" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CLayerPathMesh.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CLayerPathMesh.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gun_bros_re\milestones\SurvivalPilot.h" />
+    <ClCompile Include="src\gun_bros_re\milestones\SurvivalPilot.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gun_bros_re\gun_bros\CPlayerProgress.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CPlayerProgress.cpp" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CStoreItem.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CStoreItem.cpp" />
+    <ClInclude Include="src\gun_bros_re\runtime\StoreCatalog.h" />
+    <ClCompile Include="src\gun_bros_re\runtime\StoreCatalog.cpp" />
+  </ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CRefinementManager.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CRefinementManager.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CProfileManager.h" /><ClInclude Include="src\gun_bros_re\gun_bros\CPlayerConfiguration.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CProfileManager.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\GameFrontEnd.h" /><ClInclude Include="src\gun_bros_re\runtime\SurvivalGameContext.h" /><ClInclude Include="src\gun_bros_re\gun_bros\Planet.h" /><ClCompile Include="src\gun_bros_re\runtime\GameFrontEnd.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CBrotherAI.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CBrotherAI.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CTargetingController.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CTargetingController.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CPickup.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CPickup.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\PickupCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\PickupCatalog.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\PickupScene.h" /><ClCompile Include="src\gun_bros_re\runtime\PickupScene.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CMoveSet.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CMoveSet.cpp" /><ClInclude Include="src\gun_bros_re\runtime\PropCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\PropCatalog.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\IPropWorld.h" /><ClInclude Include="src\gun_bros_re\runtime\CombatGeometry.h" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CPowerup.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CPowerup.cpp" /><ClInclude Include="src\gun_bros_re\runtime\PowerupCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\PowerupCatalog.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\PowerupScene.h" /><ClCompile Include="src\gun_bros_re\runtime\PowerupScene.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CStunController.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CStunController.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\Mission.h" /><ClInclude Include="src\gun_bros_re\gun_bros\MissionObjective.h" /><ClInclude Include="src\gun_bros_re\runtime\MissionCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\MissionCatalog.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\OriginalProfile.h" /><ClCompile Include="src\gun_bros_re\runtime\OriginalProfile.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\engine\CCrc32.h" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CCamera.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CCamera.cpp" /></ItemGroup>
 </Project>

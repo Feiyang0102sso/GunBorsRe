@@ -13,6 +13,7 @@
 namespace {
 
 constexpr std::size_t kMaximumPlayingSounds = 32;
+bool g_muted = false;
 
 struct DecodedSound {
     SDL_AudioSpec specification;
@@ -37,6 +38,14 @@ struct CAudioPlayer::Impl {
 };
 
 CAudioPlayer::CAudioPlayer() : m_impl(new Impl()) {}
+
+void CAudioPlayer::SetMuted(bool muted) {
+    g_muted = muted;
+}
+
+bool CAudioPlayer::IsMuted() {
+    return g_muted;
+}
 
 CAudioPlayer::~CAudioPlayer() {
     for (std::size_t i = 0; i < m_impl->playing.size(); ++i) {
@@ -80,6 +89,11 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
         m_impl->sounds.find(key);
     if (found == m_impl->sounds.end()) {
         return false;
+    }
+
+    // Keep loading and key validation active during silent regression runs.
+    if (g_muted) {
+        return true;
     }
 
     Update();

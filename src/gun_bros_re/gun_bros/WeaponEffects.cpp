@@ -98,6 +98,8 @@ struct Shot {
     CombatId id = 0;
     CombatId owner = kPlayerCombatId;
     int ownerType = 0;
+    float damageMultiplier = 1;
+    float powerupMultiplier = 1;
     int part = 0;
     bool pendingHit = false;
     std::map<CombatId, int> hitUntil;
@@ -112,6 +114,8 @@ struct Shot {
 };
 
 struct EffectInstance {
+    std::uint64_t handle = 0;
+    bool persistent = false;
     CombatId actor = 0;
     int slot = 0;
     int part = 0;
@@ -134,7 +138,8 @@ struct Particle {
 };
 
 /** Nearest intersection prevents fast projectiles from tunnelling through walls. */
-float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData *scene) {
+float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData *scene,
+    float *normalX = nullptr, float *normalY = nullptr) {
     float fraction = 1.0f;
     if (scene == nullptr) { return fraction; }
     for (const CollisionEdge &edge : scene->GetEdges()) {
@@ -146,7 +151,14 @@ float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData
         if (std::abs(cross) < 0.00001f) { continue; }
         const float t = ((a.x - x) * ey - (a.y - y) * ex) / cross;
         const float u = ((a.x - x) * dy - (a.y - y) * dx) / cross;
-        if (t >= 0.0f && t < fraction && u >= 0.0f && u <= 1.0f) { fraction = t; }
+        if (t >= 0.0f && t < fraction && u >= 0.0f && u <= 1.0f) {
+            fraction = t;
+            const float length = std::hypot(ex, ey);
+            if (normalX != nullptr && normalY != nullptr && length > 0) {
+                *normalX = -ey / length;
+                *normalY = ex / length;
+            }
+        }
     }
     return fraction;
 }
@@ -178,6 +190,7 @@ struct WeaponEffects::Impl {
     std::uint32_t randomState = 1;
     std::size_t shotsFired = 0;
     std::size_t soundCues = 0;
+    std::uint64_t nextEffectHandle = 1;
     float playerX = 0, playerY = 0;
     std::map<std::uint32_t, std::unique_ptr<CSpriteGlu>> spritePacks;
     std::map<std::uint64_t, VisualAnimation> animations;
@@ -311,6 +324,7 @@ struct WeaponEffects::Impl {
     }
 
     void StopTrail(Shot *owner) {
+        if (owner == nullptr) { return; }
         std::size_t index = 0;
         while (index < activeEffects.size()) {
             if (activeEffects[index].owner == owner) { activeEffects.erase(activeEffects.begin() + index); }
@@ -329,7 +343,12 @@ struct WeaponEffects::Impl {
             hit.x = x;
             hit.y = y;
             hit.direction = direction;
-            hit.damage = cue.damage;
+            // Original splash natives use their authored damage and owner
+            // armor/level multiplier, independently of the bullet's base damage.
+            hit.damage = cue.damage * world->GetDamageMultiplier(owner->owner, owner->damageMultiplier);
+            hit.percentDamage = cue.percentDamage;
+            hit.spawnObjectId = cue.spawnObjectId;
+            hit.forceSpawn = cue.forceSpawn;
             if (cue.kind == GunCue::Kind::Splash) {
                 world->Splash(hit, cue.radius, cue.cone, cue.force, cue.forceMs);
             } else { world->SpawnFromProjectile(cue.resource, hit); }
@@ -434,7 +453,8 @@ struct WeaponEffects::Impl {
                 const ParticleEmitterTemplate &emitter = effect.data->GetEmitters()[j];
                 float end = std::max(0.0f, std::max(emitter.startSeconds, emitter.endSeconds) * 1000.0f);
                 // An attached infinite emitter stays alive between emissions.
-                const bool continuous = (effect.owner != nullptr || effect.actor != 0) && emitter.endSeconds < 0;
+                const bool continuous = (effect.owner != nullptr || effect.actor != 0 || effect.persistent)
+                    && emitter.startSeconds == -1.0f && emitter.endSeconds == -1.0f;
                 while (effect.nextSpawn[j] <= effect.ageMs && (continuous || effect.nextSpawn[j] <= end)) {
                     SpawnParticle(effect, j);
                     const float interval = Random(emitter.intervalMinimumSeconds, emitter.intervalMaximumSeconds) * 1000.0f;
@@ -460,6 +480,25 @@ WeaponEffects::~WeaponEffects() = default;
 
 void WeaponEffects::SetCombatWorld(IProjectileWorld *world) { m_impl->world = world; }
 
+std::uint64_t WeaponEffects::StartPersistentEffect(const GameObjectRef &resource, float x, float y) {
+    const std::size_t previous = m_impl->activeEffects.size();
+    m_impl->StartEffect(resource, x, y, 0, 0, nullptr);
+    if (m_impl->activeEffects.size() == previous) { return 0; }
+    EffectInstance &effect = m_impl->activeEffects.back();
+    effect.persistent = true;
+    effect.handle = m_impl->nextEffectHandle++;
+    return effect.handle;
+}
+
+void WeaponEffects::StopEffect(std::uint64_t handle) {
+    if (handle == 0) { return; }
+    for (auto iterator = m_impl->activeEffects.begin(); iterator != m_impl->activeEffects.end(); ++iterator) {
+        if (iterator->handle == handle) { m_impl->activeEffects.erase(iterator); return; }
+    }
+}
+
+void WeaponEffects::AdvanceAmbientEffects(int deltaMs) { m_impl->AdvanceParticles(deltaMs); }
+
 CombatId WeaponEffects::SpawnProjectile(const GameObjectRef &resource, float x, float y,
     float z, float direction, float speed, CombatId owner, int ownerType, int part, int node) {
     Impl &scene = *m_impl;
@@ -469,6 +508,8 @@ CombatId WeaponEffects::SpawnProjectile(const GameObjectRef &resource, float x, 
     shot->id = scene.nextProjectile++;
     shot->owner = owner;
     shot->ownerType = ownerType;
+    if (scene.world != nullptr) { shot->damageMultiplier = scene.world->GetDamageMultiplier(owner); }
+    if (scene.world != nullptr) { shot->powerupMultiplier = scene.world->GetProjectilePowerupMultiplier(owner); }
     shot->part = part;
     shot->source.node = node;
     shot->visual = visual;
@@ -566,6 +607,7 @@ void WeaponEffects::Clear() {
 void WeaponEffects::SetPaused(bool paused) { m_impl->audio.SetPaused(paused); }
 std::size_t WeaponEffects::GetBulletCount() const { return m_impl->shots.size(); }
 std::size_t WeaponEffects::GetParticleCount() const { return m_impl->particles.size(); }
+std::size_t WeaponEffects::GetEffectCount() const { return m_impl->activeEffects.size(); }
 std::size_t WeaponEffects::GetTrailCount() const {
     std::size_t count = 0;
     for (const EffectInstance &effect : m_impl->activeEffects) {
@@ -576,20 +618,42 @@ std::size_t WeaponEffects::GetTrailCount() const {
 std::size_t WeaponEffects::GetShotCount() const { return m_impl->shotsFired; }
 std::size_t WeaponEffects::GetSoundCueCount() const { return m_impl->soundCues; }
 
-void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float facingDegrees,
-                           int deltaMs, const WeaponCollision *collision) {
+void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, float facingDegrees,
+    CombatId owner, const WeaponCollision *collision) {
     Impl &scene = *m_impl;
-    if (!player.weapon || deltaMs <= 0) { return; }
-    scene.playerX = modelToScene[3];
-    scene.playerY = modelToScene[7];
+    if (!player.weapon) { return; }
     for (const GunCue &cue : player.weapon->brother.TakeCues()) {
-        scene.Cue(cue, scene.playerX, scene.playerY, 0, facingDegrees - 90);
+        if (cue.kind == GunCue::Kind::Grenade) {
+            if (!player.weapon->brother.CanThrowGrenade(cue.hand)) { continue; }
+            MeshBoneTransform origin{};
+            // GetGunNodeLocation(1) uses torso node 2, independently of the gun.
+            if (!player.weapon->brother.GetTorso().GetAnimation().GetNodeAt(2, origin)) { continue; }
+            const float x = modelToScene[0] * origin.posX + modelToScene[1] * origin.posY + modelToScene[2] * origin.posZ + modelToScene[3];
+            const float y = modelToScene[4] * origin.posX + modelToScene[5] * origin.posY + modelToScene[6] * origin.posZ + modelToScene[7];
+            const float z = modelToScene[8] * origin.posX + modelToScene[9] * origin.posY + modelToScene[10] * origin.posZ + modelToScene[11];
+            if (SpawnProjectile(cue.resource, x, y, z, facingDegrees - 90, 430, owner, 0) != 0) {
+                player.weapon->brother.OnGrenadeThrown(cue.hand);
+            }
+            continue;
+        }
+        if (cue.kind == GunCue::Kind::Splash && scene.world != nullptr) {
+            CombatHit hit;
+            hit.owner = owner;
+            hit.ownerType = 0;
+            hit.damage = cue.damage;
+            hit.percentDamage = cue.percentDamage;
+            hit.x = modelToScene[3];
+            hit.y = modelToScene[7];
+            scene.world->Splash(hit, cue.radius, cue.cone, cue.force, cue.forceMs);
+            continue;
+        }
+        Emit(cue, modelToScene[3], modelToScene[7], 0, facingDegrees - 90, owner, cue.hand, -1, -1);
     }
     for (const GameObjectRef &sound : player.weapon->brother.GetTorso().TakeSounds()) {
-        scene.PlayWav(sound.packHash, sound.localIndex);
+        scene.PlayWav(sound.packHash, sound.localIndex, false, owner);
     }
     for (const GameObjectRef &sound : player.weapon->brother.GetLegs().TakeSounds()) {
-        scene.PlayWav(sound.packHash, sound.localIndex);
+        scene.PlayWav(sound.packHash, sound.localIndex, false, owner);
     }
     const float direction = facingDegrees - 90.0f;
     const float beamLength = kMaximumBeamLength;
@@ -597,7 +661,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
     // by a player are advanced before their first draw in the same tick.
     for (const GunCue &cue : player.weapon->gun.TakeCues()) {
         if (cue.kind == GunCue::Kind::RemoveBullet) {
-            if (scene.world != nullptr) { RemoveOldestProjectile(kPlayerCombatId); }
+            if (scene.world != nullptr) { RemoveOldestProjectile(owner); }
             else if (!scene.shots.empty()) {
                 scene.StopTrail(scene.shots.front().get());
                 scene.shots.erase(scene.shots.begin());
@@ -605,7 +669,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             continue;
         }
         if (cue.kind == GunCue::Kind::Sound || cue.kind == GunCue::Kind::LoopSound || cue.kind == GunCue::Kind::StopSound) {
-            scene.PlaySound(cue);
+            scene.PlaySound(cue, owner);
             continue;
         }
         int copies = 1;
@@ -620,6 +684,9 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             if (visual == nullptr) { continue; }
             std::unique_ptr<Shot> shot(new Shot());
             shot->id = scene.nextProjectile++;
+            shot->owner = owner;
+            if (scene.world != nullptr) { shot->powerupMultiplier = scene.world->GetProjectilePowerupMultiplier(owner); }
+            shot->part = hand;
             shot->visual = visual;
             shot->source = cue;
             shot->source.hand = hand;
@@ -643,6 +710,17 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             ++scene.shotsFired;
         }
     }
+}
+
+void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float facingDegrees,
+    int deltaMs, const WeaponCollision *collision) {
+    Impl &scene = *m_impl;
+    if (!player.weapon || deltaMs <= 0) { return; }
+    scene.playerX = modelToScene[3];
+    scene.playerY = modelToScene[7];
+    EmitBrother(player, modelToScene, facingDegrees, kPlayerCombatId, collision);
+    const float direction = facingDegrees - 90;
+    const float beamLength = kMaximumBeamLength;
     for (auto &shot : scene.shots) {
         const CCollisionData *shotCollision = nullptr;
         if (collision != nullptr) {
@@ -665,7 +743,10 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         hit.flags = shot->script.flags;
         hit.x = shot->x;
         hit.y = shot->y;
-        hit.damage = shot->script.GetDamage();
+        hit.damage = shot->script.GetDamage() * shot->powerupMultiplier;
+        if (scene.world != nullptr) {
+            hit.damage *= scene.world->GetDamageMultiplier(shot->owner, shot->damageMultiplier);
+        }
         if (scene.world != nullptr && shot->script.seekRadius > 0 && !shot->beam) {
             float targetX = 0, targetY = 0;
             if (scene.world->FindTarget(hit, shot->script.seekRadius, targetX, targetY)) {
@@ -673,6 +754,8 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             }
         }
         const float startX = shot->x, startY = shot->y;
+        bool hitWall = false;
+        float wallNormalX = 0, wallNormalY = 0;
         const float radians = shot->direction * kRadians;
         if (shot->beam) {
             if (shot->owner == kPlayerCombatId) {
@@ -690,11 +773,11 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             shot->speed = std::max(0.0f, shot->speed + shot->script.acceleration * deltaMs * 0.001f);
             const float distance = shot->speed * shot->script.velocityScale * deltaMs * 0.001f;
             const float dx = std::cos(radians) * distance, dy = std::sin(radians) * distance;
-            const float fraction = SegmentFraction(shot->x, shot->y, dx, dy, shotCollision);
+            const float fraction = SegmentFraction(shot->x, shot->y, dx, dy, shotCollision, &wallNormalX, &wallNormalY);
             shot->x += dx * fraction; shot->y += dy * fraction;
-            if (fraction < 1.0f) { shot->script.Hit(); }
+            hitWall = fraction < 1.0f;
         }
-        if (scene.world != nullptr && shot->script.collisionEnabled && !shot->pendingHit && !shot->script.removed) {
+        if (scene.world != nullptr && shot->script.HasActiveCollision() && !shot->pendingHit && !shot->script.removed) {
             float x = startX, y = startY;
             float dx = shot->x - startX, dy = shot->y - startY;
             if (shot->beam) {
@@ -746,6 +829,23 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
                     break;
                 }
             }
+        }
+        // Resolve actor/prop contacts along the clipped segment before the
+        // wall event retires the shot. Otherwise destructible props are walls
+        // that can never receive their original on-hit script callback.
+        if (hitWall && !shot->script.removed) {
+            if ((shot->script.flags & 0x800) != 0) {
+                const float vx = std::cos(shot->direction * kRadians);
+                const float vy = std::sin(shot->direction * kRadians);
+                const float dot = vx * wallNormalX + vy * wallNormalY;
+                const float reflectedX = vx - 2 * dot * wallNormalX;
+                const float reflectedY = vy - 2 * dot * wallNormalY;
+                shot->direction = std::atan2(reflectedY, reflectedX) / kRadians;
+                // Separate the next sweep from this exact edge contact.
+                shot->x += reflectedX * 0.01f;
+                shot->y += reflectedY * 0.01f;
+            }
+            shot->script.OnWallCollision();
         }
         for (const GunCue &cue : shot->script.TakeCues()) { scene.Cue(cue, shot->x, shot->y, shot->z, shot->direction, shot.get()); }
     }
@@ -823,12 +923,17 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
         } else if (!shot->beam) {
             float angle = direction + 90;
             if ((shot->script.flags & 0x80) != 0) { angle = 0; }
-            scene.AddSprite(animation, age, x, y, scale, scale, angle, 1);
+            const float fraction = shot->script.GetTrajectoryFraction();
+            const float phase = shot->script.GetTrajectoryPhaseScale();
+            const float shadowScale = scale + fraction * phase * projection.scale;
+            const float alpha = 1 - 0.75f * fraction;
+            scene.AddSprite(animation, age, x, y, shadowScale, shadowScale, angle, alpha);
         }
         if (shot->visual->mesh) {
             PlayerPart &part = *shot->visual->mesh;
             float base[kMatrix4dElements];
-            const float meshScale = shot->visual->data.GetMeshScale() * part.mesh.GetBounds().inverseExtent * projection.scale * meshCameraScale;
+            const float apparentScale = shot->visual->data.GetMeshScale() + 25 * shot->script.GetTrajectoryHeight();
+            const float meshScale = apparentScale * part.mesh.GetBounds().inverseExtent * projection.scale * meshCameraScale;
             BuildPlayerGameMatrix(sceneMvp, x, y, meshScale, direction + 90, base);
             part.buffer.Draw(scene.program, base, part.texture);
         }

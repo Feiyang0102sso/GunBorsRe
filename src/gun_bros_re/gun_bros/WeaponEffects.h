@@ -25,6 +25,9 @@ public:
     /** Consume gun cues, then advance both new and existing projectiles. */
     void Update(PlayerModel &player, const float *modelToScene, float facingDegrees,
                 int deltaMs, const WeaponCollision *collision = nullptr);
+    /** Consume another brother's cues without advancing all projectiles twice. */
+    void EmitBrother(PlayerModel &player, const float *modelToScene, float facingDegrees,
+        CombatId owner, const WeaponCollision *collision = nullptr);
     /** Optional world-to-screen projection for the rotating character preview. */
     void Draw(const float *sceneMvp, const float *previewProjection = nullptr, float meshCameraScale = 1.0f,
               WeaponDrawPass pass = WeaponDrawPass::All);
@@ -39,9 +42,15 @@ public:
     bool RemoveOldestProjectile(CombatId owner);
     void RetireOwner(CombatId owner);
     void PlayMoveSound(const GameObjectRef &sound);
+    /** CPickup owns an emitter handle; stopping it preserves living particles. */
+    std::uint64_t StartPersistentEffect(const GameObjectRef &resource, float x, float y);
+    void StopEffect(std::uint64_t handle);
+    /** Standalone research scenes have no brother/projectile update. */
+    void AdvanceAmbientEffects(int deltaMs);
     void SetPaused(bool paused);
     std::size_t GetBulletCount() const;
     std::size_t GetParticleCount() const;
+    std::size_t GetEffectCount() const;
     std::size_t GetTrailCount() const;
     std::size_t GetShotCount() const;
     std::size_t GetSoundCueCount() const;

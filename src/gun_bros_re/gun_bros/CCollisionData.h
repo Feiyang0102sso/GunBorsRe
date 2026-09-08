@@ -45,6 +45,8 @@ public:
 
     /** Remove all geometry before assembling a new collision scene. */
     void Clear();
+    /** Original Enable/DisableCollision changes only the named edge group. */
+    void SetGroupEnabled(int group, bool enabled);
 
     /**
      * Add another collision shape at a world-space offset.

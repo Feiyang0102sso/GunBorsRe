@@ -150,13 +150,16 @@ void CMeshBuffer::SetVertices(const std::vector<float> &vertices) {
 }
 
 void CMeshBuffer::Draw(const CShaderProgram &program, const float *mvp,
-                       const CTexture &texture, float heatIntensity) const {
+                       const CTexture &texture, float heatIntensity, const float *overlayRgb) const {
     if (m_indexCount == 0) {
         return;
     }
 
     program.Use();
     float overlay[] = {1.0f, 0.0f, 0.0f, heatIntensity};
+    if (overlayRgb != nullptr) {
+        for (unsigned index = 0; index < 3; ++index) { overlay[index] = overlayRgb[index]; }
+    }
     if (m_overlayLocation >= 0) { glUniform4fv(m_overlayLocation, 1, overlay); }
 
     // Transposed on upload: mvp is stored row-major so it reads like a matrix.

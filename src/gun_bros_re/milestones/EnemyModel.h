@@ -62,8 +62,8 @@ struct EnemyTemplateData {
     // Named for their template offsets, which is the one thing certainly true
     // about them. Read so the two scales land at the right place.
     GameObjectRef objectRef104;
-    std::uint16_t value112;
-    std::uint16_t value114;
+    std::uint16_t experienceReward;
+    std::uint16_t xplodiumReward;
     std::uint8_t flag117;
     std::uint8_t radius116;
     CCollisionData collision;

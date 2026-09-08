@@ -13,7 +13,17 @@
 #include "milestones/M35Mesh.h"
 #include "milestones/M38Enemy.h"
 #include "milestones/Arena.h"
+#include "milestones/M5LevelFlow.h"
 #include "runtime/WeaponCatalog.h"
+#include "runtime/ArmorCatalog.h"
+#include "runtime/StoreCatalog.h"
+#include "runtime/GameFrontEnd.h"
+#include "runtime/PickupCatalog.h"
+#include "runtime/PropCatalog.h"
+#include "runtime/PowerupCatalog.h"
+#include "runtime/MissionCatalog.h"
+#include "runtime/OriginalProfile.h"
+#include "engine/CAudioPlayer.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -35,6 +45,35 @@ void PrintUsage() {
         "usage: gun_bros_re [options]\n"
         "\n"
         "  (no options)              choose a viewer from the menu\n"
+        "  --help, -h                show available options and exit\n"
+        "  --mute                    disable sound playback for every mode\n"
+        "  --game                    planets, equipment, shop and local profile\n"
+        "  --menu-page <0..3>       menu screenshot page\n"
+        "  --progress-check          verify progression, purchases and refinery\n"
+        "  --profile-play-check      play, save, reload and resume test account\n"
+        "  --play                    retail survival; default pack2 map7\n"
+        "  --survival-check          real-map projectile/wave integration check\n"
+        "  --brother-check           AI-only firing, death and wave revival check\n"
+        "  --brother                 add the original AI follow/aim policy to --play\n"
+        "  --game-menu-check         refine, buy, equip and play an isolated profile\n"
+        "  --pickup-check            pickup templates and collection scripts\n"
+        "  --pickup-render-check     all pickup sprites and animation frames\n"
+        "  --prop-check              complete prop templates and native callbacks\n"
+        "  --powerup-check           consumable templates, queries and actions\n"
+        "  --powerup-study           playable item lab, isolated stock\n"
+        "  --powerup-play-check      inventory, throw, buffs and visual check\n"
+        "  --mission-check           archive mission, objective and level references\n"
+        "  --original-save-check     read original data stores without modifying them\n"
+        "  --original-profile       play an independent copy of the original perfect save\n"
+        "  --original-profile-check validate import, original equipment and play/reload\n"
+        "  --campaign <pack> <n>     play original unfinished campaign mission\n"
+        "  --campaign-check <pack> <n>  movement/combat smoke test in archived mission\n"
+        "  --check-waves <n>         number of waves to play in survival check\n"
+        "  --start-wave <1..500>     wave study / saved-progress starting point\n"
+        "  --armor-check             verify every armor template, script and asset\n"
+        "  --armor-render-check      render all armor with three weapon poses\n"
+        "  --level-flow-check        simulate original level spawn/death events\n"
+        "  --armor [n]               armor viewer; combine with --arena to fight\n"
         "  --m1                      M1: verify cross-pack resource addressing\n"
         "  --m2                      M2: show a single PNG from a .big\n"
         "  --dump <pack>             list one pack's resource table\n"
@@ -88,6 +127,7 @@ int PromptForHarness() {
     std::printf(
         "\n=== gun_bros_re ===\n"
         "\n"
+        " 26  Play Gun Bros    -- planets, equipment, shop and saved progress\n"
         "  1  Preview          -- whole-map canvas; pan and zoom freely\n"
         "  2  GameView         -- playable game camera; fixed view\n"
         "  3  model viewer     -- one 3D model at a time, on a turntable\n"
@@ -105,18 +145,39 @@ int PromptForHarness() {
         " 14  resource addressing self-check\n"
         " 15  player weapon    -- all weapon categories, holding poses and firing\n"
         " 16  Arena            -- enemies, damage and player health\n"
+        " 17  armor check      -- every armor template, script and asset\n"
+        " 18  armor viewer     -- attachments, body textures and weapon poses\n"
+        " 19  armor rendering check -- all armor with three weapon poses\n"
+        " 20  level flow check -- original scripts, timers and spawn rules\n"
+        " 21  Survival         -- original map, enemies and wave scripts\n"
+        " 22  survival check   -- map combat, equipment, death and restart\n"
+        " 23  wave study       -- choose a starting wave; original scripts\n"
+        " 24  progress check   -- experience, health, store prices and references\n"
+        " 25  profile play check -- play, save, reload and resume actual combat\n"
+        " 27  game menu check  -- refine, buy, equip, select planet and play\n"
+        " 28  AI brother check -- independent shooting, death and wave revival\n"
+        " 29  pickup check     -- all templates and collection scripts\n"
+        " 30  pickup render check -- all original pickup sprites\n"
+        " 31  prop check       -- full templates, moves and script callbacks\n"
+        " 32  powerup check    -- consumable templates and native actions\n"
+        " 33  powerup lab      -- G use, F select; isolated item inventory\n"
+        " 34  mission archive check -- original mission/objective records\n"
+        " 35  campaign archive -- choose an unfinished original mission\n"
+        " 36  original save check -- read-only native profile archive\n"
+        " 37  original save lab -- play imported perfect save independently\n"
+        " 38  original profile play check -- import, equipment and reload\n"
         "\n"
-        "choice [1]: ");
+        "choice [26]: ");
     std::fflush(stdout);
 
     char line[64];
     if (std::fgets(line, sizeof(line), stdin) == nullptr) {
-        return 1;
+        return 26;
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 16) {
-        return 1;
+    if (choice < 1 || choice > 38) {
+        return 26;
     }
     return choice;
 }
@@ -124,8 +185,37 @@ int PromptForHarness() {
 }  // namespace
 
 int main(int argc, char **argv) {
+    int modeArgumentCount = 0;
     std::string bigDirectory = std::string(ASSET_ROOT) + "/big";
     bool surveyWeapons = false;
+    bool checkArmor = false;
+    bool checkProgress = false;
+    bool checkPickups = false;
+    bool checkProps = false;
+    bool checkPowerups = false;
+    bool powerupStudy = false;
+    bool checkPickupRendering = false;
+    bool checkMissions = false;
+    bool checkOriginalSaves = false;
+    bool playOriginalProfile = false;
+    bool checkOriginalProfile = false;
+    bool playCampaign = false;
+    bool checkCampaign = false;
+    std::string campaignPack;
+    int campaignMission = -1;
+    bool checkProfilePlay = false;
+    bool playGame = false;
+    bool checkGameMenu = false;
+    unsigned menuPage = 0;
+    bool checkArmorRendering = false;
+    bool checkLevelFlow = false;
+    bool playSurvival = false;
+    bool checkSurvival = false;
+    bool withBrother = false;
+    unsigned checkWaves = 2;
+    unsigned startWave = 0;
+    bool explicitMap = false;
+    int armorIndex = -1;
     bool checkWeapons = false;
     bool arena = false;
     bool checkArena = false;
@@ -166,7 +256,85 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const char *argument = argv[i];
 
-        if (std::strcmp(argument, "--m1") == 0) {
+        if (std::strcmp(argument, "--help") == 0 || std::strcmp(argument, "-h") == 0) {
+            PrintUsage();
+            return 0;
+        }
+        if (std::strcmp(argument, "--mute") == 0) {
+            CAudioPlayer::SetMuted(true);
+            continue;
+        }
+        ++modeArgumentCount;
+
+        if (std::strcmp(argument, "--game") == 0) {
+            playGame = true;
+        } else if (std::strcmp(argument, "--pickup-check") == 0) {
+            checkPickups = true;
+        } else if (std::strcmp(argument, "--mission-check") == 0) {
+            checkMissions = true;
+        } else if (std::strcmp(argument, "--original-save-check") == 0) {
+            checkOriginalSaves = true;
+        } else if (std::strcmp(argument, "--original-profile") == 0) {
+            playOriginalProfile = true;
+        } else if (std::strcmp(argument, "--original-profile-check") == 0) {
+            checkOriginalProfile = true;
+        } else if ((std::strcmp(argument, "--campaign") == 0 || std::strcmp(argument, "--campaign-check") == 0) && i + 2 < argc) {
+            playCampaign = true;
+            checkCampaign = std::strcmp(argument, "--campaign-check") == 0;
+            campaignPack = argv[++i];
+            campaignMission = std::atoi(argv[++i]);
+        } else if (std::strcmp(argument, "--prop-check") == 0) {
+            checkProps = true;
+        } else if (std::strcmp(argument, "--powerup-check") == 0) {
+            checkPowerups = true;
+        } else if (std::strcmp(argument, "--powerup-study") == 0) {
+            powerupStudy = true;
+            playSurvival = true;
+        } else if (std::strcmp(argument, "--powerup-play-check") == 0) {
+            powerupStudy = true;
+            playSurvival = true;
+            checkSurvival = true;
+        } else if (std::strcmp(argument, "--pickup-render-check") == 0) {
+            checkPickupRendering = true;
+        } else if (std::strcmp(argument, "--menu-page") == 0 && i + 1 < argc) {
+            menuPage = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
+        } else if (std::strcmp(argument, "--start-wave") == 0 && i + 1 < argc) {
+            const unsigned displayWave = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
+            if (displayWave == 0 || displayWave > 500) { return 1; }
+            startWave = displayWave - 1;
+        } else if (std::strcmp(argument, "--check-waves") == 0 && i + 1 < argc) {
+            checkWaves = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
+            if (checkWaves == 0 || checkWaves > 500) { return 1; }
+        } else if (std::strcmp(argument, "--brother-check") == 0) {
+            playSurvival = true;
+            checkSurvival = true;
+            withBrother = true;
+        } else if (std::strcmp(argument, "--brother") == 0) {
+            withBrother = true;
+            playSurvival = true;
+        } else if (std::strcmp(argument, "--survival-check") == 0) {
+            playSurvival = true;
+            checkSurvival = true;
+        } else if (std::strcmp(argument, "--play") == 0) {
+            playSurvival = true;
+        } else if (std::strcmp(argument, "--level-flow-check") == 0) {
+            checkLevelFlow = true;
+        } else if (std::strcmp(argument, "--game-menu-check") == 0) {
+            checkGameMenu = true;
+        } else if (std::strcmp(argument, "--profile-play-check") == 0) {
+            checkProfilePlay = true;
+        } else if (std::strcmp(argument, "--progress-check") == 0) {
+            checkProgress = true;
+        } else if (std::strcmp(argument, "--armor-check") == 0) {
+            checkArmor = true;
+        } else if (std::strcmp(argument, "--armor-render-check") == 0) {
+            checkArmorRendering = true;
+        } else if (std::strcmp(argument, "--armor") == 0) {
+            armorIndex = 0;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                armorIndex = static_cast<int>(std::strtoul(argv[++i], nullptr, 10));
+            }
+        } else if (std::strcmp(argument, "--m1") == 0) {
             runM1 = true;
         } else if (std::strcmp(argument, "--weapons") == 0) {
             surveyWeapons = true;
@@ -233,6 +401,7 @@ int main(int argc, char **argv) {
         } else if (std::strcmp(argument, "--dump") == 0 && i + 1 < argc) {
             dumpPackName = argv[++i];
         } else if (std::strcmp(argument, "--map") == 0 && i + 2 < argc) {
+            explicitMap = true;
             mapPackName = argv[++i];
             mapIndex = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--image") == 0 && i + 2 < argc) {
@@ -252,7 +421,10 @@ int main(int argc, char **argv) {
     }
 
     // Nothing on the command line means nobody typed one: ask instead.
-    if (argc == 1) {
+    if (CAudioPlayer::IsMuted()) {
+        std::printf("[audio] muted: playback streams disabled\n");
+    }
+    if (modeArgumentCount == 0) {
         const int choice = PromptForHarness();
         if (choice == 1) {
             return RunM3Map(bigDirectory, mapPackName, mapIndex,
@@ -309,9 +481,86 @@ int main(int argc, char **argv) {
         if (choice == 16) {
             return RunArena(bigDirectory, 0, 0, screenshotPath, advanceMs, false, false, showCollisions);
         }
+        if (choice == 17) {
+            return RunArmorCheck(bigDirectory);
+        }
+        if (choice == 18) {
+            return RunM37Character(bigDirectory, 0, 0.0f, screenshotPath, advanceMs, false, 0);
+        }
+        if (choice == 19) {
+            return RunArmorRenderCheck(bigDirectory);
+        }
+        if (choice == 20) {
+            return RunLevelFlowCheck(bigDirectory);
+        }
+        if (choice == 21) {
+            return RunSurvival(bigDirectory, "pack2", 7, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, showCollisions);
+        }
+        if (choice == 22) {
+            return RunSurvival(bigDirectory, "pack2", 7, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, showCollisions, true);
+        }
+        if (choice == 24) { return RunProgressCheck(bigDirectory); }
+        if (choice == 25) { return RunProfilePlayCheck(bigDirectory); }
+        if (choice == 26) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage); }
+        if (choice == 27) { return RunGameMenuCheck(bigDirectory); }
+        if (choice == 29) { return RunPickupCheck(bigDirectory); }
+        if (choice == 30) { return RunPickupRenderCheck(bigDirectory); }
+        if (choice == 31) { return RunPropCheck(bigDirectory); }
+        if (choice == 32) { return RunPowerupCheck(bigDirectory); }
+        if (choice == 34) { return RunMissionCheck(bigDirectory); }
+        if (choice == 35) { return RunMissionPlay(bigDirectory, "", -1, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview); }
+        if (choice == 36) { return RunOriginalProfileCheck(bigDirectory); }
+        if (choice == 37) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, true); }
+        if (choice == 38) { return RunOriginalProfilePlayCheck(bigDirectory); }
+        if (choice == 33) { return RunSurvival(bigDirectory, "pack2", 7, gunIndex, armorIndex, screenshotPath,
+            advanceMs, firePreview, showCollisions, false, 2, 0, nullptr, false, true); }
+        if (choice == 28) {
+            return RunSurvival(bigDirectory, "pack2", 7, 65, armorIndex, screenshotPath, 0,
+                false, showCollisions, true, 2, 0, nullptr, true);
+        }
+        if (choice == 23) {
+            std::printf("Starting wave 1..500 [21]: ");
+            std::fflush(stdout);
+            char line[64];
+            unsigned wave = 21;
+            if (std::fgets(line, sizeof(line), stdin) != nullptr && std::atoi(line) > 0) {
+                wave = static_cast<unsigned>(std::atoi(line));
+            }
+            if (wave > 500) { return 1; }
+            return RunSurvival(bigDirectory, "pack2", 7, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, showCollisions, false, 2, wave - 1);
+        }
     }
 
-    if (arena) { return RunArena(bigDirectory, enemyIndex, gunIndex, screenshotPath, advanceMs, firePreview, checkArena, showCollisions); }
+    if (checkProgress) { return RunProgressCheck(bigDirectory); }
+    if (checkPickups) { return RunPickupCheck(bigDirectory); }
+    if (checkProps) { return RunPropCheck(bigDirectory); }
+    if (checkPowerups) { return RunPowerupCheck(bigDirectory); }
+    if (checkMissions) { return RunMissionCheck(bigDirectory); }
+    if (checkOriginalSaves) { return RunOriginalProfileCheck(bigDirectory); }
+    if (playOriginalProfile) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, true); }
+    if (checkOriginalProfile) { return RunOriginalProfilePlayCheck(bigDirectory); }
+    if (playCampaign) { return RunMissionPlay(bigDirectory, campaignPack, campaignMission, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, checkCampaign); }
+    if (checkPickupRendering) { return RunPickupRenderCheck(bigDirectory); }
+    if (checkProfilePlay) { return RunProfilePlayCheck(bigDirectory); }
+    if (playGame) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage); }
+    if (checkGameMenu) { return RunGameMenuCheck(bigDirectory); }
+    if (checkArmor) {
+        return RunArmorCheck(bigDirectory);
+    }
+    if (playSurvival) {
+        if (!explicitMap) { mapPackName = "pack2"; mapIndex = 7; }
+        return RunSurvival(bigDirectory, mapPackName, mapIndex, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, showCollisions, checkSurvival, checkWaves, startWave, nullptr, withBrother, powerupStudy);
+    }
+    if (checkLevelFlow) {
+        return RunLevelFlowCheck(bigDirectory);
+    }
+    if (checkArmorRendering) {
+        return RunArmorRenderCheck(bigDirectory);
+    }
+    if (arena) { return RunArena(bigDirectory, enemyIndex, gunIndex, screenshotPath, advanceMs, firePreview, checkArena, showCollisions, armorIndex); }
+    if (armorIndex >= 0) {
+        return RunM37Character(bigDirectory, gunIndex, meshSpinDegrees, screenshotPath, advanceMs, firePreview, armorIndex);
+    }
     if (!dumpPackName.empty()) {
         return RunPackDump(bigDirectory, dumpPackName);
     }

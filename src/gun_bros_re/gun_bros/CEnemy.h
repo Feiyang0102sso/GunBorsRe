@@ -32,6 +32,7 @@
 
 #ifndef GUN_BROS_RE_GUN_BROS_CENEMY_H
 #define GUN_BROS_RE_GUN_BROS_CENEMY_H
+#include "gun_bros/CStunController.h"
 
 #include "glu_script/CScript.h"
 #include "glu_script/CScriptInterpreter.h"
@@ -167,6 +168,7 @@ public:
     // Arena enables world simulation before loading the model. Existing model
     // viewers still execute scripts, but do not move their display objects.
     EnemyCombat combat;
+    CStunController stun;
     void ConfigureTemplate(float radius, bool targetable,
         const GameObjectRef &bullet, const CCollisionData &collision);
     void SetTarget(CombatId id, float x, float y, bool alive);
@@ -174,6 +176,7 @@ public:
     HitResult ReceiveHit(const CombatHit &hit);
     void Damage(float amount);
     bool TriggerEvent(std::uint8_t event);
+    void HandleMessage(int message);
     void OnScriptStateEntered() override;
     std::vector<EnemyAction> TakeActions();
     std::size_t GetUnsupportedFunctionCount() const;
@@ -219,6 +222,7 @@ private:
         std::uint8_t argumentCount, std::int16_t &result);
     void UpdateCombatBeforeAnimation(int deltaMs);
     void UpdateCombatAfterAnimation(int deltaMs);
+    void UpdateCombatTimers(int deltaMs);
     void SetBehaviour(const std::int16_t *arguments, int count);
     void QueueBullet(const GameObjectRef &resource, int part, int node, float direction);
     GameObjectRef ScriptResource(int index) const;

@@ -33,6 +33,7 @@
 
 #include "engine/CArrayInputStream.h"
 #include "glu_script/CScript.h"
+#include "glu_script/CScriptInterpreter.h"
 #include "gun_bros/CBullet.h"  // kNoAssetId
 #include "gun_bros/CGameAssetRef.h"
 
@@ -41,7 +42,14 @@
 // One model per brother.
 constexpr std::uint32_t kArmorVariantCount = 2;
 
-class CArmor {
+// Correction (2026-09-08): the historical "one per brother" description above
+// only applies to selected textures. Slot 1 can draw BOTH meshes at its two
+// attachment nodes (CBrother::Draw :134891). Slot is template offset 4;
+// offsets 224/225 are node indices, not flags. Keep the old note for provenance.
+constexpr std::uint32_t kArmorSlotCount = 4;
+constexpr std::uint32_t kArmorAttributeCount = 5;
+
+class CArmor : public IScriptObject {
 public:
     class Template {
     public:
@@ -61,11 +69,23 @@ public:
         }
 
         const CScript &GetScript() const { return m_script; }
+        std::uint8_t GetSlot() const { return m_slot; }
+        std::uint8_t GetAttachmentNode(std::uint32_t variant) const {
+            return m_attachmentNode[variant];
+        }
+        const CGameAssetRef &GetFallbackImageRef(std::uint32_t variant) const {
+            return m_spriteImageRef[variant];
+        }
+        const CGameAssetRef &GetLoadedImageRef(std::uint32_t variant) const {
+            if (HasMesh(variant)) {
+                return m_imageRef[variant];
+            }
+            return m_spriteImageRef[variant];
+        }
 
     private:
-        std::uint8_t m_flag4;
-        std::uint8_t m_flag224;
-        std::uint8_t m_flag225;
+        std::uint8_t m_slot;
+        std::uint8_t m_attachmentNode[kArmorVariantCount];
 
         CGameAssetRef m_meshRef[kArmorVariantCount];
         CGameAssetRef m_imageRef[kArmorVariantCount];
@@ -75,6 +95,16 @@ public:
 
         CScript m_script;
     };
+
+    /** Bind stable template data, then run original OnEquip (export 0). */
+    void Bind(const Template &data);
+    void Equip();
+    std::int16_t *VariableResolver(std::uint8_t variable);
+    std::int16_t GetAttribute(std::uint32_t index) const;
+
+private:
+    CScriptInterpreter m_interpreter;
+    std::int16_t m_attributes[kArmorAttributeCount] = {};
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CARMOR_H

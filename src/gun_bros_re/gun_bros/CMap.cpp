@@ -91,6 +91,8 @@ bool CMap::Init(CArrayInputStream &stream) {
     m_collisionLayers.clear();
     m_objectLayers.clear();
     m_cameraLayers.clear();
+    m_pathLinkLayers.clear();
+    m_pathMeshLayers.clear();
     m_currentCameraLayer = 0;
     m_currentCollisionLayer = 0;
     m_currentBulletCollisionLayer = UINT32_MAX;
@@ -129,6 +131,7 @@ bool CMap::Init(CArrayInputStream &stream) {
             if (!layer.Init(stream)) {
                 return false;
             }
+            layer.SetLayerIndex(i);
             m_objectLayers.push_back(layer);
 
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Collision)) {
@@ -148,9 +151,15 @@ bool CMap::Init(CArrayInputStream &stream) {
             layer.SetLayerIndex(i);
             m_cameraLayers.push_back(layer);
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::PathLink)) {
-            SkipPathLinkLayer(stream);
+            CLayerPathLink layer;
+            if (!layer.Init(stream)) { return false; }
+            layer.SetLayerIndex(i);
+            m_pathLinkLayers.push_back(std::move(layer));
         } else if (layerType == static_cast<std::uint8_t>(MapLayerType::PathMesh)) {
-            SkipPathMeshLayer(stream);
+            CLayerPathMesh layer;
+            if (!layer.Init(stream)) { return false; }
+            layer.SetLayerIndex(i);
+            m_pathMeshLayers.push_back(std::move(layer));
         } else {
             // An unknown type has an unknown size, so the stream cannot be
             // resynchronised -- stop here rather than read garbage.
@@ -194,6 +203,28 @@ bool CMap::SetCameraLayer(std::uint32_t layerIndex) {
     }
 
     return false;
+}
+
+CLayerPathLink *CMap::GetPathLinkLayer(int layerIndex) {
+    for (CLayerPathLink &layer : m_pathLinkLayers) {
+        if (static_cast<int>(layer.GetLayerIndex()) == layerIndex) { return &layer; }
+    }
+    return nullptr;
+}
+
+ILayerPath *CMap::GetPathLayer(int layerIndex) {
+    for (CLayerPathMesh &layer : m_pathMeshLayers) {
+        if (static_cast<int>(layer.GetLayerIndex()) == layerIndex) { return &layer; }
+    }
+    return GetPathLinkLayer(layerIndex);
+}
+
+void CMap::UnlockAllPathNodes() {
+    for (unsigned layerIndex = 0; layerIndex < m_declaredLayerCount; ++layerIndex) {
+        ILayerPath *path = GetPathLayer(layerIndex);
+        if (path == nullptr) { continue; }
+        for (unsigned node = 0; node < path->GetNodes().size(); ++node) { path->SetNodeLocked(node, false); }
+    }
 }
 
 bool CMap::SetCollisionLayer(std::uint32_t layerIndex) {

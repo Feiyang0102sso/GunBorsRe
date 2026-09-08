@@ -25,6 +25,7 @@
 #include "glu_script/CScriptInterpreter.h"
 #include "glu_script/CScriptResolver.h"
 #include "gun_bros/CGameAssetRef.h"
+#include "gun_bros/CEnemySpawner.h"
 
 #include <cstdint>
 
@@ -64,9 +65,10 @@ public:
 
         // Fields 92, 94 and 96 of the template. Read to keep the stream in
         // step; no reader for them has been traced yet.
-        std::uint16_t unknown0;
-        std::uint16_t unknown1;
-        std::uint16_t unknown2;
+        // Correction: Init :121799 and OnWaveCleared :116983 identify these.
+        std::uint16_t wavesPerRevolution;
+        std::uint16_t waveLimit;
+        std::uint16_t perfectWaveRewardPercent;
 
         Template();
 
@@ -85,7 +87,40 @@ public:
      *
      * The template and map must outlive the level.
      */
-    void Bind(const Template &levelTemplate, CMap &map);
+    void Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *world = nullptr, int startWave = 0);
+    void SetWave(int wave);
+    int GetWaveLimit() const { return m_template->waveLimit; }
+    void Update(int deltaMs);
+    /** HUD/movie completion callbacks use event class 4 in the original. */
+    void HandleEvent(std::uint8_t event) {
+        if (!m_cleared) { m_interpreter.HandleEvent(4, event); }
+    }
+    void OnEnemyKilled(int objectId, const GameObjectRef &enemy);
+    void OnPickupCollected(int objectId, const GameObjectRef &pickup);
+    void OnPropEvent(int objectId, const GameObjectRef &prop, bool entered);
+    /** Original trigger export 6; disabled and paused groups do not fire. */
+    bool OnTrigger(int group);
+    int GetTriggerLayer() const { return m_triggerLayer; }
+    void UpdateProximitySpawns(float left, float top, float width, float height);
+    bool GetResource(int index, GameObjectRef &out) const;
+    bool GetStringResource(int index, CGameAssetRef &out) const;
+    int GetDialogResource() const { return m_dialogResource; }
+    unsigned GetDialogSerial() const { return m_dialogSerial; }
+    bool DoesDialogAutoClose() const { return m_dialogAutoClose; }
+    const GameObjectRef &GetNextLevel() const { return m_nextLevel; }
+    void CompleteDialog();
+    CEnemySpawner &GetSpawner() { return m_spawner; }
+    int GetWave() const { return m_variables[0]; }
+    int GetRealWave() const {
+        if (m_variables[2] > 0) { return m_variables[0] % m_variables[2]; }
+        return 0;
+    }
+    int GetStateId() const { return m_interpreter.GetStateId(); }
+    bool IsCleared() const { return m_cleared; }
+    int GetObjectLayer() const { return m_objectLayer; }
+    int GetPathLayer() const { return m_pathLayer; }
+    float GetEnemyMultiplier(int enemy, int attribute) const;
+    float GetEnemyMultiplier(const GameObjectRef &enemy, int attribute) const;
 
     /** How many native calls were made that nothing implements. */
     std::uint32_t GetUnimplementedCallCount() const { return m_unimplementedCalls; }
@@ -104,6 +139,7 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
 
 private:
+    void SpawnMapObjects(int tag, int objectId = -1);
     /** setCameraLayer. Reference: :117497 */
     void SetCameraLayer(const std::int16_t *arguments, std::uint8_t argumentCount);
 
@@ -125,6 +161,25 @@ private:
     std::int16_t m_variables[kLevelVariableCount];
 
     std::uint32_t m_unimplementedCalls;
+    CEnemySpawner m_spawner;
+    IEnemySpawnWorld *m_world = nullptr;
+    int m_timerMs = 0;
+    int m_timerFunction = -1;
+    int m_eventTimerMs = 0;
+    int m_objectLayer = -1;
+    std::vector<bool> m_spawnedObjects;
+    bool m_manualSpawnTags[256] = {};
+    int m_pathLayer = -1;
+    int m_triggerLayer = -1;
+    bool m_triggerEnabled[32] = {};
+    int m_triggerPauseMs[32] = {};
+    int m_dialogResource = -1;
+    unsigned m_dialogSerial = 0;
+    bool m_dialogAutoClose = false;
+    GameObjectRef m_nextLevel;
+    bool m_cleared = false;
+    float m_globalEnemyMultipliers[5] = {1, 1, 1, 1, 1};
+    float m_enemyMultipliers[32][5] = {};
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CLEVEL_H

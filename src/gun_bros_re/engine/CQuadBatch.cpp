@@ -301,6 +301,9 @@ void CQuadBatch::Draw(const CShaderProgram &program, const float *mvp) const {
     }
     glBindVertexArray(0);
     glUniform1i(program.GetUniformLocation("additiveOpaque"), 0);
+    // The following mesh/HUD pass expects ordinary straight-alpha blending.
+    // Keep the last particle group from making dark panels additive.
+    ApplyBlendMode(BlendMode::Alpha);
 }
 
 std::uint32_t CQuadBatch::GetQuadCount() const {

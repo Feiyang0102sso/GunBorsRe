@@ -74,6 +74,7 @@ int RunWeaponCheck(const std::string &bigDirectory);
  */
 int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
                     float spinDegrees, const std::string &screenshotPath,
-                    std::uint32_t advanceMs, bool firePreview = false);
+                    std::uint32_t advanceMs, bool firePreview = false,
+                    int armorIndex = -1);
 
 #endif  // GUN_BROS_RE_MILESTONES_M35MESH_H

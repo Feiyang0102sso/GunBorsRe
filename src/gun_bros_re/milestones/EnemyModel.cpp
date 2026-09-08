@@ -26,8 +26,8 @@ EnemyTemplateData::EnemyTemplateData()
       ordinal(0),
       gameScale(0.0f),
       uiScalePercent(0.0f),
-      value112(0),
-      value114(0),
+      experienceReward(0),
+      xplodiumReward(0),
       flag117(0),
       radius116(0) {}
 
@@ -57,8 +57,8 @@ bool ReadEnemyTemplate(PackTables &tables, std::uint32_t packHash,
     }
 
     out.objectRef104.Init(stream);
-    out.value112 = stream.ReadUInt16();
-    out.value114 = stream.ReadUInt16();
+    out.experienceReward = stream.ReadUInt16();
+    out.xplodiumReward = stream.ReadUInt16();
     out.flag117 = stream.ReadUInt8();
     out.radius116 = stream.ReadUInt8();
     out.gameScale = static_cast<float>(stream.ReadUInt16());
@@ -258,7 +258,10 @@ void DrawEnemyModel(EnemyModel &model, const CShaderProgram &program,
             partBase = unrotated;
         }
         MeshCameraBuildPartMatrix(placement, partBase, mvp);
-        config.buffer.Draw(program, mvp, config.texture, part.hitFlash);
+        // CEnemy::Draw :67667 uses white RGB and half the part flash amount.
+        // Gun heat retains the buffer's default red overlay.
+        const float hitColor[] = {1, 1, 1};
+        config.buffer.Draw(program, mvp, config.texture, part.hitFlash * 0.5f, hitColor);
     }
 }
 

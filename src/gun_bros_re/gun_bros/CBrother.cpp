@@ -101,6 +101,8 @@ void CBrother::OnScriptStateEntered() { m_timer = 0; }
 void CBrother::SetInput(bool moving, bool shooting) {
     if (m_vitals != nullptr && m_vitals->dead) { return; }
     if (m_vitals != nullptr && m_vitals->stunMs > 0) { moving = false; shooting = false; }
+    if (!CanMove()) { moving = false; }
+    if (!CanShoot()) { shooting = false; }
     if (moving != m_moving) {
         m_moving = moving;
         if (moving) { m_interpreter.HandleEvent(5, 0); }
@@ -128,6 +130,27 @@ void CBrother::SetShooting(bool shooting) {
 
 void CBrother::Update(std::int32_t deltaMs) {
     if (deltaMs <= 0) { return; }
+    if (m_powerups != nullptr) {
+        if (m_powerups->autoFireMs > 0) {
+            m_powerups->autoFireMs = std::max(0, m_powerups->autoFireMs - deltaMs);
+            if (m_powerups->autoFireMs == 0) { PowerupEffect({}, 104, false); }
+        }
+        if (m_powerups->shieldMs > 0) {
+            m_powerups->shieldMs = std::max(0, m_powerups->shieldMs - deltaMs);
+            if (m_powerups->shieldMs == 0) { PowerupEffect({}, 100, false); }
+        }
+        for (unsigned type = 0; type < 3; ++type) {
+            if (m_powerups->frenzyMs[type] <= 0) { continue; }
+            m_powerups->frenzyMs[type] = std::max(0, m_powerups->frenzyMs[type] - deltaMs);
+            if (m_powerups->frenzyMs[type] == 0) {
+                m_powerups->frenzyMultiplier[type] = 1;
+                PowerupEffect({}, 101 + type, false);
+            }
+        }
+    }
+    if (m_variables[3] > 0) {
+        m_variables[3] = static_cast<std::int16_t>(std::max(0, m_variables[3] - deltaMs));
+    }
     if (m_vitals != nullptr) {
         m_vitals->flash = std::max(0.0f, m_vitals->flash - deltaMs * 0.004f);
         if (m_vitals->stunMs > 0) {
@@ -162,6 +185,16 @@ void CBrother::Update(std::int32_t deltaMs) {
         SetShooting(false);
     }
     m_interpreter.Refresh();
+    // CBrother::Update (:135283) retries pending throws until the current
+    // animation accepts its event. Never replace the character state directly.
+    for (unsigned slot = 0; slot < 2; ++slot) {
+        if (!m_grenadePending[slot]) { continue; }
+        if (m_interpreter.HandleEvent(5, static_cast<std::uint8_t>(10 + slot))) {
+            m_grenadePending[slot] = false;
+            m_grenadeAnimating[slot] = true;
+        }
+        break;
+    }
 }
 
 std::int16_t *CBrother::VariableResolver(std::uint8_t variable) {
@@ -194,8 +227,10 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         m_timer = static_cast<int>(arguments[0] * (1000.0f / 256.0f));
         break;
     case 10:
-        if (m_vitals != nullptr && !m_vitals->dead && argumentCount > 0) {
+        if (m_vitals != nullptr && argumentCount > 0) {
             m_vitals->health = m_vitals->maximum * std::clamp<int>(arguments[0], 0, 100) / 100.0f;
+            m_vitals->dead = m_vitals->health <= 0;
+            if (m_vitals->dead) { m_variables[0] = 0; m_variables[1] = 0; }
         }
         break;
     case 6:
@@ -217,6 +252,24 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         }
         break;
     }
+    case 13: {
+        GunCue cue;
+        cue.kind = GunCue::Kind::Splash;
+        cue.damage = arguments[0] * 10.0f;
+        cue.radius = arguments[1];
+        m_cues.push_back(cue);
+        break;
+    }
+    case 14: {
+        const unsigned slot = static_cast<unsigned>(arguments[0]);
+        if (!CanThrowGrenade(slot)) { break; }
+        GunCue cue;
+        cue.kind = GunCue::Kind::Grenade;
+        cue.resource = m_grenades[slot];
+        cue.hand = slot;
+        m_cues.push_back(cue);
+        break;
+    }
     case 1:
         // The death export calls this when its animation has finished.
         break;
@@ -233,9 +286,11 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
 }
 
 HitResult CBrother::ReceiveDamage(float damage) {
-    if (m_vitals == nullptr || m_vitals->dead || damage <= 0) {
+    if (m_vitals == nullptr || m_vitals->dead || damage <= 0 || m_variables[3] > 0 || IsShield()) {
         return HitResult::Ignored;
     }
+    // HandleDamage (:136693) divides by the defense frenzy multiplier.
+    damage /= GetFrenzyMultiplier(1);
     m_vitals->lastDamage = damage;
     m_vitals->incomingDamage += damage;
     m_vitals->flash = 1;
@@ -245,6 +300,8 @@ HitResult CBrother::ReceiveDamage(float damage) {
     if (m_vitals->health <= 0) {
         SetInput(false, false);
         m_vitals->dead = true;
+        for (bool &pending : m_grenadePending) { pending = false; }
+        for (bool &animating : m_grenadeAnimating) { animating = false; }
         ++m_vitals->deaths;
         m_interpreter.CallExportFunction(2);
         return HitResult::Killed;
@@ -260,8 +317,101 @@ void CBrother::Stun(int durationMs) {
     m_interpreter.CallExportFunction(5, static_cast<std::int16_t>(durationMs));
 }
 
+void CBrother::OnWaveCleared() {
+    m_interpreter.CallExportFunction(6);
+}
+
 std::vector<GunCue> CBrother::TakeCues() {
     std::vector<GunCue> cues;
     cues.swap(m_cues);
     return cues;
+}
+
+void CBrother::SetGrenade(unsigned slot, const GameObjectRef &resource, unsigned count) {
+    if (slot >= 2) { return; }
+    m_grenades[slot] = resource;
+    m_grenadeStock[slot] = count;
+}
+
+bool CBrother::CanThrowGrenade(unsigned slot) const {
+    return slot < 2 && m_grenadeStock[slot] > 0 && !m_grenades[slot].IsNull() &&
+        (m_vitals == nullptr || !m_vitals->dead);
+}
+
+bool CBrother::OnThrowGrenade(unsigned slot) {
+    if (!CanThrowGrenade(slot) || !CanMove() || HasGrenadeRequest(slot)) { return false; }
+    m_grenadePending[slot] = true;
+    return true;
+}
+
+void CBrother::OnGrenadeThrown(unsigned slot) {
+    if (slot >= 2 || m_grenadeStock[slot] == 0) { return; }
+    --m_grenadeStock[slot];
+    m_grenadeAnimating[slot] = false;
+    ++m_grenadesThrown[slot];
+}
+
+unsigned CBrother::TakeThrownGrenades(unsigned slot) {
+    if (slot >= 2) { return 0; }
+    const unsigned count = m_grenadesThrown[slot];
+    m_grenadesThrown[slot] = 0;
+    return count;
+}
+
+void CBrother::SetPowerupState(PowerupState *powerups) {
+    m_powerups = powerups;
+    if (m_powerups == nullptr) { return; }
+    if (IsShield()) { PowerupEffect(m_powerups->effects[0], 100, true); }
+    if (IsAutoFire()) { PowerupEffect(m_powerups->effects[4], 104, true); }
+    for (unsigned type = 0; type < 3; ++type) {
+        if (IsFrenzyType(type)) { PowerupEffect(m_powerups->effects[type + 1], 101 + type, true); }
+    }
+}
+
+void CBrother::PowerupEffect(const GameObjectRef &effect, int slot, bool active) {
+    GunCue cue;
+    cue.kind = GunCue::Kind::StopTrail;
+    if (active) { cue.kind = GunCue::Kind::Trail; }
+    cue.resource = effect;
+    cue.hand = slot;
+    m_cues.push_back(cue);
+}
+
+void CBrother::StartShield(const GameObjectRef &effect, int durationMs) {
+    if (m_powerups == nullptr) { return; }
+    m_powerups->shieldMs = std::max(0, durationMs);
+    m_powerups->effects[0] = effect;
+    PowerupEffect(effect, 100, durationMs > 0);
+}
+
+void CBrother::StartAutoFire(const GameObjectRef &effect, int durationSeconds) {
+    if (m_powerups == nullptr) { return; }
+    // Unlike Q8 frenzy durations, native 22 passes whole seconds (:137216).
+    m_powerups->autoFireMs = std::max(0, durationSeconds) * 1000;
+    m_powerups->effects[4] = effect;
+    PowerupEffect(effect, 104, durationSeconds > 0);
+}
+
+void CBrother::StartFrenzyType(const GameObjectRef &effect, int durationMs, float multiplier, unsigned type) {
+    if (m_powerups == nullptr || type >= 3) { return; }
+    m_powerups->frenzyMs[type] = std::max(0, durationMs);
+    m_powerups->effects[type + 1] = effect;
+    m_powerups->frenzyMultiplier[type] = multiplier;
+    if (durationMs <= 0) { m_powerups->frenzyMultiplier[type] = 1; }
+    PowerupEffect(effect, 101 + type, durationMs > 0);
+}
+
+float CBrother::GetFrenzyMultiplier(unsigned type) const {
+    if (!IsFrenzyType(type)) { return 1; }
+    return m_powerups->frenzyMultiplier[type];
+}
+
+float CBrother::GetProjectilePowerupMultiplier() const {
+    // FireBullet (:136422): later active types replace the multiplier against
+    // base damage; the original does not multiply all three bonuses together.
+    float multiplier = 1;
+    for (unsigned type = 0; type < 3; ++type) {
+        if (IsFrenzyType(type)) { multiplier = GetFrenzyMultiplier(type); }
+    }
+    return multiplier;
 }

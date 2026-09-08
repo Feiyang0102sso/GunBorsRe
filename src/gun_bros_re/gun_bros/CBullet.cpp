@@ -7,6 +7,7 @@
 
 #include <cstdio>
 #include <limits>
+#include <cmath>
 
 namespace {
 
@@ -70,6 +71,10 @@ bool CBullet::Template::Init(CArrayInputStream &stream) {
 }
 
 void CBullet::Bind(const Template &data, bool alternate) {
+    m_trajectoryHeight = data.GetTrajectoryHeight();
+    m_trajectoryDurationMs = data.GetTrajectoryDurationMs();
+    m_trajectoryType = data.GetTrajectoryType();
+    if (!data.HasMesh()) { m_trajectoryHeight = 0; m_trajectoryDurationMs = 0; }
     animation = data.GetSpriteRef().animation;
     flags = data.GetFlags();
     acceleration = data.GetAcceleration();
@@ -90,7 +95,25 @@ void CBullet::Update(int deltaMs, int animationDurationMs) {
     // Variable 1 is the authored damage period. The elapsed time is a separate
     // runtime field; overwriting the period makes beams frame-rate dependent.
     m_damageDeltaMs = deltaMs;
+    const int previousAge = ageMs;
     ageMs += deltaMs;
+    if (m_trajectoryDurationMs > 0 && m_trajectoryHeight > 0) {
+        // TRAJECTORY_TYPE_STAGES (:18589); type 0's authored first boundary
+        // is 100 * duration, not one duration. Event 3 drives rolling scripts.
+        float firstStage = 100;
+        if (m_trajectoryType == 1) { firstStage = 0.5f; }
+        if (m_trajectoryType == 2) { firstStage = 0.4f; }
+        const int boundary = static_cast<int>(m_trajectoryDurationMs * firstStage);
+        if (previousAge < boundary && ageMs >= boundary) {
+            ++m_trajectoryEvents;
+            m_interpreter.HandleEvent(8, 3);
+        }
+        // Original type 2 starts rolling after its third bounce (Draw :63232).
+        // Move this simulation change out of Draw so headless and render agree.
+        if (m_trajectoryType == 2 && ageMs > m_trajectoryDurationMs * 0.7f && ageMs <= static_cast<int>(m_trajectoryDurationMs)) {
+            acceleration = -150;
+        }
+    }
     // CBullet::Update advances CSpritePlayer both before and after seeking.
     animationAgeMs += deltaMs * 2;
     // Script progress must not depend on whether this frame gets rendered.
@@ -116,6 +139,12 @@ float CBullet::GetDamage() const {
     return m_damage;
 }
 
+void CBullet::OnWallCollision() {
+    // UpdateLevelCollision preserves reflective or beam bullets before event 2.
+    if ((flags & 0x900) == 0) { removed = true; }
+    m_interpreter.HandleEvent(8, 2);
+}
+
 void CBullet::OnCollision(HitResult result) {
     if (result == HitResult::Pending || removed) { return; }
     int event = 0;
@@ -123,6 +152,7 @@ void CBullet::OnCollision(HitResult result) {
     if (result == HitResult::Ignored) { event = 2; }
     m_interpreter.HandleEvent(8, static_cast<std::uint8_t>(event));
     // Enemy reflection is flag 0x1000; native 9 counts terrain ricochets.
+    // Correction: native 9 is GetZOrderGroup's field +448 (:64007), not a count.
     // Ignored contacts remove ordinary bullets even when they can penetrate.
     if (result == HitResult::Ignored) {
         if ((flags & 0x100) == 0) { removed = true; }
@@ -195,6 +225,7 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         break;
     case 0: case 7: case 23:
         cue.kind = GunCue::Kind::Splash;
+        cue.percentDamage = function == 23;
         cue.damage = arguments[0];
         cue.radius = arguments[1];
         if (function == 7) { cue.cone = arguments[2]; }
@@ -206,6 +237,9 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         break;
     case 22: {
         cue.kind = GunCue::Kind::SpawnEnemy;
+        // :61351 accepts resource[, object ID[, force pool allocation]].
+        if (argumentCount >= 2) { cue.spawnObjectId = arguments[1]; }
+        if (argumentCount >= 3) { cue.forceSpawn = arguments[2] != 0; }
         std::uint32_t ordinal = 0;
         if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
             cue.resource.localIndex = static_cast<std::uint8_t>(ordinal);
@@ -217,9 +251,12 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         seekRadius = arguments[0];
         break;
     case 9:
-        ricochets = arguments[0];
+        zOrderGroup = arguments[0];
         break;
-    case 16: case 12: case 13: case 21:
+    case 21:
+        m_collisionHeightThreshold = arguments[0] / 256.0f;
+        break;
+    case 16: case 12: case 13:
         // Combat, homing and ribbon geometry are outside this visual host.
         break;
     default:
@@ -227,4 +264,37 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         break;
     }
     return 0;
+}
+
+float CBullet::GetTrajectoryPhaseScale() const {
+    if (m_trajectoryHeight <= 0 || m_trajectoryDurationMs == 0) { return 0; }
+    const float time = ageMs / static_cast<float>(m_trajectoryDurationMs);
+    if (time >= 1) { return 0; }
+    if (m_trajectoryType == 1) {
+        if (time > 0.8f) { return 0.25f; }
+        if (time > 0.5f) { return 0.5f; }
+    }
+    if (m_trajectoryType == 2) {
+        if (time > 0.7f) { return 0; }
+        if (time > 0.6f) { return 0.25f; }
+        if (time > 0.4f) { return 0.5f; }
+    }
+    return 1;
+}
+
+float CBullet::GetTrajectoryFraction() const {
+    if (GetTrajectoryPhaseScale() == 0) { return 0; }
+    float time = ageMs / static_cast<float>(m_trajectoryDurationMs);
+    float duration = 1;
+    if (m_trajectoryType == 1) {
+        duration = 0.5f;
+        if (time > 0.8f) { time -= 0.8f; duration = 0.2f; }
+        else if (time > 0.5f) { time -= 0.5f; duration = 0.3f; }
+    }
+    if (m_trajectoryType == 2) {
+        duration = 0.4f;
+        if (time > 0.6f) { time -= 0.6f; duration = 0.1f; }
+        else if (time > 0.4f) { time -= 0.4f; duration = 0.2f; }
+    }
+    return std::sin(time / duration * 3.14159265f);
 }
