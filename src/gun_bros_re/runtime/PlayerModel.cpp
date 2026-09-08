@@ -293,6 +293,9 @@ bool CreatePlayerBuffers(PlayerModel &model, const CShaderProgram &program) {
         PlayerPart &gun = model.weapon->gunPart;
         if (!gun.buffer.Create(program) || !gun.buffer.SetMesh(gun.mesh)) { return false; }
     }
+    // SetMesh uploads frame zero, which can differ from the script's idle
+    // range. Pose now so load/restart/weapon changes never expose that frame.
+    PosePlayer(model);
     return true;
 }
 
@@ -562,6 +565,7 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
     }
     weapon->gun.Bind(weapon->data, &weapon->gunPart.mesh, beam);
     weapon->brother.SetHuman(out.human);
+    weapon->gun.SetMasteryExperience(out.masteryExperience);
     weapon->brother.Bind(weapon->playerScript, out.moveSet, bodyMeshes, weapon->gun, meshes);
     std::printf("[player] equipped %s: weaponTorso=%d move=%d legs=%d hand=%u state=%d\n",
         owner.c_str(), weapon->brother.TorsoUsesWeapon(), weapon->brother.GetTorso().GetMoveIndex(),

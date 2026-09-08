@@ -42,6 +42,7 @@ public:
     void SetViewSize(float width, float height) { m_viewWidth = width; m_viewHeight = height; }
     const std::string &GetDialogText() const { return m_dialogText; }
     void CompleteDialog();
+    unsigned GetPowerupCount(unsigned localIndex) const override;
 private:
     void UpdateDialog(int deltaMs);
     void UpdateArchiveMap(float previousX, float previousY);

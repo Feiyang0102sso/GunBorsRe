@@ -431,4 +431,11 @@
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\gun_bros\CLevelIndicator.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\gun_bros_re\runtime\HostSettings.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\LoadingScreen.h" />
+    <ClCompile Include="src\gun_bros_re\runtime\HostSettings.cpp" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CDailyBonusTracking.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CDailyBonusTracking.cpp" />
+  </ItemGroup>
 </Project>

@@ -101,12 +101,19 @@ bool LoadEnemyCatalog(CResTOCManager &toc, PackTables &tables,
 
 bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
                     bool createBuffers, const CShaderProgram *program,
-                    EnemySpawnMode spawnMode, EnemyModel &out) {
+                    EnemySpawnMode spawnMode, EnemyModel &out, EnemyModelCache *cache) {
     out.configs.clear();
+    const std::uint64_t key = (static_cast<std::uint64_t>(entry.packHash) << 32) | entry.ordinal;
+    bool cached = false;
+    if (cache != nullptr) {
+        const auto found = cache->entries.find(key);
+        if (found != cache->entries.end()) { out.configs = found->second; ++cache->hits; cached = true; }
+        else { ++cache->misses; }
+    }
 
-    for (std::size_t i = 0; i < entry.moveSet.GetMeshConfigs().size(); ++i) {
+    for (std::size_t i = 0; !cached && i < entry.moveSet.GetMeshConfigs().size(); ++i) {
         const MeshConfig &config = entry.moveSet.GetMeshConfigs()[i];
-        std::unique_ptr<EnemyModelConfig> loaded(new EnemyModelConfig());
+        auto loaded = std::make_shared<EnemyModelConfig>();
 
         std::vector<std::uint8_t> meshPayload;
         if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), GameSection::Mesh,
@@ -152,6 +159,7 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
     if (out.configs.empty()) {
         return false;
     }
+    if (cache != nullptr && !cached) { cache->entries[key] = out.configs; }
 
     out.configMeshes.assign(out.configs.size(), nullptr);
     for (std::size_t i = 0; i < out.configs.size(); ++i) {

@@ -29,6 +29,7 @@
  */
 
 #define NOMINMAX
+#include "engine/CStringToKey.h"
 #include "milestones/M3Map.h"
 #include "gun_bros/CBGM.h"
 
@@ -41,7 +42,10 @@
 #include "runtime/CombatGeometry.h"
 #include "runtime/StoreCatalog.h"
 #include <sstream>
+#include <chrono>
 #include "runtime/SurvivalGameContext.h"
+#include "runtime/LoadingScreen.h"
+#include "runtime/HostSettings.h"
 #include "runtime/HudText.h"
 #include "runtime/SurvivalHud.h"
 #include "runtime/MissionCatalog.h"
@@ -2279,6 +2283,12 @@ bool EquipControlledPlayer(PackTables &tables, LoadedMap &loaded,
     // CombatScene retains this model's address. EquipPlayerWeapon stages the
     // weapon atomically and preserves the body, vitals pointer and armour.
     PlayerModel &player = *loaded.players[0].model;
+    player.gunResource.packHash = weapon.packHash;
+    player.gunResource.localIndex = static_cast<std::uint8_t>(weapon.ordinal);
+    const std::uint64_t key = (static_cast<std::uint64_t>(weapon.packHash) << 8) | weapon.ordinal;
+    player.masteryExperience = 0;
+    const auto mastery = player.masteryByWeapon.find(key);
+    if (mastery != player.masteryByWeapon.end()) { player.masteryExperience = mastery->second; }
     if (!EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapon.data, weapon.owner, player) ||
         !CreatePlayerBuffers(player, program)) { return false; }
     PosePlayer(player);
@@ -2913,6 +2923,11 @@ bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &p
     const CombatScene &scene, const CLevel &level, std::uint64_t &accountedXplodium) {
     if (context == nullptr) { return true; }
     CProfileManager &profile = context->profile;
+    if (context->tutorial) {
+        const int step = level.GetTutorialStep();
+        if (step == -1) { profile.tutorialCompleted = true; profile.tutorialSteps |= 128; }
+        else if (step < 8) { profile.tutorialSteps |= 1u << step; }
+    }
     const unsigned wave = level.GetWave();
     profile.stat42Bits |= level.GetStat42Bits();
     profile.experience = progress.GetExperience();
@@ -2925,17 +2940,39 @@ bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &p
         profile.hordeBestScore[index] = std::max(profile.hordeBestScore[index], scene.GetScore());
     } else {
         profile.clearedWaves[context->planet] = std::max(profile.clearedWaves[context->planet], wave);
+        const auto &perfectResults = scene.GetWavePerfectResults();
+        if (wave >= perfectResults.size()) {
+            const unsigned firstWave = wave - static_cast<unsigned>(perfectResults.size());
+            for (unsigned index = 0; index < perfectResults.size() && firstWave + index < 500; ++index) {
+                if (perfectResults[index]) { profile.perfectedWaves[context->planet].set(firstWave + index); }
+            }
+        }
         if (scene.GetTotalKills() < context->accountedKills) { context->accountedKills = 0; }
         profile.enemyKills[context->planet] += scene.GetTotalKills() - context->accountedKills;
     }
     context->accountedKills = scene.GetTotalKills();
+    for (const auto &entry : scene.GetWeaponProgress()) {
+        const std::uint64_t key = (static_cast<std::uint64_t>(entry.resource.packHash) << 8) | entry.resource.localIndex;
+        unsigned &credited = context->accountedWeaponExperience[key];
+        if (entry.experience < credited) { credited = 0; }
+        profile.AddWeaponExperience(entry.resource, entry.experience - credited, entry.maximum);
+        credited = entry.experience;
+    }
+    context->result.kills = scene.GetTotalKills();
+    context->result.wave = std::min(499u, wave);
+    context->result.waves = scene.GetClearedWaves();
+    context->result.perfectWaves = scene.GetPerfectWaves();
+    context->result.xplodium = scene.GetXplodium();
+    context->result.experience = progress.GetExperience() - context->startingExperience;
+    context->result.casualties = scene.GetCasualties();
+    context->result.weapons = scene.GetWeaponProgress();
     return profile.SaveToDisk(context->savePath);
 }
 
 int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission) {
+    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy) {
     std::string capturePath = screenshotPath;
     unsigned checkFailures = 0;
     CResTOCManager toc;
@@ -2951,12 +2988,28 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     CPlayerProgress progress;
     if (!LoadPlayerProgress(toc, tables, progressData)) { return 1; }
     progress.Bind(progressData);
-    if (gameContext != nullptr) { progress.SetExperience(gameContext->profile.experience); }
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
-        !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
+    if (gameContext != nullptr) {
+        progress.SetExperience(gameContext->profile.experience);
+        gameContext->startingExperience = gameContext->profile.experience;
+    }
+    if (gameContext != nullptr && gameContext->tutorial) {
+        // The zero-price level-one rifle is pack3 STORE 4 -> pack5 GUN 4.
+        GameObjectRef rifle;
+        rifle.packHash = CStringToKey("pack5");
+        rifle.localIndex = 4;
+        gameContext->profile.Grant(6, rifle);
+        gameContext->profile.configuration.guns[1] = rifle;
+    }
     CWindow window;
     if (!window.Open("Gun Bros - Survival", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     window.SetEscapeCloses(false);
+    window.EnableCheats(gameContext != nullptr);
+    MovieRenderer loadingMovies;
+    CResPackTOC *loadingCore = toc.GetPack(toc.GetCorePackIndex());
+    if (!loadingMovies.Init(*loadingCore, *loadingCore)) { return 1; }
+    LoadingScreen loading(window, loadingMovies, tables);
+    if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
+        !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     SurvivalHud survivalHud;
     if (!survivalHud.Init(toc, tables)) { return 1; }
     CShaderProgram program, markerProgram;
@@ -2973,8 +3026,15 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     loaded.players.resize(1);
     PlayerModel &player = *loaded.players[0].model;
     player.vitals = &vitals;
+    if (gameContext != nullptr) {
+        for (const auto &entry : gameContext->profile.weaponMastery) {
+            const std::uint64_t key = (static_cast<std::uint64_t>(entry.resource.packHash) << 8) | entry.resource.localIndex;
+            player.masteryByWeapon[key] = entry.experience;
+        }
+    }
     std::size_t weaponSlot = weaponIndex % weapons.size();
     unsigned equippedWeaponSlot = 0;
+    std::size_t tutorialWeaponPending = weapons.size();
     if (gameContext != nullptr) {
         const GameObjectRef &ref = gameContext->profile.configuration.guns[0];
         bool found = false;
@@ -3211,6 +3271,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     const float startX = loaded.players[0].x;
     const float startY = loaded.players[0].y;
     session.SetStartWave(static_cast<int>(startWave));
+    const bool tutorial = gameContext != nullptr && gameContext->tutorial;
+    session.GetLevel().EnableTutorial(tutorial);
     scene.SetMap(loaded.map, loaded.collisionScene, loaded.weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
     session.Restart(startX, startY);
     std::uint64_t accountedXplodium = 0;
@@ -3224,8 +3286,115 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     session.SetProps(&props);
     scene.SetProps(&props);
     session.Restart(startX, startY);
+    loading.Finish();
+    if (loading.Cancelled()) { return 0; }
     if (check) { checkFailures += session.CheckLevelSounds(); }
-    if (check && archiveMission == nullptr) {
+    if (check && withBrother) {
+        const float distance = std::hypot(scene.playerX - brother.x, scene.playerY - brother.y);
+        const bool separated = distance >= scene.GetPlayerRadius() * 2;
+        std::printf("[brother-spawn-check] player=%.1f,%.1f brother=%.1f,%.1f distance=%.1f separated=%d\n",
+            scene.playerX, scene.playerY, brother.x, brother.y, distance, separated);
+        if (!separated) { ++checkFailures; }
+        // The first visible frame must already use the selected idle pose,
+        // even while the level intro postpones the first simulation tick.
+        auto &torso = brotherModel.weapon->brother.GetTorso();
+        const int torsoIndex = torso.GetMeshConfigIndex();
+        PlayerPart *part = brotherModel.parts[torsoIndex].get();
+        if (brotherModel.weapon->brother.TorsoUsesWeapon()) { part = brotherModel.weapon->configs[torsoIndex].get(); }
+        std::vector<float> expectedPose;
+        const bool ready = torso.GetAnimation().Evaluate(expectedPose) && !expectedPose.empty() && expectedPose == part->pose;
+        std::printf("[brother-pose-check] evaluated=%zu uploaded=%zu ready=%d\n", expectedPose.size(), part->pose.size(), ready);
+        if (!ready) { ++checkFailures; }
+    }
+    if (check && tutorial) {
+        const CScript &script = loaded.playerTemplate->script;
+        for (unsigned index = 0; index < script.GetFunctions().size(); ++index) {
+            std::printf("[tutorial-script] function=%u ", index);
+            const CScriptCode &code = script.GetFunctions()[index];
+            for (unsigned byte = 0; byte <= code.GetByteLength(); ++byte) { std::printf("%02X ", code.Begin()[byte]); }
+            std::printf("\n");
+        }
+        for (unsigned index = 0; index < script.GetStates().size(); ++index) {
+            const CScriptState &state = script.GetStates()[index];
+            for (const auto &handler : state.GetExports()) {
+                std::printf("[tutorial-script] state=%u export=%u ", index, handler.id);
+                for (unsigned byte = 0; byte <= handler.code.GetByteLength(); ++byte) { std::printf("%02X ", handler.code.Begin()[byte]); }
+                std::printf("\n");
+            }
+            const auto &code = state.GetEnterCode();
+            if (code.Begin() != nullptr) {
+                std::printf("[tutorial-script] state=%u enter ", index);
+                for (unsigned byte = 0; byte <= code.GetByteLength(); ++byte) { std::printf("%02X ", code.Begin()[byte]); }
+                std::printf("\n");
+            }
+        }
+        SurvivalPilot pilot(scene, loaded.map.GetVisibleBounds());
+        int previousStep = -2;
+        int grenadeWaitMs = 0;
+        bool grenadeGateChecked = false;
+        // Exercise the original script with actual movement and projectiles.
+        for (int elapsed = 0; elapsed < 180000; elapsed += 16) {
+            const int step = session.GetLevel().GetTutorialStep();
+            if (step != previousStep) {
+                std::printf("[tutorial-check] time=%d step=%d enemies=%d kills=%u grenades=%u\n",
+                    elapsed, step, session.CountEnemies(), session.GetKills(), powerups.GetCount(13));
+                previousStep = step;
+                if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
+            }
+            if (step == -1) { break; }
+            if (step == 2) {
+                SetPlayerInput(player, false, false);
+                player.weapon->brother.OnSwapGun();
+            }
+            float moveX = 0, moveY = 0;
+            pilot.Update(16, moveX, moveY);
+            if (step == 0) { moveX = 1; moveY = 0; }
+            float pickupX = 0, pickupY = 0;
+            if (pickups.GetObjectPosition(501, pickupX, pickupY)) {
+                moveX = pickupX - scene.playerX;
+                moveY = pickupY - scene.playerY;
+            }
+            if (step == 5 && powerups.GetCount(13) > 0) {
+                grenadeWaitMs += 16;
+                if (grenadeWaitMs >= 5000) {
+                    // User reference: the large tutorial enemy ignores gunfire
+                    // until a grenade lands. Keep real fire active for five seconds.
+                    if (!grenadeGateChecked) {
+                        grenadeGateChecked = true;
+                        if (session.GetKills() != 1 || session.CountEnemies() != 1) { ++checkFailures; }
+                        std::printf("[tutorial-check] grenade-gate gunfire-ms=%d kills=%u alive=%d failures=%u\n",
+                            grenadeWaitMs, session.GetKills(), session.CountEnemies(), checkFailures);
+                    }
+                    bool inGrenadeRange = false;
+                    for (const auto &actor : scene.enemies) {
+                        const auto &enemy = actor->model.enemy.combat;
+                        if (enemy.dead || !enemy.enabled) { continue; }
+                        const float dx = enemy.x - scene.playerX, dy = enemy.y - scene.playerY;
+                        moveX = dx; moveY = dy;
+                        if (std::hypot(dx, dy) <= 95) { inGrenadeRange = true; moveX = 0; moveY = 0; }
+                    }
+                    if (inGrenadeRange) { powerups.Select(13); powerups.Use(); }
+                }
+            }
+            vitals.invincible = true;
+            const bool fireGun = step != 2 && (step != 5 || grenadeWaitMs < 5000);
+            session.Update(16, moveX, moveY, fireGun);
+            if (player.weapon->brother.TakeWeaponSwap()) {
+                const GameObjectRef &rifle = pickupProfile->configuration.guns[1];
+                for (std::size_t index = 0; index < weapons.size(); ++index) {
+                    if (weapons[index].packHash != rifle.packHash || weapons[index].ordinal != rifle.localIndex) { continue; }
+                    if (!EquipControlledPlayer(tables, loaded, program, weapons[index])) { return 1; }
+                    weaponSlot = index;
+                    equippedWeaponSlot = 1;
+                    break;
+                }
+            }
+        }
+        if (session.GetLevel().GetTutorialStep() != -1 || !grenadeGateChecked) { ++checkFailures; }
+        std::printf("[tutorial-check] final-step=%d failures=%d\n", session.GetLevel().GetTutorialStep(), checkFailures);
+        capturePath = "out/tutorial-check.png";
+    }
+    if (check && archiveMission == nullptr && !tutorial) {
         checkFailures += props.CheckDamageContracts();
         // Original character animation, real bullet scripts and actual stock.
         // This account is isolated even when the full-menu check owns a profile.
@@ -3863,6 +4032,23 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         capturePath = "out/powerup-play-check.png";
     }
     bool paused = false;
+    int lastSavedTutorialStep = session.GetLevel().GetTutorialStep();
+    bool shopOpen = false, itemChoice = false;
+    GameObjectRef leftPowerup, rightPowerup;
+    leftPowerup.packHash = CStringToKey("pack5");
+    leftPowerup.localIndex = 5;
+    rightPowerup.packHash = leftPowerup.packHash;
+    rightPowerup.localIndex = 13;
+    std::string shopMessage;
+    const bool checkControls = gameContext != nullptr && gameContext->checkControls;
+    unsigned controlFrame = 0;
+    const std::uint64_t controlsInitialBucks = pickupProfile->warbucks;
+    const bool controlsInitialSound = pickupProfile->soundEnabled;
+    const unsigned controlsInitialGrenades = pickupProfile->GetPowerupCount(rightPowerup);
+    // Run the real HUD hit tests and the same host action path. No OS input.
+    constexpr float controlClicks[][2] = {{300,720}, {250,328}, {700,524}, {250,230},
+        {320,524}, {510,385}, {710,720}, {20,20}, {200,530}, {200,350}};
+    constexpr unsigned controlClickCount = sizeof(controlClicks) / sizeof(controlClicks[0]);
     // Presentation reads a snapshot; its actions re-enter the same keyboard path.
     const auto buildHudState = [&]() {
         SurvivalHudState state;
@@ -3894,12 +4080,25 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             state.guns[0].localIndex = static_cast<std::uint8_t>(weapons[weaponSlot].ordinal);
         }
         state.paused = paused;
+        state.shopOpen = shopOpen;
+        state.itemChoice = itemChoice;
+        state.leftPowerup = leftPowerup;
+        state.rightPowerup = rightPowerup;
+        state.leftCount = pickupProfile->GetPowerupCount(leftPowerup);
+        state.rightCount = pickupProfile->GetPowerupCount(rightPowerup);
+        state.inventory = pickupProfile->powerups;
+        state.coins = pickupProfile->coins;
+        state.warbucks = pickupProfile->warbucks;
+        state.soundEnabled = pickupProfile->soundEnabled;
+        state.musicEnabled = pickupProfile->musicEnabled;
+        state.shopMessage = shopMessage;
         state.dead = vitals.dead;
         state.cleared = session.GetLevel().IsCleared();
         state.transitioning = session.IsTransitioning();
         state.transitionTime = session.GetTransitionElapsed();
         state.perfectBonus = scene.GetLastWaveBonus();
         state.dialog = session.GetDialogText();
+        state.tutorialStep = session.GetLevel().GetTutorialStep();
         if (archiveMission != nullptr) { state.mission = archiveMission->title; }
         if (powerups.GetSelected() != nullptr) {
             state.item = powerups.GetSelected()->name;
@@ -3923,7 +4122,38 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     std::printf("[survival] WASD move, mouse aim/fire, R restart, space pause, 1-7/N/M weapon, C collision\n");
+    auto debugTicks = window.GetTicksMs();
+    float debugFrameMs = 16.7f;
+    // Deterministic 1,200 rendered frames, with real waves, AI and projectiles.
+    SurvivalPilot performancePilot(scene, loaded.map.GetVisibleBounds());
+    std::ofstream performanceReport;
+    std::vector<double> performanceCpu;
+    unsigned performanceFrame = 0;
+    if (performanceStudy) {
+        vitals.invincible = true;
+        if (!window.SetVSync(false)) { return 1; }
+        std::printf("[performance] vsync=0 fixed-step=16ms rendered-frames=1200\n");
+        performanceReport.open("out/performance-frames.csv");
+        performanceReport << "frame,update_ms,geometry_ms,world_ms,hud_ms,present_ms,alive,spawned\n";
+    }
     while (window.PumpEvents()) {
+        const auto performanceStart = std::chrono::steady_clock::now();
+        const auto frameTicks = window.GetTicksMs();
+        debugFrameMs = debugFrameMs * 0.9f + static_cast<float>(frameTicks - debugTicks) * 0.1f;
+        debugTicks = frameTicks;
+        for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
+            if (cheat == "chd") { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
+            if (cheat == "chc") { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
+            if (cheat == "chi") { vitals.invincible = !vitals.invincible; }
+            if (cheat == "chh" && !vitals.dead) { vitals.health = vitals.maximum; }
+            if (gameContext != nullptr) {
+                if (cheat == "chm") { gameContext->profile.coins += 5000; gameContext->profile.warbucks += 500; }
+                if (cheat == "cht") { ++gameContext->profile.dailyDayOffset; }
+                if (cheat == "chw") { gameContext->profile.clearedWaves.fill(500); }
+                if (!gameContext->profile.SaveToDisk(gameContext->savePath)) { return 1; }
+            }
+            std::printf("[cheat] %s invincible=%d\n", cheat.c_str(), vitals.invincible);
+        }
         int inputWidth = 0, inputHeight = 0;
         window.GetDrawableSize(inputWidth, inputHeight);
         float inputX = -1, inputY = -1;
@@ -3931,9 +4161,61 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         inputX *= 1024.0f / std::max(1, inputWidth);
         inputY *= 768.0f / std::max(1, inputHeight);
         const SurvivalHudState inputState = buildHudState();
+        float menuScroll = window.TakeWheelDelta();
+        int menuDragX = 0, menuDragY = 0;
+        window.TakeDragDelta(menuDragX, menuDragY);
+        if (shopOpen && std::abs(menuDragX) > 8) { menuScroll = static_cast<float>(menuDragX); }
+        if (paused && std::abs(menuDragY) > 8) { menuScroll = static_cast<float>(menuDragY); }
+        survivalHud.Scroll(inputState, menuScroll);
+        bool pointerDown = window.IsLeftMouseDown();
+        if (checkControls && controlFrame < controlClickCount) {
+            inputX = controlClicks[controlFrame][0];
+            inputY = controlClicks[controlFrame][1];
+            survivalHud.Pointer(inputState, inputX, inputY, false);
+            pointerDown = true;
+        }
         const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
-        const SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, window.IsLeftMouseDown());
+        const SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
         if (action == SurvivalHudAction::Exit) { break; }
+        if (action == SurvivalHudAction::OpenShop) { shopOpen = true; itemChoice = false; shopMessage.clear(); accumulator = 0; }
+        if (action == SurvivalHudAction::CloseShop) { shopOpen = false; itemChoice = false; }
+        if (action == SurvivalHudAction::CancelItem) { itemChoice = false; }
+        const StoreEntry *shopItem = survivalHud.SelectedItem();
+        if (shopItem != nullptr && (action == SurvivalHudAction::BuyItem || action == SurvivalHudAction::SelectItem)) {
+            const GameObjectRef &resource = shopItem->data.objects.front().object;
+            if (action == SurvivalHudAction::BuyItem) {
+                const PurchaseResult result = pickupProfile->AcquireItem(shopItem->data, progress.GetLevel());
+                shopMessage = "ITEMS ADDED";
+                if (result == PurchaseResult::InsufficientCoins) { shopMessage = "NOT ENOUGH COINS"; }
+                if (result == PurchaseResult::InsufficientWarbucks) { shopMessage = "NOT ENOUGH WARBUCKS"; }
+                if (result == PurchaseResult::LevelLocked) { shopMessage = "LEVEL " + std::to_string(shopItem->data.requiredLevel) + " REQUIRED"; }
+                if (result == PurchaseResult::Unsupported) { shopMessage = "ITEM UNAVAILABLE"; }
+                if (result == PurchaseResult::Purchased && gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
+                itemChoice = result == PurchaseResult::Purchased;
+            } else {
+                itemChoice = pickupProfile->GetPowerupCount(resource) > 0;
+                if (!itemChoice) { shopMessage = "BUY THIS ITEM TO EQUIP IT"; }
+            }
+        }
+        if (shopItem != nullptr && itemChoice && (action == SurvivalHudAction::EquipLeft || action == SurvivalHudAction::EquipRight || action == SurvivalHudAction::UseNow)) {
+            const GameObjectRef &resource = shopItem->data.objects.front().object;
+            if (action == SurvivalHudAction::EquipLeft) { leftPowerup = resource; itemChoice = false; }
+            if (action == SurvivalHudAction::EquipRight) { rightPowerup = resource; itemChoice = false; }
+            if (action == SurvivalHudAction::UseNow) {
+                if (powerups.SelectResource(resource) && powerups.Use()) { shopOpen = false; itemChoice = false; }
+                else { shopMessage = "CANNOT USE THIS ITEM RIGHT NOW"; }
+            }
+        }
+        if (action == SurvivalHudAction::UseLeft && !paused && !shopOpen && !session.IsTransitioning()) {
+            if (powerups.SelectResource(leftPowerup)) { powerups.Use(); }
+        }
+        if (action == SurvivalHudAction::Sound || action == SurvivalHudAction::Music) {
+            if (action == SurvivalHudAction::Sound) { pickupProfile->soundEnabled = !pickupProfile->soundEnabled; }
+            if (action == SurvivalHudAction::Music) { pickupProfile->musicEnabled = !pickupProfile->musicEnabled; }
+            music.SetEnabled(pickupProfile->musicEnabled);
+            CAudioPlayer::SetEffectsEnabled(pickupProfile->soundEnabled);
+            if (gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
+        }
         KeyCode pointerKey = KeyCode::None;
         if (action == SurvivalHudAction::Pause || action == SurvivalHudAction::Resume || action == SurvivalHudAction::Continue) { pointerKey = KeyCode::Space; }
         if (action == SurvivalHudAction::Retry) { pointerKey = KeyCode::R; }
@@ -3941,28 +4223,48 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (action == SurvivalHudAction::NextItem) { pointerKey = KeyCode::F; }
         if (action == SurvivalHudAction::Weapon1) { pointerKey = KeyCode::Digit1; }
         if (action == SurvivalHudAction::Weapon2) { pointerKey = KeyCode::Digit2; }
+        if (action == SurvivalHudAction::SwapWeapon) { pointerKey = KeyCode::Q; }
         std::vector<KeyCode> inputs;
         if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) { inputs.push_back(key); }
         for (KeyCode key : inputs) {
+            if (shopOpen) {
+                if (key == KeyCode::Space || key == KeyCode::Escape) {
+                    if (itemChoice) { itemChoice = false; }
+                    else { shopOpen = false; }
+                }
+                continue;
+            }
             if (key == KeyCode::Space || key == KeyCode::Escape) {
                 if (!session.GetDialogText().empty()) { session.CompleteDialog(); }
                 else { paused = !paused; }
             }
             if (key == KeyCode::C) { showCollisions = !showCollisions; }
-            if (key == KeyCode::G && !paused && !session.IsTransitioning()) { powerups.Use(); }
-            if (key == KeyCode::F) { powerups.Cycle(); }
+            if (key == KeyCode::G && !paused && !session.IsTransitioning()) {
+                if (powerups.SelectResource(rightPowerup)) { powerups.Use(); }
+            }
+            if (key == KeyCode::F) {
+                powerups.SelectResource(rightPowerup);
+                powerups.Cycle();
+                if (powerups.GetSelected() != nullptr) { rightPowerup = powerups.GetSelected()->resource; }
+            }
             if (key == KeyCode::R) {
                 if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
                 session.Restart(startX, startY);
-                if (gameContext != nullptr) { gameContext->accountedKills = 0; }
+                if (gameContext != nullptr) { gameContext->accountedKills = 0; gameContext->accountedWeaponExperience.clear(); }
                 survivalHud.ResetNotices();
                 savedDeath = false;
                 paused = false;
+                shopOpen = false;
+                itemChoice = false;
             }
             std::size_t nextWeapon = weaponSlot;
-            if (gameContext == nullptr) { nextWeapon = SelectWeaponKey(weapons, weaponSlot, key); }
-            else if (key == KeyCode::Digit1 || key == KeyCode::Digit2 || key == KeyCode::N || key == KeyCode::M) {
+            if (gameContext == nullptr) {
+                KeyCode weaponKey = key;
+                if (key == KeyCode::Q) { weaponKey = KeyCode::N; }
+                nextWeapon = SelectWeaponKey(weapons, weaponSlot, weaponKey);
+            }
+            else if (key == KeyCode::Digit1 || key == KeyCode::Digit2 || key == KeyCode::N || key == KeyCode::M || key == KeyCode::Q) {
                 equippedWeaponSlot = 1 - equippedWeaponSlot;
                 if (key == KeyCode::Digit1) { equippedWeaponSlot = 0; }
                 if (key == KeyCode::Digit2) { equippedWeaponSlot = 1; }
@@ -3972,6 +4274,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 }
             }
             if (nextWeapon != weaponSlot && !vitals.dead) {
+                if (tutorial && session.GetLevel().GetTutorialStep() == 2) {
+                    tutorialWeaponPending = nextWeapon;
+                    continue;
+                }
                 if (!EquipControlledPlayer(tables, loaded, program, weapons[nextWeapon])) { return 1; }
                 // In-flight bullets and timed powerup effects belong to the
                 // actor world. Only the old gun's beam/loop sound ends here.
@@ -3999,33 +4305,57 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (window.IsKeyDown(KeyCode::W)) { --moveY; }
         if (window.IsKeyDown(KeyCode::S)) { ++moveY; }
         const std::uint64_t now = window.GetTicksMs();
-        if (!paused && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
+        if (!paused && !shopOpen && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
         previous = now;
-        effects.SetPaused(paused);
-        music.SetPaused(paused);
+        if (performanceStudy) {
+            accumulator = 16;
+            performancePilot.Update(16, moveX, moveY);
+        }
+        effects.SetPaused(paused || shopOpen);
+        music.SetPaused(paused || shopOpen);
         music.Update();
         while (accumulator >= 16) {
             survivalHud.Advance(16);
-            if (!vitals.dead) { session.Update(16, moveX, moveY, firePreview || (window.IsLeftMouseDown() && !hudOwnsPointer)); }
+            if (tutorialWeaponPending < weapons.size()) {
+                SetPlayerInput(player, false, false);
+                player.weapon->brother.OnSwapGun();
+            }
+            if (!vitals.dead) {
+                const bool shoot = tutorialWeaponPending >= weapons.size() &&
+                    (performanceStudy || firePreview || (window.IsLeftMouseDown() && !hudOwnsPointer));
+                session.Update(16, moveX, moveY, shoot);
+            }
             else {
                 // CLevel::UpdateAfterDeath keeps an already-used powerup alive.
                 session.UpdateAfterDeath(16);
+            }
+            if (tutorialWeaponPending < weapons.size() && player.weapon->brother.TakeWeaponSwap()) {
+                if (!EquipControlledPlayer(tables, loaded, program, weapons[tutorialWeaponPending])) { return 1; }
+                weaponSlot = tutorialWeaponPending;
+                tutorialWeaponPending = weapons.size();
             }
             AdvanceProps(loaded.props, 16);
             AdvanceTileLayers(loaded.map, 16);
             accumulator -= 16;
         }
-        if (session.GetLevel().GetWave() != lastSavedWave || (vitals.dead && !savedDeath)) {
+        if (session.GetLevel().GetWave() != lastSavedWave || (vitals.dead && !savedDeath) ||
+            session.GetLevel().GetTutorialStep() != lastSavedTutorialStep) {
             if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
             lastSavedWave = session.GetLevel().GetWave();
             savedDeath = vitals.dead;
+            lastSavedTutorialStep = session.GetLevel().GetTutorialStep();
         }
+        // Gameplay death opens the original postgame flow; research keeps its
+        // death/restart controls so existing isolated checks remain available.
+        if (vitals.dead && gameContext != nullptr && !check && capturePath.empty()) { break; }
         loaded.players[0].x = scene.playerX;
         loaded.players[0].y = scene.playerY;
         loaded.players[0].facingDegrees = scene.facing;
         camera.zoom = baselineZoom * loaded.map.GetCamera().GetScale() / kLevelCameraScale;
         FollowPlayerCamera(loaded, width, height, camera);
+        const auto performanceUpdated = std::chrono::steady_clock::now();
         BuildGeometry(loaded, batch, true, true, false);
+        const auto performanceGeometry = std::chrono::steady_clock::now();
         glViewport(0, 0, width, height);
         glClearColor(0.04f, 0.05f, 0.07f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -4064,6 +4394,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             BuildCollisionMarkers(loaded, markers);
             markers.Draw(markerProgram, mvp, 0.15f, 0.85f, 1, 0.8f);
         }
+        const auto performanceWorld = std::chrono::steady_clock::now();
         SurvivalHudState hudState = buildHudState();
         hudState.indicators = session.GetLevel().GetIndicators();
         for (CLevelIndicator &indicator : hudState.indicators) {
@@ -4072,15 +4403,40 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         if (withBrother) {
             hudState.brotherName = "PERCY GUN";
-            if (brotherModel.brotherIndex == 0) { hudState.brotherName = "FRANCIS GUN"; }
+            if (brotherModel.brotherIndex == 1) { hudState.brotherName = "FRANCIS GUN"; }
             // CLevel::DrawBrotherName :120373 anchors three collision radii
             // above the AI's world position and follows the level's alpha.
             hudState.brotherLabelX = (brother.x - camera.x) * camera.zoom * 1024 / width;
             hudState.brotherLabelY = (brother.y - scene.GetPlayerRadius() * 3 - camera.y) * camera.zoom * 768 / height;
             hudState.brotherLabelAlpha = session.GetLevel().GetBrotherLabelAlpha();
         }
+        hudState.frameMs = debugFrameMs;
+        hudState.playerX = scene.playerX;
+        hudState.playerY = scene.playerY;
+        hudState.damageDealt = scene.damageDealt;
+        const float moveLength = std::max(1.0f, std::hypot(moveX, moveY));
+        hudState.moveX = moveX / moveLength;
+        hudState.moveY = moveY / moveLength;
+        if (window.IsLeftMouseDown() && !hudOwnsPointer) {
+            hudState.aimX = std::sin(scene.facing / kRadiansToDegrees);
+            hudState.aimY = -std::cos(scene.facing / kRadiansToDegrees);
+        }
         if (!survivalHud.Draw(hudState)) { return 1; }
         if (!powerups.DrawMovies()) { return 1; }
+        if (checkControls && controlFrame < controlClickCount) {
+            if (controlFrame == 1 && !window.SaveFrame("out/combat-controls-shop.png")) { return 1; }
+            if (controlFrame == 7 && !window.SaveFrame("out/combat-controls-pause.png")) { return 1; }
+            ++controlFrame;
+            if (controlFrame < controlClickCount) { window.Present(); continue; }
+            const bool purchased = pickupProfile->warbucks == controlsInitialBucks - 4 &&
+                pickupProfile->GetPowerupCount(rightPowerup) == controlsInitialGrenades + 10;
+            const bool equipped = leftPowerup.packHash == rightPowerup.packHash && leftPowerup.localIndex == 13 && rightPowerup.localIndex == 13;
+            const bool controlsPassed = purchased && equipped && equippedWeaponSlot == 1 &&
+                pickupProfile->soundEnabled != controlsInitialSound && !paused && !shopOpen;
+            std::printf("[combat-controls-check] purchase=%d equip-both=%d weapon=%u sound=%d resume=%d failures=%d\n",
+                purchased, equipped, equippedWeaponSlot, pickupProfile->soundEnabled != controlsInitialSound, !paused && !shopOpen, !controlsPassed);
+            if (!controlsPassed) { ++checkFailures; }
+        }
         if (!capturePath.empty()) {
             if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
             const unsigned errors = glGetError();
@@ -4116,7 +4472,31 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (checkFailures != 0) { return 1; }
             return 0;
         }
+        const auto performanceHud = std::chrono::steady_clock::now();
         window.Present();
+        if (performanceStudy) {
+            const auto performanceEnd = std::chrono::steady_clock::now();
+            const double updateMs = std::chrono::duration<double, std::milli>(performanceUpdated - performanceStart).count();
+            const double geometryMs = std::chrono::duration<double, std::milli>(performanceGeometry - performanceUpdated).count();
+            const double worldMs = std::chrono::duration<double, std::milli>(performanceWorld - performanceGeometry).count();
+            const double hudMs = std::chrono::duration<double, std::milli>(performanceHud - performanceWorld).count();
+            const double presentMs = std::chrono::duration<double, std::milli>(performanceEnd - performanceHud).count();
+            performanceReport << performanceFrame << ',' << updateMs << ',' << geometryMs << ',' << worldMs << ',' << hudMs << ',' << presentMs
+                << ',' << scene.AliveCount() << ',' << scene.spawned << '\n';
+            performanceCpu.push_back(updateMs + geometryMs + worldMs + hudMs);
+            if (++performanceFrame % 300 == 0) {
+                std::printf("[performance] frame=%u update=%.2f geometry=%.2f world=%.2f hud=%.2f present=%.2f alive=%zu\n",
+                    performanceFrame, updateMs, geometryMs, worldMs, hudMs, presentMs, scene.AliveCount());
+            }
+            if (performanceFrame >= 1200) {
+                std::sort(performanceCpu.begin(), performanceCpu.end());
+                std::printf("[performance] cpu-p50=%.3f cpu-p95=%.3f cpu-p99=%.3f max=%.3f frames=%u kills=%u\n",
+                    performanceCpu[600], performanceCpu[1140], performanceCpu[1188], performanceCpu.back(), performanceFrame, scene.GetTotalKills());
+                std::printf("[performance] enemy-assets hits=%u misses=%u templates=%zu\n", scene.GetEnemyModelCache().hits,
+                    scene.GetEnemyModelCache().misses, scene.GetEnemyModelCache().entries.size());
+                break;
+            }
+        }
     }
     if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
     return 0;

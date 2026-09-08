@@ -27,6 +27,8 @@
 #include "runtime/StartupSequence.h"
 #include "runtime/MovieStudy.h"
 #include "runtime/SurvivalHud.h"
+#include "runtime/HostSettings.h"
+#include "gun_bros/CDailyBonusTracking.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -58,7 +60,7 @@ void PrintUsage() {
         "  --help, -h                show available options and exit\n"
         "  --mute                    disable sound playback for every mode\n"
         "  --game                    planets, equipment, shop and local profile\n"
-        "  --menu-page <0..19>       menu screenshot page\n"
+        "  --menu-page <0..29>       menu screenshot page (25: first brother selection)\n"
         "  --hud-check              original combat HUD, overlays and input check\n"
         "  --profile <file>         use a separate writable rebuilt profile\n"
         "  --progress-check          verify progression, purchases and refinery\n"
@@ -68,6 +70,9 @@ void PrintUsage() {
         "  --brother-check           AI-only firing, death and wave revival check\n"
         "  --brother                 add the original AI follow/aim policy to --play\n"
         "  --game-menu-check         refine, buy, equip and play an isolated profile\n"
+        "  --daily-bonus-check       original rewards, calendar cycle and save checks\n"
+        "  --tutorial-check          original move, fire, swap and grenade tutorial\n"
+        "  --performance-check       record 1200 real gameplay frames to CSV\n"
         "  --pickup-check            pickup templates and collection scripts\n"
         "  --pickup-render-check     all pickup sprites and animation frames\n"
         "  --prop-check              complete prop templates and native callbacks\n"
@@ -188,6 +193,10 @@ int PromptForHarness() {
         " 44  combat HUD check -- active, pause, death and completion\n"
         " 45  BOKOR Horde -- original map and ten starting difficulties\n"
         " 46  BOKOR combat check -- real enemies and wave advancement\n"
+        " 47  compact planet selection -- preserved pre-fidelity study\n"
+        " 48  daily bonus -- original five-day reward and persistence check\n"
+        " 49  first tutorial -- original scripts and isolated save check\n"
+        " 50  performance -- 1200 rendered gameplay frames and CPU timing\n"
         "\n"
         "choice [26]: ");
     std::fflush(stdout);
@@ -198,7 +207,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 46) {
+    if (choice < 1 || choice > 50) {
         return 26;
     }
     return choice;
@@ -207,6 +216,10 @@ int PromptForHarness() {
 }  // namespace
 
 int main(int argc, char **argv) {
+    if (!GameHostSettings().Load(std::filesystem::path(ASSET_ROOT) / "gunbros.cfg")) { return 1; }
+    bool checkDailyBonus = false;
+    bool checkTutorial = false;
+    bool checkPerformance = false;
     int modeArgumentCount = 0;
     bool researchMenu = false;
     std::string profilePath;
@@ -381,6 +394,12 @@ int main(int argc, char **argv) {
             checkLevelFlow = true;
         } else if (std::strcmp(argument, "--game-menu-check") == 0) {
             checkGameMenu = true;
+        } else if (std::strcmp(argument, "--tutorial-check") == 0) {
+            checkTutorial = true;
+        } else if (std::strcmp(argument, "--daily-bonus-check") == 0) {
+            checkDailyBonus = true;
+        } else if (std::strcmp(argument, "--performance-check") == 0) {
+            checkPerformance = true;
         } else if (std::strcmp(argument, "--profile-play-check") == 0) {
             checkProfilePlay = true;
         } else if (std::strcmp(argument, "--progress-check") == 0) {
@@ -498,6 +517,10 @@ int main(int argc, char **argv) {
     }
     if (researchMenu) {
         const int choice = PromptForHarness();
+        if (choice == 48) { return RunDailyBonusCheck(bigDirectory); }
+        if (choice == 49) { return RunTutorialPlayCheck(bigDirectory); }
+        if (choice == 50) { return RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0, nullptr, true, false, nullptr, true); }
+        if (choice == 47) { return RunGameFrontEnd(bigDirectory, screenshotPath, 20, false, profilePath); }
         if (choice == 1) {
             return RunM3Map(bigDirectory, mapPackName, mapIndex,
                             screenshotPath, advanceMs, showSpawns,
@@ -624,6 +647,9 @@ int main(int argc, char **argv) {
     if (checkProfilePlay) { return RunProfilePlayCheck(bigDirectory); }
     if (playGame) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, false, profilePath); }
     if (checkGameMenu) { return RunGameMenuCheck(bigDirectory); }
+    if (checkDailyBonus) { return RunDailyBonusCheck(bigDirectory); }
+    if (checkTutorial) { return RunTutorialPlayCheck(bigDirectory); }
+    if (checkPerformance) { return RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0, nullptr, true, false, nullptr, true); }
     if (checkArmor) {
         return RunArmorCheck(bigDirectory);
     }

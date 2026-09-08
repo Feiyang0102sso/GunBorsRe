@@ -98,6 +98,9 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_xplodiumMultiplierPercent = 100;
     m_playerCanMove = true;
     m_playerCanShoot = true;
+    m_brotherCanShoot = true;
+    m_tutorialStep = -1;
+    if (m_tutorialEnabled) { m_tutorialStep = 0; }
     m_bossIntroSerial = 0;
     m_respawnPathLayer = -1;
     m_objectTimeScale = 1;
@@ -271,6 +274,13 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
     case 67: m_brotherLabelVisible = false; return 0;
     // :119883 uses this byte in the enemy-statistic key, independently of XP.
     case 68: m_statisticsGroup = static_cast<std::uint8_t>(first); return 0;
+    // CBrotherAI::Update :139437 gates targeting with byte 3144.
+    case 69: m_brotherCanShoot = first != 0; return 0;
+    case 71: TutorialAdvance(); return 0;
+    case 72: m_tutorialStep = -1; return 0;
+    case 73:
+        if (m_world != nullptr) { return static_cast<std::int16_t>(m_world->GetPowerupCount(first)); }
+        return 0;
     case 70:
         // ClearChapterPlayback requests an exit; CGame delivers event 4 later
         // when the popup finishes. Never reenter the script resolver here.
@@ -400,6 +410,14 @@ void CLevel::CompleteDialog() {
     m_dialogCloseRequested = false;
     // CGame::Update :76636 forwards popup completion through class 4 event 4.
     HandleEvent(4);
+}
+
+void CLevel::TutorialAdvance() {
+    if (m_tutorialStep < 0) { return; }
+    ++m_tutorialStep;
+    std::printf("[tutorial] step=%d\n", m_tutorialStep);
+    // Native 71 :118108 increments the shared variable before export ten.
+    m_interpreter.CallExportFunction(10);
 }
 
 bool CLevel::GetResource(int index, GameObjectRef &out) const {

@@ -108,6 +108,9 @@ public:
     void Stun(int durationMs);
     /** Original CBrother::OnWaveCleared (:135964), including script recovery. */
     void OnWaveCleared();
+    /** CPlayer::OnSwapGun :101048 forwards input event 5 to this script. */
+    bool OnSwapGun() { return m_interpreter.HandleEvent(5, 5); }
+    bool TakeWeaponSwap() { bool requested = m_weaponSwapRequested; m_weaponSwapRequested = false; return requested; }
     /** Queue original events 10/11; inventory is committed only after spawning. */
     void SetGrenade(unsigned slot, const GameObjectRef &resource, unsigned count);
     bool OnThrowGrenade(unsigned slot);
@@ -134,6 +137,7 @@ public:
     int GetStateId() const { return m_interpreter.GetStateId(); }
 
 private:
+    bool m_weaponSwapRequested = false;
     PlayerVitals *m_vitals = nullptr;
     PowerupState *m_powerups = nullptr;
     void PowerupEffect(const GameObjectRef &effect, int slot, bool active);

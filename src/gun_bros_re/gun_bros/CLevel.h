@@ -90,6 +90,11 @@ public:
      */
     void Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *world = nullptr, int startWave = 0);
     void SetWave(int wave);
+    void EnableTutorial(bool enabled) { m_tutorialEnabled = enabled; }
+    int GetTutorialStep() const { return m_tutorialStep; }
+    std::int16_t *TutorialStepVariable() { return &m_tutorialStep; }
+    void TutorialAdvance();
+    bool CanBrotherShoot() const { return m_brotherCanShoot; }
     int GetWaveLimit() const { return m_template->waveLimit; }
     void Update(int deltaMs);
     /** HUD/movie completion callbacks use event class 4 in the original. */
@@ -157,6 +162,9 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
 
 private:
+    bool m_tutorialEnabled = false;
+    std::int16_t m_tutorialStep = -1;
+    bool m_brotherCanShoot = true;
     std::vector<CLevelIndicator> m_indicators;
     void SpawnMapObjects(int tag, int objectId = -1);
     /** setCameraLayer. Reference: :117497 */

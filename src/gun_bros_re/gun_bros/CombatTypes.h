@@ -7,6 +7,19 @@
 #include "gun_bros/CGameAssetRef.h"
 #include <cstdint>
 #include <vector>
+#include <string>
+
+struct WeaponCombatProgress {
+    GameObjectRef resource;
+    unsigned experience = 0;
+    unsigned maximum = 0;
+};
+
+struct EnemyCasualty {
+    GameObjectRef resource;
+    unsigned count = 0;
+    std::string name;
+};
 
 // IDs survive vector growth and never point at actors that have been removed.
 using CombatId = std::uint64_t;
@@ -44,6 +57,8 @@ struct PlayerVitals {
 struct CombatHit {
     CombatId projectile = 0;
     CombatId owner = 0;
+    GameObjectRef weapon;
+    unsigned weaponMasteryLimit = 0;
     int ownerType = 0;
     float damage = 0;
     float x = 0;
@@ -69,9 +84,11 @@ struct CombatTrace {
 };
 
 /** Gameplay owns target filtering and damage; projectile presentation asks it. */
+class CLevel;
 class IProjectileWorld {
 public:
     virtual ~IProjectileWorld() = default;
+    virtual CLevel *GetScriptLevel() { return nullptr; }
     virtual CombatTrace Trace(const CombatHit &hit, float x, float y,
         float dx, float dy, float radius, const std::vector<CombatId> &skipTargets) = 0;
     virtual HitResult ApplyHit(CombatId target, const CombatHit &hit) = 0;

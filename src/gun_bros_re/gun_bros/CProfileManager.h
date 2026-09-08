@@ -8,12 +8,18 @@
 #include "gun_bros/CRefinementManager.h"
 #include <filesystem>
 #include <string>
+#include <bitset>
 
 enum class PurchaseResult { Purchased, Owned, LevelLocked, InsufficientCoins, InsufficientWarbucks, Unsupported };
 
 struct PowerupInventoryEntry {
     GameObjectRef resource;
     unsigned count = 0;
+};
+
+struct WeaponMasteryEntry {
+    GameObjectRef resource;
+    unsigned experience = 0;
 };
 
 class CProfileManager {
@@ -26,6 +32,8 @@ public:
     void AddPowerup(const GameObjectRef &ref, unsigned count);
     unsigned GetPowerupCount(const GameObjectRef &ref) const;
     bool ConsumePowerup(const GameObjectRef &ref, unsigned count = 1);
+    unsigned GetWeaponExperience(const GameObjectRef &ref) const;
+    void AddWeaponExperience(const GameObjectRef &ref, unsigned amount, unsigned maximum);
     /** Local activity rewards are persisted together with their claimed bit. */
     bool ClaimActivity(unsigned index);
     unsigned ActivityProgress(unsigned index) const;
@@ -39,10 +47,19 @@ public:
     std::uint64_t warbucks = 0;
     std::uint64_t xplodium = 0;
     std::array<unsigned, 4> clearedWaves{};
+    // A cleared wave is not necessarily perfect; old host saves start unmarked.
+    std::array<std::bitset<500>, 4> perfectedWaves{};
+    std::int64_t dailyLastClaimDay = -1;
+    unsigned dailyConsecutiveDays = 0;
+    unsigned dailyDayOffset = 0;
+    // Host checkpoints follow the restored level tutorial, separate from UI tips.
+    bool tutorialCompleted = false;
+    unsigned tutorialSteps = 0;
     CPlayerConfiguration configuration;
     CRefinementManager refinery;
     std::vector<GameObjectTypeRef> inventory;
     std::vector<PowerupInventoryEntry> powerups;
+    std::vector<WeaponMasteryEntry> weaponMastery;
     bool musicEnabled = true;
     bool soundEnabled = true;
     bool brotherEnabled = true;

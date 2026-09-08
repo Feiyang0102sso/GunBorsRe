@@ -21,6 +21,13 @@
 #include <string>
 #include <vector>
 
+/** Loading screens receive resource boundaries on the render thread. */
+class IPackLoadProgress {
+public:
+    virtual ~IPackLoadProgress() = default;
+    virtual void OnResourceRead() = 0;
+};
+
 class PackTables {
 public:
     explicit PackTables(CResTOCManager &tocManager) : m_tocManager(tocManager) {
@@ -31,6 +38,7 @@ public:
     }
 
     CGameObjectPack &GetObjectPack(int packIndex) { return m_objectPacks[packIndex]; }
+    void SetLoadProgress(IPackLoadProgress *progress) { m_loadProgress = progress; }
 
     /** Which pack a hash lands on. The reference decides, not its owner. */
     const std::string &GetPackName(std::uint32_t packHash) {
@@ -41,6 +49,7 @@ public:
     bool ReadSectionResource(std::uint32_t packHash, GameSection section,
                              std::uint32_t ordinal,
                              std::vector<std::uint8_t> &payload) {
+        if (m_loadProgress != nullptr) { m_loadProgress->OnResourceRead(); }
         const int packIndex = m_tocManager.GetPackIndexFromHash(packHash);
         if (packIndex < 0) { return false; }
         const std::uint32_t handle =
@@ -54,6 +63,7 @@ public:
 private:
     CResTOCManager &m_tocManager;
     std::vector<CGameObjectPack> m_objectPacks;
+    IPackLoadProgress *m_loadProgress = nullptr;
 };
 
 #endif  // GUN_BROS_RE_MILESTONES_PACKTABLES_H

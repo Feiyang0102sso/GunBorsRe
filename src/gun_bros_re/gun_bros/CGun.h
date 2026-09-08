@@ -96,6 +96,11 @@ public:
         std::uint8_t GetHandedness() const { return m_flag256; }
         const GameObjectRef &GetBulletRef() const { return m_objectRef132; }
         std::uint16_t GetFireIntervalMs() const { return m_value140; }
+        unsigned GetMasteryLevel(unsigned experience) const;
+        unsigned GetMasteryLimit() const;
+        unsigned GetMasteryThreshold(unsigned index) const;
+        unsigned GetMasteryModifier(unsigned table, unsigned level, unsigned base) const;
+        unsigned GetCriticalDamageScale() const { if (m_value148 == 0) { return 10; } return m_value148; }
 
     private:
         std::uint8_t m_flag104;
@@ -133,6 +138,11 @@ public:
     bool CanFire() const { return m_ammo != 0; }
     bool IsBeam() const { return m_beam; }
     bool IsShooting() const { return m_shooting; }
+    void SetMasteryExperience(unsigned experience);
+    unsigned GetMasteryLevel() const { return m_mastery; }
+    unsigned GetFireRateMs() const;
+    float GetMasteryDamageMultiplier(float randomUnit = 1) const;
+    unsigned GetMasterySpeedMod() const;
     float GetHeatIntensity() const { return m_heatIntensity; }
     std::vector<GunCue> TakeCues();
 

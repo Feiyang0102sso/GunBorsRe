@@ -97,6 +97,9 @@ struct BulletVisual {
 struct Shot {
     CombatId id = 0;
     CombatId owner = kPlayerCombatId;
+    GameObjectRef weapon;
+    unsigned weaponMasteryLimit = 0;
+    float masteryDamageMultiplier = 1;
     int ownerType = 0;
     float damageMultiplier = 1;
     float powerupMultiplier = 1;
@@ -338,6 +341,8 @@ struct WeaponEffects::Impl {
             CombatHit hit;
             hit.projectile = owner->id;
             hit.owner = owner->owner;
+            hit.weapon = owner->weapon;
+            hit.weaponMasteryLimit = owner->weaponMasteryLimit;
             hit.ownerType = owner->ownerType;
             hit.flags = owner->script.flags;
             hit.x = x;
@@ -345,7 +350,7 @@ struct WeaponEffects::Impl {
             hit.direction = direction;
             // Original splash natives use their authored damage and owner
             // armor/level multiplier, independently of the bullet's base damage.
-            hit.damage = cue.damage * world->GetDamageMultiplier(owner->owner, owner->damageMultiplier);
+            hit.damage = cue.damage * owner->masteryDamageMultiplier * world->GetDamageMultiplier(owner->owner, owner->damageMultiplier);
             hit.percentDamage = cue.percentDamage;
             hit.spawnObjectId = cue.spawnObjectId;
             hit.forceSpawn = cue.forceSpawn;
@@ -519,6 +524,7 @@ CombatId WeaponEffects::SpawnProjectile(const GameObjectRef &resource, float x, 
     shot->direction = direction;
     shot->speed = speed;
     shot->beam = (visual->data.GetFlags() & kBeamFlag) != 0;
+    if (scene.world != nullptr) { shot->script.SetLevelContext(scene.world->GetScriptLevel()); }
     shot->script.Bind(visual->data, false);
     const CombatId id = shot->id;
     for (const GunCue &cue : shot->script.TakeCues()) {
@@ -685,6 +691,11 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             std::unique_ptr<Shot> shot(new Shot());
             shot->id = scene.nextProjectile++;
             shot->owner = owner;
+            shot->weapon = player.gunResource;
+            shot->weaponMasteryLimit = player.weapon->data.GetMasteryLimit();
+            float masteryRoll = 1;
+            if (player.weapon->gun.GetMasteryLevel() > 0) { masteryRoll = scene.Random(0, 1); }
+            shot->masteryDamageMultiplier = player.weapon->gun.GetMasteryDamageMultiplier(masteryRoll);
             if (scene.world != nullptr) { shot->powerupMultiplier = scene.world->GetProjectilePowerupMultiplier(owner); }
             shot->part = hand;
             shot->visual = visual;
@@ -704,6 +715,7 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
                 }
                 shot->length = beamLength * SegmentFraction(x, y, dx, dy, walls);
             }
+            if (m_impl->world != nullptr) { shot->script.SetLevelContext(m_impl->world->GetScriptLevel()); }
             shot->script.Bind(visual->data, cue.alternate);
             for (const GunCue &spawnCue : shot->script.TakeCues()) { scene.Cue(spawnCue, x, y, z, shot->direction, shot.get()); }
             scene.shots.push_back(std::move(shot));
@@ -743,11 +755,13 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         CombatHit hit;
         hit.projectile = shot->id;
         hit.owner = shot->owner;
+        hit.weapon = shot->weapon;
+        hit.weaponMasteryLimit = shot->weaponMasteryLimit;
         hit.ownerType = shot->ownerType;
         hit.flags = shot->script.flags;
         hit.x = shot->x;
         hit.y = shot->y;
-        hit.damage = shot->script.GetDamage() * shot->powerupMultiplier;
+        hit.damage = shot->script.GetDamage() * shot->powerupMultiplier * shot->masteryDamageMultiplier;
         if (scene.world != nullptr) {
             hit.damage *= scene.world->GetDamageMultiplier(shot->owner, shot->damageMultiplier);
         }

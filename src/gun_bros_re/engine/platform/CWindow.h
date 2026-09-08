@@ -52,6 +52,7 @@ enum class KeyCode {
     C,
     E,
     F,
+    Q,
     Digit1,
     Digit2,
     Digit3,
@@ -110,6 +111,8 @@ public:
 
     /** Present the back buffer. */
     void Present();
+    /** Research benchmarks can separate draw cost from refresh-rate waiting. */
+    bool SetVSync(bool enabled);
 
     /**
      * Read the drawn frame back and write it out as a PNG.
@@ -151,6 +154,8 @@ public:
     bool GetMousePosition(float &x, float &y) const;
     bool IsLeftMouseDown() const;
     void SetTitle(const std::string &title);
+    void EnableCheats(bool enabled) { m_cheatsEnabled = enabled; }
+    std::string TakeCheatCode();
 
 private:
     SDL_Window *m_window;
@@ -165,6 +170,10 @@ private:
     bool m_rightDrag = false;
     float m_wheelDelta;
     std::vector<KeyCode> m_keyPresses;
+    bool m_cheatsEnabled = false;
+    std::string m_cheatPrefix;
+    std::vector<std::string> m_cheatCodes;
+    std::uint64_t m_cheatKeyTime = 0;
     bool m_keyDown[static_cast<int>(KeyCode::Count)];
 };
 

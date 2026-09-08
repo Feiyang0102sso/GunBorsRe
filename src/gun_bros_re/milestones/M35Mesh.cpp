@@ -1422,6 +1422,27 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
             !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
             !CreatePlayerBuffers(player, program)) { return 1; }
+        // Real thresholds exercise each boundary and both critical outcomes;
+        // restoring zero keeps the existing firing regression at base mastery.
+        if (!entry.unused && entry.data.GetMasteryLimit() > 0) {
+            for (unsigned tier = 0; tier < 3; ++tier) {
+                const unsigned threshold = entry.data.GetMasteryThreshold(tier);
+                player.weapon->gun.SetMasteryExperience(threshold - 1);
+                if (player.weapon->gun.GetMasteryLevel() != tier) { return 1; }
+                player.weapon->gun.SetMasteryExperience(threshold);
+                // Some scripted launchers intentionally have a zero fire-rate
+                // field; their attack state sets the timer itself.
+                if (player.weapon->gun.GetMasteryLevel() != tier + 1 || player.weapon->gun.GetMasterySpeedMod() < 100 ||
+                    player.weapon->gun.GetMasteryDamageMultiplier(0) <
+                    player.weapon->gun.GetMasteryDamageMultiplier(1)) {
+                    std::printf("[mastery-check] FAIL %s tier=%u threshold=%u level=%u speed=%u interval=%u normal=%.2f critical=%.2f\n",
+                        entry.owner.c_str(), tier, threshold, player.weapon->gun.GetMasteryLevel(), player.weapon->gun.GetMasterySpeedMod(),
+                        player.weapon->gun.GetFireRateMs(), player.weapon->gun.GetMasteryDamageMultiplier(1), player.weapon->gun.GetMasteryDamageMultiplier(0));
+                    return 1;
+                }
+            }
+            player.weapon->gun.SetMasteryExperience(0);
+        }
         BuildPlayerGameMatrix(identity, 400, 450,
             PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
         if (i == 0) {

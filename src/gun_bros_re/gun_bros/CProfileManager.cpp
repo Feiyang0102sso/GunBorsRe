@@ -12,7 +12,7 @@
 #include <algorithm>
 
 namespace {
-constexpr unsigned kProfileVersion = 6;
+constexpr unsigned kProfileVersion = 10;
 constexpr unsigned kMaximumInventoryRecords = 1024;
 
 void WriteRef(std::ostream &stream, const GameObjectRef &ref) {
@@ -33,9 +33,16 @@ void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager
     warbucks = 0;
     xplodium = 0;
     clearedWaves.fill(0);
+    for (auto &waves : perfectedWaves) { waves.reset(); }
+    dailyLastClaimDay = -1;
+    dailyConsecutiveDays = 0;
+    dailyDayOffset = 0;
+    tutorialCompleted = false;
+    tutorialSteps = 0;
     configuration.SetDefaults(corePackHash);
     inventory.clear();
     powerups.clear();
+    weaponMastery.clear();
     musicEnabled = true;
     soundEnabled = true;
     brotherEnabled = true;
@@ -58,6 +65,26 @@ bool CProfileManager::Owns(unsigned type, const GameObjectRef &ref) const {
         if (entry.type == type && entry.object.packHash == ref.packHash && entry.object.localIndex == ref.localIndex) { return true; }
     }
     return false;
+}
+
+unsigned CProfileManager::GetWeaponExperience(const GameObjectRef &ref) const {
+    for (const auto &entry : weaponMastery) {
+        if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) { return entry.experience; }
+    }
+    return 0;
+}
+
+void CProfileManager::AddWeaponExperience(const GameObjectRef &ref, unsigned amount, unsigned maximum) {
+    if (ref.IsNull() || amount == 0 || maximum == 0) { return; }
+    for (auto &entry : weaponMastery) {
+        if (entry.resource.packHash != ref.packHash || entry.resource.localIndex != ref.localIndex) { continue; }
+        // Imported saves may exceed the current template cap. Earning XP must
+        // never reduce an existing record, including records from older tables.
+        if (entry.experience >= maximum) { return; }
+        entry.experience = static_cast<unsigned>(std::min<std::uint64_t>(maximum, static_cast<std::uint64_t>(entry.experience) + amount));
+        return;
+    }
+    weaponMastery.push_back({ref, std::min(amount, maximum)});
 }
 
 void CProfileManager::Grant(unsigned type, const GameObjectRef &ref) {
@@ -185,6 +212,31 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
         for (unsigned &score : candidate.hordeBestScore) { if (!(stream >> score) || score > 3000000000u) { return false; } }
     }
     if (version >= 6 && !(stream >> candidate.stat42Bits)) { return false; }
+    for (auto &waves : candidate.perfectedWaves) { waves.reset(); }
+    if (version >= 7) {
+        for (auto &waves : candidate.perfectedWaves) {
+            std::string bits;
+            if (!(stream >> bits) || bits.size() != 500 || bits.find_first_not_of("01") != std::string::npos) { return false; }
+            waves = std::bitset<500>(bits);
+        }
+    }
+    candidate.dailyLastClaimDay = -1;
+    candidate.dailyConsecutiveDays = 0;
+    candidate.dailyDayOffset = 0;
+    if (version >= 8 && !(stream >> candidate.dailyLastClaimDay >> candidate.dailyConsecutiveDays >> candidate.dailyDayOffset)) { return false; }
+    // Existing host accounts predate tutorial support and keep their progress.
+    candidate.tutorialCompleted = true;
+    candidate.tutorialSteps = 0;
+    if (version >= 9 && (!(stream >> candidate.tutorialCompleted >> candidate.tutorialSteps) || candidate.tutorialSteps > 255)) { return false; }
+    candidate.weaponMastery.clear();
+    if (version >= 10) {
+        if (!(stream >> count) || count > kMaximumInventoryRecords) { return false; }
+        for (unsigned index = 0; index < count; ++index) {
+            WeaponMasteryEntry entry;
+            if (!ReadRef(stream, entry.resource) || entry.resource.IsNull() || !(stream >> entry.experience)) { return false; }
+            candidate.weaponMastery.push_back(entry);
+        }
+    }
     if (!(stream >> end) || end != "END") { return false; }
     for (const GameObjectRef &ref : candidate.configuration.guns) {
         if (!candidate.Owns(6, ref)) { return false; }
@@ -232,6 +284,11 @@ bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
     stream << '\n';
     for (unsigned score : hordeBestScore) { stream << score << ' '; }
     stream << '\n' << stat42Bits;
+    for (const auto &waves : perfectedWaves) { stream << '\n' << waves.to_string(); }
+    stream << '\n' << dailyLastClaimDay << ' ' << dailyConsecutiveDays << ' ' << dailyDayOffset;
+    stream << '\n' << tutorialCompleted << ' ' << tutorialSteps;
+    stream << '\n' << weaponMastery.size() << '\n';
+    for (const auto &entry : weaponMastery) { WriteRef(stream, entry.resource); stream << entry.experience << '\n'; }
     stream << "\nEND\n";
     stream.close();
     if (stream.fail()) { return false; }

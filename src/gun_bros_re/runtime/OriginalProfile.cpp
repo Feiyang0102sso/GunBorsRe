@@ -155,11 +155,12 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
                 report << '\n';
             }
             consumed = 120;
-        } else if (storeId == 1002 || storeId == 1003) {
+        } else if (storeId == 1002 || storeId == 1003 || storeId == 1013) {
             const unsigned count = data.ReadUInt32();
             unsigned stride = 10;
             unsigned maximum = 512;
             if (storeId == 1003) { stride = 524; maximum = 64; }
+            if (storeId == 1013) { stride = 14; maximum = 128; }
             if (count > maximum || 4 + count * stride > record.data.size()) { ++failures; continue; }
             consumed = 4 + count * stride;
             report << " collection-count=" << count << '\n';
@@ -176,6 +177,9 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
                     const unsigned quantity = data.ReadUInt8();
                     data.Skip(1);
                     report << " quantity=" << quantity;
+                } else if (storeId == 1013) {
+                    data.Skip(2); // The native XP field is aligned at offset 8.
+                    report << " mastery-xp=" << data.ReadUInt32();
                 } else {
                     const unsigned progress = data.ReadUInt16();
                     const unsigned value8 = data.ReadUInt16();
@@ -207,9 +211,9 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
 
 bool ImportOriginalProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile) {
     const std::filesystem::path source = std::filesystem::path(ASSET_ROOT) / "saves";
-    const char *files[] = {"-1_1000.perfect", "-1_1001", "-1_1002", "-1_1003.perfect"};
-    OriginalDataStore records[4];
-    for (unsigned index = 0; index < 4; ++index) {
+    const char *files[] = {"-1_1000.perfect", "-1_1001", "-1_1002", "-1_1003.perfect", "-1_1013"};
+    OriginalDataStore records[5];
+    for (unsigned index = 0; index < 5; ++index) {
         if (!ReadOriginalDataStore(source / files[index], records[index]) || !records[index].crcMatches || records[index].version != 0) {
             std::printf("[original-profile] invalid source: %s\n", files[index]);
             return false;
@@ -217,6 +221,7 @@ bool ImportOriginalProfile(CResTOCManager &toc, PackTables &tables, CProfileMana
     }
     if (records[0].minimumSize != 48 || records[1].minimumSize != 120) { return false; }
     CProfileManager candidate = profile;
+    candidate.tutorialCompleted = true;
     CArrayInputStream progress(records[0].data);
     progress.Skip(4);
     // CRefinementManager::BeginRefinement :178519 consumes the QWORD this+44.
@@ -259,6 +264,7 @@ bool ImportOriginalProfile(CResTOCManager &toc, PackTables &tables, CProfileMana
     if (missionCount > 64 || 4 + missionCount * 524 != records[3].minimumSize) { return false; }
     const char *planetPacks[] = {"pack2", "pack7", "pack9", "pack12"};
     candidate.clearedWaves.fill(0);
+    for (auto &waves : candidate.perfectedWaves) { waves.reset(); }
     for (unsigned index = 0; index < missionCount; ++index) {
         GameObjectRef level;
         level.packHash = missions.ReadUInt32();
@@ -266,7 +272,11 @@ bool ImportOriginalProfile(CResTOCManager &toc, PackTables &tables, CProfileMana
         const unsigned type = missions.ReadUInt8();
         missions.Skip(2);
         const unsigned waveProgress = missions.ReadUInt16();
-        missions.Skip(514); // Secondary wave value and per-wave bit data remain archived.
+        // WasWavePerfected :192487 reads a 4096-bit array after the secondary
+        // wave value. The disk reference occupies two more bytes than RAM.
+        missions.Skip(2);
+        std::array<std::uint8_t, 512> perfectBits{};
+        for (auto &byte : perfectBits) { byte = missions.ReadUInt8(); }
         if (type != 7 || toc.GetPackIndexFromHash(level.packHash) < 0) { return false; }
         std::vector<std::uint8_t> payload;
         if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, payload)) { return false; }
@@ -279,10 +289,31 @@ bool ImportOriginalProfile(CResTOCManager &toc, PackTables &tables, CProfileMana
             const int packIndex = toc.GetPackIndexFromName(planetPacks[planet]);
             if (packIndex >= 0 && toc.GetPack(packIndex)->GetPackHash() == level.packHash) {
                 candidate.clearedWaves[planet] = std::min(waveProgress, 500u);
+                for (unsigned wave = 0; wave < 500; ++wave) {
+                    candidate.perfectedWaves[planet].set(wave, (perfectBits[wave / 8] & (1u << (wave % 8))) != 0);
+                }
             }
         }
     }
-    if (progress.Overran() || equipment.Overran() || inventory.Overran() || missions.Overran()) { return false; }
+    // SaveRestore registration :80431 and CWeaponMastery::SaveToServer :192239
+    // identify 1013 as weapons3. The older 1005 collection is not current XP.
+    CArrayInputStream mastery(records[4].data);
+    const unsigned masteryCount = mastery.ReadUInt32();
+    if (masteryCount > 128 || 4 + masteryCount * 14 != records[4].minimumSize) { return false; }
+    candidate.weaponMastery.clear();
+    for (unsigned index = 0; index < masteryCount; ++index) {
+        WeaponMasteryEntry entry;
+        entry.resource.packHash = mastery.ReadUInt32();
+        entry.resource.localIndex = mastery.ReadUInt8();
+        if (mastery.ReadUInt8() != 6 || toc.GetPackIndexFromHash(entry.resource.packHash) < 0) { return false; }
+        mastery.Skip(4); // Native dirty flag and padding, following the disk reference.
+        entry.experience = mastery.ReadUInt32();
+        std::vector<std::uint8_t> payload;
+        if (!tables.ReadSectionResource(entry.resource.packHash, GameSection::Gun, entry.resource.localIndex, payload)) { return false; }
+        candidate.weaponMastery.push_back(entry);
+        std::printf("[original-profile] mastery pack=%u gun=%u xp=%u\n", entry.resource.packHash, entry.resource.localIndex, entry.experience);
+    }
+    if (progress.Overran() || equipment.Overran() || inventory.Overran() || missions.Overran() || mastery.Overran()) { return false; }
     profile = std::move(candidate);
     std::printf("[original-profile] imported xp=%llu coins=%llu warbucks=%llu xplodium=%llu owned=%zu\n",
         profile.experience, profile.coins, profile.warbucks, profile.xplodium, profile.inventory.size());
@@ -297,18 +328,29 @@ int RunOriginalProfilePlayCheck(const std::string &bigDirectory) {
     if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+    profile.tutorialCompleted = true;
     if (!ImportOriginalProfile(toc, tables, profile)) { return 1; }
+    CProfileManager capCheck = profile;
+    const GameObjectRef mainGun = profile.configuration.guns[0];
+    const unsigned originalMastery = profile.GetWeaponExperience(mainGun);
+    // Older template limits must not truncate imported progress on the next kill.
+    capCheck.AddWeaponExperience(mainGun, 1, originalMastery - 1);
+    if (capCheck.GetWeaponExperience(mainGun) != originalMastery) { return 1; }
     const std::filesystem::path save = "out/original-profile-check.dat";
     if (!profile.SaveToDisk(save)) { return 1; }
     CProfileManager restored;
     restored.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     if (!restored.LoadFromDisk(save) || restored.experience != profile.experience ||
         restored.configuration.guns[0].localIndex != 64 || restored.configuration.armor[0].localIndex != 178 ||
-        restored.inventory.size() != 8) { return 1; }
+        restored.inventory.size() != 8 || restored.weaponMastery.size() != 4 ||
+        restored.GetWeaponExperience(restored.configuration.guns[0]) < 800000) { return 1; }
     for (unsigned waves : restored.clearedWaves) { if (waves != 500) { return 1; } }
     SurvivalGameContext context{restored, save, 0};
     if (RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
     if (!restored.LoadFromDisk(save)) { return 1; }
+    for (const auto &entry : profile.weaponMastery) {
+        if (restored.GetWeaponExperience(entry.resource) < entry.experience) { return 1; }
+    }
     std::printf("[original-profile-check] original-equipment/play/reload failures=0\n");
     return 0;
 }

@@ -170,7 +170,7 @@ void CBrother::Update(std::int32_t deltaMs) {
         m_timer -= deltaMs;
         if (m_timer <= 0) { m_interpreter.HandleEvent(5, 7); }
     }
-    const int interval = std::max<int>(1, m_gun->GetTemplate()->GetFireIntervalMs());
+    const int interval = std::max<int>(1, m_gun->GetFireRateMs());
     m_fireElapsed += deltaMs;
     if (!m_shooting) {
         m_fireElapsed = std::min(m_fireElapsed, interval);
@@ -236,6 +236,10 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
             m_vitals->dead = m_vitals->health <= 0;
             if (m_vitals->dead) { m_variables[0] = 0; m_variables[1] = 0; }
         }
+        break;
+    case 3:
+        // The swap animation releases its old weapon at this native callback.
+        m_weaponSwapRequested = true;
         break;
     case 6:
         SetShooting(false);

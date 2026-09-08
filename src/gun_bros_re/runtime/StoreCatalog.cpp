@@ -234,6 +234,10 @@ int RunProgressCheck(const std::string &bigDirectory) {
             if (ref.type >= kObjectTypeCount || !tables.ReadSectionResource(ref.object.packHash,
                 static_cast<GameSection>(ref.type + 1), ref.object.localIndex, payload)) { ++failures; }
         }
+        for (unsigned group = 0; group < item.statGroups.size(); ++group) {
+            storeReport << " stat" << group << '=';
+            for (std::int32_t value : item.statGroups[group]) { storeReport << value << ','; }
+        }
         storeReport << '\n';
     }
     std::printf("[progress-check] levels=%u store=%zu references=%u failures=%d\n",

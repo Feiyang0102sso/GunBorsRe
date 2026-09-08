@@ -24,6 +24,7 @@ class CBrotherAI {
 public:
     void Reset(float startX, float startY);
     void SetForce(float x, float y, int durationMs);
+    void SetShootingAllowed(bool allowed) { m_shootingAllowed = allowed; }
     void Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
         float playerX, float playerY, float speedMultiplier);
     float x = 0;
@@ -37,6 +38,7 @@ public:
     unsigned GetTargetCount() const { return m_targetCount; }
     bool TakeWeaponSwapRequest() { const bool requested = m_weaponSwapRequested; m_weaponSwapRequested = false; return requested; }
 private:
+    bool m_shootingAllowed = true;
     int Random(int minimum, int maximum);
     void UpdateTarget(int deltaMs, IBrotherAIWorld &world, bool &shooting);
     std::mt19937 m_random{0xB6400};

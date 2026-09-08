@@ -98,6 +98,11 @@ std::int16_t *ResolveVariable(IScriptObject *host, std::uint16_t variableId) {
     const std::uint8_t variable = static_cast<std::uint8_t>(variableId & 0xFF);
 
     if (classId == kScriptClassGame) {
+        if (variable == 6) {
+            CLevel *level = dynamic_cast<CLevel *>(host);
+            if (level == nullptr) { level = host->GetLevelContext(); }
+            if (level != nullptr) { return level->TutorialStepVariable(); }
+        }
         return host->ResolveGameVariable(variable);
     }
 

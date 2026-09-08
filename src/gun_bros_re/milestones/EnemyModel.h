@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -97,12 +98,21 @@ struct EnemyModelConfig {
  * meshes CEnemy was bound to are the ones inside `configs`.
  */
 struct EnemyModel {
-    std::vector<std::unique_ptr<EnemyModelConfig>> configs;
+    std::vector<std::shared_ptr<EnemyModelConfig>> configs;
     std::vector<const CMesh *> configMeshes;
     CEnemy enemy;
 
     // Reused between frames so the evaluator does not reallocate.
     std::vector<float> pose;
+};
+
+/** Per-scene GL resources: poses/controllers stay on each individual enemy.
+ * Drawing uploads a part's pose immediately before its draw, so the immutable
+ * meshes, textures and upload buffers can be reused by the next enemy.
+ */
+struct EnemyModelCache {
+    std::map<std::uint64_t, std::vector<std::shared_ptr<EnemyModelConfig>>> entries;
+    unsigned hits = 0, misses = 0;
 };
 
 /**
@@ -132,7 +142,7 @@ enum class EnemySpawnMode {
  */
 bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
                     bool createBuffers, const CShaderProgram *program,
-                    EnemySpawnMode spawnMode, EnemyModel &out);
+                    EnemySpawnMode spawnMode, EnemyModel &out, EnemyModelCache *cache = nullptr);
 
 /** Which config a part is currently showing, or -1 when it shows nothing. */
 std::int32_t EnemyPartConfig(const EnemyModel &model, std::uint32_t partIndex);

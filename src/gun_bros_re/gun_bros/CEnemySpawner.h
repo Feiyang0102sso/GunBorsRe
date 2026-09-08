@@ -26,6 +26,7 @@ public:
     virtual bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) { return false; }
     virtual bool GetObjectPosition(int objectId, float &x, float &y) const { return false; }
     virtual bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const { return false; }
+    virtual unsigned GetPowerupCount(unsigned localIndex) const { return 0; }
 };
 
 class CEnemySpawner {

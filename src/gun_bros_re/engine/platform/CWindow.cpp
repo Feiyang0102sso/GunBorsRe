@@ -78,6 +78,7 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_C:      return KeyCode::C;
         case SDLK_E:      return KeyCode::E;
         case SDLK_F:      return KeyCode::F;
+        case SDLK_Q:      return KeyCode::Q;
         case SDLK_1:      return KeyCode::Digit1;
         case SDLK_2:      return KeyCode::Digit2;
         case SDLK_3:      return KeyCode::Digit3;
@@ -192,6 +193,23 @@ bool CWindow::PumpEvents() {
         if (event.type == SDL_EVENT_QUIT) {
             m_quitRequested = true;
         } else if (event.type == SDL_EVENT_KEY_DOWN) {
+            if (m_cheatsEnabled && !event.key.repeat && event.key.key >= SDLK_A && event.key.key <= SDLK_Z) {
+                const auto now = SDL_GetTicks();
+                if (now - m_cheatKeyTime > 2500) { m_cheatPrefix.clear(); }
+                m_cheatKeyTime = now;
+                const char letter = static_cast<char>(event.key.key);
+                if (m_cheatPrefix == "ch") {
+                    if (std::strchr("mtdchiw", letter) != nullptr) {
+                        m_cheatCodes.push_back(m_cheatPrefix + letter);
+                        m_cheatPrefix.clear();
+                        continue; // A completed cheat must not also trigger a weapon hotkey.
+                    }
+                    m_cheatPrefix.clear();
+                }
+                if (m_cheatPrefix == "c" && letter == 'h') { m_cheatPrefix = "ch"; continue; }
+                if (letter == 'c') { m_cheatPrefix = "c"; continue; }
+                m_cheatPrefix.clear();
+            }
             if (event.key.key == SDLK_ESCAPE && m_escapeCloses) {
                 m_quitRequested = true;
             } else {
@@ -263,6 +281,19 @@ bool CWindow::IsKeyDown(KeyCode key) const {
 
 void CWindow::Present() {
     SDL_GL_SwapWindow(m_window);
+}
+
+bool CWindow::SetVSync(bool enabled) {
+    int interval = 0;
+    if (enabled) { interval = 1; }
+    return SDL_GL_SetSwapInterval(interval);
+}
+
+std::string CWindow::TakeCheatCode() {
+    if (m_cheatCodes.empty()) { return {}; }
+    const std::string code = m_cheatCodes.front();
+    m_cheatCodes.erase(m_cheatCodes.begin());
+    return code;
 }
 
 bool CWindow::GetMousePosition(float &x, float &y) const {

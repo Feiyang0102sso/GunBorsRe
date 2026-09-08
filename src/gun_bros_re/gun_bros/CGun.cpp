@@ -47,6 +47,12 @@ bool CGun::Template::Init(CArrayInputStream &stream) {
 
     for (std::uint32_t i = 0; i < kGunStatTableCount; ++i) {
         ReadStatTable(stream, m_statTables[i]);
+        unsigned minimum = 0;
+        if (i == 2 || i == 4) { minimum = 100; }
+        // CGun::Template::Init :127798 / :127835 keeps three values and
+        // clamps movement/damage percentages to 100. Retail rifles store zero.
+        m_statTables[i].resize(3, minimum);
+        for (unsigned &value : m_statTables[i]) { value = std::max(value, minimum); }
     }
 
     if (!m_moveSet.Init(stream)) {
@@ -59,6 +65,47 @@ bool CGun::Template::Init(CArrayInputStream &stream) {
     }
 
     return true;
+}
+
+unsigned CGun::Template::GetMasteryLevel(unsigned experience) const {
+    for (unsigned level = 0; level < 3; ++level) {
+        if (GetMasteryThreshold(level) > experience) { return level; }
+    }
+    return 3;
+}
+
+unsigned CGun::Template::GetMasteryThreshold(unsigned index) const {
+    if (index >= m_statTables[0].size()) { return 0; }
+    return m_statTables[0][index];
+}
+
+unsigned CGun::Template::GetMasteryLimit() const { return GetMasteryThreshold(2); }
+
+unsigned CGun::Template::GetMasteryModifier(unsigned table, unsigned level, unsigned base) const {
+    if (level == 0 || table >= kGunStatTableCount || level > m_statTables[table].size()) { return base; }
+    return m_statTables[table][level - 1];
+}
+
+void CGun::SetMasteryExperience(unsigned experience) {
+    m_mastery = static_cast<std::int16_t>(m_template->GetMasteryLevel(experience));
+}
+
+unsigned CGun::GetFireRateMs() const {
+    return m_template->GetMasteryModifier(5, m_mastery, m_template->GetFireIntervalMs());
+}
+
+float CGun::GetMasteryDamageMultiplier(float randomUnit) const {
+    // CGun::GetMasteryDamageMultiplier :128469, normal damage table at +200.
+    float multiplier = m_template->GetMasteryModifier(4, m_mastery, 100) * 0.01f;
+    const unsigned range = m_template->GetMasteryModifier(1, m_mastery, 0);
+    // Utility::Random(0, range) is inclusive; zero is the critical outcome.
+    if (range != 0 && randomUnit < 1.0f / (range + 1.0f)) { multiplier *= m_template->GetCriticalDamageScale(); }
+    return multiplier;
+}
+
+unsigned CGun::GetMasterySpeedMod() const {
+    // CPlayer::UpdateMovement :101437 multiplies walking speed, not bullets.
+    return m_template->GetMasteryModifier(2, m_mastery, 100);
 }
 
 CGun::CGun() : m_template(nullptr), m_ammo(1), m_mastery(0),

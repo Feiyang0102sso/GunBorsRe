@@ -34,10 +34,25 @@ unsigned PowerupScene::GetCount() const {
     return m_profile.GetPowerupCount(entry->resource);
 }
 
+unsigned PowerupScene::GetCount(unsigned localIndex) const {
+    for (const PowerupEntry &entry : m_catalog) {
+        if (entry.resource.localIndex == localIndex) { return m_profile.GetPowerupCount(entry.resource); }
+    }
+    return 0;
+}
+
 bool PowerupScene::Select(unsigned index) {
     if (index >= m_catalog.size() || !IsSupported(m_catalog[index])) { return false; }
     m_selected = index;
     return true;
+}
+
+bool PowerupScene::SelectResource(const GameObjectRef &resource) {
+    for (unsigned index = 0; index < m_catalog.size(); ++index) {
+        const GameObjectRef &candidate = m_catalog[index].resource;
+        if (candidate.packHash == resource.packHash && candidate.localIndex == resource.localIndex) { return Select(index); }
+    }
+    return false;
 }
 
 void PowerupScene::Cycle() {

@@ -325,6 +325,11 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     UpdateCamera(deltaMs);
 }
 
+unsigned SurvivalSession::GetPowerupCount(unsigned localIndex) const {
+    if (m_powerups == nullptr) { return 0; }
+    return m_powerups->GetCount(localIndex);
+}
+
 void SurvivalSession::UpdateCamera(int deltaMs) {
     const MapRectangle bounds = m_map.GetVisibleBounds();
     const float scale = 0.8f / m_map.GetCamera().GetScale();

@@ -74,6 +74,7 @@ public:
     float GetPlayerRadius() const { return m_playerRadius; }
     void SetPathLayer(int index) { m_pathLayer = index; }
     void SetLevel(CLevel *level) { m_level = level; }
+    CLevel *GetScriptLevel() override { return m_level; }
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPlayerProgress(CPlayerProgress *progress);
     void AddExperience(unsigned amount);
@@ -88,6 +89,7 @@ public:
     std::uint64_t GetLastWaveBonus() const { return m_lastWaveBonus; }
     unsigned GetPerfectWaves() const { return m_perfectWaves; }
     unsigned GetClearedWaves() const { return m_clearedWaves; }
+    const std::vector<bool> &GetWavePerfectResults() const { return m_wavePerfectResults; }
     CombatId GetAutoAimTarget() const { return m_autoAim.GetTarget(); }
     bool HasClearPath(float x, float y, float targetX, float targetY, float radius) const;
     /** Read-only movement simulation for a test driver escaping wall contact. */
@@ -100,6 +102,9 @@ public:
     float GetProjectilePowerupMultiplier(CombatId owner) const override;
     float GetEnemyTimeScale() const override;
     unsigned GetTotalKills() const;
+    const EnemyModelCache &GetEnemyModelCache() const { return m_enemyModelCache; }
+    const std::vector<WeaponCombatProgress> &GetWeaponProgress() const { return m_weaponProgress; }
+    const std::vector<EnemyCasualty> &GetCasualties() const { return m_casualties; }
     void SetViewCenter(float x, float y) { m_viewCenterX = x; m_viewCenterY = y; m_hasViewCenter = true; }
     float GetViewCenterX() const { if (m_hasViewCenter) { return m_viewCenterX; } return playerX; }
     float GetViewCenterY() const { if (m_hasViewCenter) { return m_viewCenterY; } return playerY; }
@@ -125,8 +130,11 @@ public:
     unsigned invalidSpawns = 0;
 
 private:
+    EnemyModelCache m_enemyModelCache;
     CTargetingController m_autoAim;
     void RewardEnemy(const CombatEnemy &actor);
+    std::vector<WeaponCombatProgress> m_weaponProgress;
+    std::vector<EnemyCasualty> m_casualties;
     CPlayerProgress *m_progress = nullptr;
     std::uint64_t m_xplodium = 0;
     unsigned m_xplodiumRemainder = 0;
@@ -138,6 +146,7 @@ private:
     unsigned m_waveHits = 0;
     unsigned m_perfectWaves = 0;
     unsigned m_clearedWaves = 0;
+    std::vector<bool> m_wavePerfectResults;
     void Actions(CombatEnemy &actor);
     void SelectTarget(CombatEnemy &actor);
     void PartMatrix(const CombatEnemy &actor, int part, float *matrix) const;

@@ -6,8 +6,11 @@
 #include "runtime/MovieRenderer.h"
 #include "runtime/StoreCatalog.h"
 #include "gun_bros/CLevelIndicator.h"
+#include "gun_bros/CProfileManager.h"
+#include "runtime/PowerupCatalog.h"
 
-enum class SurvivalHudAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue };
+enum class SurvivalHudAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
+    SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music };
 
 struct SurvivalHudState {
     float health = 0, maximumHealth = 1, brotherHealth = 0, brotherMaximumHealth = 1;
@@ -17,10 +20,19 @@ struct SurvivalHudState {
     unsigned stopwatchMs = 0;
     unsigned bossIntroSerial = 0;
     int xplodiumMultiplier = 100;
+    float frameMs = 0, playerX = 0, playerY = 0, damageDealt = 0;
     bool horde = false;
     unsigned score = 0, killStreak = 0;
     bool paused = false, dead = false, cleared = false, transitioning = false, withBrother = false;
+    bool shopOpen = false, itemChoice = false, soundEnabled = true, musicEnabled = true;
+    std::uint64_t coins = 0, warbucks = 0;
+    float moveX = 0, moveY = 0, aimX = 0, aimY = 0;
+    GameObjectRef leftPowerup, rightPowerup;
+    unsigned leftCount = 0, rightCount = 0;
+    std::vector<PowerupInventoryEntry> inventory;
+    std::string shopMessage;
     std::string weapon, item, buffs, dialog, mission;
+    int tutorialStep = -1;
     std::string brotherName;
     float brotherLabelX = 0, brotherLabelY = 0, brotherLabelAlpha = 0;
     GameObjectRef guns[2], powerup;
@@ -38,6 +50,8 @@ public:
     unsigned NoticeTime() const { if (m_notices.empty()) { return 0; } return m_notices.front().elapsed; }
     SurvivalHudAction Pointer(const SurvivalHudState &state, float x, float y, bool down);
     bool CapturesPointer(const SurvivalHudState &state, float x, float y) const;
+    void Scroll(const SurvivalHudState &state, float amount);
+    const StoreEntry *SelectedItem() const;
 private:
     struct Button { MovieRegion rect; SurvivalHudAction action; const char *label; };
     std::vector<Button> Buttons(const SurvivalHudState &state) const;
@@ -45,6 +59,13 @@ private:
     void Icon(unsigned type, const GameObjectRef &object, const MovieRegion &region);
     void ObserveProgress(const SurvivalHudState &state);
     void DrawNotice();
+    void DrawControls(const SurvivalHudState &state);
+    void DrawShop(const SurvivalHudState &state);
+    void CountBadge(unsigned count, float x, float y, float diameter);
+    std::vector<unsigned> m_shopEntries;
+    int m_selectedItem = -1;
+    unsigned m_shopOffset = 0;
+    unsigned m_pauseOffset = 0;
     struct Notice { unsigned movie, elapsed; std::string title, footer; };
     std::vector<Notice> m_notices;
     unsigned m_previousLevel = 0, m_previousWave = 0;
@@ -53,6 +74,8 @@ private:
     MovieRenderer m_movies;
     PackTables *m_tables = nullptr;
     std::vector<StoreEntry> m_store;
+    std::vector<PowerupEntry> m_powerups;
+    std::map<std::uint32_t, std::unique_ptr<MovieRenderer>> m_powerupRenderers;
     std::map<std::uint64_t, std::unique_ptr<CTexture>> m_icons;
     bool m_previousDown = false;
     float m_mouseX = -1, m_mouseY = -1;

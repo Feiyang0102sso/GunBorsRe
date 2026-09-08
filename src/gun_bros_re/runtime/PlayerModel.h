@@ -36,6 +36,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
 // The player's move set names its models in this order, and CBrother::Draw
 // draws them as parts 0 and 1 with no attachment between them.
@@ -111,6 +112,9 @@ struct PlayerModel {
     PlayerVitals *vitals = nullptr;
     CBrother::PowerupState powerups;
     bool human = true;
+    GameObjectRef gunResource;
+    unsigned masteryExperience = 0;
+    std::map<std::uint64_t, unsigned> masteryByWeapon;
     unsigned brotherIndex = 0;
 };
 

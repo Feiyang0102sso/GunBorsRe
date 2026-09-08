@@ -72,6 +72,23 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
     const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
         m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(m_player, 3)));
     const bool playerKill = actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId;
+    bool counted = false;
+    for (auto &entry : m_casualties) {
+        if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) {
+            ++entry.count; counted = true; break;
+        }
+    }
+    if (!counted) { m_casualties.push_back({ref, 1, actor.data->owner}); }
+    const CombatHit &hit = actor.model.enemy.combat.pendingHit;
+    if (playerKill && !hit.weapon.IsNull()) {
+        bool credited = false;
+        for (auto &entry : m_weaponProgress) {
+            if (entry.resource.packHash == hit.weapon.packHash && entry.resource.localIndex == hit.weapon.localIndex) {
+                entry.experience += experience; credited = true; break;
+            }
+        }
+        if (!credited) { m_weaponProgress.push_back({hit.weapon, experience, hit.weaponMasteryLimit}); }
+    }
     if (m_horde) {
         // CLevel::OnEnemyKilled :119655-119802: bro kills score once, player
         // kills twice at the current streak multiplier and advance that streak.
@@ -127,6 +144,7 @@ void CombatScene::OnWaveCleared(unsigned perfectRewardPercent) {
     if (m_player.weapon != nullptr) { m_player.weapon->brother.OnWaveCleared(); }
     if (m_brotherModel != nullptr) { m_brotherModel->weapon->brother.OnWaveCleared(); }
     m_lastWaveBonus = 0;
+    m_wavePerfectResults.push_back(m_vitals.hits == m_waveHits);
     // CLevel::OnWaveCleared (:116980): integer percentage, at least one.
     // Count accepted damage contacts even in the invincible test pilot.
     if (m_vitals.hits == m_waveHits) {
@@ -252,6 +270,8 @@ void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
 }
 
 void CombatScene::Reset() {
+    m_weaponProgress.clear();
+    m_casualties.clear();
     m_xplodiumRemainder = 0;
     m_hasViewCenter = false;
     m_score = 0;
@@ -271,6 +291,7 @@ void CombatScene::Reset() {
     m_lastWaveBonus = 0;
     m_perfectWaves = 0;
     m_clearedWaves = 0;
+    m_wavePerfectResults.clear();
     if (m_player.weapon != nullptr) {
         // Reset the script and gun state as well as health. The replacement
         // copies templates before retiring the old equipment.
@@ -291,6 +312,7 @@ void CombatScene::Reset() {
     playerY = 650;
     m_previousPlayerX = playerX;
     m_previousPlayerY = playerY;
+    m_player.weapon->brother.SetLevelContext(m_level);
     facing = 0;
     damageDealt = 0;
     lastDamage = 0;
@@ -320,7 +342,7 @@ CombatEnemy *CombatScene::Spawn(std::size_t entry, float x, float y) {
     }
     state.previousX = state.x;
     state.previousY = state.y;
-    if (!LoadEnemyModel(m_tables, *actor->data, true, &m_program, EnemySpawnMode::Level, actor->model)) {
+    if (!LoadEnemyModel(m_tables, *actor->data, true, &m_program, EnemySpawnMode::Level, actor->model, &m_enemyModelCache)) {
         ++invalidSpawns;
         return nullptr;
     }
@@ -403,7 +425,21 @@ bool CombatScene::SwapBrotherWeapon() {
 }
 
 void CombatScene::ResetBrotherPosition(float x, float y) {
-    if (m_brother != nullptr) { m_brother->Reset(x, y); }
+    if (m_brother == nullptr) { return; }
+    // The host used to reset both actors onto the same point. Pick an open
+    // nearby position through the actual collision path, including on restart.
+    constexpr float directions[][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+        {-0.7071f, -0.7071f}, {0.7071f, -0.7071f}, {-0.7071f, 0.7071f}, {0.7071f, 0.7071f}};
+    const float distance = m_playerRadius * 4;
+    for (const auto &direction : directions) {
+        const float targetX = x + direction[0] * distance;
+        const float targetY = y + direction[1] * distance;
+        if (!CanWalkTo(x, y, targetX, targetY)) { continue; }
+        m_brother->Reset(targetX, targetY);
+        return;
+    }
+    // Extremely tight authored spawn areas still have a deterministic fallback.
+    m_brother->Reset(x, y);
 }
 
 void CombatScene::BrotherMatrix(float *matrix) const {
@@ -855,6 +891,8 @@ void CombatScene::Actions(CombatEnemy &actor) {
 }
 
 void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
+    // Equipment changes create a new script host; reconnect before input.
+    m_player.weapon->brother.SetLevelContext(m_level);
     if (deltaMs <= 0) { return; }
     deaths.clear();
     levelEvents.clear();
@@ -864,7 +902,8 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     if (!m_vitals.dead && m_vitals.stunMs == 0) {
         const float length = std::hypot(moveX, moveY);
         if (length > 0 && m_player.weapon->brother.CanMove()) {
-            const float speed = kPlayerSpeed * PlayerArmorMultiplier(m_player, 2) * m_player.weapon->brother.GetFrenzyMultiplier(2);
+            const float speed = kPlayerSpeed * PlayerArmorMultiplier(m_player, 2) * m_player.weapon->brother.GetFrenzyMultiplier(2) *
+                m_player.weapon->gun.GetMasterySpeedMod() * 0.01f;
             playerX += moveX / length * speed * deltaMs * 0.001f;
             playerY += moveY / length * speed * deltaMs * 0.001f;
         }
@@ -885,6 +924,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     }
     ResolveMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY, m_playerRadius);
     if (m_brotherModel != nullptr) {
+        m_brother->SetShootingAllowed(m_level == nullptr || m_level->CanBrotherShoot());
         m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
             playerX, playerY, PlayerArmorMultiplier(*m_brotherModel, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2));
         if (m_brother->TakeWeaponSwapRequest() && !SwapBrotherWeapon()) { ++invalidSpawns; }

@@ -123,7 +123,7 @@ void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
         }
     }
     bool shooting = false;
-    if (brother.CanShoot()) { UpdateTarget(deltaMs, world, shooting); }
+    if (brother.CanShoot() && m_shootingAllowed) { UpdateTarget(deltaMs, world, shooting); }
     if (!shooting && (moveX != 0 || moveY != 0)) { facing = std::atan2(moveY, moveX) / kRadians + 90; }
     brother.SetInput(moveX != 0 || moveY != 0, shooting);
 }

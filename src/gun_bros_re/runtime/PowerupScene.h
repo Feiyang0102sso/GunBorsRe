@@ -14,6 +14,7 @@ public:
         PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile);
     bool Init();
     bool Select(unsigned index);
+    bool SelectResource(const GameObjectRef &resource);
     void Cycle();
     bool Use();
     void Update(int deltaMs);
@@ -23,6 +24,7 @@ public:
     const PowerupMoviePlayer &GetMoviePlayer() const { return m_moviePlayer; }
     const PowerupEntry *GetSelected() const;
     unsigned GetCount() const;
+    unsigned GetCount(unsigned localIndex) const;
     unsigned consumed = 0;
     unsigned failures = 0;
 private:

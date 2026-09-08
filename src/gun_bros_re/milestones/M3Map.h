@@ -48,6 +48,6 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
     SurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
-    const MissionEntry *archiveMission = nullptr);
+    const MissionEntry *archiveMission = nullptr, bool performanceStudy = false);
 
 #endif  // GUN_BROS_RE_MILESTONES_M3MAP_H
