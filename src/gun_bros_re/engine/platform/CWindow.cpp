@@ -53,6 +53,8 @@ void FitWindowToUsableDisplay(int &width, int &height) {
 /** Map an SDL keycode onto the platform-independent enum. */
 KeyCode TranslateKey(SDL_Keycode key) {
     switch (key) {
+        case SDLK_ESCAPE: return KeyCode::Escape;
+        case SDLK_RETURN: return KeyCode::Enter;
         case SDLK_LEFT:   return KeyCode::Left;
         case SDLK_RIGHT:  return KeyCode::Right;
         case SDLK_UP:     return KeyCode::Up;
@@ -190,7 +192,7 @@ bool CWindow::PumpEvents() {
         if (event.type == SDL_EVENT_QUIT) {
             m_quitRequested = true;
         } else if (event.type == SDL_EVENT_KEY_DOWN) {
-            if (event.key.key == SDLK_ESCAPE) {
+            if (event.key.key == SDLK_ESCAPE && m_escapeCloses) {
                 m_quitRequested = true;
             } else {
                 const KeyCode code = TranslateKey(event.key.key);

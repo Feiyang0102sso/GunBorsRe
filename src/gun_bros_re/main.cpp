@@ -24,6 +24,9 @@
 #include "runtime/MissionCatalog.h"
 #include "runtime/OriginalProfile.h"
 #include "engine/CAudioPlayer.h"
+#include "runtime/StartupSequence.h"
+#include "runtime/MovieStudy.h"
+#include "runtime/SurvivalHud.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -44,11 +47,20 @@ void PrintUsage() {
     std::printf(
         "usage: gun_bros_re [options]\n"
         "\n"
-        "  (no options)              choose a viewer from the menu\n"
+        "  (no options)              start Gun Bros\n"
+        "  --research                open the permanent milestone menu\n"
+        "  --intro                   play original Glu video (space/click to skip)\n"
+        "  --skip-intro              enter menus without the startup video\n"
+        "  --media-check             decode all original music and intro frames\n"
+        "  --movie-check             parse original Glu UI timelines\n"
+        "  --movie <0..147>           inspect original UI; arrows browse, C regions\n"
+        "  --movie-gallery           render every original core UI movie\n"
         "  --help, -h                show available options and exit\n"
         "  --mute                    disable sound playback for every mode\n"
         "  --game                    planets, equipment, shop and local profile\n"
-        "  --menu-page <0..3>       menu screenshot page\n"
+        "  --menu-page <0..19>       menu screenshot page\n"
+        "  --hud-check              original combat HUD, overlays and input check\n"
+        "  --profile <file>         use a separate writable rebuilt profile\n"
         "  --progress-check          verify progression, purchases and refinery\n"
         "  --profile-play-check      play, save, reload and resume test account\n"
         "  --play                    retail survival; default pack2 map7\n"
@@ -66,6 +78,8 @@ void PrintUsage() {
         "  --original-save-check     read original data stores without modifying them\n"
         "  --original-profile       play an independent copy of the original perfect save\n"
         "  --original-profile-check validate import, original equipment and play/reload\n"
+        "  --horde [0-9]            play BOKOR with original Horde script\n"
+        "  --horde-check [0-9]      actual combat through one Horde\n"
         "  --campaign <pack> <n>     play original unfinished campaign mission\n"
         "  --campaign-check <pack> <n>  movement/combat smoke test in archived mission\n"
         "  --check-waves <n>         number of waves to play in survival check\n"
@@ -166,6 +180,14 @@ int PromptForHarness() {
         " 36  original save check -- read-only native profile archive\n"
         " 37  original save lab -- play imported perfect save independently\n"
         " 38  original profile play check -- import, equipment and reload\n"
+        " 39  startup movie    -- original Glu M4V and WAV\n"
+        " 40  media check      -- full video and seven MP3 decode\n"
+        " 41  original UI viewer -- CMovie timeline; arrows browse, C regions\n"
+        " 42  original UI check -- all packs and font resource records\n"
+        " 43  original UI gallery -- render every core movie to out/ui-movies\n"
+        " 44  combat HUD check -- active, pause, death and completion\n"
+        " 45  BOKOR Horde -- original map and ten starting difficulties\n"
+        " 46  BOKOR combat check -- real enemies and wave advancement\n"
         "\n"
         "choice [26]: ");
     std::fflush(stdout);
@@ -176,7 +198,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 38) {
+    if (choice < 1 || choice > 46) {
         return 26;
     }
     return choice;
@@ -186,6 +208,16 @@ int PromptForHarness() {
 
 int main(int argc, char **argv) {
     int modeArgumentCount = 0;
+    bool researchMenu = false;
+    std::string profilePath;
+    bool introStudy = false;
+    bool checkMedia = false;
+    bool checkMovies = false;
+    bool checkHud = false;
+    bool movieStudy = false;
+    bool movieGallery = false;
+    unsigned movieOrdinal = 0;
+    bool skipIntro = false;
     std::string bigDirectory = std::string(ASSET_ROOT) + "/big";
     bool surveyWeapons = false;
     bool checkArmor = false;
@@ -264,9 +296,31 @@ int main(int argc, char **argv) {
             CAudioPlayer::SetMuted(true);
             continue;
         }
+        if (std::strcmp(argument, "--profile") == 0 && i + 1 < argc) {
+            profilePath = argv[++i];
+            continue;
+        }
         ++modeArgumentCount;
 
-        if (std::strcmp(argument, "--game") == 0) {
+        if (std::strcmp(argument, "--movie") == 0 && i + 1 < argc) {
+            movieStudy = true;
+            movieOrdinal = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
+        } else if (std::strcmp(argument, "--movie-gallery") == 0) {
+            movieStudy = true;
+            movieGallery = true;
+        } else if (std::strcmp(argument, "--hud-check") == 0) { checkHud = true; }
+        else if (std::strcmp(argument, "--movie-check") == 0) {
+            checkMovies = true;
+        } else if (std::strcmp(argument, "--intro") == 0) {
+            introStudy = true;
+        } else if (std::strcmp(argument, "--media-check") == 0) {
+            checkMedia = true;
+        } else if (std::strcmp(argument, "--skip-intro") == 0) {
+            skipIntro = true;
+            playGame = true;
+        } else if (std::strcmp(argument, "--research") == 0) {
+            researchMenu = true;
+        } else if (std::strcmp(argument, "--game") == 0) {
             playGame = true;
         } else if (std::strcmp(argument, "--pickup-check") == 0) {
             checkPickups = true;
@@ -278,6 +332,12 @@ int main(int argc, char **argv) {
             playOriginalProfile = true;
         } else if (std::strcmp(argument, "--original-profile-check") == 0) {
             checkOriginalProfile = true;
+        } else if (std::strcmp(argument, "--horde") == 0 || std::strcmp(argument, "--horde-check") == 0) {
+            playCampaign = true;
+            checkCampaign = std::strcmp(argument, "--horde-check") == 0;
+            campaignPack = "pack11";
+            campaignMission = 0;
+            if (i + 1 < argc && argv[i + 1][0] != '-') { campaignMission = std::atoi(argv[++i]); }
         } else if ((std::strcmp(argument, "--campaign") == 0 || std::strcmp(argument, "--campaign-check") == 0) && i + 2 < argc) {
             playCampaign = true;
             checkCampaign = std::strcmp(argument, "--campaign-check") == 0;
@@ -424,7 +484,19 @@ int main(int argc, char **argv) {
     if (CAudioPlayer::IsMuted()) {
         std::printf("[audio] muted: playback streams disabled\n");
     }
-    if (modeArgumentCount == 0) {
+    // Retail startup now enters the game; the historical menu above is explicit.
+    if (modeArgumentCount == 0) { playGame = true; }
+    if (checkMedia) { return RunMediaCheck(); }
+    if (checkHud) { return RunSurvivalHudCheck(bigDirectory); }
+    if (checkMovies) { return RunMovieCheck(bigDirectory); }
+    if (movieStudy) { return RunMovieStudy(bigDirectory, movieOrdinal, screenshotPath, advanceMs, movieGallery); }
+    if (introStudy) { return RunStartupSequence(screenshotPath, advanceMs); }
+    if ((playGame || playOriginalProfile) && screenshotPath.empty() && !skipIntro) {
+        const int result = RunStartupSequence();
+        if (result == 2) { return 0; }
+        if (result != 0) { return result; }
+    }
+    if (researchMenu) {
         const int choice = PromptForHarness();
         if (choice == 1) {
             return RunM3Map(bigDirectory, mapPackName, mapIndex,
@@ -501,7 +573,7 @@ int main(int argc, char **argv) {
         }
         if (choice == 24) { return RunProgressCheck(bigDirectory); }
         if (choice == 25) { return RunProfilePlayCheck(bigDirectory); }
-        if (choice == 26) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage); }
+        if (choice == 26) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, false, profilePath); }
         if (choice == 27) { return RunGameMenuCheck(bigDirectory); }
         if (choice == 29) { return RunPickupCheck(bigDirectory); }
         if (choice == 30) { return RunPickupRenderCheck(bigDirectory); }
@@ -510,8 +582,16 @@ int main(int argc, char **argv) {
         if (choice == 34) { return RunMissionCheck(bigDirectory); }
         if (choice == 35) { return RunMissionPlay(bigDirectory, "", -1, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview); }
         if (choice == 36) { return RunOriginalProfileCheck(bigDirectory); }
-        if (choice == 37) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, true); }
+        if (choice == 37) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, true, profilePath); }
         if (choice == 38) { return RunOriginalProfilePlayCheck(bigDirectory); }
+        if (choice == 39) { return RunStartupSequence(screenshotPath, advanceMs); }
+        if (choice == 40) { return RunMediaCheck(); }
+        if (choice == 41) { return RunMovieStudy(bigDirectory, movieOrdinal, screenshotPath, advanceMs); }
+        if (choice == 42) { return RunMovieCheck(bigDirectory); }
+        if (choice == 43) { return RunMovieStudy(bigDirectory, 0, "", 0, true); }
+        if (choice == 45) { return RunGameFrontEnd(bigDirectory, screenshotPath, 16); }
+        if (choice == 46) { return RunMissionPlay(bigDirectory, "pack11", 0, 80, -1, "", 0, false, true); }
+        if (choice == 44) { return RunSurvivalHudCheck(bigDirectory); }
         if (choice == 33) { return RunSurvival(bigDirectory, "pack2", 7, gunIndex, armorIndex, screenshotPath,
             advanceMs, firePreview, showCollisions, false, 2, 0, nullptr, false, true); }
         if (choice == 28) {
@@ -537,12 +617,12 @@ int main(int argc, char **argv) {
     if (checkPowerups) { return RunPowerupCheck(bigDirectory); }
     if (checkMissions) { return RunMissionCheck(bigDirectory); }
     if (checkOriginalSaves) { return RunOriginalProfileCheck(bigDirectory); }
-    if (playOriginalProfile) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, true); }
+    if (playOriginalProfile) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, true, profilePath); }
     if (checkOriginalProfile) { return RunOriginalProfilePlayCheck(bigDirectory); }
     if (playCampaign) { return RunMissionPlay(bigDirectory, campaignPack, campaignMission, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, checkCampaign); }
     if (checkPickupRendering) { return RunPickupRenderCheck(bigDirectory); }
     if (checkProfilePlay) { return RunProfilePlayCheck(bigDirectory); }
-    if (playGame) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage); }
+    if (playGame) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, false, profilePath); }
     if (checkGameMenu) { return RunGameMenuCheck(bigDirectory); }
     if (checkArmor) {
         return RunArmorCheck(bigDirectory);

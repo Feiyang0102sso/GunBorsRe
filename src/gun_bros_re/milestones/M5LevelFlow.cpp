@@ -12,6 +12,16 @@
 #include <cmath>
 
 namespace {
+class IndicatorWorld : public IEnemySpawnWorld {
+public:
+    bool SpawnEnemy(const GameObjectRef &, int, int, int) override { return false; }
+    int CountEnemies(const GameObjectRef *, int) const override { return 0; }
+    bool GetObjectPosition(int objectId, float &x, float &y) const override {
+        if (objectId != 7) { return false; }
+        x = 2000; y = 500; return true;
+    }
+};
+
 unsigned CheckCameraScale() {
     CCamera camera;
     unsigned failures = 0;
@@ -39,6 +49,79 @@ unsigned CheckCameraScale() {
     level.Bind(data, map);
     if (map.GetCamera().GetScale() != 0.8f) { ++failures; }
     std::printf("[camera-check] interpolation/retarget/snap/native/restart failures=%u\n", failures);
+    for (std::int16_t bit : {1, 4, 1, 31, 32, -1}) { level.FunctionResolver(82, &bit, 1); }
+    if (level.GetStat42Bits() != 0x80000012u) { ++failures; }
+    level.Bind(data, map);
+    if (level.GetStat42Bits() != 0) { ++failures; }
+    std::printf("[level-stat-check] record42/set-bit/idempotent/range/reset failures=%u\n", failures);
+    const std::int16_t dialogArguments[] = {5, 0, 1};
+    level.FunctionResolver(40, dialogArguments, 3);
+    const unsigned dialogSerial = level.GetDialogSerial();
+    if (level.GetDialogResource() != 5 || !level.DoesDialogAutoClose()) { ++failures; }
+    level.FunctionResolver(70, nullptr, 0);
+    if (level.GetDialogResource() != 5 || !level.IsDialogCloseRequested() ||
+        level.GetDialogSerial() != dialogSerial) { ++failures; }
+    level.CompleteDialog();
+    if (level.GetDialogResource() != -1 || level.IsDialogCloseRequested()) { ++failures; }
+    level.FunctionResolver(70, nullptr, 0);
+    if (level.IsDialogCloseRequested()) { ++failures; }
+    std::printf("[level-dialog-check] script-open/deferred-close/empty-close failures=%u\n", failures);
+    level.FunctionResolver(66, nullptr, 0);
+    level.FunctionResolver(61, nullptr, 0);
+    level.Update(250);
+    if (std::fabs(level.GetBrotherLabelAlpha() - 0.5f) > 0.00001f || level.GetStopwatchTime() != 250) { ++failures; }
+    level.FunctionResolver(67, nullptr, 0);
+    level.FunctionResolver(62, nullptr, 0);
+    level.Update(100);
+    if (std::fabs(level.GetBrotherLabelAlpha() - 0.3f) > 0.00001f || level.GetStopwatchTime() != 250) { ++failures; }
+    level.Bind(data, map);
+    if (level.GetBrotherLabelAlpha() != 0 || level.GetStopwatchTime() != 0) { ++failures; }
+    std::printf("[level-clock-check] brother-label-fade/stopwatch/pause/restart failures=%u\n", failures);
+    camera.Reset();
+    camera.UpdatePosition(600, 500, 0, 0, 2000, 1500, 400, 300);
+    camera.SetTarget(1200, 800);
+    camera.SetCameraMode(2);
+    camera.Update(500);
+    camera.UpdatePosition(600, 500, 0, 0, 2000, 1500, 400, 300);
+    if (std::fabs(camera.GetX() - 900) > 0.001f || std::fabs(camera.GetY() - 650) > 0.001f) { ++failures; }
+    camera.Update(500);
+    camera.UpdatePosition(600, 500, 0, 0, 2000, 1500, 400, 300);
+    if (camera.GetX() != 1200 || camera.GetY() != 800) { ++failures; }
+    camera.Shake(1000);
+    camera.Shake(200);
+    if (camera.GetShakeTime() != 1000) { ++failures; }
+    camera.Update(1000);
+    if (camera.GetShakeTime() != 0) { ++failures; }
+    camera.SetCameraMode(0);
+    camera.Update(1000);
+    camera.UpdatePosition(5, 5, 0, 0, 2000, 1500, 400, 300);
+    if (camera.GetX() != 200 || camera.GetY() != 150) { ++failures; }
+    const std::int16_t disabled = 0;
+    level.FunctionResolver(77, &disabled, 1);
+    level.FunctionResolver(78, &disabled, 1);
+    if (level.CanPlayerMove() || level.CanPlayerShoot()) { ++failures; }
+    level.Bind(data, map);
+    if (!level.CanPlayerMove() || !level.CanPlayerShoot()) { ++failures; }
+    std::printf("[camera-position-check] target/follow/clamp/shake/input-gates failures=%u\n", failures);
+    IndicatorWorld indicatorWorld;
+    level.Bind(data, map, &indicatorWorld);
+    const std::int16_t marker[] = {7, 1};
+    level.FunctionResolver(49, marker, 2);
+    level.UpdateIndicators(100, 20, 20, 984, 668);
+    if (level.GetIndicators().size() != 1 || level.GetIndicators()[0].Alpha() != 1) { ++failures; }
+    level.FunctionResolver(50, marker, 1);
+    level.UpdateIndicators(100, 20, 20, 984, 668);
+    if (level.GetIndicators().size() != 1 || std::fabs(level.GetIndicators()[0].Alpha() - 0.5f) > 0.001f) { ++failures; }
+    level.UpdateIndicators(100, 20, 20, 984, 668);
+    if (!level.GetIndicators().empty()) { ++failures; }
+    level.FunctionResolver(49, marker, 2);
+    level.UpdateIndicators(16, 1500, 20, 984, 668);
+    level.UpdateIndicators(200, 1500, 20, 984, 668);
+    if (!level.GetIndicators().empty() || level.SetIndicator(8, 1)) { ++failures; }
+    level.FunctionResolver(49, marker, 2);
+    level.Bind(data, map, &indicatorWorld);
+    if (!level.GetIndicators().empty()) { ++failures; }
+    std::printf("[indicator-check] native-create/remove cosine-fade=200ms onscreen-retire/restart failures=%u\n", failures);
     return failures;
 }
 

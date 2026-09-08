@@ -29,6 +29,7 @@ bool CEnemySpawner::Spawn(int resource, int layer, int node, int objectId) {
     if (m_level == nullptr || m_world == nullptr || !m_level->GetResource(resource, enemy)) {
         return false;
     }
+    if (m_world->CountEnemies() >= static_cast<int>(m_level->GetEnemyLimit())) { return false; }
     if (layer < 0) {
         layer = m_layer;
     }

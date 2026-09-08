@@ -168,6 +168,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
     profile.experience = 105;
     profile.xplodium = 321;
     profile.clearedWaves[2] = 50;
+    profile.stat42Bits = 0x80000012u;
     profile.refinery.slots[1].state = 1;
     if (!profile.refinery.BeginRefinement(1, 1, 100, profile.xplodium, 1000)) { ++failures; }
     const std::filesystem::path savePath = "out/profile-check.dat";
@@ -175,7 +176,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
     CProfileManager reloaded;
     reloaded.Reset(coreHash, refinementData);
     if (!reloaded.LoadFromDisk(savePath) || reloaded.experience != 105 || reloaded.xplodium != 221 ||
-        reloaded.clearedWaves[2] != 50 || reloaded.inventory.size() != profile.inventory.size() ||
+        reloaded.clearedWaves[2] != 50 || reloaded.stat42Bits != 0x80000012u || reloaded.inventory.size() != profile.inventory.size() ||
         reloaded.configuration.guns[1].packHash != profile.configuration.guns[1].packHash) { ++failures; }
     reloaded.refinery.UpdateRefinement(1300);
     if (!reloaded.refinery.CollectResources(1, reloaded.coins) || reloaded.coins != 120) { ++failures; }
@@ -186,10 +187,15 @@ int RunProgressCheck(const std::string &bigDirectory) {
     std::vector<std::string> lines;
     std::string savedLine;
     while (std::getline(currentProfile, savedLine)) { lines.push_back(savedLine); }
-    if (lines.size() < 3 || lines[lines.size() - 2] != "0") { ++failures; }
+    // v3-v5 append settings and Horde records after the consumable section.
+    // The v1 boundary is the end of the twelve refinery records, not END - 1.
+    const std::size_t legacyLineCount = 4 + reloaded.configuration.guns.size() +
+        reloaded.configuration.armor.size() + reloaded.inventory.size() + reloaded.refinery.slots.size();
+    if (lines.size() <= legacyLineCount || lines[legacyLineCount] != "0") { ++failures; }
     else {
         lines[0] = "GUNBROS_RE_PROFILE 1";
-        lines.erase(lines.end() - 2);
+        lines.resize(legacyLineCount);
+        lines.push_back("END");
         std::ofstream legacyProfile("out/profile-check-v1.dat");
         for (const std::string &line : lines) { legacyProfile << line << '\n'; }
         legacyProfile.close();

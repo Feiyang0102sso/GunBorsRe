@@ -56,6 +56,9 @@ public:
     void Update(int deltaMs, float moveX, float moveY, bool shoot);
     void PlayerMatrix(float *matrix) const;
     void SetBrother(PlayerModel *model, CBrotherAI *brother);
+    void SetBrotherWeapons(const CScript &script, const CGun::Template &pistol, const CGun::Template &rifle);
+    bool SwapBrotherWeapon();
+    unsigned GetBrotherWeaponSlot() const { return m_brotherWeaponSlot; }
     void ResetBrotherPosition(float x, float y);
     void BrotherMatrix(float *matrix) const;
     CombatId FindBrotherTarget(float x, float y, float radius) override;
@@ -74,10 +77,13 @@ public:
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPlayerProgress(CPlayerProgress *progress);
     void AddExperience(unsigned amount);
-    void AddXplodium(unsigned amount) { m_xplodium += amount; }
+    void AddXplodium(unsigned amount);
     void AddHealth(unsigned amount);
     bool TouchesPickup(float x, float y) const;
     std::uint64_t GetXplodium() const { return m_xplodium; }
+    void SetHorde(bool enabled) { m_horde = enabled; }
+    unsigned GetScore() const { return m_score; }
+    unsigned GetKillStreak() const { return m_killStreak; }
     void OnWaveCleared(unsigned perfectRewardPercent);
     std::uint64_t GetLastWaveBonus() const { return m_lastWaveBonus; }
     unsigned GetPerfectWaves() const { return m_perfectWaves; }
@@ -92,6 +98,11 @@ public:
     HitResult ApplyHit(CombatId target, const CombatHit &hit) override;
     float GetDamageMultiplier(CombatId owner, float fallback = 1) const override;
     float GetProjectilePowerupMultiplier(CombatId owner) const override;
+    float GetEnemyTimeScale() const override;
+    unsigned GetTotalKills() const;
+    void SetViewCenter(float x, float y) { m_viewCenterX = x; m_viewCenterY = y; m_hasViewCenter = true; }
+    float GetViewCenterX() const { if (m_hasViewCenter) { return m_viewCenterX; } return playerX; }
+    float GetViewCenterY() const { if (m_hasViewCenter) { return m_viewCenterY; } return playerY; }
     void Splash(const CombatHit &hit, float radius, float coneDegrees,
         float force, int forceMs) override;
     void SpawnFromProjectile(const GameObjectRef &resource, const CombatHit &hit) override;
@@ -118,6 +129,10 @@ private:
     void RewardEnemy(const CombatEnemy &actor);
     CPlayerProgress *m_progress = nullptr;
     std::uint64_t m_xplodium = 0;
+    unsigned m_xplodiumRemainder = 0;
+    bool m_horde = false;
+    unsigned m_score = 0;
+    unsigned m_killStreak = 0;
     std::uint64_t m_waveXplodium = 0;
     std::uint64_t m_lastWaveBonus = 0;
     unsigned m_waveHits = 0;
@@ -141,6 +156,9 @@ private:
     PlayerModel &m_player;
     PlayerModel *m_brotherModel = nullptr;
     CBrotherAI *m_brother = nullptr;
+    const CScript *m_brotherScript = nullptr;
+    const CGun::Template *m_brotherWeapons[2]{};
+    unsigned m_brotherWeaponSlot = 0;
     PlayerVitals &m_vitals;
     WeaponEffects &m_effects;
     float m_playerGameScale;
@@ -148,6 +166,8 @@ private:
     const CCollisionData *m_collision = nullptr;
     WeaponCollision *m_weaponCollision = nullptr;
     float m_cameraScale = 1;
+    float m_viewCenterX = 0, m_viewCenterY = 0;
+    bool m_hasViewCenter = false;
     float m_playerRadius = kArenaPlayerCollisionRadius;
     float m_left = 35;
     float m_top = 150;

@@ -722,6 +722,10 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
     const float direction = facingDegrees - 90;
     const float beamLength = kMaximumBeamLength;
     for (auto &shot : scene.shots) {
+        int shotDeltaMs = deltaMs;
+        if (shot->ownerType == 1 && scene.world != nullptr) {
+            shotDeltaMs = std::max(1, static_cast<int>(std::lround(deltaMs * scene.world->GetEnemyTimeScale())));
+        }
         const CCollisionData *shotCollision = nullptr;
         if (collision != nullptr) {
             shotCollision = &collision->walls;
@@ -729,7 +733,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         }
         const CGameSpriteGluRef &sprite = shot->visual->data.GetSpriteRef();
         const int duration = scene.Animation(sprite.packHash, sprite.archetype, shot->script.animation).durationMs;
-        shot->script.Update(deltaMs, duration);
+        shot->script.Update(shotDeltaMs, duration);
         if (shot->script.removed) {
             for (const GunCue &cue : shot->script.TakeCues()) {
                 scene.Cue(cue, shot->x, shot->y, shot->z, shot->direction, shot.get());
@@ -770,8 +774,8 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             const float dy = std::sin(shot->direction * kRadians) * beamLength;
             shot->length = beamLength * SegmentFraction(shot->x, shot->y, dx, dy, shotCollision);
         } else {
-            shot->speed = std::max(0.0f, shot->speed + shot->script.acceleration * deltaMs * 0.001f);
-            const float distance = shot->speed * shot->script.velocityScale * deltaMs * 0.001f;
+            shot->speed = std::max(0.0f, shot->speed + shot->script.acceleration * shotDeltaMs * 0.001f);
+            const float distance = shot->speed * shot->script.velocityScale * shotDeltaMs * 0.001f;
             const float dx = std::cos(radians) * distance, dy = std::sin(radians) * distance;
             const float fraction = SegmentFraction(shot->x, shot->y, dx, dy, shotCollision, &wallNormalX, &wallNormalY);
             shot->x += dx * fraction; shot->y += dy * fraction;

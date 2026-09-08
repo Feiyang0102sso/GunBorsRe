@@ -54,6 +54,7 @@ struct CombatHit {
     int edge = -1;
     bool splash = false;
     bool percentDamage = false;
+    bool applyArmorAttack = true; // Scripted fixed-damage air strikes bypass gun bonuses.
     int spawnObjectId = -1;
     bool forceSpawn = false;
 };
@@ -76,6 +77,7 @@ public:
     virtual HitResult ApplyHit(CombatId target, const CombatHit &hit) = 0;
     virtual float GetDamageMultiplier(CombatId owner, float fallback = 1) const { return fallback; }
     virtual float GetProjectilePowerupMultiplier(CombatId owner) const { return 1; }
+    virtual float GetEnemyTimeScale() const { return 1; }
     virtual void Splash(const CombatHit &hit, float radius, float coneDegrees,
         float force, int forceMs) = 0;
     virtual void SpawnFromProjectile(const GameObjectRef &resource,

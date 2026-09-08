@@ -41,10 +41,12 @@ public:
     struct PowerupState {
         int shieldMs = 0;
         int autoFireMs = 0;
+        int legacyFrenzyMs = 0;
+        float legacyFrenzyMultiplier[3]{1, 1, 1};
         bool turretActive = false;
         int frenzyMs[3]{};
         float frenzyMultiplier[3]{1, 1, 1};
-        GameObjectRef effects[5];
+        GameObjectRef effects[6];
     };
     class Template {
     public:
@@ -92,6 +94,9 @@ public:
     bool IsTurretActive() const { return m_powerups != nullptr && m_powerups->turretActive; }
     void SetTurretIsActive(bool active) { if (m_powerups != nullptr) { m_powerups->turretActive = active; } }
     void StartFrenzyType(const GameObjectRef &effect, int durationMs, float multiplier, unsigned type);
+    void StartFrenzy(const GameObjectRef &effect, int durationMs, float attack, float defense, float speed);
+    void StopFrenzy();
+    bool IsFrenzy() const { return m_powerups != nullptr && m_powerups->legacyFrenzyMs > 0; }
     bool IsShield() const { return m_powerups != nullptr && m_powerups->shieldMs > 0; }
     bool IsFrenzyType(unsigned type) const { return type < 3 && m_powerups != nullptr && m_powerups->frenzyMs[type] > 0; }
     float GetFrenzyMultiplier(unsigned type) const;

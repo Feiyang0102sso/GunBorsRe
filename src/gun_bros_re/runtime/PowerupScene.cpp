@@ -9,7 +9,7 @@
 PowerupScene::PowerupScene(CResTOCManager &toc, PackTables &tables, PlayerModel &player,
     PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile)
     : m_toc(toc), m_tables(tables), m_player(player), m_vitals(vitals), m_scene(scene),
-      m_effects(effects), m_profile(profile) {}
+      m_effects(effects), m_profile(profile), m_moviePlayer(toc, tables, scene) {}
 
 bool PowerupScene::Init() { return LoadPowerupCatalog(m_toc, m_tables, m_catalog); }
 
@@ -18,6 +18,8 @@ bool PowerupScene::IsSupported(const PowerupEntry &entry) const {
     // templates stay available in the full research catalogue.
     // Auto-fire and turret now have their original targeting/spawn hosts;
     // movie-driven items and legacy Tantrum still remain archived.
+    // Movie-driven air strikes now have real timeline/callback hosts below.
+    // Legacy Tantrum now follows its original timer/effect and expiry callbacks.
     return IsPlayablePowerup(entry.resource);
 }
 
@@ -49,6 +51,7 @@ void PowerupScene::Cycle() {
 }
 
 bool PowerupScene::Use() {
+    if (m_moviePlayer.IsActive()) { return false; }
     const PowerupEntry *entry = GetSelected();
     if (entry == nullptr || !IsSupported(*entry) || GetCount() == 0 || m_vitals.dead || !m_player.weapon) { return false; }
     // CBrother::UsePowerup :138000 guards this exact item before querying its
@@ -58,6 +61,7 @@ bool PowerupScene::Use() {
     PowerupStatus status;
     status.healthPercent = static_cast<int>(std::lround(m_vitals.health * 100 / m_vitals.maximum));
     status.shield = m_player.weapon->brother.IsShield();
+    status.frenzy = m_player.weapon->brother.IsFrenzy();
     status.autoFire = m_player.weapon->brother.IsAutoFire();
     status.turret = m_player.weapon->brother.IsTurretActive();
     for (unsigned type = 0; type < 3; ++type) { status.frenzyTypes[type] = m_player.weapon->brother.IsFrenzyType(type); }
@@ -65,6 +69,15 @@ bool PowerupScene::Use() {
     query.Bind(entry->data, status);
     if (!query.Query(0) || !query.Query(1)) { return false; }
     const bool decrement = query.Query(3);
+    const unsigned itemIndex = entry->resource.localIndex;
+    if (itemIndex == 0 || itemIndex == 10 || itemIndex == 11) {
+        if (!m_moviePlayer.Start(*entry)) { ++failures; return false; }
+        if (decrement) {
+            if (!m_profile.ConsumePowerup(entry->resource)) { m_moviePlayer.Reset(); ++failures; return false; }
+            ++consumed;
+        }
+        return true;
+    }
     CPowerup powerup;
     powerup.Bind(entry->data, status);
     powerup.Equip();
@@ -87,6 +100,10 @@ bool PowerupScene::Use() {
             requested = true;
         } else if (action.function == 22) {
             m_player.weapon->brother.StartAutoFire(action.resource, action.arguments[1]);
+            requested = true;
+        } else if (action.function == 17) {
+            m_player.weapon->brother.StartFrenzy(action.resource, action.arguments[1] * 1000 / 256,
+                action.arguments[2] / 256.0f, action.arguments[3] / 256.0f, action.arguments[4] / 256.0f);
             requested = true;
         } else if (action.function == 27) {
             m_player.weapon->brother.StartFrenzyType(action.resource, action.arguments[1] * 1000 / 256,
@@ -111,6 +128,7 @@ bool PowerupScene::Use() {
 }
 
 void PowerupScene::Update(int deltaMs) {
+    m_moviePlayer.Update(deltaMs);
     if (!m_player.weapon) { return; }
     const unsigned thrown = m_player.weapon->brother.TakeThrownGrenades(0);
     if (thrown > 0) {
@@ -128,3 +146,10 @@ void PowerupScene::Update(int deltaMs) {
         m_equipped = {};
     }
 }
+
+void PowerupScene::Reset() {
+    m_equipped = {};
+    m_moviePlayer.Reset();
+}
+
+bool PowerupScene::DrawMovies() { return m_moviePlayer.Draw(); }

@@ -41,6 +41,7 @@ void CBrotherAI::Reset(float startX, float startY) {
     m_moving = false;
     m_targetCount = 0;
     m_forceMs = 0;
+    m_weaponSwapRequested = false;
     m_random.seed(0xB6400);
 }
 
@@ -98,6 +99,10 @@ void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
         brother.SetInput(false, false);
         return;
     }
+    // CBrotherAI::Update :139423 chooses an occasional weapon swap with the
+    // original inclusive 0..10000 <= 3 roll. The host applies it after Update
+    // returns, so replacing the gun cannot invalidate this CBrother reference.
+    if (Random(0, 10000) <= 3) { m_weaponSwapRequested = true; }
     const float distance = std::hypot(playerX - x, playerY - y);
     if (distance < kFollowStopDistance || !brother.CanMove()) { m_moving = false; }
     else if (distance > kFollowStartDistance) { m_moving = true; }

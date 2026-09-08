@@ -186,7 +186,7 @@ int RunMissionPlay(const std::string &bigDirectory, const std::string &packName,
     if (packIndex < 0 || missionIndex < 0) { return 1; }
     for (const MissionEntry &entry : catalog) {
         if (entry.resource.packHash != toc.GetPack(packIndex)->GetPackHash() || entry.resource.localIndex != missionIndex) { continue; }
-        if (entry.data.type != 0) { std::printf("[campaign] entry is not an archived campaign mission\n"); return 1; }
+        if (entry.data.type != 0 && entry.data.type != 2) { std::printf("[mission] unsupported mission type\n"); return 1; }
         std::vector<std::uint8_t> payload;
         if (!tables.ReadSectionResource(entry.data.level.packHash, GameSection::Level, entry.data.level.localIndex, payload)) { return 1; }
         CArrayInputStream stream(payload);
@@ -194,7 +194,7 @@ int RunMissionPlay(const std::string &bigDirectory, const std::string &packName,
         if (!level.Init(stream)) { return 1; }
         std::printf("[campaign] %s %s\n", entry.owner.c_str(), entry.title.c_str());
         return RunSurvival(bigDirectory, tables.GetPackName(level.mapRef.packHash), level.mapRef.localIndex,
-            weaponIndex, armorIndex, screenshot, advanceMs, fire, false, check, 2, 0, nullptr, false, false, &entry);
+            weaponIndex, armorIndex, screenshot, advanceMs, fire, false, check, 2, entry.data.value64, nullptr, false, false, &entry);
     }
     return 1;
 }

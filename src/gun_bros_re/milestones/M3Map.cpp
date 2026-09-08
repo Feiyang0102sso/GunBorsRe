@@ -30,6 +30,7 @@
 
 #define NOMINMAX
 #include "milestones/M3Map.h"
+#include "gun_bros/CBGM.h"
 
 #include "milestones/EnemyModel.h"
 #include "milestones/SurvivalPilot.h"
@@ -42,6 +43,7 @@
 #include <sstream>
 #include "runtime/SurvivalGameContext.h"
 #include "runtime/HudText.h"
+#include "runtime/SurvivalHud.h"
 #include "runtime/MissionCatalog.h"
 #include "gun_bros/WeaponEffects.h"
 #include "runtime/PackTables.h"
@@ -1913,6 +1915,14 @@ public:
         }
     }
 
+    bool GetObjectPosition(int objectId, float &x, float &y) const override {
+        for (const PlacedProp &prop : m_map.props) {
+            if (prop.objectId != objectId || (prop.runtime != nullptr && prop.runtime->IsRemoved())) { continue; }
+            x = prop.x; y = prop.y; return true;
+        }
+        return false;
+    }
+
     void Update(int deltaMs) override {
         const CLayerCollision *bodyLayer = m_map.map.GetCurrentCollisionLayer();
         const CLayerCollision *bulletLayer = m_map.map.GetCurrentBulletCollisionLayer();
@@ -2724,6 +2734,10 @@ void FollowPlayerCamera(const LoadedMap &loaded, int viewWidth, int viewHeight,
     const float viewWorldHeight = static_cast<float>(viewHeight) / camera.zoom;
     camera.x = loaded.players[0].x - viewWorldWidth * 0.5f;
     camera.y = loaded.players[0].y - viewWorldHeight * 0.5f;
+    if (loaded.map.GetCamera().HasPosition()) {
+        camera.x = loaded.map.GetCamera().GetX() - viewWorldWidth * 0.5f;
+        camera.y = loaded.map.GetCamera().GetY() - viewWorldHeight * 0.5f;
+    }
 
     const MapRectangle bounds = loaded.map.GetVisibleBounds();
     if (bounds.IsEmpty()) {
@@ -2896,13 +2910,25 @@ int RunMapList(const std::string &bigDirectory) {
 
 /** Checkpoint the rebuilt profile only. Research harnesses pass no context. */
 bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &progress,
-    const CombatScene &scene, unsigned wave, std::uint64_t &accountedXplodium) {
+    const CombatScene &scene, const CLevel &level, std::uint64_t &accountedXplodium) {
     if (context == nullptr) { return true; }
     CProfileManager &profile = context->profile;
+    const unsigned wave = level.GetWave();
+    profile.stat42Bits |= level.GetStat42Bits();
     profile.experience = progress.GetExperience();
     profile.xplodium += scene.GetXplodium() - accountedXplodium;
     accountedXplodium = scene.GetXplodium();
-    profile.clearedWaves[context->planet] = std::max(profile.clearedWaves[context->planet], wave);
+    if (context->hordeStart >= 0) {
+        const unsigned index = static_cast<unsigned>(context->hordeStart);
+        profile.hordeBestKills[index] = std::max(profile.hordeBestKills[index], scene.GetTotalKills());
+        profile.hordeBestWave[index] = std::max(profile.hordeBestWave[index], wave);
+        profile.hordeBestScore[index] = std::max(profile.hordeBestScore[index], scene.GetScore());
+    } else {
+        profile.clearedWaves[context->planet] = std::max(profile.clearedWaves[context->planet], wave);
+        if (scene.GetTotalKills() < context->accountedKills) { context->accountedKills = 0; }
+        profile.enemyKills[context->planet] += scene.GetTotalKills() - context->accountedKills;
+    }
+    context->accountedKills = scene.GetTotalKills();
     return profile.SaveToDisk(context->savePath);
 }
 
@@ -2930,6 +2956,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     CWindow window;
     if (!window.Open("Gun Bros - Survival", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    window.SetEscapeCloses(false);
+    SurvivalHud survivalHud;
+    if (!survivalHud.Init(toc, tables)) { return 1; }
     CShaderProgram program, markerProgram;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0") ||
         !markerProgram.Load(kShaderDirectory, "ogles_vs_mvp_constcolor", "ogles_ps_constcolor")) { return 1; }
@@ -3034,23 +3063,124 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             !restoredPickupProfile.LoadFromDisk("out/pickup-profile-check.dat") ||
             restoredPickupProfile.GetPowerupCount(grenade) != 1) { ++checkFailures; }
         std::printf("[pickup-check] health/experience/xplodium/grenade/save-once failures=%u\n", checkFailures);
+        CLevel percentageLevel;
+        CLevel::Template percentageTemplate;
+        CMap percentageMap;
+        percentageLevel.Bind(percentageTemplate, percentageMap);
+        rewardProbe.SetLevel(&percentageLevel);
+        const std::uint64_t beforePercentage = rewardProbe.GetXplodium();
+        const std::int16_t percentage = 105;
+        percentageLevel.FunctionResolver(56, &percentage, 1);
+        for (unsigned award = 0; award < 20; ++award) { rewardProbe.AddXplodium(1); }
+        if (rewardProbe.GetXplodium() != beforePercentage + 21) { ++checkFailures; }
+        const std::int16_t increment = 95;
+        percentageLevel.FunctionResolver(57, &increment, 1);
+        rewardProbe.AddXplodium(1);
+        if (rewardProbe.GetXplodium() != beforePercentage + 23) { ++checkFailures; }
+        std::printf("[xplodium-check] fractional-carry=1 set-add-percent=1 failures=%u\n", checkFailures);
+        // Three real enemy deaths distinguish player streak growth from a bro
+        // assist. Expected points are 2E + 4E + 3E; only the first two grant XP.
+        rewardProbe.Reset();
+        pickupProgress.Bind(progressData);
+        rewardProbe.SetPlayerProgress(&pickupProgress);
+        rewardProbe.SetHorde(true);
+        percentageLevel.Bind(percentageTemplate, percentageMap);
+        vitals.invincible = true;
+        unsigned expectedExperience = 0;
+        for (unsigned death = 0; death < 3; ++death) {
+            CombatEnemy *target = rewardProbe.Spawn(0, 600, 350);
+            if (target == nullptr) { ++checkFailures; break; }
+            const unsigned experience = static_cast<unsigned>(std::ceil(target->data->experienceReward * PlayerArmorMultiplier(player, 3)));
+            if (death == 0) { expectedExperience = experience; }
+            CombatHit hit;
+            hit.owner = kPlayerCombatId;
+            if (death == 2) { hit.owner = kBrotherCombatId; }
+            hit.ownerType = 0;
+            hit.damage = 1000000;
+            hit.applyArmorAttack = false;
+            const CombatId targetId = target->model.enemy.combat.id;
+            for (unsigned tick = 0; tick < 300 && !target->deathReported; ++tick) {
+                rewardProbe.ApplyHit(targetId, hit);
+                rewardProbe.Update(16, 0, 0, false);
+            }
+            if (!target->deathReported) { ++checkFailures; }
+        }
+        if (expectedExperience == 0 || rewardProbe.GetScore() != expectedExperience * 9 ||
+            rewardProbe.GetKillStreak() != 2 || pickupProgress.GetExperience() != expectedExperience * 2) { ++checkFailures; }
+        std::printf("[horde-score-check] enemy-xp=%u points=%u expected=%u streak=%u xp=%llu failures=%u\n",
+            expectedExperience, rewardProbe.GetScore(), expectedExperience * 9,
+            rewardProbe.GetKillStreak(), pickupProgress.GetExperience(), checkFailures);
+        vitals.invincible = false;
     }
     CombatScene scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+    CBGM music;
+    if (!music.NextTrack()) { return 1; }
+    if (gameContext != nullptr) {
+        music.SetEnabled(gameContext->profile.musicEnabled);
+        CAudioPlayer::SetEffectsEnabled(gameContext->profile.soundEnabled);
+        player.brotherIndex = gameContext->profile.playerBrother;
+    }
     CBrotherAI brother;
     PlayerModel brotherModel;
+    CPlayerConfiguration brotherConfiguration;
+    brotherConfiguration.SetDefaults(toc.GetPack(toc.GetCorePackIndex())->GetPackHash());
+    // Local default partner: Whippersnappers and the free ER97E Elite rifle.
+    // These are core gun 0 and pack5 gun 4 in the original store catalogue.
+    brotherConfiguration.guns[1].packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+    brotherConfiguration.guns[1].localIndex = 4;
     if (withBrother) {
         brother.vitals.maximum = progress.GetHealth();
         brother.vitals.invincible = false;
         brotherModel.vitals = &brother.vitals;
         brotherModel.human = false;
         brotherModel.brotherIndex = 1;
+        if (gameContext != nullptr) { brotherModel.brotherIndex = 1 - gameContext->profile.playerBrother; }
+        std::size_t brotherWeaponSlot = 0;
+        for (std::size_t index = 0; index < weapons.size(); ++index) {
+            if (weapons[index].packHash == brotherConfiguration.guns[0].packHash &&
+                weapons[index].ordinal == brotherConfiguration.guns[0].localIndex) {
+                brotherWeaponSlot = index;
+                break;
+            }
+        }
         if (!BuildPlayerBody(tables, player.moveSet, brotherModel) ||
-            !EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapons[weaponSlot].data,
+            !EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapons[brotherWeaponSlot].data,
                 "AI brother", brotherModel) || !CreatePlayerBuffers(brotherModel, program)) { return 1; }
-        for (const auto &armor : player.armor) {
-            if (armor != nullptr && !EquipPlayerArmor(tables, armor->data, program, brotherModel)) { return 1; }
+        for (const GameObjectRef &ref : brotherConfiguration.armor) {
+            if (ref.IsNull()) { continue; }
+            std::vector<std::uint8_t> payload;
+            if (!tables.ReadSectionResource(ref.packHash, GameSection::Armor, ref.localIndex, payload)) { return 1; }
+            CArrayInputStream input(payload);
+            CArmor::Template armor;
+            if (!armor.Init(input) || !EquipPlayerArmor(tables, armor, program, brotherModel)) { return 1; }
+        }
+        // Regression: a local default partner must never inherit premium gear.
+        if (check) {
+            const unsigned coreHash = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
+            bool defaultEquipment = weapons[brotherWeaponSlot].packHash == coreHash && weapons[brotherWeaponSlot].ordinal == 0;
+            for (unsigned slot = 0; slot < 3; ++slot) {
+                if (brotherModel.armor[slot] == nullptr || PlayerArmorMultiplier(brotherModel, slot) != 1.0f) {
+                    defaultEquipment = false;
+                }
+            }
+            std::printf("[brother-equipment-check] gun=%s default=%d\n", weapons[brotherWeaponSlot].name.c_str(), defaultEquipment);
+            if (!defaultEquipment) { return 1; }
         }
         scene.SetBrother(&brotherModel, &brother);
+        const WeaponEntry *rifle = nullptr;
+        for (const WeaponEntry &entry : weapons) {
+            if (entry.packHash == brotherConfiguration.guns[1].packHash && entry.ordinal == brotherConfiguration.guns[1].localIndex) {
+                rifle = &entry;
+                break;
+            }
+        }
+        if (rifle == nullptr) { return 1; }
+        scene.SetBrotherWeapons(loaded.playerTemplate->script, weapons[brotherWeaponSlot].data, rifle->data);
+        if (check) {
+            if (!scene.SwapBrotherWeapon() || scene.GetBrotherWeaponSlot() != 1 ||
+                !scene.SwapBrotherWeapon() || scene.GetBrotherWeaponSlot() != 0) { return 1; }
+            std::printf("[brother-equipment-check] pistol-rifle-pistol=1 player-unchanged=1\n");
+        }
     }
     scene.SetPlayerProgress(&progress);
     SurvivalSession session(scene, loaded.map, enemies);
@@ -3076,6 +3206,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     const GameObjectRef *archiveLevel = nullptr;
     if (archiveMission != nullptr) { archiveLevel = &archiveMission->data.level; }
     if (!session.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel)) { return 1; }
+    const bool horde = archiveMission != nullptr && archiveMission->data.type == 2;
+    if (horde) { session.SetHorde(true); }
     const float startX = loaded.players[0].x;
     const float startY = loaded.players[0].y;
     session.SetStartWave(static_cast<int>(startWave));
@@ -3139,6 +3271,65 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (!powerupProbe.Use() || vitals.health != std::min(vitals.maximum, 9.0f) || powerupProbe.GetCount() != 0) { ++checkFailures; }
         checkFailures += powerupProbe.failures;
         std::printf("[powerup-play-check] healing/cancel/repeat consumed=%u failures=%u\n", powerupProbe.consumed, checkFailures);
+        for (unsigned airstrikeIndex : {0u, 10u, 11u}) {
+            session.Restart(startX, startY);
+            WeaponEffects airstrikeEffects(toc, tables, program);
+            CombatScene airstrikeScene(tables, program, enemies, player, vitals, airstrikeEffects, loaded.playerTemplate->gameScale);
+            airstrikeScene.Reset();
+            CombatEnemy *target = airstrikeScene.Spawn(0, 700, 650);
+            CombatEnemy *outside = airstrikeScene.Spawn(0, 4600, 650);
+            if (target == nullptr || outside == nullptr) { return 1; }
+            for (int elapsed = 0; elapsed < 1000; elapsed += 16) {
+                target->model.enemy.Update(16);
+                outside->model.enemy.Update(16);
+            }
+            target->model.enemy.TakeActions();
+            outside->model.enemy.TakeActions();
+            // Arena clamps initial spawns; explicitly place the radius probe
+            // outside the blast only after its authored spawn state has matured.
+            outside->model.enemy.combat.x = 600;
+            outside->model.enemy.combat.y = 650;
+            target->model.enemy.combat.health = 100000;
+            target->model.enemy.combat.maxHealth = 100000;
+            // Put the blast at a camera center far from the player. The target
+            // must be hit there; the player's vicinity is outside every radius.
+            airstrikeScene.SetViewCenter(5000, 650);
+            target->model.enemy.combat.x = 5100;
+            target->model.enemy.combat.y = 650;
+            consumable.localIndex = static_cast<std::uint8_t>(airstrikeIndex);
+            consumableProbe.AddPowerup(consumable, 2);
+            PowerupScene airstrike(toc, tables, player, vitals, airstrikeScene, airstrikeEffects, consumableProbe);
+            if (!airstrike.Init() || !airstrike.Select(airstrikeIndex) || !airstrike.Use() || airstrike.Use() || airstrike.GetCount() != 1) { ++checkFailures; }
+            if (target->model.enemy.combat.hitCount != 0) { ++checkFailures; }
+            // Paused presentation has no elapsed time and must not finish a movie.
+            for (unsigned repeat = 0; repeat < 10; ++repeat) { airstrike.Update(0); }
+            if (airstrike.GetMoviePlayer().GetElapsed() != 0) { ++checkFailures; }
+            unsigned splashTime = 0;
+            for (int elapsed = 0; elapsed < 12000 && airstrike.IsMovieActive(); elapsed += 16) {
+                airstrike.Update(16);
+                if (airstrike.GetMoviePlayer().splashCount > 0 && splashTime == 0) { splashTime = elapsed + 16; }
+                if (elapsed == 992) {
+                    glClearColor(0.04f, 0.05f, 0.07f, 1);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    if (!airstrike.DrawMovies() || !window.SaveFrame("out/airstrike-check-" + std::to_string(airstrikeIndex) + ".png")) { ++checkFailures; }
+                }
+            }
+            float expectedDamage = 240;
+            if (airstrikeIndex == 10) { expectedDamage = 500; }
+            if (airstrikeIndex == 11) { expectedDamage = 1600; }
+            if (airstrike.IsMovieActive() || airstrike.GetMoviePlayer().splashCount != 1 || splashTime < 1200 ||
+                std::abs(target->model.enemy.combat.totalDamage - expectedDamage) > 0.01f ||
+                outside->model.enemy.combat.hitCount != 0 || airstrike.GetCount() != 1) { ++checkFailures; }
+            std::printf("[airstrike-check] item=%u time=%u movies=%u effects=%u damage=%.2f expected=%.2f outside-hits=%d stock=%u failures=%u\n",
+                airstrikeIndex, splashTime, airstrike.GetMoviePlayer().movieCompletions, airstrike.GetMoviePlayer().effectCount,
+                target->model.enemy.combat.totalDamage, expectedDamage, outside->model.enemy.combat.hitCount, airstrike.GetCount(), checkFailures);
+            if (!airstrike.Use()) { ++checkFailures; }
+            airstrike.Update(400);
+            airstrike.Reset();
+            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { airstrike.Update(16); }
+            if (airstrike.GetMoviePlayer().splashCount != 1 || airstrike.IsMovieActive() || airstrike.GetCount() != 0) { ++checkFailures; }
+            checkFailures += airstrike.failures + airstrike.GetMoviePlayer().failures;
+        }
         session.Restart(startX, startY);
         consumable.localIndex = 5;
         consumableProbe.AddPowerup(consumable, 2);
@@ -3276,6 +3467,20 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (std::abs(vitals.health - (beforeDefense - 256.0f / 332)) > 0.001f) { ++checkFailures; }
         AdvancePlayer(player, 15000);
         if (scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1 || player.weapon->brother.IsFrenzyType(2)) { ++checkFailures; }
+        consumable.localIndex = 6;
+        consumableProbe.AddPowerup(consumable, 2);
+        powerupProbe.Select(6);
+        if (!powerupProbe.Use() || powerupProbe.Use() || !player.weapon->brother.IsFrenzy() ||
+            player.powerups.legacyFrenzyMs != 21000 || scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1) { ++checkFailures; }
+        if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) ||
+            player.powerups.legacyFrenzyMs != 21000) { ++checkFailures; }
+        AdvancePlayer(player, 20000);
+        powerupProbe.Select(18);
+        if (!powerupProbe.Use() || !player.weapon->brother.IsFrenzyType(0)) { ++checkFailures; }
+        AdvancePlayer(player, 1000);
+        if (player.weapon->brother.IsFrenzy() || player.weapon->brother.IsFrenzyType(0) ||
+            player.powerups.legacyFrenzyMultiplier[0] != 1) { ++checkFailures; }
+        std::printf("[tantrum-check] duration=21000 duplicate-blocked=1 equipment-preserved=1 stop-all-boosts=1 failures=%u\n", checkFailures);
         if (!consumableProbe.SaveToDisk("out/powerup-profile-check.dat")) { ++checkFailures; }
         CProfileManager restoredConsumables;
         restoredConsumables.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), consumableRefinement);
@@ -3491,6 +3696,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (session.GetLevel().GetWave() >= targetWave) { break; }
         }
         pilot.Report();
+        const unsigned unsupportedLevel = session.GetLevel().GetUnimplementedCallCount();
+        const unsigned unsupportedSpawner = session.GetLevel().GetSpawner().GetUnsupportedCount();
+        checkFailures += unsupportedLevel + unsupportedSpawner;
+        std::printf("[survival-script-check] level=%u spawner=%u\n", unsupportedLevel, unsupportedSpawner);
         checkFailures += pickups.failures;
         std::printf("[pickup-check] spawned=%u collected=%u remaining=%zu failures=%u\n",
             pickups.spawned, pickups.collected, pickups.GetCount(), pickups.failures);
@@ -3549,7 +3758,32 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         capturePath = "out/survival-check-" + packShortName + ".png";
     }
-    if (check && archiveMission != nullptr) {
+    if (check && horde) {
+        vitals.invincible = true;
+        SurvivalPilot pilot(scene, loaded.map.GetVisibleBounds());
+        const int initialWave = session.GetLevel().GetWave();
+        int targetWave = initialWave + 1;
+        if (initialWave == 0) { targetWave = 2; }
+        for (int elapsed = 0; elapsed < 1800000 && session.GetLevel().GetWave() < targetWave; elapsed += 16) {
+            float moveX = 0, moveY = 0;
+            pilot.Update(16, moveX, moveY);
+            session.Update(16, moveX, moveY, true);
+            AdvanceProps(loaded.props, 16);
+            AdvanceTileLayers(loaded.map, 16);
+        }
+        // Finish the real HUD transition callback; it restores BOKOR time scale
+        // and releases its next state. A first-wave-only check misses this seam.
+        for (int elapsed = 0; elapsed < 1408; elapsed += 16) { session.Update(16, 0, 0, false); }
+        if (session.GetLevel().GetWave() < targetWave || session.GetKills() == 0 || scene.GetScore() == 0 ||
+            session.GetLevel().GetObjectTimeScale() != 1 ||
+            scene.invalidSpawns != 0 || session.GetLevel().GetUnimplementedCallCount() != 0 ||
+            session.GetLevel().GetSpawner().GetUnsupportedCount() != 0) { ++checkFailures; }
+        std::printf("[horde-check] initial=%d next=%d spawned=%u kills=%u stopwatch=%d slow=%.4f failures=%u\n",
+            initialWave, session.GetLevel().GetWave(), scene.spawned, session.GetKills(),
+            session.GetLevel().GetStopwatchTime(), session.GetLevel().GetObjectTimeScale(), checkFailures);
+        capturePath = "out/horde-check-" + std::to_string(startWave) + ".png";
+    }
+    if (check && archiveMission != nullptr && !horde) {
         // Research input pilot: visit authored pickups and trigger edges without
         // teleporting actors or directly invoking trigger/death callbacks.
         vitals.invincible = true;
@@ -3629,6 +3863,60 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         capturePath = "out/powerup-play-check.png";
     }
     bool paused = false;
+    // Presentation reads a snapshot; its actions re-enter the same keyboard path.
+    const auto buildHudState = [&]() {
+        SurvivalHudState state;
+        state.health = vitals.health;
+        state.maximumHealth = vitals.maximum;
+        state.brotherHealth = brother.vitals.health;
+        state.brotherMaximumHealth = brother.vitals.maximum;
+        state.withBrother = withBrother;
+        state.wave = std::min(session.GetLevel().GetWave(), session.GetLevel().GetWaveLimit() - 1);
+        state.horde = horde;
+        state.score = scene.GetScore();
+        state.killStreak = scene.GetKillStreak();
+        state.stopwatchMs = session.GetLevel().GetStopwatchTime();
+        state.bossIntroSerial = session.GetLevel().GetBossIntroSerial();
+        state.xplodiumMultiplier = session.GetLevel().GetXplodiumMultiplierPercent();
+        state.level = progress.GetLevel();
+        state.experience = progress.GetExperienceInLevel();
+        state.experienceDelta = progress.GetExperienceDelta();
+        state.xplodium = scene.GetXplodium();
+        state.kills = scene.GetTotalKills();
+        state.enemies = session.CountEnemies();
+        state.weaponSlot = equippedWeaponSlot;
+        state.weapon = weapons[weaponSlot].name;
+        if (gameContext != nullptr) {
+            state.guns[0] = gameContext->profile.configuration.guns[0];
+            state.guns[1] = gameContext->profile.configuration.guns[1];
+        } else {
+            state.guns[0].packHash = weapons[weaponSlot].packHash;
+            state.guns[0].localIndex = static_cast<std::uint8_t>(weapons[weaponSlot].ordinal);
+        }
+        state.paused = paused;
+        state.dead = vitals.dead;
+        state.cleared = session.GetLevel().IsCleared();
+        state.transitioning = session.IsTransitioning();
+        state.transitionTime = session.GetTransitionElapsed();
+        state.perfectBonus = scene.GetLastWaveBonus();
+        state.dialog = session.GetDialogText();
+        if (archiveMission != nullptr) { state.mission = archiveMission->title; }
+        if (powerups.GetSelected() != nullptr) {
+            state.item = powerups.GetSelected()->name;
+            state.itemCount = powerups.GetCount();
+        }
+        const char *buffNames[] = {"SHIELD", "ATTACK", "DEFENSE", "SPEED", "AUTO AIM", "TANTRUM"};
+        const int buffTimers[] = {player.powerups.shieldMs, player.powerups.frenzyMs[0],
+            player.powerups.frenzyMs[1], player.powerups.frenzyMs[2], player.powerups.autoFireMs, player.powerups.legacyFrenzyMs};
+        for (unsigned index = 0; index < 6; ++index) {
+            if (buffTimers[index] <= 0) { continue; }
+            if (!state.buffs.empty()) { state.buffs += "   "; }
+            state.buffs += buffNames[index];
+            state.buffs += " " + std::to_string((buffTimers[index] + 999) / 1000) + "S";
+        }
+        if (player.weapon->brother.IsTurretActive()) { state.buffs += "   TURRET ACTIVE"; }
+        return state;
+    };
     int accumulator = 0;
     std::uint64_t previous = window.GetTicksMs();
     Camera camera;
@@ -3636,8 +3924,28 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     std::printf("[survival] WASD move, mouse aim/fire, R restart, space pause, 1-7/N/M weapon, C collision\n");
     while (window.PumpEvents()) {
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
-            if (key == KeyCode::Space) {
+        int inputWidth = 0, inputHeight = 0;
+        window.GetDrawableSize(inputWidth, inputHeight);
+        float inputX = -1, inputY = -1;
+        window.GetMousePosition(inputX, inputY);
+        inputX *= 1024.0f / std::max(1, inputWidth);
+        inputY *= 768.0f / std::max(1, inputHeight);
+        const SurvivalHudState inputState = buildHudState();
+        const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
+        const SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, window.IsLeftMouseDown());
+        if (action == SurvivalHudAction::Exit) { break; }
+        KeyCode pointerKey = KeyCode::None;
+        if (action == SurvivalHudAction::Pause || action == SurvivalHudAction::Resume || action == SurvivalHudAction::Continue) { pointerKey = KeyCode::Space; }
+        if (action == SurvivalHudAction::Retry) { pointerKey = KeyCode::R; }
+        if (action == SurvivalHudAction::UseItem) { pointerKey = KeyCode::G; }
+        if (action == SurvivalHudAction::NextItem) { pointerKey = KeyCode::F; }
+        if (action == SurvivalHudAction::Weapon1) { pointerKey = KeyCode::Digit1; }
+        if (action == SurvivalHudAction::Weapon2) { pointerKey = KeyCode::Digit2; }
+        std::vector<KeyCode> inputs;
+        if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
+        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) { inputs.push_back(key); }
+        for (KeyCode key : inputs) {
+            if (key == KeyCode::Space || key == KeyCode::Escape) {
                 if (!session.GetDialogText().empty()) { session.CompleteDialog(); }
                 else { paused = !paused; }
             }
@@ -3645,8 +3953,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (key == KeyCode::G && !paused && !session.IsTransitioning()) { powerups.Use(); }
             if (key == KeyCode::F) { powerups.Cycle(); }
             if (key == KeyCode::R) {
-                if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+                if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
                 session.Restart(startX, startY);
+                if (gameContext != nullptr) { gameContext->accountedKills = 0; }
+                survivalHud.ResetNotices();
                 savedDeath = false;
                 paused = false;
             }
@@ -3677,6 +3987,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         camera.zoom = baselineZoom * loaded.map.GetCamera().GetScale() / kLevelCameraScale;
         session.SetViewSize(width / baselineZoom, height / baselineZoom);
         FollowPlayerCamera(loaded, width, height, camera);
+        scene.SetViewCenter(camera.x + width / camera.zoom * 0.5f, camera.y + height / camera.zoom * 0.5f);
         float mouseX = 0, mouseY = 0;
         if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead) {
             scene.facing = std::atan2(camera.y + mouseY / camera.zoom - scene.playerY,
@@ -3691,15 +4002,21 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (!paused && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
         previous = now;
         effects.SetPaused(paused);
+        music.SetPaused(paused);
+        music.Update();
         while (accumulator >= 16) {
-            if (!vitals.dead) { session.Update(16, moveX, moveY, firePreview || window.IsLeftMouseDown()); }
-            else { scene.Update(16, 0, 0, false); }
+            survivalHud.Advance(16);
+            if (!vitals.dead) { session.Update(16, moveX, moveY, firePreview || (window.IsLeftMouseDown() && !hudOwnsPointer)); }
+            else {
+                // CLevel::UpdateAfterDeath keeps an already-used powerup alive.
+                session.UpdateAfterDeath(16);
+            }
             AdvanceProps(loaded.props, 16);
             AdvanceTileLayers(loaded.map, 16);
             accumulator -= 16;
         }
         if (session.GetLevel().GetWave() != lastSavedWave || (vitals.dead && !savedDeath)) {
-            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
             lastSavedWave = session.GetLevel().GetWave();
             savedDeath = vitals.dead;
         }
@@ -3747,113 +4064,61 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             BuildCollisionMarkers(loaded, markers);
             markers.Draw(markerProgram, mvp, 0.15f, 0.85f, 1, 0.8f);
         }
-        float hud[kMatrix4dElements];
-        Matrix4dOrthoTopLeft(800, 600, 100, hud);
-        markers.Begin();
-        markers.AddRect(0, 0, 800, 67);
-        markers.AddRect(0, 67, 800, 28);
-        markers.AddRect(0, 565, 800, 35);
-        markers.Draw(markerProgram, hud, 0.015f, 0.025f, 0.04f, 0.88f);
-        char line[192];
-        const int displayWave = std::min(session.GetLevel().GetWave(), session.GetLevel().GetWaveLimit() - 1);
-        std::snprintf(line, sizeof(line), "REVOLUTION %d/10    WAVE %d/50    ENEMIES %d",
-            displayWave / 50 + 1, displayWave % 50 + 1, session.CountEnemies());
-        if (archiveMission != nullptr) {
-            std::snprintf(line, sizeof(line), "ARCHIVE  %s  ENEMIES %d", archiveMission->title.c_str(), session.CountEnemies());
+        SurvivalHudState hudState = buildHudState();
+        hudState.indicators = session.GetLevel().GetIndicators();
+        for (CLevelIndicator &indicator : hudState.indicators) {
+            indicator.x = (indicator.x - camera.x) * camera.zoom * 1024 / width;
+            indicator.y = (indicator.y - camera.y) * camera.zoom * 768 / height;
         }
-        markers.Begin();
-        DrawHudText(markers, 20, 12, line, 2);
-        std::snprintf(line, sizeof(line), "HP %.0f/%.0f  KILLS %u", vitals.health, vitals.maximum, session.GetKills());
-        DrawHudText(markers, 20, 37, line, 2);
         if (withBrother) {
-            std::snprintf(line, sizeof(line), "BRO %.0f/%.0f", brother.vitals.health, brother.vitals.maximum);
-            DrawHudText(markers, 260, 40, line, 1.5f);
+            hudState.brotherName = "PERCY GUN";
+            if (brotherModel.brotherIndex == 0) { hudState.brotherName = "FRANCIS GUN"; }
+            // CLevel::DrawBrotherName :120373 anchors three collision radii
+            // above the AI's world position and follows the level's alpha.
+            hudState.brotherLabelX = (brother.x - camera.x) * camera.zoom * 1024 / width;
+            hudState.brotherLabelY = (brother.y - scene.GetPlayerRadius() * 3 - camera.y) * camera.zoom * 768 / height;
+            hudState.brotherLabelAlpha = session.GetLevel().GetBrotherLabelAlpha();
         }
-        std::snprintf(line, sizeof(line), "LEVEL %u  XP %llu/%u    XPLODIUM %llu",
-            progress.GetLevel(), progress.GetExperienceInLevel(), progress.GetExperienceDelta(), scene.GetXplodium());
-        DrawHudText(markers, 20, 73, line, 1.7f);
-        DrawHudText(markers, 20, 577, "WASD MOVE  MOUSE FIRE  1/2 GUN  G ITEM  F NEXT  R RETRY  SPACE PAUSE  ESC MENU", 1.25f);
-        const char *buffNames[] = {"SHIELD", "ATTACK", "DEFENSE", "SPEED", "AUTO AIM"};
-        const int buffTimers[] = {player.powerups.shieldMs, player.powerups.frenzyMs[0],
-            player.powerups.frenzyMs[1], player.powerups.frenzyMs[2], player.powerups.autoFireMs};
-        std::string activePowerups;
-        for (unsigned index = 0; index < 5; ++index) {
-            if (buffTimers[index] <= 0) { continue; }
-            if (!activePowerups.empty()) { activePowerups += "   "; }
-            activePowerups += buffNames[index];
-            activePowerups += " " + std::to_string((buffTimers[index] + 999) / 1000) + "S";
-        }
-        if (player.weapon->brother.IsTurretActive()) { activePowerups += "   TURRET ACTIVE"; }
-        if (!activePowerups.empty()) { DrawHudText(markers, 20, 520, activePowerups.c_str(), 1.3f); }
-        if (powerups.GetSelected() != nullptr) {
-            std::snprintf(line, sizeof(line), "G: %s  X%u", powerups.GetSelected()->name.c_str(), powerups.GetCount());
-            DrawHudText(markers, 20, 548, line, 1.7f);
-        }
-        markers.Draw(markerProgram, hud, 0.85f, 0.92f, 1, 1);
-        markers.Begin();
-        markers.AddRect(400, 39, 360 * std::clamp(vitals.health / vitals.maximum, 0.0f, 1.0f), 12);
-        markers.Draw(markerProgram, hud, 0.25f, 0.9f, 0.45f, 1);
-        if (paused || session.GetLevel().IsCleared() || vitals.dead) {
-            markers.Begin();
-            markers.AddRect(170, 215, 480, 105);
-            markers.Draw(markerProgram, hud, 0.015f, 0.025f, 0.04f, 0.9f);
-        }
-        markers.Begin();
-        if (session.IsTransitioning()) { DrawHudText(markers, 230, 230, "GET READY", 6); }
-        if (session.IsTransitioning() && scene.GetLastWaveBonus() > 0) {
-            std::snprintf(line, sizeof(line), "PERFECT WAVE  +%llu XPLODIUM", scene.GetLastWaveBonus());
-            DrawHudText(markers, 175, 285, line, 2.5f);
-        }
-        if (paused) { DrawHudText(markers, 290, 260, "PAUSED", 5); }
-        if (withBrother && brother.vitals.dead && !vitals.dead) {
-            DrawHudText(markers, 170, 533, "BRO RETURNS AFTER THIS WAVE", 2.5f);
-        }
-        if (session.GetLevel().IsCleared()) {
-            if (archiveMission != nullptr) { DrawHudText(markers, 200, 235, "MISSION COMPLETE", 4); }
-            else {
-                DrawHudText(markers, 200, 235, "SURVIVAL COMPLETE", 4);
-                DrawHudText(markers, 255, 280, "500 WAVES CLEARED", 3);
-            }
-        }
-        if (vitals.dead) {
-            DrawHudText(markers, 230, 235, "MISSION FAILED", 4);
-            DrawHudText(markers, 250, 280, "PRESS R TO RETRY", 3);
-        }
-        markers.Draw(markerProgram, hud, 1, 0.75f, 0.25f, 1);
-        if (!session.GetDialogText().empty()) {
-            markers.Begin();
-            markers.AddRect(25, 405, 750, 132);
-            markers.Draw(markerProgram, hud, 0.02f, 0.03f, 0.05f, 0.95f);
-            markers.Begin();
-            std::istringstream words(session.GetDialogText());
-            std::string word, textLine;
-            float textY = 417;
-            while (words >> word) {
-                if (textLine.size() + word.size() > 70) {
-                    DrawHudText(markers, 40, textY, textLine.c_str(), 1.65f);
-                    textY += 17;
-                    textLine.clear();
-                }
-                if (!textLine.empty()) { textLine += ' '; }
-                textLine += word;
-            }
-            if (!textLine.empty()) { DrawHudText(markers, 40, textY, textLine.c_str(), 1.65f); }
-            DrawHudText(markers, 40, 518, "SPACE: CONTINUE", 1.5f);
-            markers.Draw(markerProgram, hud, 0.9f, 0.95f, 1, 1);
-        }
+        if (!survivalHud.Draw(hudState)) { return 1; }
+        if (!powerups.DrawMovies()) { return 1; }
         if (!capturePath.empty()) {
-            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
             const unsigned errors = glGetError();
             if (errors != 0 || !window.SaveFrame(capturePath)) { return 1; }
             std::printf("[survival] wave=%d alive=%d spawned=%u kills=%u hp=%.1f\n",
                 session.GetLevel().GetWave(), session.CountEnemies(), scene.spawned, session.GetKills(), vitals.health);
             window.Present();
+            if (check && horde) {
+                CRefinementManager::Template refinement;
+                if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+                CProfileManager hordeProfile;
+                hordeProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+                SurvivalGameContext record{hordeProfile, "out/horde-progress-check.dat"};
+                record.hordeStart = static_cast<int>(startWave);
+                std::uint64_t credited = 0;
+                if (!SaveSurvivalProgress(&record, progress, scene, session.GetLevel(), credited) ||
+                    !SaveSurvivalProgress(&record, progress, scene, session.GetLevel(), credited)) { return 1; }
+                CProfileManager restored = hordeProfile;
+                if (!restored.LoadFromDisk(record.savePath) || restored.hordeBestScore[startWave] != scene.GetScore() ||
+                    restored.hordeBestKills[startWave] != scene.GetTotalKills() || restored.clearedWaves[0] != 0 ||
+                    restored.enemyKills[0] != 0) { ++checkFailures; }
+                const unsigned points = scene.GetScore();
+                CombatHit damage;
+                damage.ownerType = 1;
+                damage.damage = 1;
+                scene.ApplyHit(kPlayerCombatId, damage);
+                if (scene.GetKillStreak() != 0 || scene.GetScore() != points) { ++checkFailures; }
+                session.Restart(startX, startY);
+                if (scene.GetScore() != 0 || scene.GetKillStreak() != 0 || session.GetKills() != 0 ||
+                    session.GetLevel().GetStopwatchTime() != 0 || session.GetLevel().GetObjectTimeScale() != 1) { ++checkFailures; }
+                std::printf("[horde-check] points=%u saved=1 damage-resets-streak=1 restart=1 failures=%u\n", points, checkFailures);
+            }
             if (checkFailures != 0) { return 1; }
             return 0;
         }
         window.Present();
     }
-    if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel().GetWave(), accountedXplodium)) { return 1; }
+    if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
     return 0;
 }
 

@@ -35,6 +35,7 @@ public:
     CombatId GetTarget() const { return m_target; }
     bool IsMoving() const { return m_moving; }
     unsigned GetTargetCount() const { return m_targetCount; }
+    bool TakeWeaponSwapRequest() { const bool requested = m_weaponSwapRequested; m_weaponSwapRequested = false; return requested; }
 private:
     int Random(int minimum, int maximum);
     void UpdateTarget(int deltaMs, IBrotherAIWorld &world, bool &shooting);
@@ -49,5 +50,6 @@ private:
     float m_forceX = 0;
     float m_forceY = 0;
     int m_forceMs = 0;
+    bool m_weaponSwapRequested = false;
 };
 #endif

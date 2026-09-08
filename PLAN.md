@@ -2,6 +2,8 @@
 
 > 2026-09-08 当前可玩入口、操作和边界见 [游戏验收](docs/acceptance.md)，本轮逆向证据与分阶段验证见 [整夜进度记录](docs/overnight-progress.md)。以下保留原重写计划，历史里程碑继续可用。
 
+> 本日上课期间追加授权已执行：默认进入游戏、原 Glu 视频及 MP3、CMovie 菜单与战斗 HUD、默认兄弟装备、离线下级流程、BOKOR。详细方案与验证见 [UI 重建](docs/ui-reconstruction.md)。下列历史非目标中的联网限制不再排除本地模拟页面；真实远端服务及多人同步仍未实现。
+
 用 C++ 在 Windows 上重写 Glu Mobile 的自研引擎，**运行时直接读原版 `.big`**，让游戏跑起来。
 
 参考资料：
@@ -35,6 +37,7 @@
 | 渲染 | OpenGL 3.3 Core，加载器自己写（~30 个函数，`engine/platform/GLLoader.h`） |
 | 图像 | PNG 编解码自己写（`engine/CPNG.cpp`），不用 stb_image |
 | 解压 | zlib（`inflate` 给资源和 PNG，`deflate` 只给截图） |
+| 视频 / MP3 | Windows Media Foundation 系统解码器，SDL3 播放 PCM；无额外 ffmpeg 运行依赖 |
 | 构建 | Visual Studio / MSBuild（`gun_bro_re.slnx`，工具集 v145），只支持 x64 |
 | 第三方库 | 只有 zlib（源码内置）和 SDL3（官方预编译包），不用包管理器 |
 

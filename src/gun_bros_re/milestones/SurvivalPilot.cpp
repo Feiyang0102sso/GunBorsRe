@@ -148,13 +148,17 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     // Keep an engagement stable. Re-selecting the nearest enemy while retreating
     // can alternate between two ranged units and trap the pilot at their midpoint.
     CombatEnemy *previousTarget = m_scene.Find(m_target);
-    if (previousTarget != nullptr && previousTarget->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
+    if (previousTarget != nullptr && previousTarget->model.enemy.combat.enabled &&
+        previousTarget->model.enemy.combat.targetable && previousTarget->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
         target = previousTarget;
     }
     float nearest = 100000;
     if (target == nullptr) {
         for (const auto &actor : m_scene.enemies) {
-            if (!actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+            // Match the brother's targeting filters. Authored map actors can
+            // accept collision callbacks without being combat targets.
+            if (!actor->model.enemy.combat.enabled || !actor->model.enemy.combat.targetable ||
+                !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
             const EnemyCombat &enemy = actor->model.enemy.combat;
             const float distance = std::hypot(enemy.x - m_scene.playerX, enemy.y - m_scene.playerY);
             if (distance < nearest) { nearest = distance; target = actor.get(); }

@@ -27,6 +27,8 @@ typedef struct SDL_GLContextState *SDL_GLContext;
  */
 enum class KeyCode {
     None,
+    Escape,
+    Enter,
     Left,
     Right,
     Up,
@@ -103,6 +105,8 @@ public:
      * @return false once the user has asked to quit.
      */
     bool PumpEvents();
+    /** Game menus consume Escape as Back; research viewers retain Escape to quit. */
+    void SetEscapeCloses(bool enabled) { m_escapeCloses = enabled; }
 
     /** Present the back buffer. */
     void Present();
@@ -153,6 +157,7 @@ private:
     SDL_GLContext m_context;
     bool m_sdlInitialised;
     bool m_quitRequested;
+    bool m_escapeCloses = true;
 
     // Input accumulators, drained by the Take* methods.
     int m_dragDeltaX;

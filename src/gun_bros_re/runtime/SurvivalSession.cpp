@@ -42,7 +42,7 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
 
 void SurvivalSession::Restart(float x, float y) {
     m_scene.Reset();
-    if (m_powerups != nullptr) { m_powerups->Update(0); }
+    if (m_powerups != nullptr) { m_powerups->Reset(); }
     if (m_pickups != nullptr) { m_pickups->Reset(); }
     if (m_props != nullptr) { m_props->Reset(); }
     m_scene.playerX = x;
@@ -51,7 +51,12 @@ void SurvivalSession::Restart(float x, float y) {
     m_spawnSerial = 0;
     m_kills = 0;
     m_transitionMs = 1200; // Desktop intro duration; original completion event retained.
+    m_transitionDuration = 1200;
+    if (m_horde) { m_transitionMs = 0; } // BOKOR owns its five-second intro timer.
     m_level.Bind(m_template, m_map, this, m_startWave);
+    m_bossIntroSerial = m_level.GetBossIntroSerial();
+    if (m_bossIntroSerial > 0) { m_transitionMs = 2000; m_transitionDuration = 2000; }
+    UpdateCamera();
     UpdateDialog(0);
     for (const CLayerPathLink &path : m_map.GetPathLinkLayers()) {
         std::printf("[survival] path layer=%u nodes=%zu selected=%d\n", path.GetLayerIndex(), path.GetNodes().size(), m_level.GetPathLayer());
@@ -86,6 +91,8 @@ bool SurvivalSession::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int
     CombatEnemy *actor = m_scene.Spawn(entryIndex, nodes[nodeIndex].x, nodes[nodeIndex].y);
     if (actor == nullptr) { return false; }
     actor->objectId = objectId;
+    // CLevel::AddObject :116890 attaches the enemy direction marker.
+    m_level.SetIndicator(objectId, 0, actor->model.enemy.combat.id);
     return true;
 }
 
@@ -103,6 +110,7 @@ bool SurvivalSession::SpawnMapObject(const PlacedObject &object, int objectId) {
         CombatEnemy *actor = m_scene.Spawn(index, object.x, object.y);
         if (actor == nullptr) { return false; }
         actor->objectId = objectId;
+        m_level.SetIndicator(objectId, 0, actor->model.enemy.combat.id);
         actor->model.enemy.combat.facing = static_cast<float>(object.facing);
         std::printf("[survival] placed enemy id=%d tag=%u item=%u path=%u facing=%d\n",
             objectId, object.spawnTag, object.localIndex, object.pathLayer, object.facing);
@@ -173,7 +181,30 @@ bool SurvivalSession::SpawnPickup(const GameObjectRef &pickup, int layer, int no
 
 bool SurvivalSession::SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) {
     if (m_pickups == nullptr) { return false; }
-    return m_pickups->Spawn(pickup, x, y, objectId);
+    if (!m_pickups->Spawn(pickup, x, y, objectId)) { return false; }
+    // CEnemySpawner::SpawnPickup :146349 marks the particular pickup instance.
+    m_level.SetIndicator(objectId, 1, (1ULL << 32) | m_pickups->spawned);
+    return true;
+}
+
+bool SurvivalSession::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
+    if ((key >> 32) == 1) {
+        return m_pickups != nullptr && m_pickups->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
+    }
+    CombatEnemy *actor = m_scene.Find(static_cast<CombatId>(key));
+    if (actor == nullptr || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { return false; }
+    x = actor->model.enemy.combat.x; y = actor->model.enemy.combat.y; return true;
+}
+
+bool SurvivalSession::GetObjectPosition(int objectId, float &x, float &y) const {
+    for (const auto &actor : m_scene.enemies) {
+        if (actor->objectId != objectId || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { continue; }
+        x = actor->model.enemy.combat.x;
+        y = actor->model.enemy.combat.y;
+        return true;
+    }
+    if (m_pickups != nullptr && m_pickups->GetObjectPosition(objectId, x, y)) { return true; }
+    return m_props != nullptr && m_props->GetObjectPosition(objectId, x, y);
 }
 
 int SurvivalSession::CountEnemies(const GameObjectRef *enemy, int objectId) const {
@@ -194,6 +225,7 @@ void SurvivalSession::CompleteDialog() {
 }
 
 void SurvivalSession::UpdateDialog(int deltaMs) {
+    if (m_level.IsDialogCloseRequested()) { CompleteDialog(); return; }
     if (m_dialogSerial != m_level.GetDialogSerial()) {
         m_dialogSerial = m_level.GetDialogSerial();
         m_dialogElapsedMs = 0;
@@ -250,24 +282,27 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     UpdateDialog(deltaMs);
     if (m_level.IsCleared()) {
         m_scene.Update(deltaMs, 0, 0, false);
+        UpdateCamera(deltaMs);
         return;
     }
     if (m_transitionMs > 0) {
         m_transitionMs -= deltaMs;
         if (m_transitionMs <= 0) { m_level.HandleEvent(2); }
-        return;
+        if (!m_horde) { UpdateCamera(deltaMs); return; }
     }
     const int previousWave = m_level.GetWave();
     m_level.Update(deltaMs);
     m_scene.SetPathLayer(m_level.GetPathLayer());
     const float previousX = m_scene.playerX;
     const float previousY = m_scene.playerY;
+    if (!m_level.CanPlayerMove()) { moveX = 0; moveY = 0; }
+    if (!m_level.CanPlayerShoot()) { fire = false; }
     m_scene.Update(deltaMs, moveX, moveY, fire);
     if (m_archive) { UpdateArchiveMap(previousX, previousY); }
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
     if (m_props != nullptr) { m_props->Update(deltaMs); }
     if (m_pickups != nullptr) {
-        for (const PickupSpawn &spawn : m_scene.pickupSpawns) { m_pickups->Spawn(spawn.resource, spawn.x, spawn.y); }
+        for (const PickupSpawn &spawn : m_scene.pickupSpawns) { SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0); }
         m_pickups->Update(deltaMs, m_scene, *m_effects);
         for (const PickupCollection &pickup : m_pickups->collections) {
             m_level.OnPickupCollected(pickup.objectId, pickup.resource);
@@ -279,5 +314,35 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         m_level.OnEnemyKilled(death.objectId, death.enemy);
         ++m_kills;
     }
-    if (m_level.GetWave() != previousWave && !m_level.IsCleared()) { m_transitionMs = 1200; }
+    if (m_level.GetWave() != previousWave && !m_level.IsCleared()) { m_transitionMs = 1200; m_transitionDuration = 1200; }
+    if (m_bossIntroSerial != m_level.GetBossIntroSerial()) {
+        m_bossIntroSerial = m_level.GetBossIntroSerial();
+        // OnBossWaveStart uses GLU_MOVIE_WAVE_CLEARED and its real 2000 ms
+        // completion callback before releasing the next scripted state.
+        m_transitionMs = 2000;
+        m_transitionDuration = 2000;
+    }
+    UpdateCamera(deltaMs);
+}
+
+void SurvivalSession::UpdateCamera(int deltaMs) {
+    const MapRectangle bounds = m_map.GetVisibleBounds();
+    const float scale = 0.8f / m_map.GetCamera().GetScale();
+    m_map.GetCamera().UpdatePosition(m_scene.playerX, m_scene.playerY, bounds.x, bounds.y,
+        bounds.width, bounds.height, m_viewWidth * scale, m_viewHeight * scale);
+    m_scene.SetViewCenter(m_map.GetCamera().GetX(), m_map.GetCamera().GetY());
+    const float width = m_viewWidth * scale;
+    const float height = m_viewHeight * scale;
+    // The original reserves 25 screen units at top/sides and 100 at bottom.
+    m_level.UpdateIndicators(deltaMs, m_map.GetCamera().GetX() - width * 0.5f + width * 20 / 1024,
+        m_map.GetCamera().GetY() - height * 0.5f + height * 20 / 768,
+        width * 984 / 1024, height * 668 / 768);
+}
+
+void SurvivalSession::UpdateAfterDeath(int deltaMs) {
+    // Finish existing attacks and camera effects without advancing new waves.
+    m_map.GetCamera().Update(deltaMs);
+    m_scene.Update(deltaMs, 0, 0, false);
+    if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
+    UpdateCamera(deltaMs);
 }

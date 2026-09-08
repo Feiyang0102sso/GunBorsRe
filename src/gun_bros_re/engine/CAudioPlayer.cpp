@@ -14,6 +14,7 @@ namespace {
 
 constexpr std::size_t kMaximumPlayingSounds = 32;
 bool g_muted = false;
+bool g_effectsEnabled = true;
 
 struct DecodedSound {
     SDL_AudioSpec specification;
@@ -35,6 +36,8 @@ struct CAudioPlayer::Impl {
     std::vector<PlayingSound> playing;
     bool paused = false;
     std::uint64_t pauseStartMs = 0;
+    float volume = 1;
+    bool musicChannel = false;
 };
 
 CAudioPlayer::CAudioPlayer() : m_impl(new Impl()) {}
@@ -45,6 +48,15 @@ void CAudioPlayer::SetMuted(bool muted) {
 
 bool CAudioPlayer::IsMuted() {
     return g_muted;
+}
+
+void CAudioPlayer::SetEffectsEnabled(bool enabled) { g_effectsEnabled = enabled; }
+void CAudioPlayer::SetMusicChannel(bool music) { m_impl->musicChannel = music; }
+void CAudioPlayer::SetVolume(float volume) {
+    if (volume < 0) { volume = 0; }
+    if (volume > 1) { volume = 1; }
+    m_impl->volume = volume;
+    for (PlayingSound &sound : m_impl->playing) { SDL_SetAudioStreamGain(sound.stream, volume); }
 }
 
 CAudioPlayer::~CAudioPlayer() {
@@ -92,7 +104,7 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
     }
 
     // Keep loading and key validation active during silent regression runs.
-    if (g_muted) {
+    if (g_muted || (!m_impl->musicChannel && !g_effectsEnabled)) {
         return true;
     }
 
@@ -109,6 +121,7 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
         std::printf("[audio] could not open playback stream: %s\n", SDL_GetError());
         return false;
     }
+    SDL_SetAudioStreamGain(stream, m_impl->volume);
     if (!SDL_PutAudioStreamData(stream, sound.samples.data(),
                                 static_cast<int>(sound.samples.size())) ||
         !SDL_FlushAudioStream(stream) || !SDL_ResumeAudioStreamDevice(stream)) {
@@ -176,6 +189,18 @@ void CAudioPlayer::Stop(std::uint64_t key) {
 void CAudioPlayer::StopAll() {
     for (const PlayingSound &sound : m_impl->playing) { SDL_DestroyAudioStream(sound.stream); }
     m_impl->playing.clear();
+}
+
+bool CAudioPlayer::LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &samples, unsigned sampleRate, unsigned channels) {
+    if (samples.empty() || sampleRate == 0 || channels == 0 || samples.size() % (channels * 2) != 0) { return false; }
+    DecodedSound sound;
+    sound.specification = {};
+    sound.specification.format = SDL_AUDIO_S16LE;
+    sound.specification.freq = static_cast<int>(sampleRate);
+    sound.specification.channels = static_cast<int>(channels);
+    sound.samples = samples;
+    m_impl->sounds[key] = std::move(sound);
+    return true;
 }
 
 void CAudioPlayer::StopOwner(std::uint64_t owner) {

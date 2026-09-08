@@ -131,6 +131,10 @@ void CBrother::SetShooting(bool shooting) {
 void CBrother::Update(std::int32_t deltaMs) {
     if (deltaMs <= 0) { return; }
     if (m_powerups != nullptr) {
+        if (m_powerups->legacyFrenzyMs > 0) {
+            m_powerups->legacyFrenzyMs = std::max(0, m_powerups->legacyFrenzyMs - deltaMs);
+            if (m_powerups->legacyFrenzyMs == 0) { StopFrenzy(); }
+        }
         if (m_powerups->autoFireMs > 0) {
             m_powerups->autoFireMs = std::max(0, m_powerups->autoFireMs - deltaMs);
             if (m_powerups->autoFireMs == 0) { PowerupEffect({}, 104, false); }
@@ -363,6 +367,7 @@ void CBrother::SetPowerupState(PowerupState *powerups) {
     if (m_powerups == nullptr) { return; }
     if (IsShield()) { PowerupEffect(m_powerups->effects[0], 100, true); }
     if (IsAutoFire()) { PowerupEffect(m_powerups->effects[4], 104, true); }
+    if (IsFrenzy()) { PowerupEffect(m_powerups->effects[5], 105, true); }
     for (unsigned type = 0; type < 3; ++type) {
         if (IsFrenzyType(type)) { PowerupEffect(m_powerups->effects[type + 1], 101 + type, true); }
     }
@@ -390,6 +395,28 @@ void CBrother::StartAutoFire(const GameObjectRef &effect, int durationSeconds) {
     m_powerups->autoFireMs = std::max(0, durationSeconds) * 1000;
     m_powerups->effects[4] = effect;
     PowerupEffect(effect, 104, durationSeconds > 0);
+}
+
+void CBrother::StartFrenzy(const GameObjectRef &effect, int durationMs, float attack, float defense, float speed) {
+    if (m_powerups == nullptr) { return; }
+    if (durationMs <= 0) { StopFrenzy(); return; }
+    m_powerups->legacyFrenzyMs = durationMs;
+    // StartFrenzy :137333 retains these old fields. This iOS build's combat
+    // reads the later per-type fields instead; do not invent a 1.5x combat boost.
+    m_powerups->legacyFrenzyMultiplier[0] = attack;
+    m_powerups->legacyFrenzyMultiplier[1] = defense;
+    m_powerups->legacyFrenzyMultiplier[2] = speed;
+    m_powerups->effects[5] = effect;
+    PowerupEffect(effect, 105, true);
+}
+
+void CBrother::StopFrenzy() {
+    if (m_powerups == nullptr) { return; }
+    m_powerups->legacyFrenzyMs = 0;
+    for (float &multiplier : m_powerups->legacyFrenzyMultiplier) { multiplier = 1; }
+    PowerupEffect({}, 105, false);
+    // Original StopFrenzy :137295 also stops all three newer boost channels.
+    for (unsigned type = 0; type < 3; ++type) { StartFrenzyType({}, 0, 1, type); }
 }
 
 void CBrother::StartFrenzyType(const GameObjectRef &effect, int durationMs, float multiplier, unsigned type) {

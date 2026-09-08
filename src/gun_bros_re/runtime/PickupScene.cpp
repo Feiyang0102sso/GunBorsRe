@@ -9,6 +9,20 @@
 PickupScene::PickupScene(CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,
     CProfileManager *profile) : m_toc(toc), m_tables(tables), m_program(program), m_profile(profile) {}
 
+bool PickupScene::GetObjectPosition(int objectId, float &x, float &y) const {
+    for (const auto &instance : m_instances) {
+        if (instance->objectId == objectId) { x = instance->x; y = instance->y; return true; }
+    }
+    return false;
+}
+
+bool PickupScene::GetIndicatorTarget(unsigned serial, float &x, float &y) const {
+    for (const auto &instance : m_instances) {
+        if (instance->serial == serial) { x = instance->x; y = instance->y; return true; }
+    }
+    return false;
+}
+
 bool PickupScene::Init() {
     if (!m_batch.Create(m_program) || !LoadPickupCatalog(m_toc, m_tables, m_catalog)) { return false; }
     for (const PickupEntry &entry : m_catalog) {
@@ -54,6 +68,7 @@ bool PickupScene::Spawn(const GameObjectRef &ref, float x, float y, int objectId
         const auto &entry = *visual->entry;
         if (entry.ref.packHash != ref.packHash || entry.ref.localIndex != ref.localIndex) { continue; }
         auto instance = std::make_unique<Instance>();
+        instance->serial = spawned + 1;
         instance->visual = visual.get();
         instance->x = x;
         instance->y = y;

@@ -9,9 +9,10 @@
 #include <cstdio>
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
 
 namespace {
-constexpr unsigned kProfileVersion = 2;
+constexpr unsigned kProfileVersion = 6;
 constexpr unsigned kMaximumInventoryRecords = 1024;
 
 void WriteRef(std::ostream &stream, const GameObjectRef &ref) {
@@ -35,6 +36,16 @@ void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager
     configuration.SetDefaults(corePackHash);
     inventory.clear();
     powerups.clear();
+    musicEnabled = true;
+    soundEnabled = true;
+    brotherEnabled = true;
+    playerBrother = 0;
+    claimedActivities = 0;
+    enemyKills.fill(0);
+    hordeBestKills.fill(0);
+    hordeBestWave.fill(0);
+    hordeBestScore.fill(0);
+    stat42Bits = 0;
     for (const GameObjectRef &gun : configuration.guns) { Grant(6, gun); }
     for (const GameObjectRef &armor : configuration.armor) {
         if (!armor.IsNull()) { Grant(2, armor); }
@@ -88,6 +99,24 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
     return PurchaseResult::Purchased;
 }
 
+PurchaseResult CProfileManager::AcquireCurrency(const CStoreItem &item) {
+    // CurrencyPurchase :155009. The absent online checkout is explicitly
+    // confirmed by the local-mode screen before this original settlement.
+    if (item.type == 14) { coins += item.commonPrice; return PurchaseResult::Purchased; }
+    if (item.type == 15) { warbucks += item.rarePrice; return PurchaseResult::Purchased; }
+    if (item.type != 16) { return PurchaseResult::Unsupported; }
+    if (item.value32 != 0) {
+        if (coins < item.commonPrice) { return PurchaseResult::InsufficientCoins; }
+        coins -= item.commonPrice;
+        warbucks += item.rarePrice;
+    } else {
+        if (warbucks < item.rarePrice) { return PurchaseResult::InsufficientWarbucks; }
+        warbucks -= item.rarePrice;
+        coins += item.commonPrice;
+    }
+    return PurchaseResult::Purchased;
+}
+
 bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) { return true; }
     std::ifstream stream(path);
@@ -131,6 +160,31 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
             candidate.AddPowerup(ref, quantity);
         }
     }
+    candidate.musicEnabled = true;
+    candidate.soundEnabled = true;
+    candidate.brotherEnabled = true;
+    candidate.playerBrother = 0;
+    candidate.claimedActivities = 0;
+    candidate.enemyKills.fill(0);
+    candidate.hordeBestKills.fill(0);
+    candidate.hordeBestWave.fill(0);
+    candidate.hordeBestScore.fill(0);
+    candidate.stat42Bits = 0;
+    if (version >= 3) {
+        if (!(stream >> candidate.musicEnabled >> candidate.soundEnabled >> candidate.brotherEnabled >>
+            candidate.playerBrother >> candidate.claimedActivities) || candidate.playerBrother > 1 || candidate.claimedActivities > 255) { return false; }
+        for (std::uint64_t &kills : candidate.enemyKills) {
+            if (!(stream >> kills)) { return false; }
+        }
+    }
+    if (version >= 4) {
+        for (unsigned &kills : candidate.hordeBestKills) { if (!(stream >> kills)) { return false; } }
+        for (unsigned &wave : candidate.hordeBestWave) { if (!(stream >> wave) || wave > 999) { return false; } }
+    }
+    if (version >= 5) {
+        for (unsigned &score : candidate.hordeBestScore) { if (!(stream >> score) || score > 3000000000u) { return false; } }
+    }
+    if (version >= 6 && !(stream >> candidate.stat42Bits)) { return false; }
     if (!(stream >> end) || end != "END") { return false; }
     for (const GameObjectRef &ref : candidate.configuration.guns) {
         if (!candidate.Owns(6, ref)) { return false; }
@@ -169,7 +223,16 @@ bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
         WriteRef(stream, item.resource);
         stream << item.count << '\n';
     }
-    stream << "END\n";
+    stream << musicEnabled << ' ' << soundEnabled << ' ' << brotherEnabled << ' ' << playerBrother << ' ' << claimedActivities << '\n';
+    for (std::uint64_t kills : enemyKills) { stream << kills << ' '; }
+    stream << '\n';
+    for (unsigned kills : hordeBestKills) { stream << kills << ' '; }
+    stream << '\n';
+    for (unsigned wave : hordeBestWave) { stream << wave << ' '; }
+    stream << '\n';
+    for (unsigned score : hordeBestScore) { stream << score << ' '; }
+    stream << '\n' << stat42Bits;
+    stream << "\nEND\n";
     stream.close();
     if (stream.fail()) { return false; }
     // Windows rename cannot replace an existing destination; use its atomic
@@ -206,4 +269,38 @@ bool CProfileManager::ConsumePowerup(const GameObjectRef &ref, unsigned count) {
         return true;
     }
     return false;
+}
+
+unsigned CProfileManager::ActivityTarget(unsigned index) {
+    constexpr unsigned targets[] = {5, 50, 250, 4, 15, 1000, 4, 50};
+    if (index >= 8) { return 0; }
+    return targets[index];
+}
+
+unsigned CProfileManager::ActivityProgress(unsigned index) const {
+    std::uint64_t value = 0;
+    if (index == 0 || index == 7) {
+        for (unsigned waves : clearedWaves) { value += waves; }
+    } else if (index == 1 || index == 5) {
+        for (std::uint64_t kills : enemyKills) { value += kills; }
+    } else if (index == 2) { value = enemyKills[0]; }
+    else if (index == 3) {
+        for (const GameObjectTypeRef &item : inventory) { if (item.type == 6) { ++value; } }
+    } else if (index == 4) { value = clearedWaves[1]; }
+    else if (index == 6) {
+        for (unsigned waves : clearedWaves) { if (waves > 0) { ++value; } }
+    }
+    return static_cast<unsigned>(std::min<std::uint64_t>(value, ActivityTarget(index)));
+}
+
+bool CProfileManager::ClaimActivity(unsigned index) {
+    if (index >= 8 || (claimedActivities & (1u << index)) != 0 || ActivityProgress(index) < ActivityTarget(index)) { return false; }
+    // The original online reward service is absent. These explicitly local
+    // activities give an offline route to currency; never repeat a claimed reward.
+    constexpr unsigned coinRewards[] = {100, 150, 500, 250, 750, 1000, 1000, 1500};
+    constexpr unsigned warbuckRewards[] = {1, 1, 3, 2, 3, 5, 5, 10};
+    coins += coinRewards[index];
+    warbucks += warbuckRewards[index];
+    claimedActivities |= 1u << index;
+    return true;
 }

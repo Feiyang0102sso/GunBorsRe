@@ -92,11 +92,16 @@ bool CSpriteGlu::ReadGlobalTables(CResPackTOC &pack) {
     // at or past the sprite map count names one of these. Only pack7 has any,
     // and CSpriteIterator reports them rather than drawing them.
     const std::uint16_t primitiveCount = stream.ReadUInt16();
+    m_primitives.clear();
+    m_primitives.resize(primitiveCount);
     for (std::uint16_t i = 0; i < primitiveCount; ++i) {
-        stream.ReadUInt32();  // colour
-        stream.ReadUInt16();  // width
-        stream.ReadUInt16();  // height
-        stream.ReadUInt8();
+        Primitive &primitive = m_primitives[i];
+        primitive.color = stream.ReadUInt32();  // colour
+        primitive.width = stream.ReadUInt16();  // width
+        primitive.height = stream.ReadUInt16();  // height
+        primitive.type = stream.ReadUInt8();
+        std::printf("[spriteglu] primitive=%u type=%u color=%08x size=%ux%u\n", i,
+            primitive.type, primitive.color, primitive.width, primitive.height);
     }
 
     // Sprite map substitution groups, used to swap a character's guns and
@@ -261,6 +266,32 @@ bool CSpriteGlu::LoadPages(std::uint8_t index, CSpriteGluArchetype &archetype) {
 
     archetype.SetPages(std::move(pages));
     return true;
+}
+
+const CTexture *CSpriteGlu::GetPrimitiveTexture(std::uint16_t spriteMapIndex) const {
+    if (spriteMapIndex < m_spriteMaps.size()) { return nullptr; }
+    const unsigned index = spriteMapIndex - static_cast<unsigned>(m_spriteMaps.size());
+    if (index >= m_primitives.size()) { return nullptr; }
+    const Primitive &primitive = m_primitives[index];
+    if (primitive.type == 17 || primitive.width == 0 || primitive.height == 0) { return nullptr; }
+    if (!primitive.texture) {
+        // CSpritePlayer::Draw :59246 uses the low RGB24, replacing stored alpha
+        // with the player's current alpha. The quad applies that alpha later.
+        PNGImage pixels;
+        pixels.width = primitive.width;
+        pixels.height = primitive.height;
+        pixels.pixels.resize(static_cast<std::size_t>(pixels.width) * pixels.height * 4);
+        for (std::size_t offset = 0; offset < pixels.pixels.size(); offset += 4) {
+            pixels.pixels[offset] = static_cast<std::uint8_t>(primitive.color >> 16);
+            pixels.pixels[offset + 1] = static_cast<std::uint8_t>(primitive.color >> 8);
+            pixels.pixels[offset + 2] = static_cast<std::uint8_t>(primitive.color);
+            pixels.pixels[offset + 3] = 255;
+        }
+        auto texture = std::make_unique<CTexture>();
+        if (!texture->Create(pixels)) { return nullptr; }
+        primitive.texture = std::move(texture);
+    }
+    return primitive.texture.get();
 }
 
 bool CSpriteGlu::ResolveImageIndex(std::uint16_t spriteMapIndex,

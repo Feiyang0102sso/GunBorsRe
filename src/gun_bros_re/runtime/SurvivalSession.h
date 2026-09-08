@@ -15,8 +15,10 @@ public:
     bool Load(CResTOCManager &toc, PackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
         const GameObjectRef *archiveLevel = nullptr);
     void Restart(float x, float y);
+    void SetHorde(bool enabled) { m_horde = enabled; m_archive = false; m_scene.SetHorde(enabled); }
     void SetStartWave(int wave) { m_startWave = wave; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
+    void UpdateAfterDeath(int deltaMs);
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const override;
     bool SpawnMapObject(const PlacedObject &object, int objectId) override;
@@ -30,8 +32,11 @@ public:
     void SetPickups(PickupScene *pickups, WeaponEffects *effects) { m_pickups = pickups; m_effects = effects; }
     bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) override;
     bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) override;
+    bool GetObjectPosition(int objectId, float &x, float &y) const override;
+    bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const override;
     CLevel &GetLevel() { return m_level; }
     bool IsTransitioning() const { return m_transitionMs > 0; }
+    unsigned GetTransitionElapsed() const { return m_transitionDuration - m_transitionMs; }
     unsigned GetKills() const { return m_kills; }
     /** Visible world size at the original 0.8 baseline; scale varies per tick. */
     void SetViewSize(float width, float height) { m_viewWidth = width; m_viewHeight = height; }
@@ -40,16 +45,20 @@ public:
 private:
     void UpdateDialog(int deltaMs);
     void UpdateArchiveMap(float previousX, float previousY);
+    void UpdateCamera(int deltaMs = 0);
     CLevel::Template m_template;
     CLevel m_level;
     CombatScene &m_scene;
     CMap &m_map;
     const std::vector<EnemyTemplateData> &m_catalog;
     int m_transitionMs = 1200;
+    int m_transitionDuration = 1200;
+    unsigned m_bossIntroSerial = 0;
     unsigned m_spawnSerial = 0;
     unsigned m_kills = 0;
     int m_startWave = 0;
     bool m_archive = false;
+    bool m_horde = false;
     float m_viewWidth = 572;
     float m_viewHeight = 429;
     CResTOCManager *m_toc = nullptr;

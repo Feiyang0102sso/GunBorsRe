@@ -10,13 +10,15 @@
 param(
     [ValidateSet('Release', 'Debug')]
     [string]$Configuration = 'Release',
-    [ValidateSet('Core', 'Campaign', 'LongRun')]
-    [string]$Phase = 'Core'
+    [ValidateSet('Core', 'UI', 'Campaign', 'Boundary', 'LongRun')]
+    [string]$Phase = 'Core',
+    [string]$ExecutablePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $gameExe = Join-Path $projectRoot "bin/x64/$Configuration/gun_bros_re.exe"
+if ($ExecutablePath) { $gameExe = (Resolve-Path -LiteralPath $ExecutablePath).Path }
 if (-not (Test-Path -LiteralPath $gameExe -PathType Leaf)) {
     throw "Build the $Configuration executable first: $gameExe"
 }
@@ -65,11 +67,25 @@ if ($Phase -eq 'Core') {
     Add-Check 'menu' @('--game-menu-check')
     Add-Check 'original-saves' @('--original-save-check')
     Add-Check 'original-profile' @('--original-profile-check')
+} elseif ($Phase -eq 'UI') {
+    Add-Check 'media' @('--media-check')
+    Add-Check 'intro' @('--intro')
+    Add-Check 'movies' @('--movie-check')
+    Add-Check 'movie-gallery' @('--movie-gallery')
+    Add-Check 'hud' @('--hud-check')
+    Add-Check 'menu' @('--game-menu-check')
+    Add-Check 'horde-first' @('--horde-check', '0', '--weapon', '80')
+    Add-Check 'horde-last' @('--horde-check', '9', '--weapon', '80')
 } elseif ($Phase -eq 'Campaign') {
     foreach ($mission in @(10, 11, 12, 13, 14)) {
         Add-Check "campaign-pack2-$mission" @('--campaign-check', 'pack2', "$mission", '--weapon', '65')
     }
     Add-Check 'campaign-pack7-0' @('--campaign-check', 'pack7', '0', '--weapon', '65')
+} elseif ($Phase -eq 'Boundary') {
+    Add-Check 'final-pack2' @('--survival-check', '--map', 'pack2', '7', '--weapon', '65', '--start-wave', '499', '--check-waves', '2')
+    Add-Check 'final-pack7' @('--survival-check', '--map', 'pack7', '6', '--weapon', '65', '--start-wave', '499', '--check-waves', '2')
+    Add-Check 'final-pack9' @('--survival-check', '--map', 'pack9', '0', '--weapon', '65', '--start-wave', '499', '--check-waves', '2')
+    Add-Check 'final-pack12' @('--survival-check', '--map', 'pack12', '0', '--weapon', '65', '--start-wave', '499', '--check-waves', '2')
 } else {
     Add-Check 'survival-pack2' @('--survival-check', '--map', 'pack2', '7', '--weapon', '65', '--check-waves', '500')
     Add-Check 'survival-pack7' @('--survival-check', '--map', 'pack7', '6', '--weapon', '65', '--check-waves', '500')

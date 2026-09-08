@@ -22,9 +22,15 @@ public:
     /** Process-wide startup option: validate WAVs without opening playback streams. */
     static void SetMuted(bool muted);
     static bool IsMuted();
+    static void SetEffectsEnabled(bool enabled);
+    /** Music bypasses the effects switch, and has its own original 0.3 gain. */
+    void SetMusicChannel(bool music);
+    void SetVolume(float volume);
 
     /** Decode and cache a RIFF/WAVE resource under a caller-owned key. */
     bool Load(std::uint64_t key, const std::vector<std::uint8_t> &wavBytes);
+    /** Cache decoded signed little-endian 16-bit PCM from the media decoder. */
+    bool LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &samples, unsigned sampleRate, unsigned channels);
 
     /** Start one cached sound. Return whether playback was successfully queued. */
     bool Play(std::uint64_t key, bool loop = false, std::uint64_t owner = 0);

@@ -9,5 +9,7 @@ struct SurvivalGameContext {
     CProfileManager &profile;
     std::filesystem::path savePath;
     unsigned planet = 0;
+    unsigned accountedKills = 0;
+    int hordeStart = -1;
 };
 #endif

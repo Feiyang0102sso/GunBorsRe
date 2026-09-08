@@ -26,8 +26,13 @@ public:
     void AddPowerup(const GameObjectRef &ref, unsigned count);
     unsigned GetPowerupCount(const GameObjectRef &ref) const;
     bool ConsumePowerup(const GameObjectRef &ref, unsigned count = 1);
+    /** Local activity rewards are persisted together with their claimed bit. */
+    bool ClaimActivity(unsigned index);
+    unsigned ActivityProgress(unsigned index) const;
+    static unsigned ActivityTarget(unsigned index);
     /** Offline equipment purchase follows level, common-else-rare, then ownership. */
     PurchaseResult AcquireItem(const CStoreItem &item, unsigned level);
+    PurchaseResult AcquireCurrency(const CStoreItem &item);
 
     std::uint64_t experience = 0;
     std::uint64_t coins = 0;
@@ -38,5 +43,16 @@ public:
     CRefinementManager refinery;
     std::vector<GameObjectTypeRef> inventory;
     std::vector<PowerupInventoryEntry> powerups;
+    bool musicEnabled = true;
+    bool soundEnabled = true;
+    bool brotherEnabled = true;
+    unsigned playerBrother = 0;
+    unsigned claimedActivities = 0;
+    std::array<std::uint64_t, 4> enemyKills{};
+    // Personal bests remain separate from the four retail planet campaigns.
+    std::array<unsigned, 10> hordeBestKills{};
+    std::array<unsigned, 10> hordeBestWave{};
+    std::array<unsigned, 10> hordeBestScore{};
+    unsigned stat42Bits = 0; // Authored level event bits; remote achievement reporting is separate.
 };
 #endif

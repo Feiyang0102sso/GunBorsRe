@@ -6,5 +6,6 @@
 #include <string>
 int RunProfilePlayCheck(const std::string &bigDirectory);
 int RunGameMenuCheck(const std::string &bigDirectory);
-int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screenshotPath = "", unsigned page = 0, bool originalProfile = false);
+int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screenshotPath = "", unsigned page = 0,
+    bool originalProfile = false, const std::string &profilePath = "");
 #endif

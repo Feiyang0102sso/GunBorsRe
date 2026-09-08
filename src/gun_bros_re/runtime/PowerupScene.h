@@ -6,6 +6,7 @@
 #include "runtime/PowerupCatalog.h"
 #include "runtime/CombatScene.h"
 #include "gun_bros/CProfileManager.h"
+#include "runtime/PowerupMoviePlayer.h"
 
 class PowerupScene {
 public:
@@ -16,6 +17,10 @@ public:
     void Cycle();
     bool Use();
     void Update(int deltaMs);
+    void Reset();
+    bool DrawMovies();
+    bool IsMovieActive() const { return m_moviePlayer.IsActive(); }
+    const PowerupMoviePlayer &GetMoviePlayer() const { return m_moviePlayer; }
     const PowerupEntry *GetSelected() const;
     unsigned GetCount() const;
     unsigned consumed = 0;
@@ -29,6 +34,7 @@ private:
     CombatScene &m_scene;
     WeaponEffects &m_effects;
     CProfileManager &m_profile;
+    PowerupMoviePlayer m_moviePlayer;
     std::vector<PowerupEntry> m_catalog;
     GameObjectRef m_equipped;
     unsigned m_selected = 13;

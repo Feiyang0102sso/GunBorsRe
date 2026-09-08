@@ -8,6 +8,44 @@
 #include "gun_bros/CMap.h"
 
 #include <cstdio>
+#include <algorithm>
+
+bool CLevel::SetIndicator(int objectId, unsigned type, std::uint64_t targetKey) {
+    if (type >= 7 || m_indicators.size() >= 30 || m_world == nullptr) { return false; }
+    CLevelIndicator indicator;
+    indicator.objectId = objectId;
+    indicator.targetKey = targetKey;
+    indicator.type = type;
+    bool found = false;
+    if (targetKey == 0) { found = m_world->GetObjectPosition(objectId, indicator.x, indicator.y); }
+    else { found = m_world->GetIndicatorTarget(targetKey, indicator.x, indicator.y); }
+    if (!found) { return false; }
+    m_indicators.push_back(indicator);
+    return true;
+}
+
+void CLevel::RemoveIndicator(int objectId) {
+    for (CLevelIndicator &indicator : m_indicators) {
+        if (indicator.objectId == objectId) { indicator.FadeOut(); return; }
+    }
+}
+
+void CLevel::UpdateIndicators(int deltaMs, float left, float top, float width, float height) {
+    for (std::size_t index = 0; index < m_indicators.size();) {
+        CLevelIndicator &indicator = m_indicators[index];
+        indicator.Update(deltaMs);
+        bool found = false;
+        if (m_world != nullptr) {
+            if (indicator.targetKey == 0) { found = m_world->GetObjectPosition(indicator.objectId, indicator.x, indicator.y); }
+            else { found = m_world->GetIndicatorTarget(indicator.targetKey, indicator.x, indicator.y); }
+        }
+        if (!found) { indicator.FadeOut(); }
+        // Original markers retire once the target enters the inner viewport.
+        if (indicator.x > left && indicator.x < left + width && indicator.y > top && indicator.y < top + height) { indicator.FadeOut(); }
+        if (indicator.IsDone()) { m_indicators.erase(m_indicators.begin() + index); }
+        else { ++index; }
+    }
+}
 
 CLevel::Template::Template() : wavesPerRevolution(0), waveLimit(0), perfectWaveRewardPercent(0) {}
 
@@ -32,7 +70,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_template = &levelTemplate;
     m_map = &map;
     // CLevel snaps to 0.8 before executing OnLevelStart (:121002).
-    map.GetCamera().SnapScale(0.8f);
+    map.GetCamera().Reset(0.8f);
     map.UnlockAllPathNodes();
     m_world = world;
     m_spawner.Bind(*this, world);
@@ -41,15 +79,31 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_eventTimerMs = 0;
     m_objectLayer = -1;
     m_spawnedObjects.clear();
+    m_indicators.clear();
     for (bool &manual : m_manualSpawnTags) { manual = false; }
     m_pathLayer = -1;
     m_triggerLayer = -1;
     m_dialogResource = -1;
+    m_dialogCloseRequested = false;
     m_nextLevel = {};
     ++m_dialogSerial;
     for (bool &enabled : m_triggerEnabled) { enabled = true; }
     for (int &pause : m_triggerPauseMs) { pause = 0; }
     m_cleared = false;
+    m_stopwatchMs = 0;
+    m_stopwatchRunning = false;
+    m_brotherLabelVisible = false;
+    m_brotherLabelAlpha = 0;
+    m_enemyLimit = 50;
+    m_xplodiumMultiplierPercent = 100;
+    m_playerCanMove = true;
+    m_playerCanShoot = true;
+    m_bossIntroSerial = 0;
+    m_respawnPathLayer = -1;
+    m_objectTimeScale = 1;
+    m_statisticsGroup = 0;
+    for (unsigned &kills : m_statisticsKills) { kills = 0; }
+    m_stat42Bits = 0;
     m_unimplementedCalls = 0;
     for (std::int16_t &variable : m_variables) {
         variable = 0;
@@ -152,6 +206,7 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
     case 35: m_timerMs = first; m_timerFunction = second; return 0;
     case 40:
         m_dialogResource = first;
+        m_dialogCloseRequested = false;
         m_dialogAutoClose = argumentCount >= 3 && arguments[2] != 0;
         ++m_dialogSerial;
         return 0;
@@ -160,6 +215,7 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
         if (m_world != nullptr) { m_world->OnWaveCleared(m_template->perfectWaveRewardPercent); }
         ++m_variables[0];
         std::printf("[level] wave cleared; next=%d\n", m_variables[0] + 1);
+        std::fflush(stdout); // Keep long-running wave checks observable under redirected output.
         if (m_template != nullptr && m_template->waveLimit > 0 && m_variables[0] >= m_template->waveLimit) {
             m_cleared = true;
             m_spawner.Reset();
@@ -167,6 +223,27 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
         }
         return 0;
     case 52: m_timerMs = 0; m_timerFunction = -1; return 0;
+    case 49: SetIndicator(first, static_cast<unsigned>(second)); return 0;
+    case 50:
+        // Shipped scripts pass one object ID. The decompiler's a3[1] in this
+        // arm cannot describe those calls; use the single supplied argument.
+        RemoveIndicator(first);
+        return 0;
+    case 39: m_map->GetCamera().Shake(first * 1000 / 256); return 0;
+    case 74: m_map->GetCamera().SetCameraMode(first); return 0;
+    case 75: m_map->GetCamera().SetTarget(static_cast<float>(first), static_cast<float>(second)); return 0;
+    case 76: m_map->GetCamera().SetTargetToPlayer(); return 0;
+    // Original CBrother words 1006/1004 gate movement and firing respectively.
+    case 77: m_playerCanMove = first != 0; return 0;
+    case 78: m_playerCanShoot = first != 0; return 0;
+    case 79: ++m_bossIntroSerial; return 0;
+    // CLevel::RespawnPlayerForDeathMatch :115007 uses this path's farthest node.
+    // Retail scripts also set it; single-player never invokes that respawn path.
+    case 80: m_respawnPathLayer = first; return 0;
+    // CPlayerStatistics::SetStatBit :220857 accepts bit positions 0..31.
+    case 82:
+        if (first >= 0 && first < 32) { m_stat42Bits |= 1u << first; }
+        return 0;
     case 53:
         if (m_variables[2] > 0) { return m_variables[0] % m_variables[2]; }
         return 0;
@@ -177,6 +254,27 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
         return 0;
     case 55:
         if (first >= 0 && first < 5) { m_globalEnemyMultipliers[first] = second / 256.0f; }
+        return 0;
+    // CPlayer::SetXplodiumMultiplier :100302 stores a percentage, not 8.8.
+    case 56: m_xplodiumMultiplierPercent = first; return 0;
+    case 57: m_xplodiumMultiplierPercent += first; return 0;
+    // CLevel::FunctionResolver :118039-118089. These are host clocks and
+    // presentation switches, not network gates or arbitrary gameplay bonuses.
+    case 58: m_objectTimeScale = first / 256.0f; return 0;
+    // CEnemySpawner::GetNumFreeEnemies :147230 consumes the same pool limit.
+    case 59: m_enemyLimit = std::min(50u, static_cast<unsigned>(first)); return 0;
+    case 60: m_stopwatchMs = 0; m_stopwatchRunning = false; return 0;
+    case 61: m_stopwatchRunning = true; return 0;
+    case 62: m_stopwatchRunning = false; return 0;
+    case 63: m_stopwatchRunning = first != 0; return 0;
+    case 66: m_brotherLabelVisible = true; return 0;
+    case 67: m_brotherLabelVisible = false; return 0;
+    // :119883 uses this byte in the enemy-statistic key, independently of XP.
+    case 68: m_statisticsGroup = static_cast<std::uint8_t>(first); return 0;
+    case 70:
+        // ClearChapterPlayback requests an exit; CGame delivers event 4 later
+        // when the popup finishes. Never reenter the script resolver here.
+        if (m_dialogResource >= 0) { m_dialogCloseRequested = true; }
         return 0;
     default: break;
     }
@@ -216,6 +314,10 @@ void CLevel::Update(int deltaMs) {
     if (deltaMs <= 0 || m_cleared) {
         return;
     }
+    if (m_stopwatchRunning) { m_stopwatchMs += deltaMs; }
+    // CLevel::Update :121477 fades the brother's name at 0.002 per ms.
+    if (m_brotherLabelVisible) { m_brotherLabelAlpha = std::min(1.0f, m_brotherLabelAlpha + deltaMs * 0.002f); }
+    else { m_brotherLabelAlpha = std::max(0.0f, m_brotherLabelAlpha - deltaMs * 0.002f); }
     for (int &pause : m_triggerPauseMs) {
         pause -= deltaMs;
         if (pause < 0) { pause = 0; }
@@ -295,6 +397,7 @@ bool CLevel::GetStringResource(int index, CGameAssetRef &out) const {
 void CLevel::CompleteDialog() {
     if (m_dialogResource < 0) { return; }
     m_dialogResource = -1;
+    m_dialogCloseRequested = false;
     // CGame::Update :76636 forwards popup completion through class 4 event 4.
     HandleEvent(4);
 }
@@ -313,6 +416,7 @@ void CLevel::OnEnemyKilled(int objectId, const GameObjectRef &enemy) {
     if (m_template == nullptr || m_cleared) {
         return;
     }
+    ++m_statisticsKills[m_statisticsGroup];
     int resourceIndex = -1;
     const auto &resources = m_template->script.GetResources();
     for (std::size_t index = 0; index < resources.size(); ++index) {

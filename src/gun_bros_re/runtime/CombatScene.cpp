@@ -71,16 +71,47 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
     const GameObjectRef &ref = actor.model.enemy.combat.templateRef;
     const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
         m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(m_player, 3)));
-    AddExperience(experience);
+    const bool playerKill = actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId;
+    if (m_horde) {
+        // CLevel::OnEnemyKilled :119655-119802: bro kills score once, player
+        // kills twice at the current streak multiplier and advance that streak.
+        std::uint64_t points = static_cast<std::uint64_t>(experience) * (m_killStreak + 1);
+        if (playerKill) { points *= 2; ++m_killStreak; }
+        m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL, m_score + points));
+        if (playerKill) { AddExperience(experience); }
+    } else { AddExperience(experience); }
     if (actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId) {
         const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
             m_level->GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(m_player, 4)));
-        m_xplodium += xplodium;
+        AddXplodium(xplodium);
     }
 }
 
 void CombatScene::AddHealth(unsigned amount) {
     if (!m_vitals.dead) { m_vitals.health = std::min(m_vitals.maximum, m_vitals.health + amount); }
+}
+
+void CombatScene::AddXplodium(unsigned amount) {
+    // CPlayer::AddXplodium :101116 keeps hundredths between individual grants.
+    // Rounding every small pickup separately loses the later-wave bonus.
+    unsigned percent = 100;
+    if (m_level != nullptr) { percent = static_cast<unsigned>(std::max(0, m_level->GetXplodiumMultiplierPercent())); }
+    const std::uint64_t scaled = static_cast<std::uint64_t>(amount) * percent + m_xplodiumRemainder;
+    m_xplodium += scaled / 100;
+    m_xplodiumRemainder = static_cast<unsigned>(scaled % 100);
+}
+
+unsigned CombatScene::GetTotalKills() const {
+    unsigned total = kills;
+    // Dead actors can retain their original corpse animation for ten seconds.
+    // Saving must include them before their render objects are retired.
+    for (const auto &actor : enemies) { total += actor->model.enemy.combat.deathCount; }
+    return total;
+}
+
+float CombatScene::GetEnemyTimeScale() const {
+    if (m_level == nullptr) { return 1; }
+    return m_level->GetObjectTimeScale();
 }
 
 bool CombatScene::TouchesPickup(float x, float y) const {
@@ -101,7 +132,9 @@ void CombatScene::OnWaveCleared(unsigned perfectRewardPercent) {
     if (m_vitals.hits == m_waveHits) {
         m_lastWaveBonus = std::max<std::uint64_t>(1,
             (m_xplodium - m_waveXplodium) * perfectRewardPercent / 100);
-        m_xplodium += m_lastWaveBonus;
+        const std::uint64_t before = m_xplodium;
+        AddXplodium(static_cast<unsigned>(m_lastWaveBonus));
+        m_lastWaveBonus = m_xplodium - before;
         ++m_perfectWaves;
     }
     ++m_clearedWaves;
@@ -219,6 +252,10 @@ void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
 }
 
 void CombatScene::Reset() {
+    m_xplodiumRemainder = 0;
+    m_hasViewCenter = false;
+    m_score = 0;
+    m_killStreak = 0;
     m_effects.Clear();
     enemies.clear();
     deaths.clear();
@@ -345,6 +382,24 @@ void CombatScene::PlayerMatrix(float *matrix) const {
 void CombatScene::SetBrother(PlayerModel *model, CBrotherAI *brother) {
     m_brotherModel = model;
     m_brother = brother;
+}
+
+void CombatScene::SetBrotherWeapons(const CScript &script, const CGun::Template &pistol, const CGun::Template &rifle) {
+    m_brotherScript = &script;
+    m_brotherWeapons[0] = &pistol;
+    m_brotherWeapons[1] = &rifle;
+    m_brotherWeaponSlot = 0;
+}
+
+bool CombatScene::SwapBrotherWeapon() {
+    if (m_brotherScript == nullptr || m_brotherModel == nullptr || m_brother->vitals.dead) { return true; }
+    const unsigned next = 1 - m_brotherWeaponSlot;
+    m_effects.RetireOwner(kBrotherCombatId);
+    if (!EquipPlayerWeapon(m_tables, *m_brotherScript, *m_brotherWeapons[next], "AI brother swap", *m_brotherModel) ||
+        !CreatePlayerBuffers(*m_brotherModel, m_program)) { return false; }
+    m_brotherWeaponSlot = next;
+    std::printf("[brother] weapon-slot=%u\n", next);
+    return true;
 }
 
 void CombatScene::ResetBrotherPosition(float x, float y) {
@@ -615,13 +670,17 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
         float damage = hit.damage;
         if (hit.splash && hit.percentDamage) { damage *= m_vitals.maximum * 0.01f; }
         damage = std::max(0.0f, damage * (1.0f - reduction));
-        return m_player.weapon->brother.ReceiveDamage(damage);
+        const unsigned hitsBefore = m_vitals.hits;
+        const HitResult result = m_player.weapon->brother.ReceiveDamage(damage);
+        // OnPlayerDamaged :115914 resets the streak on accepted damage only.
+        if (m_vitals.hits != hitsBefore) { m_killStreak = 0; }
+        return result;
     }
     CombatHit adjusted = hit;
-    if (hit.owner == kPlayerCombatId) {
+    if (hit.applyArmorAttack && hit.owner == kPlayerCombatId) {
         adjusted.damage *= PlayerArmorMultiplier(m_player, 1);
     }
-    if (hit.owner == kBrotherCombatId && m_brotherModel != nullptr) {
+    if (hit.applyArmorAttack && hit.owner == kBrotherCombatId && m_brotherModel != nullptr) {
         adjusted.damage *= PlayerArmorMultiplier(*m_brotherModel, 1);
     }
     CombatEnemy *actor = Find(target);
@@ -743,6 +802,8 @@ void CombatScene::Actions(CombatEnemy &actor) {
         if (state.targetType == 2) { ownerType = 0; }
         if (action.kind == EnemyAction::Kind::LevelEvent) {
             levelEvents.push_back(static_cast<std::uint8_t>(action.slot));
+        } else if (action.kind == EnemyAction::Kind::Shake) {
+            if (m_map != nullptr) { m_map->GetCamera().Shake(action.durationMs); }
         } else if (action.kind == EnemyAction::Kind::TurretActive) {
             // CEnemy native 71 :72744 selects the local player when offline.
             m_player.weapon->brother.SetTurretIsActive(action.slot != 0);
@@ -826,15 +887,22 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     if (m_brotherModel != nullptr) {
         m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
             playerX, playerY, PlayerArmorMultiplier(*m_brotherModel, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2));
+        if (m_brother->TakeWeaponSwapRequest() && !SwapBrotherWeapon()) { ++invalidSpawns; }
         AdvancePlayer(*m_brotherModel, deltaMs);
     }
     for (auto &actor : enemies) {
         CEnemy &enemy = actor->model.enemy;
         EnemyCombat &state = enemy.combat;
         if (!state.enabled || state.removed) { continue; }
+        int enemyDeltaMs = deltaMs;
+        // TransformObjectElapseMS :114279 leaves dead actors and player shots
+        // at normal speed; live enemies use the script's Q8 time multiplier.
+        if (m_level != nullptr && !state.dead) {
+            enemyDeltaMs = std::max(1, static_cast<int>(std::lround(deltaMs * m_level->GetObjectTimeScale())));
+        }
         SelectTarget(*actor);
-        UpdateNavigation(*actor, deltaMs);
-        enemy.Update(deltaMs);
+        UpdateNavigation(*actor, enemyDeltaMs);
+        enemy.Update(enemyDeltaMs);
         for (std::uint32_t part = 0; part < enemy.GetPartCount(); ++part) {
             for (const GameObjectRef &sound : enemy.GetPart(part).controller.TakeSounds()) {
                 m_effects.PlayMoveSound(sound);
@@ -842,8 +910,8 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         }
         ResolveMovement(state.previousX, state.previousY, state.x, state.y,
             enemy.GetPart(0).radius * m_cameraScale, false);
-        actor->contactTimer = std::max(0, actor->contactTimer - deltaMs);
-        actor->brotherContactTimer = std::max(0, actor->brotherContactTimer - deltaMs);
+        actor->contactTimer = std::max(0, actor->contactTimer - enemyDeltaMs);
+        actor->brotherContactTimer = std::max(0, actor->brotherContactTimer - enemyDeltaMs);
         if (m_brother != nullptr && !m_brother->vitals.dead && !state.dead &&
             state.variables[16] != 1 && state.targetType != 2 && state.variables[12] > 0 &&
             state.variables[13] > 0 && actor->brotherContactTimer == 0 &&

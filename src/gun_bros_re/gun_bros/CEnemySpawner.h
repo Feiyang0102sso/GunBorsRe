@@ -24,6 +24,8 @@ public:
     virtual void OnWaveCleared(unsigned perfectRewardPercent) {}
     virtual bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) { return false; }
     virtual bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) { return false; }
+    virtual bool GetObjectPosition(int objectId, float &x, float &y) const { return false; }
+    virtual bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const { return false; }
 };
 
 class CEnemySpawner {

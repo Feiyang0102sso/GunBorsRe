@@ -10,6 +10,7 @@ public:
     virtual void Reset() = 0;
     virtual void Update(int deltaMs) = 0;
     virtual void SendMessage(int objectId, int message) = 0;
+    virtual bool GetObjectPosition(int objectId, float &x, float &y) const { return false; }
     virtual CombatTrace Trace(const CombatHit &hit, float x, float y, float dx, float dy,
         float radius, const std::vector<CombatId> &skip) { return {}; }
     virtual HitResult ApplyHit(CombatId target, const CombatHit &hit) { return HitResult::Ignored; }

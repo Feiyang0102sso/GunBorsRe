@@ -109,6 +109,18 @@ void CSpriteIterator::ExpandSprite(std::uint16_t spriteIndex, std::int32_t offse
         if (!m_glu.ResolveImageIndex(part.spriteMapIndex, imageIndex)) {
             // A sprite map past the table is a coloured primitive rather than
             // an image. Only pack7 has one, and nothing draws primitives yet.
+            // The original RGB rectangle now has a lazy texture-backed host.
+            const CTexture *primitive = m_glu.GetPrimitiveTexture(part.spriteMapIndex);
+            if (primitive != nullptr) {
+                SpriteQuad quad{};
+                quad.page = primitive;
+                quad.source = {0, 0, static_cast<std::uint16_t>(primitive->GetWidth()), static_cast<std::uint16_t>(primitive->GetHeight())};
+                quad.offsetX = offsetX + part.offsetX;
+                quad.offsetY = offsetY + part.offsetY;
+                quad.blend = BlendMode::Alpha;
+                out.push_back(quad);
+                continue;
+            }
             m_skippedParts++;
             continue;
         }

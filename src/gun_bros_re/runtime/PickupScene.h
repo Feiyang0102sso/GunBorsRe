@@ -29,6 +29,8 @@ public:
     void UpdateEffects(int deltaMs, WeaponEffects &effects);
     void Draw(const float *mvp, float scale);
     std::size_t GetCount() const { return m_instances.size(); }
+    bool GetObjectPosition(int objectId, float &x, float &y) const;
+    bool GetIndicatorTarget(unsigned serial, float &x, float &y) const;
     unsigned spawned = 0;
     unsigned collected = 0;
     unsigned failures = 0;
@@ -40,6 +42,7 @@ private:
         std::vector<std::vector<SpriteQuad>> frames;
     };
     struct Instance {
+        unsigned serial = 0;
         CPickup pickup;
         CSpritePlayer animation;
         Visual *visual = nullptr;

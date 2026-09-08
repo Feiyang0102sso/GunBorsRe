@@ -111,6 +111,7 @@ public:
 
     /** The sprite map's blend bits, or 0 when the index is out of range. */
     std::uint8_t GetSpriteMapBlendFlags(std::uint16_t spriteMapIndex) const;
+    const CTexture *GetPrimitiveTexture(std::uint16_t spriteMapIndex) const;
 
 private:
     /** Read SPRITEGLU__BINARY_GLOBAL into the tables. */
@@ -128,6 +129,13 @@ private:
     std::uint8_t m_archetypeCount;
     std::vector<std::uint16_t> m_imageSlots;  // image slot -> image index
     std::vector<SpriteMap> m_spriteMaps;
+    struct Primitive {
+        std::uint32_t color = 0;
+        std::uint16_t width = 0, height = 0;
+        std::uint8_t type = 0;
+        mutable std::unique_ptr<CTexture> texture;
+    };
+    std::vector<Primitive> m_primitives;
 
     // How many atlas pages each archetype owns, and where its run starts.
     std::vector<std::uint8_t> m_pagesPerArchetype;

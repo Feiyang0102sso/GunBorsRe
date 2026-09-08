@@ -26,6 +26,7 @@
 #include "glu_script/CScriptResolver.h"
 #include "gun_bros/CGameAssetRef.h"
 #include "gun_bros/CEnemySpawner.h"
+#include "gun_bros/CLevelIndicator.h"
 
 #include <cstdint>
 
@@ -107,15 +108,32 @@ public:
     int GetDialogResource() const { return m_dialogResource; }
     unsigned GetDialogSerial() const { return m_dialogSerial; }
     bool DoesDialogAutoClose() const { return m_dialogAutoClose; }
+    bool IsDialogCloseRequested() const { return m_dialogCloseRequested; }
     const GameObjectRef &GetNextLevel() const { return m_nextLevel; }
     void CompleteDialog();
     CEnemySpawner &GetSpawner() { return m_spawner; }
+    bool SetIndicator(int objectId, unsigned type, std::uint64_t targetKey = 0);
+    void RemoveIndicator(int objectId);
+    void UpdateIndicators(int deltaMs, float left, float top, float width, float height);
+    const std::vector<CLevelIndicator> &GetIndicators() const { return m_indicators; }
     int GetWave() const { return m_variables[0]; }
     int GetRealWave() const {
         if (m_variables[2] > 0) { return m_variables[0] % m_variables[2]; }
         return 0;
     }
     int GetStateId() const { return m_interpreter.GetStateId(); }
+    int GetStopwatchTime() const { return m_stopwatchMs; }
+    bool IsBrotherLabelVisible() const { return m_brotherLabelVisible; }
+    float GetBrotherLabelAlpha() const { return m_brotherLabelAlpha; }
+    float GetObjectTimeScale() const { return m_objectTimeScale; }
+    unsigned GetEnemyLimit() const { return m_enemyLimit; }
+    int GetXplodiumMultiplierPercent() const { return m_xplodiumMultiplierPercent; }
+    bool CanPlayerMove() const { return m_playerCanMove; }
+    bool CanPlayerShoot() const { return m_playerCanShoot; }
+    unsigned GetBossIntroSerial() const { return m_bossIntroSerial; }
+    int GetRespawnPathLayer() const { return m_respawnPathLayer; }
+    unsigned GetKillsInStatisticsGroup(unsigned group) const { return m_statisticsKills[group & 255]; }
+    unsigned GetStat42Bits() const { return m_stat42Bits; }
     bool IsCleared() const { return m_cleared; }
     int GetObjectLayer() const { return m_objectLayer; }
     int GetPathLayer() const { return m_pathLayer; }
@@ -139,6 +157,7 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
 
 private:
+    std::vector<CLevelIndicator> m_indicators;
     void SpawnMapObjects(int tag, int objectId = -1);
     /** setCameraLayer. Reference: :117497 */
     void SetCameraLayer(const std::int16_t *arguments, std::uint8_t argumentCount);
@@ -176,8 +195,22 @@ private:
     int m_dialogResource = -1;
     unsigned m_dialogSerial = 0;
     bool m_dialogAutoClose = false;
+    bool m_dialogCloseRequested = false;
     GameObjectRef m_nextLevel;
     bool m_cleared = false;
+    int m_stopwatchMs = 0;
+    bool m_stopwatchRunning = false;
+    bool m_brotherLabelVisible = false;
+    float m_brotherLabelAlpha = 0;
+    unsigned m_enemyLimit = 50;
+    int m_xplodiumMultiplierPercent = 100;
+    bool m_playerCanMove = true, m_playerCanShoot = true;
+    unsigned m_bossIntroSerial = 0;
+    int m_respawnPathLayer = -1;
+    float m_objectTimeScale = 1;
+    std::uint8_t m_statisticsGroup = 0;
+    unsigned m_statisticsKills[256] = {};
+    unsigned m_stat42Bits = 0; // Original CPlayerStatistics record 42, native 82.
     float m_globalEnemyMultipliers[5] = {1, 1, 1, 1, 1};
     float m_enemyMultipliers[32][5] = {};
 };
