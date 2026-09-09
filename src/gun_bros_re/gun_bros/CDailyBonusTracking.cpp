@@ -45,11 +45,34 @@ bool CDailyBonusTracking::Load(CResTOCManager &toc, PackTables &tables) {
     return true;
 }
 
+void CDailyBonusTracking::RefreshUsageData(CProfileManager &profile, std::uint32_t currentSeconds) const {
+    if (!profile.nativeArchive) { return; }
+    // OnReActivate :77908 refreshes even when the player does not claim.
+    const auto elapsed = currentSeconds - profile.dailyLastLaunchSeconds;
+    if (elapsed < 172800) { profile.dailyConsecutiveSeconds += elapsed; }
+    else { profile.dailyConsecutiveSeconds = 0; profile.dailyLastCommit = 0; }
+    profile.dailyLastLaunchSeconds = currentSeconds;
+    profile.dailyConsecutiveDays = profile.dailyConsecutiveSeconds / 86400 + 1;
+}
+
 bool CDailyBonusTracking::IsBonusAvailable(const CProfileManager &profile, std::int64_t localDay) const {
+    if (profile.nativeArchive) {
+        // Native caller supplies seconds from the Windows UTC clock adapter.
+        // RefreshUsageData :209316 resets after a gap of at least 172800s.
+        const auto elapsed = static_cast<std::uint32_t>(localDay) - profile.dailyLastLaunchSeconds;
+        if (elapsed >= 172800) { return !prizes.empty(); }
+        const unsigned day = (profile.dailyConsecutiveSeconds + elapsed) / 86400 + 1;
+        return !prizes.empty() && profile.dailyLastCommit < day;
+    }
     return !prizes.empty() && localDay + profile.dailyDayOffset > profile.dailyLastClaimDay;
 }
 
 unsigned CDailyBonusTracking::CalculateBonus(const CProfileManager &profile, std::int64_t localDay) const {
+    if (profile.nativeArchive) {
+        const auto elapsed = static_cast<std::uint32_t>(localDay) - profile.dailyLastLaunchSeconds;
+        if (elapsed >= 172800) { return 0; }
+        return ((profile.dailyConsecutiveSeconds + elapsed) / 86400) % static_cast<unsigned>(prizes.size());
+    }
     if (localDay + profile.dailyDayOffset != profile.dailyLastClaimDay + 1) { return 0; }
     // CommitBonus :209500 uses (consecutiveDay - 1) modulo reward count.
     return profile.dailyConsecutiveDays % static_cast<unsigned>(prizes.size());
@@ -66,16 +89,31 @@ bool CDailyBonusTracking::CommitBonus(CProfileManager &profile, std::int64_t loc
             if (entry.ref.packHash == ref.packHash && entry.ref.localIndex == ref.localIndex) { reward = &entry; break; }
         }
         if (reward == nullptr) { return false; }
-        CStoreItem freeItem = reward->data;
-        freeItem.commonPrice = 0;
-        freeItem.rarePrice = 0;
-        freeItem.requiredLevel = 0;
-        const auto result = candidate.AcquireItem(freeItem, 200);
+        if (!profile.nativeArchive) { return false; }
+        CPlayerProgress playerProgress;
+        playerProgress.Bind(profile.nativeArchive->progression);
+        playerProgress.SetExperience(profile.experience);
+        const auto result = candidate.AcquireItem(reward->data, playerProgress.GetLevel(), true);
+        // AwardPrize ignores an ineligible/already-owned item and still awards
+        // the currency/XP. Unsupported resources remain an explicit failure.
+        if (result == PurchaseResult::LevelLocked) { continue; }
         if (result != PurchaseResult::Purchased && result != PurchaseResult::Owned) { return false; }
     }
     candidate.coins += prize.coins;
     candidate.warbucks += prize.warbucks;
     candidate.experience += prize.experience;
+    if (profile.nativeArchive) {
+        const auto elapsed = static_cast<std::uint32_t>(localDay) - profile.dailyLastLaunchSeconds;
+        candidate.dailyConsecutiveSeconds = 0;
+        if (elapsed < 172800) { candidate.dailyConsecutiveSeconds = profile.dailyConsecutiveSeconds + elapsed; }
+        candidate.dailyLastLaunchSeconds = static_cast<std::uint32_t>(localDay);
+        candidate.dailyLastCommit = candidate.dailyConsecutiveSeconds / 86400 + 1;
+        candidate.dailyConsecutiveDays = candidate.dailyLastCommit;
+        ++candidate.statistics[32]; // CommitBonus :209575, DAILY_BONUSES.
+        profile = std::move(candidate);
+        std::printf("[daily] native seconds=%u day=%u reward=%u\n", profile.dailyLastLaunchSeconds, profile.dailyLastCommit, index + 1);
+        return true;
+    }
     if (localDay + profile.dailyDayOffset != profile.dailyLastClaimDay + 1) { candidate.dailyConsecutiveDays = 0; }
     ++candidate.dailyConsecutiveDays;
     candidate.dailyLastClaimDay = localDay + profile.dailyDayOffset;

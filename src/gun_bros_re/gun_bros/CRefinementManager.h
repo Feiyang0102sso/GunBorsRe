@@ -26,6 +26,10 @@ public:
         unsigned state = 0;
         std::uint64_t amount = 0;
         std::int64_t finishTime = 0;
+        // Native save preserves milliseconds and the original start/duration.
+        std::int64_t finishTimeMs = 0;
+        std::uint32_t startTimeSeconds = 0;
+        std::int32_t totalDurationMs = 0;
         float efficiency = 0;
     };
 

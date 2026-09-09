@@ -28,6 +28,14 @@ bool ReadRef(std::istream &stream, GameObjectRef &ref) {
 }
 
 void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager::Template &refinement) {
+    nativeArchive.reset();
+    firstLaunch = true;
+    activeWeaponSlot = 0;
+    tutorialSeen.fill(0);
+    statistics.fill(0);
+    dailyLastLaunchSeconds = 0;
+    dailyConsecutiveSeconds = 0;
+    dailyLastCommit = 0;
     experience = 0;
     coins = 0;
     warbucks = 0;
@@ -43,9 +51,11 @@ void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager
     inventory.clear();
     powerups.clear();
     weaponMastery.clear();
+    options.Reset();
     musicEnabled = true;
     soundEnabled = true;
     brotherEnabled = true;
+    pushChallenges = true;
     playerBrother = 0;
     claimedActivities = 0;
     enemyKills.fill(0);
@@ -95,7 +105,7 @@ void CProfileManager::Grant(unsigned type, const GameObjectRef &ref) {
     inventory.push_back(entry);
 }
 
-PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned level) {
+PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned level, bool award) {
     // Consumables, bundles with consumables, and real-money products need their
     // own runtime systems; do not charge for an item we cannot deliver.
     // Stage 10: supported consumables now use their own count inventory.
@@ -103,7 +113,8 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
     bool missing = false;
     for (const GameObjectTypeRef &ref : item.objects) {
         if (ref.type == 17 && IsPlayablePowerup(ref.object)) {
-            if (item.commonPrice == 0 && item.rarePrice == 0) { return PurchaseResult::Unsupported; }
+            if (award && GetPowerupCount(ref.object) >= 99) { continue; }
+            if (!award && item.commonPrice == 0 && item.rarePrice == 0) { return PurchaseResult::Unsupported; }
             missing = true;
             continue;
         }
@@ -112,16 +123,28 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
     }
     if (!missing) { return PurchaseResult::Owned; }
     if (level < item.requiredLevel) { return PurchaseResult::LevelLocked; }
-    if (item.commonPrice != 0) {
-        if (coins < item.commonPrice) { return PurchaseResult::InsufficientCoins; }
-        coins -= item.commonPrice;
-    } else {
-        if (warbucks < item.rarePrice) { return PurchaseResult::InsufficientWarbucks; }
-        warbucks -= item.rarePrice;
+    // CStoreAggregator::AcquireItem :158044 has a separate award branch;
+    // its level gate still applies. Never rewrite a BIG item's price to grant it.
+    if (!award) {
+        if (item.commonPrice != 0) {
+            if (coins < item.commonPrice) { return PurchaseResult::InsufficientCoins; }
+            coins -= item.commonPrice;
+        } else {
+            if (warbucks < item.rarePrice) { return PurchaseResult::InsufficientWarbucks; }
+            warbucks -= item.rarePrice;
+        }
     }
     for (const GameObjectTypeRef &ref : item.objects) {
-        if (ref.type == 17) { AddPowerup(ref.object, 1); }
+        if (ref.type == 17) {
+            if (!award || GetPowerupCount(ref.object) < 99) { AddPowerup(ref.object, 1); }
+        }
         else { Grant(ref.type, ref.object); }
+    }
+    if (!award && (item.commonPrice != 0 || item.rarePrice != 0)) {
+        // Original GUNS/ARMOR/POWERUPS_BOUGHT statistics :158145.
+        if (item.type <= 6) { ++statistics[10]; }
+        else if (item.type <= 9) { ++statistics[11]; }
+        else if (item.type <= 13) { ++statistics[12]; }
     }
     return PurchaseResult::Purchased;
 }
@@ -145,6 +168,7 @@ PurchaseResult CProfileManager::AcquireCurrency(const CStoreItem &item) {
 }
 
 bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
+    if (nativeArchive) { return ReloadNativeProfile(*this, path); }
     if (!std::filesystem::exists(path)) { return true; }
     std::ifstream stream(path);
     std::string magic;
@@ -250,6 +274,7 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
 }
 
 bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
+    if (nativeArchive) { return SaveNativeProfile(*this, path); }
     if (!path.parent_path().empty()) { std::filesystem::create_directories(path.parent_path()); }
     std::filesystem::path temporary = path;
     temporary += L".tmp";
@@ -351,6 +376,12 @@ unsigned CProfileManager::ActivityProgress(unsigned index) const {
 }
 
 bool CProfileManager::ClaimActivity(unsigned index) {
+    // Historical host-only research rewards are not CChallengeTemplate prizes.
+    // Native DataStores must never receive this invented reward table.
+    if (nativeArchive) {
+        std::printf("[profile] reject legacy activity reward for native account index=%u\n", index);
+        return false;
+    }
     if (index >= 8 || (claimedActivities & (1u << index)) != 0 || ActivityProgress(index) < ActivityTarget(index)) { return false; }
     // The original online reward service is absent. These explicitly local
     // activities give an offline route to currency; never repeat a claimed reward.

@@ -92,11 +92,12 @@ struct MeshBounds {
  * Vertices are kept flat -- three floats per vertex, in the order they arrive
  * -- because that is the shape a vertex buffer wants.
  */
+class CMoveSetMesh;
 class CMesh {
 public:
     CMesh();
 
-    bool Init(CArrayInputStream &stream);
+    bool Init(CArrayInputStream &stream, const CMoveSetMesh *moveSet = nullptr);
 
     const std::vector<std::string> &GetBoneNames() const { return m_boneNames; }
     const std::vector<std::uint16_t> &GetIndices() const { return m_indices; }

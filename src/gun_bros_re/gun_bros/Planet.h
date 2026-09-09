@@ -12,24 +12,24 @@ public:
         // Planet::Init (:169935), CreateNameString (:170215).
         name.Init(stream);
         description.Init(stream);
-        value80 = stream.ReadUInt16();
+        mapSlot = stream.ReadUInt16();
         thumbnail.Init(stream);
         largeImage.Init(stream);
         image44.Init(stream);
         missions.resize(stream.ReadUInt8());
         for (GameObjectRef &mission : missions) { mission.Init(stream); }
         object12.Init(stream);
-        value82 = stream.ReadUInt16();
+        requiredLevel = stream.ReadUInt16();
         return !stream.Overran();
     }
     CGameAssetRef name;
     CGameAssetRef description;
-    unsigned value80 = 0;
+    unsigned mapSlot = 0; // CMenuMission::Bind :162800, original mem+80.
     CGameSpriteGluRef thumbnail;
     CGameSpriteGluRef largeImage;
     CGameSpriteGluRef image44;
     std::vector<GameObjectRef> missions;
     GameObjectRef object12;
-    unsigned value82 = 0;
+    unsigned requiredLevel = 0; // LevelReqCallback :161277, original mem+82.
 };
 #endif

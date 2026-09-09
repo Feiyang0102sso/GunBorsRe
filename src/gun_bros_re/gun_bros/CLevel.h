@@ -122,6 +122,8 @@ public:
     void UpdateIndicators(int deltaMs, float left, float top, float width, float height);
     const std::vector<CLevelIndicator> &GetIndicators() const { return m_indicators; }
     int GetWave() const { return m_variables[0]; }
+    // CLevel::GetRevolution/GetRevolutionCount use Flow variable 2 as divisor.
+    int GetWavesPerRevolution() const { return m_variables[2]; }
     int GetRealWave() const {
         if (m_variables[2] > 0) { return m_variables[0] % m_variables[2]; }
         return 0;

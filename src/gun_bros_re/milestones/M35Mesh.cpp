@@ -33,6 +33,7 @@
 #include "runtime/PlayerModel.h"
 #include "runtime/ArmorCatalog.h"
 #include "runtime/WeaponCatalog.h"
+#include "runtime/StoreCatalog.h"
 #include "gun_bros/WeaponEffects.h"
 #include "gun_bros/CParticleEffect.h"
 
@@ -1395,9 +1396,18 @@ int RunWeaponCheck(const std::string &bigDirectory) {
     if (emitter.SelectAnimation(0) != 4 || emitter.SelectAnimation(1) != 4) { return 1; }
     emitter.animationMask = 0x20;
     if (emitter.SelectAnimation(0.5f) != 5) { return 1; }
-    if (weapons[57].category != 2 || !weapons[59].unused || !weapons[64].unused) {
-        std::printf("[weapon-check] retail category / unused entry regression\n");
-        return 1;
+    // Validate the actual STORE join, not hand-selected resource ordinals.
+    std::vector<StoreEntry> storeEntries;
+    if (!LoadStoreCatalog(toc, tables, storeEntries)) { return 1; }
+    for (const auto &store : storeEntries) {
+        if (store.data.objects.size() != 1 || store.data.objects.front().type != 6) { continue; }
+        const auto &reference = store.data.objects.front().object;
+        bool matched = false;
+        for (const auto &weapon : weapons) {
+            if (weapon.packHash != reference.packHash || weapon.ordinal != reference.localIndex) { continue; }
+            matched = weapon.hasStoreEntry && weapon.category == store.data.type;
+        }
+        if (!matched) { std::printf("[weapon-check] original store category join failed\n"); return 1; }
     }
     float identity[kMatrix4dElements];
     float modelToScene[kMatrix4dElements];
@@ -1424,7 +1434,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             !CreatePlayerBuffers(player, program)) { return 1; }
         // Real thresholds exercise each boundary and both critical outcomes;
         // restoring zero keeps the existing firing regression at base mastery.
-        if (!entry.unused && entry.data.GetMasteryLimit() > 0) {
+        if (entry.hasStoreEntry && entry.data.GetMasteryLimit() > 0) {
             for (unsigned tier = 0; tier < 3; ++tier) {
                 const unsigned threshold = entry.data.GetMasteryThreshold(tier);
                 player.weapon->gun.SetMasteryExperience(threshold - 1);
@@ -1458,7 +1468,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         }
         // Stationary, collision-free launch probes cannot pass on footsteps
         // or distant impact sounds. Cover the reported silent weapon groups.
-        const bool checkLaunch = (entry.category == 0 && !entry.unused) ||
+        const bool checkLaunch = (entry.category == 0 && entry.hasStoreEntry) ||
             (i >= 12 && i <= 15) || (i >= 24 && i <= 26) ||
             i == 33 || i == 34 || i == 36 || i == 44 || i == 46 || i == 68 || i == 69;
         if (checkLaunch) {

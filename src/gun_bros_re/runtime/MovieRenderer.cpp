@@ -63,7 +63,8 @@ unsigned MovieRenderer::Ordinal(const char *name) {
 }
 
 bool MovieRenderer::Region(unsigned ordinal, unsigned index, unsigned time, MovieRegion &region) {
-    for (const MovieRegion &candidate : Regions(ordinal, time)) {
+    // CMovie::GetUserRegion is a metrics query; invisible touch boxes still exist.
+    for (const MovieRegion &candidate : Regions(ordinal, time, 512, 384, true)) {
         if (candidate.index != index) { continue; }
         region = candidate;
         return true;
@@ -86,10 +87,18 @@ MovieRenderer::Animation *MovieRenderer::GetAnimation(unsigned archetype, unsign
     auto found = m_animations.find(key);
     if (found != m_animations.end()) { return &found->second; }
     const CSpriteGluArchetype *data = m_sprites.GetArchetype(static_cast<std::uint8_t>(archetype));
-    if (data == nullptr || animation >= data->GetAnimationCount()) {
+    if (data == nullptr || data->GetAnimationCount() == 0) {
         std::printf("[movie] invalid sprite archetype=%u animation=%u\n", archetype, animation);
         ++m_failures;
         return nullptr;
+    }
+    if (animation >= data->GetAnimationCount()) {
+        // CSpritePlayer::SetAnimation :58861 clamps to animationCount-1.
+        // MDS_ICON_STANDARD's coin is actually 4:43 while the BIG has33
+        // animations. Preserve the raw key and follow the native consumer.
+        const unsigned original = animation;
+        animation = data->GetAnimationCount() - 1;
+        std::printf("[movie] native animation clamp archetype=%u requested=%u resolved=%u\n", archetype, original, animation);
     }
     Animation value;
     float left = 100000, top = 100000, right = -100000, bottom = -100000;
@@ -136,10 +145,38 @@ MovieKeyFrame MovieRenderer::AtTime(const MovieObject &object, unsigned time) co
 }
 
 MovieRenderer::Metrics MovieRenderer::GetMetrics(const CMovie &movie, unsigned objectIndex, unsigned time, float width, float height, unsigned depth) {
+    if (depth > movie.objects.size() || objectIndex >= movie.objects.size()) { return {}; }
+    const MovieObject &object = movie.objects[objectIndex];
+    if (object.type != 6 || object.frames.empty()) {
+        return GetFrameMetrics(movie, objectIndex, AtTime(object, time), time, width, height, depth);
+    }
+    // GetMetricsAtTime :182335 and CalculateLocation :182636 resolve both
+    // key locations before interpolation. A changed parent uses its key time.
+    unsigned index = 0;
+    while (index + 1 < object.frames.size() && object.frames[index + 1].time <= time) { ++index; }
+    const MovieKeyFrame &first = object.frames[index];
+    if (index + 1 == object.frames.size() || time <= first.time) {
+        return GetFrameMetrics(movie, objectIndex, first, time, width, height, depth);
+    }
+    const MovieKeyFrame &last = object.frames[index + 1];
+    unsigned firstTime = time, lastTime = time;
+    if (first.parent != last.parent) { firstTime = first.time; lastTime = last.time; }
+    const Metrics before = GetFrameMetrics(movie, objectIndex, first, firstTime, width, height, depth);
+    const Metrics after = GetFrameMetrics(movie, objectIndex, last, lastTime, width, height, depth);
+    const float progress = float(time - first.time) / (last.time - first.time);
+    Metrics result;
+    result.x = std::floor(before.x + (after.x - before.x) * progress);
+    result.y = std::floor(before.y + (after.y - before.y) * progress);
+    result.width = std::floor(before.width + (after.width - before.width) * progress);
+    result.height = std::floor(before.height + (after.height - before.height) * progress);
+    return result;
+}
+
+MovieRenderer::Metrics MovieRenderer::GetFrameMetrics(const CMovie &movie, unsigned objectIndex, const MovieKeyFrame &frame,
+    unsigned time, float width, float height, unsigned depth) {
     Metrics metrics;
     if (depth > movie.objects.size() || objectIndex >= movie.objects.size()) { return metrics; }
     const MovieObject &object = movie.objects[objectIndex];
-    const MovieKeyFrame frame = AtTime(object, time);
     if (object.type == 0) {
         Animation *animation = GetAnimation(frame.content[0], frame.content[2]);
         if (animation != nullptr) { metrics = animation->bounds; }
@@ -149,10 +186,13 @@ MovieRenderer::Metrics MovieRenderer::GetMetrics(const CMovie &movie, unsigned o
         if (frame.content[2] == 253) { metrics.width *= width / movie.width; }
         if (frame.content[3] == 253) { metrics.height *= height / movie.height; }
     }
-    metrics.left *= frame.scaleX;
-    metrics.top *= frame.scaleY;
-    metrics.width *= frame.scaleX;
-    metrics.height *= frame.scaleY;
+    // Region bounds stay unscaled (:182603); Draw transforms around the center.
+    if (object.type != 6) {
+        metrics.left *= frame.scaleX;
+        metrics.top *= frame.scaleY;
+        metrics.width *= frame.scaleX;
+        metrics.height *= frame.scaleY;
+    }
     metrics.x = frame.x;
     metrics.y = frame.y;
     if (frame.parent != 255) {
@@ -249,7 +289,7 @@ bool MovieRenderer::DrawSpriteFitted(unsigned archetype, unsigned animationIndex
         y + (height - animation->bounds.height * scale) * 0.5f - animation->bounds.top * scale, scale, alpha);
 }
 
-std::vector<MovieRegion> MovieRenderer::Regions(unsigned ordinal, unsigned time, float x, float y) {
+std::vector<MovieRegion> MovieRenderer::Regions(unsigned ordinal, unsigned time, float x, float y, bool includeInvisible) {
     std::vector<MovieRegion> regions;
     CMovie *movie = GetMovie(ordinal);
     if (movie == nullptr) { return regions; }
@@ -259,7 +299,7 @@ std::vector<MovieRegion> MovieRenderer::Regions(unsigned ordinal, unsigned time,
         if (object.type != 6) { continue; }
         const MovieKeyFrame frame = AtTime(object, time);
         const Metrics metrics = GetMetrics(*movie, index, time, 1024, 768);
-        if (frame.visible) { regions.push_back({regionIndex, frame.region, x + metrics.x, y + metrics.y, metrics.width, metrics.height, frame.alpha}); }
+        if (frame.visible || includeInvisible) { regions.push_back({regionIndex, frame.region, x + metrics.x, y + metrics.y, metrics.width, metrics.height, frame.alpha}); }
         ++regionIndex;
     }
     return regions;
@@ -269,6 +309,16 @@ unsigned MovieRenderer::SpriteDuration(unsigned archetype, unsigned animationInd
     Animation *animation = GetAnimation(archetype, animationIndex);
     if (animation == nullptr) { return 0; }
     return animation->duration;
+}
+
+bool MovieRenderer::SpriteBounds(unsigned archetype, unsigned animationIndex, MovieRegion &bounds) {
+    Animation *animation = GetAnimation(archetype, animationIndex);
+    if (animation == nullptr || animation->steps.empty()) { return false; }
+    bounds.x = animation->bounds.left;
+    bounds.y = animation->bounds.top;
+    bounds.width = animation->bounds.width;
+    bounds.height = animation->bounds.height;
+    return true;
 }
 
 bool MovieRenderer::ButtonBackground(float x, float y, float width, float height, bool selected, bool hovered) {
@@ -346,7 +396,8 @@ bool MovieRenderer::DrawFitted(unsigned ordinal, unsigned time, float x, float y
     return false;
 }
 
-bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, float width, float height, unsigned depth, float alpha) {
+bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, float width, float height, unsigned depth, float alpha,
+    IMovieRegionCallback *callback) {
     const unsigned failuresBefore = m_failures;
     if (depth > 8) { ++m_failures; return false; }
     CMovie *movie = GetMovie(ordinal);
@@ -368,6 +419,38 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
         const MovieObject &object = movie->objects[index];
         const MovieKeyFrame frame = AtTime(object, time);
         if (!frame.visible || frame.alpha <= 0) { continue; }
+        if (object.type == 6 && callback != nullptr) {
+            // CMovieRegion::Draw :109978 dispatches inside the Movie draw order.
+            // Planet sprites must not be painted over every foreground layer.
+            unsigned regionIndex = 0;
+            for (unsigned previous = 0; previous < index; ++previous) {
+                if (movie->objects[previous].type == 6) { ++regionIndex; }
+            }
+            const Metrics metrics = GetMetrics(*movie, index, time, width, height);
+            const MovieRegion region{regionIndex, frame.region, x + metrics.x, y + metrics.y,
+                metrics.width, metrics.height, frame.alpha * alpha};
+            Flush();
+            float previous[16], transform[16], transformed[16];
+            std::memcpy(previous, m_projection, sizeof(previous));
+            Matrix4dIdentity(transform);
+            const float angle = frame.rotation * 3.14159265358979323846f / 180;
+            const float cosine = std::cos(angle), sine = std::sin(angle);
+            transform[0] = cosine * frame.scaleX;
+            transform[1] = -sine * frame.scaleY;
+            transform[4] = sine * frame.scaleX;
+            transform[5] = cosine * frame.scaleY;
+            const float centerX = region.x + region.width / 2;
+            const float centerY = region.y + region.height / 2;
+            transform[3] = centerX - centerX * transform[0] - centerY * transform[1];
+            transform[7] = centerY - centerX * transform[4] - centerY * transform[5];
+            Matrix4dMultiply(previous, transform, transformed);
+            std::memcpy(m_projection, transformed, sizeof(transformed));
+            const bool drawn = callback->DrawMovieRegion(region);
+            std::memcpy(m_projection, previous, sizeof(previous));
+            if (!drawn) { return false; }
+            m_batch.Begin();
+            continue;
+        }
         if (object.type == 2) {
             if (frame.content[0] == 255) { continue; }
             Flush();
@@ -493,4 +576,30 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
         }
     }
     return m_failures == failuresBefore;
+}
+
+/** Same 256-sample gradient used by CMovieFill; Utility::GradientY adapter. */
+bool MovieRenderer::Gradient(float x, float y, float width, float height, unsigned topRgb, unsigned bottomRgb, float alpha) {
+    if (width <= 0 || height <= 0) { return true; }
+    const std::uint64_t key = (std::uint64_t(topRgb & 0xffffff) << 24) | (bottomRgb & 0xffffff);
+    if (m_gradients.count(key) == 0) {
+        PNGImage pixels;
+        pixels.width = 1;
+        pixels.height = 256;
+        for (unsigned row = 0; row < 256; ++row) {
+            for (unsigned channel = 0; channel < 3; ++channel) {
+                const unsigned shift = (2 - channel) * 8;
+                pixels.pixels.push_back(std::uint8_t((((topRgb >> shift) & 255) * (255 - row) + ((bottomRgb >> shift) & 255) * row) / 255));
+            }
+            pixels.pixels.push_back(255);
+        }
+        auto texture = std::make_unique<CTexture>();
+        if (!texture->Create(pixels)) { ++m_failures; return false; }
+        m_gradients[key] = std::move(texture);
+    }
+    m_batch.Begin();
+    m_batch.AddTransformedQuad(*m_gradients[key], x, y, width, height, {0, 0, 1, 256}, false, false,
+        BlendMode::Alpha, 0, 0, 1, 1, 0, alpha);
+    Flush();
+    return true;
 }

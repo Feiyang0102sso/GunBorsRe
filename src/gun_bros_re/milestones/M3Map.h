@@ -8,12 +8,10 @@
 
 #include <cstdint>
 #include <string>
+#include "runtime/MapScene.h"
 
 /** The two intentionally different ways a map can be opened. */
-enum class MapViewMode {
-    Preview,
-    GameView,
-};
+// MapViewMode now belongs to runtime/MapScene.h, shared by game and tools.
 
 /**
  * Assemble one map out of its tile and object layers and draw it.
@@ -44,10 +42,6 @@ int RunMapList(const std::string &bigDirectory);
 /** Retail survival on the same terrain renderer; research viewers stay separate. */
 struct SurvivalGameContext;
 struct MissionEntry;
-int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
-    unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
-    unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
-    SurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
-    const MissionEntry *archiveMission = nullptr, bool performanceStudy = false);
+// RunSurvival is declared in runtime/MapScene.h; no game caller needs this harness.
 
 #endif  // GUN_BROS_RE_MILESTONES_M3MAP_H

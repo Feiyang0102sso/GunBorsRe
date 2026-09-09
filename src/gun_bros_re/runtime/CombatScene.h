@@ -5,7 +5,7 @@
 #define GUN_BROS_RE_COMBATSCENE_H
 #include "gun_bros/CTargetingController.h"
 
-#include "milestones/EnemyModel.h"
+#include "runtime/EnemyModel.h"
 #include "gun_bros/WeaponEffects.h"
 #include "gun_bros/CMap.h"
 #include "gun_bros/CPlayerProgress.h"
@@ -85,6 +85,7 @@ public:
     void SetHorde(bool enabled) { m_horde = enabled; }
     unsigned GetScore() const { return m_score; }
     unsigned GetKillStreak() const { return m_killStreak; }
+    unsigned GetBestKillStreak() const { return m_bestKillStreak; }
     void OnWaveCleared(unsigned perfectRewardPercent);
     std::uint64_t GetLastWaveBonus() const { return m_lastWaveBonus; }
     unsigned GetPerfectWaves() const { return m_perfectWaves; }
@@ -141,6 +142,7 @@ private:
     bool m_horde = false;
     unsigned m_score = 0;
     unsigned m_killStreak = 0;
+    unsigned m_bestKillStreak = 0;
     std::uint64_t m_waveXplodium = 0;
     std::uint64_t m_lastWaveBonus = 0;
     unsigned m_waveHits = 0;

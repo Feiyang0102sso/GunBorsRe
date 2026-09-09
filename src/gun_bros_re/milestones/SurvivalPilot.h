@@ -5,12 +5,13 @@
 #ifndef GUN_BROS_RE_SURVIVALPILOT_H
 #define GUN_BROS_RE_SURVIVALPILOT_H
 #include "runtime/CombatScene.h"
+#include "runtime/SurvivalInputDriver.h"
 
-class SurvivalPilot {
+class SurvivalPilot : public ISurvivalInputDriver {
 public:
     SurvivalPilot(CombatScene &scene, const MapRectangle &bounds);
-    void Update(int deltaMs, float &moveX, float &moveY);
-    void Report() const;
+    void Update(int deltaMs, float &moveX, float &moveY) override;
+    void Report() const override;
 private:
     struct Node { float x = 0; float y = 0; std::vector<int> neighbors; };
     void Plan(const CombatEnemy &target);

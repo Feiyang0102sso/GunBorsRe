@@ -125,6 +125,11 @@ public:
         const std::vector<const CMesh *> &weaponMeshes);
     void SetInput(bool moving, bool shooting);
     void Update(std::int32_t deltaMs);
+    /** Menu-specific Flow export and animation update, from SpawnForUI/UpdateUI. */
+    bool SpawnForUI();
+    void UpdateUI(std::int32_t deltaMs);
+    /** Native 3 replaces the active gun without restarting the current torso. */
+    void SetUIGun(CGun &gun, const std::vector<const CMesh *> &weaponMeshes);
     void SetScriptSequenceFrame(std::uint8_t frame) override;
     bool IsScriptSequenceFrameFinished() override;
     void OnScriptStateEntered() override;
@@ -132,6 +137,7 @@ public:
         const std::int16_t *arguments, std::uint8_t argumentCount);
     std::int16_t *VariableResolver(std::uint8_t variable);
     CMoveSetMeshController &GetTorso() { return m_torso; }
+    const CMoveSetMeshController &GetTorso() const { return m_torso; }
     CMoveSetMeshController &GetLegs() { return m_legs; }
     bool TorsoUsesWeapon() const { return m_torsoUsesWeapon; }
     int GetStateId() const { return m_interpreter.GetStateId(); }

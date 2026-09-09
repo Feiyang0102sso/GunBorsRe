@@ -7,7 +7,7 @@
 #include "gun_bros/CProfileManager.h"
 #include "gun_bros/CLevel.h"
 #include "runtime/SurvivalGameContext.h"
-#include "milestones/M3Map.h"
+#include "runtime/MapScene.h"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>

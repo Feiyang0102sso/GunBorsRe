@@ -14,7 +14,7 @@
 |---|---|---:|---:|---|---|
 | 1000及`.perfect` | CPlayerProgress | 0 | 536 | 244 / 48 | 原料、双货币、经验等级、好友经验窗口、首次启动/内购/推送标记 |
 | 1001 | CPlayerConfiguration | 0 | 536 | 208 / 120 | 两枪、两弹、四甲引用，当前枪槽、角色、熟练度及未明配置 |
-| 1002 | CPurchasedItems / PurchasedItem | 0 | 536 | 221 / 94 | count=9；每项10字节，引用键与1字节数量 |
+| 1002 | CPurchases / PurchasedItem | 0 | 536 | 221 / 94 | count=9；每项10字节，引用键与1字节数量；2026-09-09按原符号纠正旧名CPurchasedItems |
 | 1003及`.perfect` | CMissionWaveStatus / MissionWaveInfo | 0 | 3096 | 236 / 2624 | count=5；每项524字节，关卡进度与4096位完美波图 |
 | 1004 | CMissionObjectiveStatus / MissionObjectiveInfo | 0 | 536 | 266 / 4 | 当前count=0；完成目标集合，每项只有8字节键 |
 | 1005 | CKillTracker / KillTrackerWeapon | 0 | 536 | 238 / 60 | count=4；每项14字节，武器击杀数 |
@@ -91,3 +91,7 @@ CRC范围是整个文件去掉最后4字节，含owner与随机填充。算法�
 有读取器但缺非空实物记录的分支包括1004、1006礼物项、1016、1018。本次验证了当前空集合边界；非空布局来自原写出/读取代码，并未伪造一份“通过”的原版样本。1018末尾value、1001配置尾部、部分教程枚举及统计消费者仍待进一步追踪。所有原始存档保持只读，没有做回写游戏验证。
 
 逐字段真实数值、偏移、CRC结果和SHA256见[save-catalog.json](../out/binary-research/save-catalog.json)。复核命令：`D:\Python312\python.exe src/tools/catalog_save_records.py`。模板用于研究阅读，本轮没有运行010 Editor。
+
+## 2026-09-09：应用选项p补证
+
+原COptionsMgr把CRC与32字节对象片段独立写入p，不在1000–1018内。见[options.bt](<../_Big_tool/binary template/saves/options.bt>)。原saves样本未包含该文件，模板与实现依据原Read/Write/Reset；已验证构造默认、SFX/MUSIC、三态AutoBro、通知、未知字节及CRC。Windows运行账户在独立存档目录创建p，原saves仍只读。挑战推送仍属于1000负载+46。

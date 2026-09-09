@@ -1,11 +1,15 @@
 /** @file CProfileManager.h
  * @brief Rebuilt offline profile. Its disk format is deliberately separate from iOS.
+ * Current GUI: original iOS DataStore records via NativeProfile; the separate
+ * text format above is retained only for explicitly selected .dat research.
  */
 #ifndef GUN_BROS_RE_CPROFILEMANAGER_H
 #define GUN_BROS_RE_CPROFILEMANAGER_H
 #include "gun_bros/CPlayerConfiguration.h"
 #include "gun_bros/CStoreItem.h"
 #include "gun_bros/CRefinementManager.h"
+#include "runtime/NativeProfile.h"
+#include <optional>
 #include <filesystem>
 #include <string>
 #include <bitset>
@@ -39,7 +43,7 @@ public:
     unsigned ActivityProgress(unsigned index) const;
     static unsigned ActivityTarget(unsigned index);
     /** Offline equipment purchase follows level, common-else-rare, then ownership. */
-    PurchaseResult AcquireItem(const CStoreItem &item, unsigned level);
+    PurchaseResult AcquireItem(const CStoreItem &item, unsigned level, bool award = false);
     PurchaseResult AcquireCurrency(const CStoreItem &item);
 
     std::uint64_t experience = 0;
@@ -60,9 +64,11 @@ public:
     std::vector<GameObjectTypeRef> inventory;
     std::vector<PowerupInventoryEntry> powerups;
     std::vector<WeaponMasteryEntry> weaponMastery;
+    COptionsMgr options;
     bool musicEnabled = true;
     bool soundEnabled = true;
     bool brotherEnabled = true;
+    bool pushChallenges = true; // CPlayerProgress mem+86, gbPushChallenges.
     unsigned playerBrother = 0;
     unsigned claimedActivities = 0;
     std::array<std::uint64_t, 4> enemyKills{};
@@ -71,5 +77,14 @@ public:
     std::array<unsigned, 10> hordeBestWave{};
     std::array<unsigned, 10> hordeBestScore{};
     unsigned stat42Bits = 0; // Authored level event bits; remote achievement reporting is separate.
+    // Original client fields, independent from the older research text profile.
+    std::optional<NativeProfileArchive> nativeArchive;
+    bool firstLaunch = true; // Original flag clears at player selection, not tutorial end.
+    unsigned activeWeaponSlot = 0;
+    std::array<std::uint8_t, 22> tutorialSeen{};
+    std::array<std::uint32_t, 47> statistics{};
+    std::uint32_t dailyLastLaunchSeconds = 0;
+    std::uint32_t dailyConsecutiveSeconds = 0;
+    std::uint32_t dailyLastCommit = 0;
 };
 #endif

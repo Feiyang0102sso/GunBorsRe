@@ -66,6 +66,9 @@ bool CRefinementManager::BeginRefinement(unsigned slot, unsigned interval, std::
     target.amount = amount;
     target.efficiency = m_template->efficiencyPercent[interval] / 100.0f;
     target.finishTime = now + static_cast<std::int64_t>(m_template->minutes[interval]) * 60;
+    target.startTimeSeconds = static_cast<std::uint32_t>(now);
+    target.totalDurationMs = static_cast<std::int32_t>(m_template->minutes[interval] * 60000);
+    target.finishTimeMs = target.finishTime * 1000;
     target.state = 2;
     if (target.finishTime == now) { target.state = 3; }
     xplodium -= amount;

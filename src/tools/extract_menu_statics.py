@@ -1,5 +1,6 @@
 """读取带符号 iOS 程序中的原始菜单静态表，不修改程序和资源。"""
 from pathlib import Path
+import hashlib
 import json
 import re
 import struct
@@ -7,6 +8,7 @@ import struct
 ROOT = Path(__file__).resolve().parents[2]
 PROGRAM = ROOT / "gunbros"
 SOURCE = ROOT / "_IDA_OUT/gunbros_3.6.0_IOS.c"
+GENERATOR_VERSION = 1
 
 
 def read_image():
@@ -63,18 +65,30 @@ def main():
         for index in range(count):
             # Static header is 16 bytes; every original entry occupies 64 bytes.
             entry_offset = offset + 16 + index * 64
-            words = struct.unpack_from("<16I", data, entry_offset)
+            words = struct.unpack_from("<14I", data, entry_offset)
+            # GetElementAction :153502 reads table + index*64 + 8/+12.
+            # The string block begins at +16, so words[14:16] belong to
+            # the NEXT record's action pair, not this entry.
+            action, parameter = struct.unpack_from("<2I", data, offset + index * 64 + 8)
             strings = []
             for value in words:
                 text = ""
                 if 0x200000 < value < 0x3F0000:
                     text = string_at(value)
                 strings.append(text)
-            table["entries"].append({"words": words, "strings": strings})
+            table["entries"].append({"words": words, "strings": strings, "action": action, "parameter": parameter})
         tables[name] = table
     output = ROOT / "out/menu-statics.json"
     output.write_text(json.dumps(tables, indent=2), encoding="utf-8")
-    generated = ["// Generated from the ARMv7 original by src/tools/extract_menu_statics.py."]
+    # Keep extracted native tables reproducible; these are program constants,
+    # not manually maintained replacements for BIG resource data.
+    provenance = [
+        "// Generated from the ARMv7 original by src/tools/extract_menu_statics.py.",
+        f"// Generator format version: {GENERATOR_VERSION}; command: python src/tools/extract_menu_statics.py",
+        f"// gunbros SHA256: {hashlib.sha256(data).hexdigest()}",
+        f"// _IDA_OUT/gunbros_3.6.0_IOS.c SHA256: {hashlib.sha256(SOURCE.read_bytes()).hexdigest()}",
+    ]
+    generated = list(provenance)
     for name, table in tables.items():
         for index, entry in enumerate(table["entries"]):
             words = entry["words"]
@@ -89,9 +103,21 @@ def main():
                 movies.append(json.dumps(strings[10 + slot]))
             generated.append("{%s, %d, {%s}, {%s}, {%s}, %d, %d}," %
                 (json.dumps(name), index, ", ".join(labels), ", ".join(sprites),
-                 ", ".join(movies), words[14], words[15]))
+                 ", ".join(movies), entry["action"], entry["parameter"]))
     target = ROOT / "src/gun_bros_re/runtime/OriginalMenuData.inc"
     target.write_text("\n".join(generated) + "\n", encoding="utf-8")
+    # NAVBAR_MAIN at VA 0x3c3cc0: shared movie index, count, then branch IDs.
+    # CMenuNavigationBar::Init :143357 maps branch-1 to MDS_BUTTON_TRUNK.
+    navigation_offset = offset_of(0x3C3CC0)
+    shared_movie, navigation_count = struct.unpack_from("<2I", data, navigation_offset)
+    navigation = []
+    for index in range(navigation_count):
+        navigation.append(str(struct.unpack_from("<I", data, navigation_offset + 8 + index * 4)[0]))
+    navigation_target = ROOT / "src/gun_bros_re/runtime/OriginalNavigationData.inc"
+    navigation_target.write_text(
+        "\n".join(provenance) + "\n"
+        + "// Generated NAVBAR_MAIN, gunbros ARMv7 VA 0x3c3cc0; shared movie %d.\n" % shared_movie
+        + ", ".join(navigation) + "\n", encoding="utf-8")
     print(f"[menu-statics] tables={len(tables)} output={output}")
     for name in ("MDS_BUTTON_TRUNK", "MDS_BUTTON_PLAY", "MDS_BUTTON_STORE_CATEGORIES", "MDS_OPTIONS"):
         print(name, json.dumps(tables.get(name), indent=2))

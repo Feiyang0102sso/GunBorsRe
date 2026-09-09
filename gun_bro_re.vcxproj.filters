@@ -16,6 +16,20 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\gun_bros_re\main.cpp" />
+    <ClCompile Include="src\gun_bros_re\research\main.cpp" />
+    <ClCompile Include="src\gun_bros_re\runtime\MapScene.cpp" />
+    <ClCompile Include="src\gun_bros_re\runtime\SurvivalInputDriver.cpp" />
+    <ClCompile Include="src\gun_bros_re\engine\platform\ResearchLauncher.cpp" />
+    <ClInclude Include="src\gun_bros_re\engine\platform\ResearchLauncher.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\MapScene.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\SurvivalInputDriver.h" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CMenuUpgradePopup.cpp" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMenuUpgradePopup.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMenuMesh.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\COptionsMgr.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CMenuPopupPrompt.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CInputPadMeter.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\OriginalTextLayout.h" />
     <ClCompile Include="src\gun_bros_re\gun_bros\EnemyCombat.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\CombatScene.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\Arena.cpp" />
@@ -188,7 +202,7 @@
   <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CPowerup.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CPowerup.cpp" /><ClInclude Include="src\gun_bros_re\runtime\PowerupCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\PowerupCatalog.cpp" /></ItemGroup>
   <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\PowerupScene.h" /><ClCompile Include="src\gun_bros_re\runtime\PowerupScene.cpp" /></ItemGroup>
   <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CStunController.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CStunController.cpp" /></ItemGroup>
-  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\Mission.h" /><ClInclude Include="src\gun_bros_re\gun_bros\MissionObjective.h" /><ClInclude Include="src\gun_bros_re\runtime\MissionCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\MissionCatalog.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\Mission.h" /><ClInclude Include="src\gun_bros_re\gun_bros\CMissionScriptContext.h" /><ClInclude Include="src\gun_bros_re\gun_bros\MissionObjective.h" /><ClInclude Include="src\gun_bros_re\runtime\MissionCatalog.h" /><ClInclude Include="src\gun_bros_re\runtime\PlanetCatalog.h" /><ClCompile Include="src\gun_bros_re\runtime\MissionCatalog.cpp" /></ItemGroup>
   <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\OriginalProfile.h" /><ClCompile Include="src\gun_bros_re\runtime\OriginalProfile.cpp" /></ItemGroup>
   <ItemGroup><ClInclude Include="src\gun_bros_re\engine\CCrc32.h" /></ItemGroup>
   <ItemGroup><ClInclude Include="src\gun_bros_re\gun_bros\CCamera.h" /><ClCompile Include="src\gun_bros_re\gun_bros\CCamera.cpp" /></ItemGroup>
@@ -199,6 +213,7 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CMovie.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\MovieStudy.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\SurvivalHud.cpp" />
+    <ClCompile Include="src\gun_bros_re\runtime\OriginalPowerupSelector.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\PowerupMoviePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\MovieRenderer.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CBitmapFont.cpp" />
@@ -246,7 +261,7 @@
     <ClCompile Include="src\gun_bros_re\sprite_glu\CSpritePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M3Map.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M35Mesh.cpp" />
-    <ClCompile Include="src\gun_bros_re\milestones\EnemyModel.cpp" />
+    <ClCompile Include="src\gun_bros_re\runtime\EnemyModel.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\PlayerModel.cpp" />
     <ClCompile Include="src\gun_bros_re\milestones\M38Enemy.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CPNG.cpp" />
@@ -303,7 +318,7 @@
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpritePlayer.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M3Map.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M35Mesh.h" />
-    <ClInclude Include="src\gun_bros_re\milestones\EnemyModel.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\EnemyModel.h" />
     <ClInclude Include="src\gun_bros_re\runtime\PlayerModel.h" />
     <ClInclude Include="src\gun_bros_re\milestones\M38Enemy.h" />
     <ClInclude Include="src\gun_bros_re\runtime\PackTables.h" />
@@ -335,4 +350,5 @@
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\gun_bros\CLevelIndicator.h" />
   </ItemGroup>
+  <ItemGroup><ClInclude Include="src\gun_bros_re\runtime\NativeProfile.h" /><ClCompile Include="src\gun_bros_re\runtime\NativeProfile.cpp" /></ItemGroup>
 </Project>

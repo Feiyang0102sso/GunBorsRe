@@ -4,6 +4,10 @@
  */
 
 #include "engine/platform/CWindow.h"
+#define NOMINMAX
+#include <Windows.h>
+#include "engine/platform/ResearchLauncher.h"
+#include "engine/CAudioPlayer.h"
 
 #include "engine/CPNG.h"
 #include "engine/platform/GLLoader.h"
@@ -16,6 +20,16 @@
 namespace {
 
 constexpr int kUsableDisplayPercent = 90;
+// Windows system-menu commands occupy the low range below 0xF000.
+constexpr UINT kResearchToolsCommand = 0x1FE0;
+
+bool SDLCALL HandleWindowsMenu(void *, MSG *message) {
+    if (message->message != WM_SYSCOMMAND || (message->wParam & 0xFFF0) != kResearchToolsCommand) { return true; }
+    const wchar_t *arguments = L"--research";
+    if (CAudioPlayer::IsMuted()) { arguments = L"--research --mute"; }
+    LaunchResearchTools(arguments, true);
+    return false;
+}
 
 /** Keep the requested 4:3 window comfortably inside the current desktop. */
 void FitWindowToUsableDisplay(int &width, int &height) {
@@ -144,6 +158,16 @@ bool CWindow::Open(const std::string &title, int width, int height) {
     }
     SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED,
                           SDL_WINDOWPOS_CENTERED);
+    // Host tool access lives in the window chrome, outside original BIG menus.
+    // Right-click the title bar / Alt+Space opens the permanent research entry.
+    const auto properties = SDL_GetWindowProperties(m_window);
+    const HWND handle = static_cast<HWND>(SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+    if (handle != nullptr) {
+        const HMENU menu = GetSystemMenu(handle, FALSE);
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING, kResearchToolsCommand, L"Research tools...");
+        SDL_SetWindowsMessageHook(HandleWindowsMenu, nullptr);
+    }
 
     m_context = SDL_GL_CreateContext(m_window);
     if (m_context == nullptr) {

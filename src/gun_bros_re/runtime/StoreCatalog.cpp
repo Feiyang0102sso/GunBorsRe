@@ -54,6 +54,30 @@ bool LoadStoreCatalog(CResTOCManager &toc, PackTables &tables, std::vector<Store
     return !catalog.empty();
 }
 
+int FindCurrencyOffer(const std::vector<StoreEntry> &catalog, unsigned currency, unsigned missing) {
+    // CStoreAggregator::CacheLowestAppropriateIAPItem :155786 scans pack/store
+    // order, requires the IAP flag and excludes conversions. No authored prices
+    // or selected product IDs are copied into the host.
+    int adequate = -1, largest = -1;
+    unsigned adequateAmount = 0, largestAmount = 0;
+    for (unsigned index = 0; index < catalog.size(); ++index) {
+        const CStoreItem &item = catalog[index].data;
+        if (item.value32 != 1 || item.type == 16) { continue; }
+        unsigned amount = item.commonPrice;
+        if (currency == 1) { amount = item.rarePrice; }
+        if (amount >= missing && (adequateAmount == 0 || amount < adequateAmount)) {
+            adequate = static_cast<int>(index);
+            adequateAmount = amount;
+        }
+        if (largestAmount == 0 || amount > largestAmount) {
+            largest = static_cast<int>(index);
+            largestAmount = amount;
+        }
+    }
+    if (adequate >= 0) { return adequate; }
+    return largest;
+}
+
 bool LoadPlayerProgress(CResTOCManager &toc, PackTables &tables, CPlayerProgress::Template &data) {
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         // Progress is a singleton data table, not a script-spawned object;

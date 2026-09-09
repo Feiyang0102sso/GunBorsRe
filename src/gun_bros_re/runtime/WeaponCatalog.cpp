@@ -2,6 +2,7 @@
  * @brief Weapon identity and store metadata, read directly from BIG archives.
  */
 #include "runtime/WeaponCatalog.h"
+#include "gun_bros/CStoreItem.h"
 #include <cstdio>
 
 namespace {
@@ -55,10 +56,9 @@ bool LoadWeaponCatalog(CResTOCManager &toc, PackTables &tables,
             entry.category = entry.data.GetCategory();
             // Retail classification confirmed by the original game's inventory.
             // Preserve the template's category and holding moves separately.
-            if (pack->GetShortName() == "pack5" && ordinal == 56) { entry.category = 2; }
-            if (pack->GetShortName() == "pack5" && (ordinal == 58 || ordinal == 63)) {
-                entry.unused = true;
-            }
+            // Correction: the old ordinal-specific overrides were not evidence.
+            // STORE category is resolved from its actual typed reference below;
+            // absent store metadata remains unknown, never an "unused" verdict.
             bool hasProjectile = !entry.data.GetBulletRef().IsNull();
             for (const ScriptResourceRef &ref : entry.data.GetScript().GetResources()) {
                 // Script type 3 is CBullet (section 4); sound-only references
@@ -80,29 +80,24 @@ bool LoadWeaponCatalog(CResTOCManager &toc, PackTables &tables,
             std::vector<std::uint8_t> payload;
             if (!tables.ReadSectionResource(pack->GetPackHash(), kStoreSection, ordinal, payload)) { return false; }
             CArrayInputStream stream(payload);
-            stream.Skip(6);
-            const std::uint8_t references = stream.ReadUInt8();
-            std::vector<GameObjectRef> guns;
-            for (std::uint8_t j = 0; j < references; ++j) {
-                const std::uint8_t type = stream.ReadUInt8();
-                GameObjectRef ref;
-                ref.Init(stream);
-                if (type == 6) { guns.push_back(ref); }
-            }
-            stream.Skip(11);
-            CGameAssetRef icon, unused, name;
-            icon.Init(stream);
-            unused.Init(stream);
-            name.Init(stream);
-            if (stream.Overran()) { return false; }
-            if (references != 1) { continue; } // Bundles must not rename their weapons.
-            for (const GameObjectRef &ref : guns) {
-                for (WeaponEntry &weapon : weapons) {
-                    if (weapon.packHash == ref.packHash && weapon.ordinal == ref.localIndex) {
-                        const std::string title = ReadWeaponName(toc, name);
-                        if (!title.empty()) { weapon.name = title; }
-                    }
+            CStoreItem item;
+            if (!item.Init(stream) || stream.Available() != 0) { return false; }
+            if (item.objects.size() != 1) { continue; } // Bundles must not rename their weapons.
+            const auto &reference = item.objects.front();
+            if (reference.type != 6) { continue; }
+            for (WeaponEntry &weapon : weapons) {
+                if (weapon.packHash != reference.object.packHash || weapon.ordinal != reference.object.localIndex) { continue; }
+                // CStoreAggregator::CreateItemCategoryString :157379 reads +4,
+                // distinct from CGun::Template+104 (gun_template/store_entry.bt).
+                if (weapon.hasStoreEntry && weapon.category != item.type) {
+                    std::printf("[weapon-catalog] conflicting store category gun=%u:%u store=%u:%u values=%d/%u\n",
+                        weapon.packHash, weapon.ordinal, pack->GetPackHash(), ordinal, weapon.category, item.type);
+                    return false;
                 }
+                weapon.hasStoreEntry = true;
+                weapon.category = item.type;
+                const std::string title = ReadWeaponName(toc, item.assets[2]);
+                if (!title.empty()) { weapon.name = title; }
             }
         }
     }
@@ -144,7 +139,7 @@ std::string WeaponSelectionLabel(const std::vector<WeaponEntry> &weapons,
     std::string label = std::string(WeaponCategoryName(weapon.category)) + " " +
         std::to_string(position) + "/" + std::to_string(count) + " | " + weapon.name;
     if (weapon.visualOnly) { label += " [visual only: no firing data]"; }
-    if (weapon.unused) { label += " [unused / unconfirmed]"; }
+    if (!weapon.hasStoreEntry) { label += " [no single-item STORE reference]"; }
     return label;
 }
 

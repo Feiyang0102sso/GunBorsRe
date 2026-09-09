@@ -62,6 +62,7 @@ public:
     std::vector<GameObjectRef> TakeSounds();
 
     std::int32_t GetMoveIndex() const { return m_moveIndex; }
+    const CMoveSetMesh *GetMoveSet() const { return m_moveSet; }
 
     /** Which mesh config the current move shows, or -1 with no move set. */
     std::int32_t GetMeshConfigIndex() const;

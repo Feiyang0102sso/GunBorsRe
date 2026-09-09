@@ -125,7 +125,12 @@ bool CMeshBuffer::SetMesh(const CMesh &mesh) {
     glBindVertexArray(0);
     // A new actor can be drawn before its first update (also while paused).
     // Allocate positions now; drawing an empty vertex buffer can crash drivers.
-    SetFrame(mesh, 0);
+    // With the original MoveSet frame filter, frame zero may be absent.
+    for (std::size_t frame = 0; frame < mesh.GetFrames().size(); ++frame) {
+        if (mesh.GetFrames()[frame].vertices.empty()) { continue; }
+        SetFrame(mesh, frame);
+        break;
+    }
     return GLCheckErrors("mesh buffer upload");
 }
 

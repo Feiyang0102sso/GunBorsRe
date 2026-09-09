@@ -9,14 +9,17 @@
 #include "runtime/IPropWorld.h"
 #include "runtime/PowerupScene.h"
 
+class SurvivalHud;
 class SurvivalSession : public IEnemySpawnWorld {
 public:
     SurvivalSession(CombatScene &scene, CMap &map, const std::vector<EnemyTemplateData> &catalog);
     bool Load(CResTOCManager &toc, PackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
-        const GameObjectRef *archiveLevel = nullptr);
+        const GameObjectRef *selectedLevel = nullptr, bool archive = false);
     void Restart(float x, float y);
     void SetHorde(bool enabled) { m_horde = enabled; m_archive = false; m_scene.SetHorde(enabled); }
     void SetStartWave(int wave) { m_startWave = wave; }
+    void SetOriginalHud(SurvivalHud *hud) { m_originalHud = hud; }
+    bool HasOriginalHud() const { return m_originalHud != nullptr; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
     void UpdateAfterDeath(int deltaMs);
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
@@ -35,8 +38,8 @@ public:
     bool GetObjectPosition(int objectId, float &x, float &y) const override;
     bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const override;
     CLevel &GetLevel() { return m_level; }
-    bool IsTransitioning() const { return m_transitionMs > 0; }
-    unsigned GetTransitionElapsed() const { return m_transitionDuration - m_transitionMs; }
+    bool IsTransitioning() const;
+    unsigned GetTransitionElapsed() const;
     unsigned GetKills() const { return m_kills; }
     /** Visible world size at the original 0.8 baseline; scale varies per tick. */
     void SetViewSize(float width, float height) { m_viewWidth = width; m_viewHeight = height; }
@@ -60,6 +63,8 @@ private:
     int m_startWave = 0;
     bool m_archive = false;
     bool m_horde = false;
+    SurvivalHud *m_originalHud = nullptr;
+    bool m_bossWave = false;
     float m_viewWidth = 572;
     float m_viewHeight = 429;
     CResTOCManager *m_toc = nullptr;

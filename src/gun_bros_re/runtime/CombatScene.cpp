@@ -94,6 +94,8 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
         // kills twice at the current streak multiplier and advance that streak.
         std::uint64_t points = static_cast<std::uint64_t>(experience) * (m_killStreak + 1);
         if (playerKill) { points *= 2; ++m_killStreak; }
+        // CLevel::GetBestKillStreak retains the session maximum across hits.
+        m_bestKillStreak = std::max(m_bestKillStreak, m_killStreak);
         m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL, m_score + points));
         if (playerKill) { AddExperience(experience); }
     } else { AddExperience(experience); }
@@ -276,6 +278,7 @@ void CombatScene::Reset() {
     m_hasViewCenter = false;
     m_score = 0;
     m_killStreak = 0;
+    m_bestKillStreak = 0;
     m_effects.Clear();
     enemies.clear();
     deaths.clear();

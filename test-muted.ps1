@@ -10,14 +10,15 @@
 param(
     [ValidateSet('Release', 'Debug')]
     [string]$Configuration = 'Release',
-    [ValidateSet('Core', 'UI', 'Campaign', 'Boundary', 'LongRun')]
+    [ValidateSet('Core', 'UI', 'OriginalUI', 'Campaign', 'Boundary', 'LongRun')]
     [string]$Phase = 'Core',
     [string]$ExecutablePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
-$gameExe = Join-Path $projectRoot "bin/x64/$Configuration/gun_bros_re.exe"
+# Checks belong to the permanent companion. The GUI is verified separately.
+$gameExe = Join-Path $projectRoot "bin/x64/$Configuration/gun_bros_research.exe"
 if ($ExecutablePath) { $gameExe = (Resolve-Path -LiteralPath $ExecutablePath).Path }
 if (-not (Test-Path -LiteralPath $gameExe -PathType Leaf)) {
     throw "Build the $Configuration executable first: $gameExe"
@@ -78,6 +79,26 @@ if ($Phase -eq 'Core') {
     Add-Check 'menu' @('--game-menu-check')
     Add-Check 'horde-first' @('--horde-check', '0', '--weapon', '80')
     Add-Check 'horde-last' @('--horde-check', '9', '--weapon', '80')
+} elseif ($Phase -eq 'OriginalUI') {
+    # Native resources, real hit regions, timeline boundaries and save reloads.
+    Add-Check 'native-profile' @('--native-profile-check')
+    Add-Check 'native-profile-play' @('--native-profile-play-check')
+    Add-Check 'tutorial-native' @('--tutorial-check')
+    Add-Check 'store-cards' @('--store-card-check')
+    Add-Check 'mastery-upgrade' @('--upgrade-popup-check')
+    Add-Check 'bank' @('--bank-check')
+    Add-Check 'options' @('--options-check')
+    Add-Check 'offline-social' @('--social-check')
+    Add-Check 'planet-menu' @('--planet-menu-check')
+    Add-Check 'mission-menu' @('--mission-menu-check')
+    Add-Check 'header' @('--header-check')
+    Add-Check 'refinery-menu' @('--refinery-menu-check')
+    Add-Check 'greeting' @('--greeting-check')
+    Add-Check 'player-select' @('--player-select-check')
+    Add-Check 'postgame-menu' @('--postgame-menu-check')
+    Add-Check 'pause-menu' @('--pause-check')
+    Add-Check 'original-hud' @('--original-hud-check')
+    Add-Check 'powerup-selector' @('--powerup-selector-check')
 } elseif ($Phase -eq 'Campaign') {
     foreach ($mission in @(10, 11, 12, 13, 14)) {
         Add-Check "campaign-pack2-$mission" @('--campaign-check', 'pack2', "$mission", '--weapon', '65')

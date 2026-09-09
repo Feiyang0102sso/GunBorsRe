@@ -14,6 +14,7 @@
 #include "gun_bros/CPickup.h"
 #include "gun_bros/CProp.h"
 #include "gun_bros/CPowerup.h"
+#include "gun_bros/CMissionScriptContext.h"
 
 #include <cstdio>
 
@@ -24,6 +25,10 @@ std::int16_t ResolveFunction(IScriptObject *host, std::uint16_t functionId,
                              std::uint8_t argumentCount) {
     const std::uint8_t classId = static_cast<std::uint8_t>((functionId >> 8) & 0xFF);
     const std::uint8_t function = static_cast<std::uint8_t>(functionId & 0xFF);
+
+    if (classId == kScriptClassMission) {
+        return static_cast<CMissionScriptContext *>(host)->FunctionResolver(function, arguments, argumentCount);
+    }
 
     if (classId == kScriptClassSpawner) {
         CLevel *level = dynamic_cast<CLevel *>(host);

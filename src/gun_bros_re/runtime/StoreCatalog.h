@@ -17,6 +17,8 @@ struct StoreEntry {
 
 std::string ReadGameString(CResTOCManager &toc, const CGameAssetRef &ref);
 bool LoadStoreCatalog(CResTOCManager &toc, PackTables &tables, std::vector<StoreEntry> &catalog);
+/** Original smallest adequate IAP, or largest available when none suffices. */
+int FindCurrencyOffer(const std::vector<StoreEntry> &catalog, unsigned currency, unsigned missing);
 bool LoadPlayerProgress(CResTOCManager &toc, PackTables &tables, CPlayerProgress::Template &data);
 bool LoadRefinementTemplate(CResTOCManager &toc, PackTables &tables, CRefinementManager::Template &data);
 int RunProgressCheck(const std::string &bigDirectory);

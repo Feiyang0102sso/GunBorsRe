@@ -13,6 +13,8 @@ struct DailyPrize {
 class CDailyBonusTracking {
 public:
     bool Load(CResTOCManager &toc, PackTables &tables);
+    /** Original RefreshUsageData, with seconds supplied by the host clock. */
+    void RefreshUsageData(CProfileManager &profile, std::uint32_t currentSeconds) const;
     bool IsBonusAvailable(const CProfileManager &profile, std::int64_t localDay) const;
     unsigned CalculateBonus(const CProfileManager &profile, std::int64_t localDay) const;
     bool CommitBonus(CProfileManager &profile, std::int64_t localDay, const std::vector<StoreEntry> &store) const;

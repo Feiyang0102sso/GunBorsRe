@@ -5,6 +5,8 @@
 #include "runtime/SurvivalSession.h"
 #include "runtime/CombatGeometry.h"
 #include "runtime/StoreCatalog.h"
+#include "runtime/SurvivalHud.h"
+#include "gun_bros/Mission.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -15,26 +17,53 @@ SurvivalSession::SurvivalSession(CombatScene &scene, CMap &map,
 }
 
 bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
-    const GameObjectRef *archiveLevel) {
-    m_archive = archiveLevel != nullptr;
+    const GameObjectRef *selectedLevel, bool archive) {
+    m_archive = archive;
     m_toc = &toc;
+    GameObjectRef requested;
+    if (selectedLevel != nullptr) { requested = *selectedLevel; }
+    // Original Mission -> LEVEL -> TILELAYER chain, never script-size heuristics.
+    // Mission::Init :164402; CLevel::Template::Init :114770, corresponding BT.
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC *pack = toc.GetPack(packIndex);
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Level);
+        if (selectedLevel != nullptr && pack->GetPackHash() != selectedLevel->packHash) { continue; }
+        GameSection section = GameSection::Mission;
+        if (selectedLevel != nullptr) { section = GameSection::Level; }
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(section);
         for (unsigned index = 0; index < count; ++index) {
-            if (archiveLevel != nullptr && (pack->GetPackHash() != archiveLevel->packHash || index != archiveLevel->localIndex)) { continue; }
+            if (selectedLevel != nullptr && index != selectedLevel->localIndex) { continue; }
             std::vector<std::uint8_t> payload;
-            if (!tables.ReadSectionResource(pack->GetPackHash(), GameSection::Level, index, payload)) { return false; }
+            if (!tables.ReadSectionResource(pack->GetPackHash(), section, index, payload)) { return false; }
+            GameObjectRef level = requested;
+            if (selectedLevel == nullptr) {
+                CArrayInputStream missionStream(payload);
+                Mission mission;
+                if (!mission.Init(missionStream) || missionStream.Available() != 0) { return false; }
+                if (mission.type != 1) { continue; }
+                level = mission.level;
+                if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, payload)) { return false; }
+            }
             CArrayInputStream stream(payload);
             CLevel::Template candidate;
-            if (!candidate.Init(stream)) { return false; }
-            if (candidate.mapRef.packHash == mapPack && candidate.mapRef.localIndex == mapIndex &&
-                (candidate.script.GetStates().size() > 100 || archiveLevel != nullptr)) {
+            if (!candidate.Init(stream) || stream.Available() != 0) { return false; }
+            if (candidate.mapRef.packHash == mapPack && candidate.mapRef.localIndex == mapIndex) {
+                if (!requested.IsNull() && selectedLevel == nullptr &&
+                    (requested.packHash != level.packHash || requested.localIndex != level.localIndex)) {
+                    std::printf("[survival] ambiguous retail LEVEL for map=%u:%u\n", mapPack, mapIndex);
+                    return false;
+                }
+                requested = level;
                 m_template = std::move(candidate);
-                std::printf("[survival] selected %s LEVEL %u for MAP %u\n", pack->GetShortName().c_str(), index, mapIndex);
-                return true;
+                if (selectedLevel != nullptr) {
+                    std::printf("[survival] selected explicit LEVEL %u:%u for MAP %u:%u\n", level.packHash, level.localIndex, mapPack, mapIndex);
+                    return true;
+                }
             }
         }
+    }
+    if (!requested.IsNull() && selectedLevel == nullptr) {
+        std::printf("[survival] selected retail Mission LEVEL %u:%u for MAP %u:%u\n", requested.packHash, requested.localIndex, mapPack, mapIndex);
+        return true;
     }
     std::printf("[survival] no retail survival level for requested map\n");
     return false;
@@ -56,6 +85,13 @@ void SurvivalSession::Restart(float x, float y) {
     m_level.Bind(m_template, m_map, this, m_startWave);
     m_bossIntroSerial = m_level.GetBossIntroSerial();
     if (m_bossIntroSerial > 0) { m_transitionMs = 2000; m_transitionDuration = 2000; }
+    m_bossWave = m_bossIntroSerial > 0;
+    if (m_originalHud != nullptr) {
+        m_transitionMs = 0;
+        unsigned wave = m_level.GetRealWave() + 1;
+        if (m_horde && m_level.GetWavesPerRevolution() > 0) { wave = m_level.GetWave() / m_level.GetWavesPerRevolution() + 1; }
+        m_originalHud->BeginOriginalLevel(wave, m_horde, m_bossWave);
+    }
     UpdateCamera();
     UpdateDialog(0);
     for (const CLayerPathLink &path : m_map.GetPathLinkLayers()) {
@@ -133,7 +169,24 @@ void SurvivalSession::SendPropMessage(int objectId, int message) {
 }
 
 void SurvivalSession::OnWaveCleared(unsigned perfectRewardPercent) {
+    const unsigned previousPerfect = m_scene.GetPerfectWaves();
     m_scene.OnWaveCleared(perfectRewardPercent);
+    // CGame::OnWaveCleared :76246 only shows this sequence for game type 1.
+    if (m_originalHud != nullptr && !m_horde) {
+        m_originalHud->OnOriginalWaveClear(m_level.GetRealWave() + 1,
+            m_scene.GetPerfectWaves() > previousPerfect, perfectRewardPercent, m_bossWave);
+    }
+    m_bossWave = false;
+}
+
+bool SurvivalSession::IsTransitioning() const {
+    if (m_originalHud != nullptr) { return m_originalHud->HasInterstitial(); }
+    return m_transitionMs > 0;
+}
+
+unsigned SurvivalSession::GetTransitionElapsed() const {
+    if (m_originalHud != nullptr) { return m_originalHud->NoticeTime(); }
+    return m_transitionDuration - m_transitionMs;
 }
 
 void SurvivalSession::PlayLevelSound(const GameObjectRef &sound) {
@@ -280,12 +333,19 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     if (deltaMs <= 0) { return; }
     m_map.GetCamera().Update(deltaMs);
     UpdateDialog(deltaMs);
+    if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
     if (m_level.IsCleared()) {
         m_scene.Update(deltaMs, 0, 0, false);
         UpdateCamera(deltaMs);
         return;
     }
-    if (m_transitionMs > 0) {
+    if (m_originalHud != nullptr) {
+        // InterstitialSequenceCallback :86336 emits LEVEL event 2 only after
+        // the last authored Movie completes. BOKOR keeps its script clock alive.
+        if (m_originalHud->TakeInterstitialCompletion()) { m_level.HandleEvent(2); }
+        if (m_originalHud->HasInterstitial() && !m_horde) { UpdateCamera(deltaMs); return; }
+    }
+    if (m_originalHud == nullptr && m_transitionMs > 0) {
         m_transitionMs -= deltaMs;
         if (m_transitionMs <= 0) { m_level.HandleEvent(2); }
         if (!m_horde) { UpdateCamera(deltaMs); return; }
@@ -314,13 +374,24 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         m_level.OnEnemyKilled(death.objectId, death.enemy);
         ++m_kills;
     }
-    if (m_level.GetWave() != previousWave && !m_level.IsCleared()) { m_transitionMs = 1200; m_transitionDuration = 1200; }
+    if (m_originalHud == nullptr && m_level.GetWave() != previousWave && !m_level.IsCleared()) { m_transitionMs = 1200; m_transitionDuration = 1200; }
+    if (m_originalHud != nullptr && m_horde && m_level.GetWave() != previousWave && !m_level.IsCleared()) {
+        // CGame::OnLevelStart :75385 names Horde rounds with GetRevolution.
+        // Its Movie callback releases the script's slow-motion intermission.
+        const int divisor = m_level.GetWavesPerRevolution();
+        if (divisor > 0) { m_originalHud->BeginOriginalLevel(m_level.GetWave() / divisor + 1, true, false); }
+    }
     if (m_bossIntroSerial != m_level.GetBossIntroSerial()) {
         m_bossIntroSerial = m_level.GetBossIntroSerial();
         // OnBossWaveStart uses GLU_MOVIE_WAVE_CLEARED and its real 2000 ms
         // completion callback before releasing the next scripted state.
         m_transitionMs = 2000;
         m_transitionDuration = 2000;
+        m_bossWave = true;
+        if (m_originalHud != nullptr) {
+            m_transitionMs = 0;
+            m_originalHud->BeginOriginalLevel(m_level.GetRealWave() + 1, m_horde, true);
+        }
     }
     UpdateCamera(deltaMs);
 }
@@ -345,6 +416,7 @@ void SurvivalSession::UpdateCamera(int deltaMs) {
 }
 
 void SurvivalSession::UpdateAfterDeath(int deltaMs) {
+    if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
     // Finish existing attacks and camera effects without advancing new waves.
     m_map.GetCamera().Update(deltaMs);
     m_scene.Update(deltaMs, 0, 0, false);

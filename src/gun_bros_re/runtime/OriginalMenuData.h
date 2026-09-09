@@ -13,6 +13,9 @@ struct OriginalMenuEntry {
     unsigned action;
     unsigned parameter;
 };
+inline constexpr unsigned kOriginalNavigationBranches[] = {
+#include "runtime/OriginalNavigationData.inc"
+};
 inline const OriginalMenuEntry *OriginalMenuData(const char *table, unsigned index) {
     static const OriginalMenuEntry entries[] = {
 #include "runtime/OriginalMenuData.inc"

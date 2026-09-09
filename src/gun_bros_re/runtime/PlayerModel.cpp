@@ -14,6 +14,7 @@
 #include "gun_bros/CMeshCamera.h"
 
 #include <cstdio>
+#include <cmath>
 
 namespace {
 
@@ -54,7 +55,7 @@ bool BuildAnimatedPart(PackTables &tables, const CMoveSetMesh &moveSet,
 
     if (!LoadMeshAndAtlas(tables, name, moveSet.GetPackHash(), config.meshOrdinal,
                           moveSet.GetPackHash(), config.imageOrdinal, part.mesh,
-                          part.texture)) {
+                          part.texture, &moveSet)) {
         return false;
     }
 
@@ -74,7 +75,7 @@ bool BuildAnimatedPart(PackTables &tables, const CMoveSetMesh &moveSet,
 bool LoadMeshAndAtlas(PackTables &tables, const char *label,
                       std::uint32_t meshPackHash, std::uint32_t meshOrdinal,
                       std::uint32_t imagePackHash, std::uint32_t imageOrdinal,
-                      CMesh &mesh, CTexture &texture) {
+                      CMesh &mesh, CTexture &texture, const CMoveSetMesh *moveSet) {
     std::vector<std::uint8_t> meshPayload;
     if (!tables.ReadSectionResource(meshPackHash, GameSection::Mesh, meshOrdinal,
                                     meshPayload)) {
@@ -83,7 +84,7 @@ bool LoadMeshAndAtlas(PackTables &tables, const char *label,
     }
 
     CArrayInputStream meshStream(meshPayload);
-    if (!mesh.Init(meshStream)) {
+    if (!mesh.Init(meshStream, moveSet)) {
         return false;
     }
 
@@ -286,11 +287,13 @@ bool CreatePlayerBuffers(PlayerModel &model, const CShaderProgram &program) {
             return false;
         }
     }
-    if (model.weapon) {
-        for (auto &config : model.weapon->configs) {
+    PlayerWeaponState *weaponBanks[] = {model.weapon.get(), model.uiOtherWeapon.get()};
+    for (PlayerWeaponState *weapon : weaponBanks) {
+        if (weapon == nullptr) { continue; }
+        for (auto &config : weapon->configs) {
             if (!config->buffer.Create(program) || !config->buffer.SetMesh(config->mesh)) { return false; }
         }
-        PlayerPart &gun = model.weapon->gunPart;
+        PlayerPart &gun = weapon->gunPart;
         if (!gun.buffer.Create(program) || !gun.buffer.SetMesh(gun.mesh)) { return false; }
     }
     // SetMesh uploads frame zero, which can differ from the script's idle
@@ -318,15 +321,28 @@ void AdvancePlayer(PlayerModel &model, std::int32_t deltaMs) {
     }
 }
 
+/** Resolve the actual controller mesh, including an outgoing gun's torso. */
+static PlayerPart *FindPlayerTorsoPart(PlayerModel &model) {
+    const CMesh *mesh = model.weapon->brother.GetTorso().GetAnimation().GetMesh();
+    for (auto &part : model.parts) {
+        if (&part->mesh == mesh) { return part.get(); }
+    }
+    PlayerWeaponState *banks[] = {model.weapon.get(), model.uiOtherWeapon.get()};
+    for (PlayerWeaponState *bank : banks) {
+        if (bank == nullptr) { continue; }
+        for (auto &part : bank->configs) {
+            if (&part->mesh == mesh) { return part.get(); }
+        }
+    }
+    return nullptr;
+}
+
 void PosePlayer(PlayerModel &model) {
     if (model.weapon) {
         PlayerWeaponState &weapon = *model.weapon;
         CMoveSetMeshController &torso = weapon.brother.GetTorso();
-        const int torsoIndex = torso.GetMeshConfigIndex();
-        if (torsoIndex >= 0) {
-            PlayerPart *part = nullptr;
-            if (weapon.brother.TorsoUsesWeapon()) { part = weapon.configs[torsoIndex].get(); }
-            else { part = model.parts[torsoIndex].get(); }
+        PlayerPart *part = FindPlayerTorsoPart(model);
+        if (part != nullptr) {
             if (torso.GetAnimation().Evaluate(part->pose)) { part->buffer.SetVertices(part->pose); }
         }
         CMoveSetMeshController &legs = weapon.brother.GetLegs();
@@ -335,8 +351,10 @@ void PosePlayer(PlayerModel &model) {
             PlayerPart &part = *model.parts[legsIndex];
             if (legs.GetAnimation().Evaluate(part.pose)) { part.buffer.SetVertices(part.pose); }
         }
-        PlayerPart &gun = weapon.gunPart;
-        if (weapon.gun.GetAnimation().Evaluate(gun.pose)) { gun.buffer.SetVertices(gun.pose); }
+        PlayerWeaponState *active = &weapon;
+        if (model.uiActiveWeapon != nullptr) { active = model.uiActiveWeapon; }
+        PlayerPart &gun = active->gunPart;
+        if (active->gun.GetAnimation().Evaluate(gun.pose)) { gun.buffer.SetVertices(gun.pose); }
         return;
     }
     for (std::size_t i = 0; i < model.parts.size(); ++i) {
@@ -397,6 +415,35 @@ MeshBounds PlayerBounds(const PlayerModel &model) {
     return combined;
 }
 
+bool BuildPlayerUIMatrix(const PlayerModel &model, float centerX, float top, float height,
+    float facingRadians, float screenWidth, float screenHeight, float *out) {
+    if (!model.weapon) { return false; }
+    const CMesh *torso = model.weapon->brother.GetTorso().GetAnimation().GetMesh();
+    if (torso == nullptr) { return false; }
+    const MeshBounds &bounds = torso->GetBounds();
+    const float torsoHeight = std::abs(bounds.maxZ - bounds.minZ);
+    if (torsoHeight <= 0 || height <= 0) { return false; }
+
+    // CBrother::DrawUI :136337-136357 uses mesh mem+68/+80/+92, not
+    // combined player bounds or the weapon's extent. These are derived from BIG.
+    const float scale = height / torsoHeight;
+    const float originY = static_cast<float>(static_cast<int>(top - bounds.centerZ * scale + height + height * 0.5f));
+    float projection[16], translation[16], scaling[16], tilt[16], facing[16], first[16], second[16];
+    // CGraphics2d_OGLES::SetWidthAndHeightMappedOrthoProjection :378895:
+    // original near/far = 0/32767; OrientForUI :98920 places the mesh at -500.
+    Matrix4dOrthoTopLeft(screenWidth, screenHeight, 32767, projection);
+    projection[11] = -1;
+    Matrix4dTranslation(static_cast<float>(static_cast<int>(centerX)), originY, -500, translation);
+    Matrix4dScale(scale, scaling);
+    Matrix4dRotationX(3.14159265f * 0.5f, tilt);
+    Matrix4dRotationZ(3.14159265f + facingRadians, facing);
+    Matrix4dMultiply(projection, translation, first);
+    Matrix4dMultiply(first, scaling, second);
+    Matrix4dMultiply(second, tilt, first);
+    Matrix4dMultiply(first, facing, out);
+    return true;
+}
+
 void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
                 const float *base) {
     float flash = 0;
@@ -406,12 +453,9 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
     }
     if (model.weapon) {
         PlayerWeaponState &weapon = *model.weapon;
-        const int torsoIndex = weapon.brother.GetTorso().GetMeshConfigIndex();
         const int legsIndex = weapon.brother.GetLegs().GetMeshConfigIndex();
-        if (torsoIndex >= 0) {
-            PlayerPart *part = nullptr;
-            if (weapon.brother.TorsoUsesWeapon()) { part = weapon.configs[torsoIndex].get(); }
-            else { part = model.parts[torsoIndex].get(); }
+        PlayerPart *part = FindPlayerTorsoPart(model);
+        if (part != nullptr) {
             const CTexture *texture = &part->texture;
             if (model.armor[1] && model.armor[1]->images[model.brotherIndex].IsValid()) {
                 texture = &model.armor[1]->images[model.brotherIndex];
@@ -427,7 +471,9 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
             }
             part.buffer.Draw(program, base, *texture, flash);
         }
-        const int handedness = weapon.data.GetHandedness();
+        PlayerWeaponState *active = &weapon;
+        if (model.uiActiveWeapon != nullptr) { active = model.uiActiveWeapon; }
+        const int handedness = active->data.GetHandedness();
         int count = 1;
         if (handedness == 2) { count = 2; }
         for (int i = 0; i < count; ++i) {
@@ -437,7 +483,7 @@ void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
             if (!weapon.brother.GetTorso().GetAnimation().GetNodeAt(bone, placement.attachment)) { continue; }
             float mvp[kMatrix4dElements];
             MeshCameraBuildPartMatrix(placement, base, mvp);
-            weapon.gunPart.buffer.Draw(program, mvp, weapon.gunPart.texture, weapon.gun.GetHeatIntensity());
+            active->gunPart.buffer.Draw(program, mvp, active->gunPart.texture, active->gun.GetHeatIntensity());
         }
         // Original order after weapons: head, then both torso attachments.
         const std::uint32_t slots[] = {2, 1};
@@ -531,26 +577,22 @@ float PlayerModelWorldScale(const PlayerModel &model, float gameScale,
     return inverseExtent * kPlayerRuntimeScale * gameScale * cameraScale;
 }
 
-bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
-    const CGun::Template &data, const std::string &owner, PlayerModel &out) {
-    std::unique_ptr<PlayerWeaponState> weapon(new PlayerWeaponState());
-    weapon->playerScript = playerScript;
+/** Shared BIG asset loading; only the primary state binds a brother script. */
+static bool LoadPlayerWeaponAssets(PackTables &tables, const CGun::Template &data,
+    const std::string &owner, std::unique_ptr<PlayerWeaponState> &weapon) {
+    weapon = std::make_unique<PlayerWeaponState>();
     weapon->data = data;
     const CMoveSetMesh &moves = weapon->data.GetMoveSet();
-    std::vector<const CMesh *> meshes;
     for (const MeshConfig &config : moves.GetMeshConfigs()) {
         std::unique_ptr<PlayerPart> part(new PlayerPart());
         if (!LoadMeshAndAtlas(tables, "weapon torso", moves.GetPackHash(), config.meshOrdinal,
-            moves.GetPackHash(), config.imageOrdinal, part->mesh, part->texture)) { return false; }
-        meshes.push_back(&part->mesh);
+            moves.GetPackHash(), config.imageOrdinal, part->mesh, part->texture, &moves)) { return false; }
         weapon->configs.push_back(std::move(part));
     }
     const CGameAssetRef &mesh = data.GetMeshRef();
     const CGameAssetRef &atlas = data.GetImageRef();
     if (!LoadMeshAndAtlas(tables, owner.c_str(), mesh.packHash, mesh.assetId,
         atlas.packHash, atlas.assetId, weapon->gunPart.mesh, weapon->gunPart.texture)) { return false; }
-    std::vector<const CMesh *> bodyMeshes;
-    for (auto &part : out.parts) { bodyMeshes.push_back(&part->mesh); }
     // CBrother::UpdateNormal treats continuous beams specially when the gun
     // script clears its ready flag. Resolve that property from the real bullet.
     bool beam = false;
@@ -564,6 +606,32 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
         beam = (bullet.GetFlags() & 0x100) != 0;
     }
     weapon->gun.Bind(weapon->data, &weapon->gunPart.mesh, beam);
+    return true;
+}
+
+bool PreparePlayerUIWeapon(PackTables &tables, const CGun::Template &data,
+    const std::string &owner, PlayerModel &out) {
+    return LoadPlayerWeaponAssets(tables, data, owner, out.uiOtherWeapon);
+}
+
+void SelectPlayerUIWeapon(PlayerModel &model, bool primary) {
+    PlayerWeaponState *active = model.uiOtherWeapon.get();
+    if (primary) { active = model.weapon.get(); }
+    std::vector<const CMesh *> meshes;
+    for (const auto &part : active->configs) { meshes.push_back(&part->mesh); }
+    model.weapon->brother.SetUIGun(active->gun, meshes);
+    model.uiActiveWeapon = active;
+}
+
+bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
+    const CGun::Template &data, const std::string &owner, PlayerModel &out) {
+    std::unique_ptr<PlayerWeaponState> weapon;
+    if (!LoadPlayerWeaponAssets(tables, data, owner, weapon)) { return false; }
+    weapon->playerScript = playerScript;
+    std::vector<const CMesh *> meshes;
+    for (auto &part : weapon->configs) { meshes.push_back(&part->mesh); }
+    std::vector<const CMesh *> bodyMeshes;
+    for (auto &part : out.parts) { bodyMeshes.push_back(&part->mesh); }
     weapon->brother.SetHuman(out.human);
     weapon->gun.SetMasteryExperience(out.masteryExperience);
     weapon->brother.Bind(weapon->playerScript, out.moveSet, bodyMeshes, weapon->gun, meshes);
@@ -571,6 +639,8 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
         owner.c_str(), weapon->brother.TorsoUsesWeapon(), weapon->brother.GetTorso().GetMoveIndex(),
         weapon->brother.GetLegs().GetMoveIndex(), data.GetHandedness(), weapon->brother.GetStateId());
     out.weapon = std::move(weapon);
+    out.uiActiveWeapon = nullptr;
+    out.uiOtherWeapon.reset();
     out.weapon->brother.SetVitals(out.vitals);
     out.weapon->brother.SetPowerupState(&out.powerups);
     return true;

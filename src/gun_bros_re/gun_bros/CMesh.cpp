@@ -4,6 +4,7 @@
  */
 
 #include "gun_bros/CMesh.h"
+#include "gun_bros/CMoveSetMesh.h"
 
 #include <cstdio>
 #include <cstring>
@@ -39,7 +40,7 @@ std::string ReadBoneName(CArrayInputStream &stream) {
 
 CMesh::CMesh() : m_vertexCount(0), m_bounds() {}
 
-bool CMesh::Init(CArrayInputStream &stream) {
+bool CMesh::Init(CArrayInputStream &stream, const CMoveSetMesh *moveSet) {
     m_boneNames.clear();
     m_indices.clear();
     m_texCoords.clear();
@@ -92,6 +93,14 @@ bool CMesh::Init(CArrayInputStream &stream) {
     for (std::uint16_t frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
         MeshFrame &frame = m_frames[frameIndex];
         frame.timeMs = stream.ReadInt32();
+
+        // CMesh::Init :97965 keeps timestamps but skips unused frame data.
+        // ComputeBounds must therefore use the first retained frame, not an
+        // unrelated pose at file frame zero. The range comes from the BIG move set.
+        if (moveSet != nullptr && !moveSet->IsFrameUsedInMoves(frameIndex)) {
+            stream.Skip(frameSize - 4);
+            continue;
+        }
 
         frame.bones.resize(boneCount);
         for (std::uint8_t boneIndex = 0; boneIndex < boneCount; ++boneIndex) {

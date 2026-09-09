@@ -54,7 +54,7 @@ constexpr std::uint8_t kPlayerLegsConfigIndex = 1;
 bool LoadMeshAndAtlas(PackTables &tables, const char *label,
                       std::uint32_t meshPackHash, std::uint32_t meshOrdinal,
                       std::uint32_t imagePackHash, std::uint32_t imageOrdinal,
-                      CMesh &mesh, CTexture &texture);
+                      CMesh &mesh, CTexture &texture, const CMoveSetMesh *moveSet = nullptr);
 
 /** One drawable piece of an assembled player. */
 struct PlayerPart {
@@ -108,6 +108,10 @@ struct PlayerModel {
     CMoveSetMesh moveSet;
     std::vector<std::unique_ptr<PlayerPart>> parts;
     std::unique_ptr<PlayerWeaponState> weapon;
+    // CBrother owns two guns in the original. UI keeps both mesh banks alive
+    // while the old torso finishes raising after native 3 switches the gun.
+    std::unique_ptr<PlayerWeaponState> uiOtherWeapon;
+    PlayerWeaponState *uiActiveWeapon = nullptr;
     std::unique_ptr<PlayerArmorState> armor[kArmorSlotCount];
     PlayerVitals *vitals = nullptr;
     CBrother::PowerupState powerups;
@@ -158,6 +162,10 @@ bool BuildPlayerBody(PackTables &tables, const CMoveSetMesh &moveSet,
 /** Equip the actual template, including its player move overrides and scripts. */
 bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
     const CGun::Template &weapon, const std::string &owner, PlayerModel &out);
+/** Load the second UI gun from BIG; the primary brother remains the sole host. */
+bool PreparePlayerUIWeapon(PackTables &tables, const CGun::Template &weapon,
+    const std::string &owner, PlayerModel &out);
+void SelectPlayerUIWeapon(PlayerModel &model, bool primary);
 /** Replace only the template's own armour slot; other equipment stays equipped. */
 bool EquipPlayerArmor(PackTables &tables, const CArmor::Template &data,
     const CShaderProgram &program, PlayerModel &out);
@@ -205,6 +213,12 @@ MeshBounds PlayerBounds(const PlayerModel &model);
  */
 void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
                 const float *base);
+
+/** CBrother::DrawUI + CMeshCamera::OrientForUI, in full-menu pixel coordinates.
+ * The region height scales the active torso's raw Z extent; weapons do not
+ * change framing. Returns false when the active torso cannot be resolved. */
+bool BuildPlayerUIMatrix(const PlayerModel &model, float centerX, float top, float height,
+    float facingRadians, float screenWidth, float screenHeight, float *out);
 
 /**
  * Point every animated part at the same slot of its own move list.

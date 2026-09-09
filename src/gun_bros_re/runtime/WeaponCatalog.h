@@ -21,7 +21,7 @@ struct WeaponEntry {
     std::string owner;
     int category = -1;
     bool visualOnly = false;
-    bool unused = false;
+    bool hasStoreEntry = false; // Missing metadata does not prove an unused asset.
 };
 
 /** Reads each GUN once, then joins STORE_ITEM references for display names. */

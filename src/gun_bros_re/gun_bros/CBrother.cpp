@@ -76,7 +76,7 @@ void CBrother::SetScriptSequenceFrame(std::uint8_t frame) {
             break;
         }
     }
-    if (m_torsoUsesWeapon != useWeapon) {
+    if (m_torso.GetMoveSet() != moves) {
         if (useWeapon) {
             m_torso.SetMoveSet(moves, m_weaponMeshes);
         } else {
@@ -291,6 +291,45 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         break;
     }
     return 0;
+}
+
+bool CBrother::SpawnForUI() {
+    // :135894 -> CallScriptExportFunction(this, 0, 9, ...): 9 is the export,
+    // not its argument. SetState starts the original state's first sequence.
+    return m_interpreter.CallExportFunction(9);
+}
+
+void CBrother::SetUIGun(CGun &gun, const std::vector<const CMesh *> &weaponMeshes) {
+    // CBrother::FunctionResolver native 3 (:138868): the current sequence
+    // keeps its old mesh/range. Only the next SetMove consumes new overrides.
+    m_gun = &gun;
+    m_weaponMeshes = weaponMeshes;
+    gun.OnEquip();
+}
+
+void CBrother::UpdateUI(std::int32_t deltaMs) {
+    // CBrother::UpdateUI :137516 synchronizes legs to the previous torso time.
+    // Menu previews do not run UpdateNormal's combat timers and fire input.
+    auto &torso = m_torso.GetAnimation();
+    auto &legs = m_legs.GetAnimation();
+    const int previousTorsoTime = torso.GetTimeMs();
+    const int torsoDuration = torso.GetRangeDurationMs();
+    const int legsDuration = legs.GetRangeDurationMs();
+    // UpdateUI calls the animation controller directly and truncates the
+    // scaled milliseconds (:137550), unlike UpdateNormal's rounded helper.
+    const CMoveSetMesh *torsoMoves = m_torso.GetMoveSet();
+    const int torsoMove = m_torso.GetMoveIndex();
+    if (torsoMoves != nullptr && torsoMove >= 0) {
+        torso.Update(static_cast<int>(torsoMoves->GetMoves()[torsoMove].speed * deltaMs));
+    }
+    if (torsoDuration > 0 && legsDuration > 0 && m_legs.GetMoveIndex() >= 0) {
+        const float ratio = static_cast<float>(legsDuration) / torsoDuration;
+        const float speed = m_baseMoves->GetMoves()[m_legs.GetMoveIndex()].speed;
+        const int phase = static_cast<int>(previousTorsoTime * ratio * speed);
+        legs.SetTimeMs(phase % legsDuration + legs.GetRangeStartMs());
+    }
+    m_gun->Update(deltaMs);
+    m_interpreter.Refresh();
 }
 
 HitResult CBrother::ReceiveDamage(float damage) {

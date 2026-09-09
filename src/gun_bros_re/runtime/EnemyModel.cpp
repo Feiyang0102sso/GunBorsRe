@@ -3,7 +3,7 @@
  * @brief One enemy's models, assembled by its script and ready to draw.
  */
 
-#include "milestones/EnemyModel.h"
+#include "runtime/EnemyModel.h"
 
 #include "engine/CArrayInputStream.h"
 #include "engine/CMatrix4d.h"
