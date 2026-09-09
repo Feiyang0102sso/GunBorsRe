@@ -9,13 +9,18 @@
 | `play-muted.cmd` | 正式游戏，静音；继续本地账户，无账户时进入新手教程 |
 | `play.cmd` | 正式游戏，开启声音 |
 | `play-original-save.cmd` | 原完美存档的独立研究副本，静音 |
-| `research.cmd` | 永久研究菜单，静音，原有 1–46 项保留；47 紧凑星图、48 签到、49 教程、50 性能 |
+| `research.cmd` | 永久研究菜单，静音，原有 1–46 项保留；47 紧凑星图、48 签到、49 教程、50 性能、51 商店模板试点、52 共用商品卡验收 |
+| `store-template-demo.cmd` | 直接进入商店体验 FILTER、GUNS/ARMOR/POWER UPS 商品卡模板；使用 `out/store-template-demo.dat` 隔离账户，静音 |
 
 实际程序为 `bin/x64/Release/gun_bros_re.exe`，仍直接读取本项目的原版 BIG。无参数直接启动游戏，研究菜单只由 `--research` 或脚本进入。启动器先切回资源根目录。EXE 全部模式支持 `--mute`，静音照常解码音乐、音效和视频并运行游戏逻辑。`--profile out/my-test.dat` 可指定隔离账户，`--skip-intro` 跳过启动视频。
 
 正常账户写 `userdata/profile.dat`；原存档研究副本写 `userdata/original-profile.dat`。后者首次从 `saves/` 的原记录导入，随后继续自己的进度。源存档始终只读。自动检查使用 `out/` 的独立账户。
 
+商店最新改动与来源：[共用商品卡模板](store-cards-template.md)。`--store-card-check --mute` 验证三类卡片、真实文本绑定、开合倒放、预览及购买重载；`--store-template-check --mute` 同时覆盖 FILTER。该项不代表人物相机、完整滚动/筛选/优惠状态和 BANK 结算均已复刻。
+
 ## 建议验收顺序
+
+商店模板试点已接入正式商店：点击右下角 FILTER，观察上移与回弹，选择 PISTOL/RIFLE，再点击上方 FILTER 收起；文字、按钮及命中区域随当前 Movie 时间更新。专项命令 `--store-template-check --mute` 输出5张动画时刻截图；范围、源码证据和验证记录见 [商店模板试点](store-template-pilot.md)。本次只完成该组件，不能据此认定整个商店已忠实复刻。
 
 1. 启动静音新手游戏，确认原 Glu 视频、标题页。视频可用空格／点击跳过。无存档先选 Percy／Francis，进入原移动射击、免费步枪切换、拾取手雷炸大怪的教程；老账户不强制重做。签到使用本机日期，五天循环；此后七项主导航可操作。
 2. WASD 移动、鼠标瞄准、左键射击；Q 切换已装备双枪，1/2 直接选择。G 使用道具、F 切选；红按钮打开战斗商店，支持购买、左右装备与立即使用，蓝按钮切枪。空格／Esc 暂停，暂停列表可滚动，SURRENDER 进入结算。R 重开、C 碰撞叠加及 N/M 属保留研究控制。

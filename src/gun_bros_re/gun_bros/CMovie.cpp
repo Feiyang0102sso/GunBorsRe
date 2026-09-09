@@ -19,6 +19,16 @@ void ReadTransform(CArrayInputStream &stream, MovieKeyFrame &frame) {
 }
 }
 
+bool CMovie::GetChapterRange(unsigned chapter, unsigned &start, unsigned &end) const {
+    if (chapter >= chapters.size()) { return false; }
+    start = chapters[chapter];
+    end = duration;
+    if (chapter + 1 < chapters.size()) { end = chapters[chapter + 1]; }
+    if (end < start || end > duration) { return false; }
+    if (end != start && end != duration) { --end; }
+    return true;
+}
+
 bool CMovie::Init(CArrayInputStream &stream) {
     objects.clear();
     chapters.clear();

@@ -35,14 +35,17 @@ public:
         unsigned depth = 0, float alpha = 1);
     bool DrawNamed(const char *name, unsigned time, float x = 512, float y = 384);
     bool DrawFitted(unsigned ordinal, unsigned time, float x, float y, float width, float height, unsigned regionIndex = 0);
-    std::string NamedString(const char *name);
+    /** Some original tables index consecutive resource handles, not alias suffixes. */
+    std::string NamedString(const char *name, unsigned offset = 0);
     bool DrawSprite(unsigned archetype, unsigned animation, unsigned time, float x, float y, float scale = 1, float alpha = 1, float rotation = 0);
-    bool DrawSpriteFitted(unsigned archetype, unsigned animation, unsigned time, float x, float y, float width, float height);
+    bool DrawSpriteFitted(unsigned archetype, unsigned animation, unsigned time, float x, float y, float width, float height, float alpha = 1);
     bool ButtonBackground(float x, float y, float width, float height, bool selected, bool hovered);
     unsigned SpriteDuration(unsigned archetype, unsigned animation);
     void Image(const CTexture &texture, float x, float y, float width, float height);
     bool Text(const std::string &text, float x, float y, unsigned font = 0, float scale = 1, float maxWidth = 0, float alpha = 1);
     float TextWidth(const std::string &text, unsigned font = 0, float scale = 1);
+    /** Authored line height of the BIG bitmap font used by Text. */
+    float TextHeight(unsigned font = 0, float scale = 1);
     std::vector<MovieRegion> Regions(unsigned ordinal, unsigned time, float x = 512, float y = 384);
     void Rectangle(float x, float y, float width, float height, float r, float g, float b, float alpha = 1);
     void SetRegionOverlay(bool enabled) { m_regionOverlay = enabled; }

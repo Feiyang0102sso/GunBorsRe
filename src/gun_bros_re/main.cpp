@@ -71,6 +71,8 @@ void PrintUsage() {
         "  --brother-check           AI-only firing, death and wave revival check\n"
         "  --brother                 add the original AI follow/aim policy to --play\n"
         "  --game-menu-check         refine, buy, equip and play an isolated profile\n"
+        "  --store-card-check        verify GUNS/ARMOR/POWER UPS cards and capture stages\n"
+        "  --store-template-check    verify BIG store filter and shared item cards\n"
         "  --daily-bonus-check       original rewards, calendar cycle and save checks\n"
         "  --tutorial-check          original move, fire, swap and grenade tutorial\n"
         "  --performance-check       record 1200 real gameplay frames to CSV\n"
@@ -198,6 +200,8 @@ int PromptForHarness() {
         " 48  daily bonus -- original five-day reward and persistence check\n"
         " 49  first tutorial -- original scripts and isolated save check\n"
         " 50  performance -- 1200 rendered gameplay frames and CPU timing\n"
+        " 51  store template -- filter animation, input and screenshots\n"
+        " 52  store cards -- guns, armor, powerups and resource binding\n"
         "\n"
         "choice [26]: ");
     std::fflush(stdout);
@@ -208,7 +212,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 50) {
+    if (choice < 1 || choice > 52) {
         return 26;
     }
     return choice;
@@ -252,6 +256,8 @@ int main(int argc, char **argv) {
     bool checkProfilePlay = false;
     bool playGame = false;
     bool checkGameMenu = false;
+    bool checkStoreTemplate = false;
+    bool checkStoreCards = false;
     unsigned menuPage = 0;
     bool movieRegions = false;
     bool checkArmorRendering = false;
@@ -399,6 +405,10 @@ int main(int argc, char **argv) {
             checkLevelFlow = true;
         } else if (std::strcmp(argument, "--game-menu-check") == 0) {
             checkGameMenu = true;
+        } else if (std::strcmp(argument, "--store-card-check") == 0) {
+            checkStoreCards = true;
+        } else if (std::strcmp(argument, "--store-template-check") == 0) {
+            checkStoreTemplate = true;
         } else if (std::strcmp(argument, "--tutorial-check") == 0) {
             checkTutorial = true;
         } else if (std::strcmp(argument, "--daily-bonus-check") == 0) {
@@ -524,6 +534,8 @@ int main(int argc, char **argv) {
         const int choice = PromptForHarness();
         if (choice == 48) { return RunDailyBonusCheck(bigDirectory); }
         if (choice == 49) { return RunTutorialPlayCheck(bigDirectory); }
+        if (choice == 52) { return RunStoreTemplateCheck(bigDirectory, true); }
+        if (choice == 51) { return RunStoreTemplateCheck(bigDirectory); }
         if (choice == 50) { return RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0, nullptr, true, false, nullptr, true); }
         if (choice == 47) { return RunGameFrontEnd(bigDirectory, screenshotPath, 20, false, profilePath); }
         if (choice == 1) {
@@ -652,6 +664,8 @@ int main(int argc, char **argv) {
     if (checkProfilePlay) { return RunProfilePlayCheck(bigDirectory); }
     if (playGame) { return RunGameFrontEnd(bigDirectory, screenshotPath, menuPage, false, profilePath); }
     if (checkGameMenu) { return RunGameMenuCheck(bigDirectory); }
+    if (checkStoreCards) { return RunStoreTemplateCheck(bigDirectory, true); }
+    if (checkStoreTemplate) { return RunStoreTemplateCheck(bigDirectory); }
     if (checkDailyBonus) { return RunDailyBonusCheck(bigDirectory); }
     if (checkTutorial) { return RunTutorialPlayCheck(bigDirectory); }
     if (checkPerformance) { return RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0, nullptr, true, false, nullptr, true); }

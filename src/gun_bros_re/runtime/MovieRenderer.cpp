@@ -210,6 +210,12 @@ bool MovieRenderer::Text(const std::string &text, float x, float y, unsigned fon
     return true;
 }
 
+float MovieRenderer::TextHeight(unsigned font, float scale) {
+    CBitmapFont *bitmap = GetFont(font);
+    if (bitmap == nullptr) { return 0; }
+    return bitmap->Height(scale);
+}
+
 float MovieRenderer::TextWidth(const std::string &text, unsigned font, float scale) {
     CBitmapFont *value = GetFont(font);
     if (value == nullptr) { return 0; }
@@ -234,13 +240,13 @@ bool MovieRenderer::DrawSprite(unsigned archetype, unsigned animationIndex, unsi
     return true;
 }
 
-bool MovieRenderer::DrawSpriteFitted(unsigned archetype, unsigned animationIndex, unsigned time, float x, float y, float width, float height) {
+bool MovieRenderer::DrawSpriteFitted(unsigned archetype, unsigned animationIndex, unsigned time, float x, float y, float width, float height, float alpha) {
     Animation *animation = GetAnimation(archetype, animationIndex);
     if (animation == nullptr || animation->bounds.width <= 0 || animation->bounds.height <= 0) { return false; }
     const float scale = std::min(width / animation->bounds.width, height / animation->bounds.height);
     return DrawSprite(archetype, animationIndex, time,
         x + (width - animation->bounds.width * scale) * 0.5f - animation->bounds.left * scale,
-        y + (height - animation->bounds.height * scale) * 0.5f - animation->bounds.top * scale, scale);
+        y + (height - animation->bounds.height * scale) * 0.5f - animation->bounds.top * scale, scale, alpha);
 }
 
 std::vector<MovieRegion> MovieRenderer::Regions(unsigned ordinal, unsigned time, float x, float y) {
@@ -303,19 +309,21 @@ bool MovieRenderer::DrawNamed(const char *name, unsigned time, float x, float y)
     return Draw(ordinal, time, x, y);
 }
 
-std::string MovieRenderer::NamedString(const char *name) {
+std::string MovieRenderer::NamedString(const char *name, unsigned offset) {
     if (name == nullptr || name[0] == 0) { return {}; }
-    auto found = m_strings.find(name);
+    std::string key = name;
+    if (offset != 0) { key += ":" + std::to_string(offset); }
+    auto found = m_strings.find(key);
     if (found != m_strings.end()) { return found->second; }
     std::vector<std::uint8_t> bytes;
     const unsigned handle = m_core->GetResValue(name);
-    if (handle == 0 || !m_core->GetResource(handle, bytes)) { return {}; }
+    if (handle == 0 || !m_core->GetResource(handle + offset, bytes)) { return {}; }
     std::string result;
     for (std::uint8_t byte : bytes) {
         if (byte == 0) { break; }
         result.push_back(static_cast<char>(byte));
     }
-    m_strings[name] = result;
+    m_strings[key] = result;
     return result;
 }
 
