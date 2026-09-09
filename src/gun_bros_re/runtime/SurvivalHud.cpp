@@ -62,7 +62,7 @@ bool SurvivalHud::Init(CResTOCManager &toc, PackTables &tables) {
     for (unsigned movie : movies) {
         if (!m_movies.Draw(movie, 600)) { return false; }
     }
-    constexpr unsigned sprites[] = {6, 7, 8, 27, 35, 39, 87};
+    constexpr unsigned sprites[] = {6, 7, 8, 27, 28, 35, 36, 39, 87};
     for (unsigned sprite : sprites) { m_movies.SpriteDuration(1, sprite); }
     for (unsigned font : {0u, 1u, 5u, 6u, 7u}) { m_movies.TextWidth("0123456789", font); }
     // Composite sticks and badges have their own lazy-expanded frame caches.
@@ -1310,18 +1310,30 @@ bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
     const unsigned base = m_movies.Ordinal("GLU_MOVIE_HUD_PAD_IPAD");
     class BaseCallback : public IMovieRegionCallback {
     public:
-        explicit BaseCallback(SurvivalHud &owner) : hud(owner) {}
+        BaseCallback(SurvivalHud &owner, const SurvivalHudState &snapshot) : hud(owner), state(snapshot) {}
         bool DrawMovieRegion(const MovieRegion &region) override {
             if (region.index < 2) { return hud.DrawOriginalMeter(region, region.index); }
             if (region.index == 2 || region.index == 3) {
                 unsigned animation = 27;
-                if (region.index == 3) { animation = 35; }
+                // CInputPad::Base::SetState :87545: selector state 7 keeps
+                // the red button down (28); returning state 8 restores 27.
+                if (state.shopOpen) { animation = 28; }
+                if (region.index == 3) {
+                    animation = 35;
+                    // Base::UpdateInput :88480 uses 36 for a held touch in
+                    // region 3. Actions still fire once on the down edge.
+                    if (hud.m_previousDown && region.Contains(hud.m_mouseX, hud.m_mouseY) &&
+                        !state.shopOpen && !state.paused && !state.dead && !state.cleared) {
+                        animation = 36;
+                    }
+                }
                 return hud.m_movies.DrawSprite(1, animation, hud.m_controlTime, region.x, region.y + region.height, 1, region.alpha);
             }
             return true;
         }
         SurvivalHud &hud;
-    } baseCallback(*this);
+        const SurvivalHudState &state;
+    } baseCallback(*this, state);
     if (!m_movies.Draw(base, 0, 512, 384, 1024, 768, 0, 1, &baseCallback)) { return false; }
     MovieRegion stickBounds;
     if (!m_movies.SpriteBounds(1, 6, stickBounds)) { return false; }
@@ -1414,6 +1426,70 @@ int RunOriginalHudCheck(const std::string &bigDirectory) {
         hud.Pointer(state, x, y, false);
         if (hud.Pointer(state, x, y, true) != button.action) { ++failures; }
         else { ++hits; }
+    }
+    // Exercise the actual input/draw path: both authored pressed sprites must
+    // differ on screen, stay pressed while active, then restore exactly.
+    unsigned pressedChecks = 0;
+    int width = 0, height = 0;
+    window.GetDrawableSize(width, height);
+    std::vector<unsigned char> idlePixels(width * height * 4);
+    std::vector<unsigned char> pressedPixels(idlePixels.size());
+    std::vector<unsigned char> currentPixels(idlePixels.size());
+    for (const auto &button : buttons) {
+        if (button.action != SurvivalHudAction::OpenShop && button.action != SurvivalHudAction::SwapWeapon) { continue; }
+        const float x = button.rect.x + button.rect.width / 2;
+        const float y = button.rect.y + button.rect.height / 2;
+        hud.Pointer(state, x, y, false);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!hud.DrawOriginalControls(state)) { ++failures; }
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, idlePixels.data());
+        if (!window.SaveFrame("out/ui-original-2026-09-09/hud-button-idle-" + std::to_string(pressedChecks) + ".png")) { ++failures; }
+        if (hud.Pointer(state, x, y, true) != button.action) { ++failures; }
+        if (button.action == SurvivalHudAction::OpenShop) { state.shopOpen = true; }
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!hud.DrawOriginalControls(state)) { ++failures; }
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pressedPixels.data());
+        const bool changed = idlePixels != pressedPixels;
+        if (!changed) { ++failures; }
+        if (!window.SaveFrame("out/ui-original-2026-09-09/hud-button-pressed-" + std::to_string(pressedChecks) + ".png")) { ++failures; }
+        if (hud.Pointer(state, x, y, true) != SurvivalHudAction::None) { ++failures; }
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!hud.DrawOriginalControls(state)) { ++failures; }
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+        if (currentPixels != pressedPixels) { ++failures; }
+        if (button.action == SurvivalHudAction::SwapWeapon) {
+            // Moving off restores the artwork; moving back does not fire a
+            // second switch. A paused menu must not leave the HUD held down.
+            if (hud.Pointer(state, -1, -1, true) != SurvivalHudAction::None) { ++failures; }
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (!hud.DrawOriginalControls(state)) { ++failures; }
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+            if (currentPixels != idlePixels) { ++failures; }
+            if (hud.Pointer(state, x, y, true) != SurvivalHudAction::None) { ++failures; }
+            state.paused = true;
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (!hud.DrawOriginalControls(state)) { ++failures; }
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+            if (currentPixels != idlePixels) { ++failures; }
+            state.paused = false;
+        }
+        hud.Pointer(state, x, y, false);
+        if (state.shopOpen) {
+            // The selector remains active after mouse release, matching
+            // CInputPad::Base state 7 rather than a transient hover effect.
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (!hud.DrawOriginalControls(state)) { ++failures; }
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+            if (currentPixels != pressedPixels) { ++failures; }
+        }
+        state.shopOpen = false;
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!hud.DrawOriginalControls(state)) { ++failures; }
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+        if (currentPixels != idlePixels) { ++failures; }
+        std::printf("[hud-button-check] action=%u pressed-pixels-changed=%d restored=%d\n",
+            unsigned(button.action), changed, currentPixels == idlePixels);
+        ++pressedChecks;
     }
     // Perturb the in-memory parsed Movie: hit geometry must follow its bytes.
     const unsigned base = hud.m_movies.Ordinal("GLU_MOVIE_HUD_PAD_IPAD");
