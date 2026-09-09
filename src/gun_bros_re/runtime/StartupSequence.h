@@ -4,6 +4,7 @@
 #ifndef GUN_BROS_RE_STARTUPSEQUENCE_H
 #define GUN_BROS_RE_STARTUPSEQUENCE_H
 #include <string>
-int RunStartupSequence(const std::string &screenshotPath = "", unsigned advanceMs = 0);
+class CWindow;
+int RunStartupSequence(const std::string &screenshotPath = "", unsigned advanceMs = 0, CWindow *sharedWindow = nullptr);
 int RunMediaCheck();
 #endif

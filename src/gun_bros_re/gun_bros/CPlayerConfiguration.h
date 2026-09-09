@@ -10,6 +10,22 @@ struct CPlayerConfiguration {
     std::array<GameObjectRef, 2> guns;
     std::array<GameObjectRef, 4> armor;
 
+    /** IsGunEquipped :170480 searches both slots, independently of active gun. */
+    int IsGunEquipped(const GameObjectRef &object) const {
+        for (unsigned slot = 0; slot < guns.size(); ++slot) {
+            if (guns[slot].packHash == object.packHash && guns[slot].localIndex == object.localIndex) {
+                return static_cast<int>(slot);
+            }
+        }
+        return -1;
+    }
+
+    /** SetGun :171692 does not overwrite a slot with an already equipped gun. */
+    void SetGun(unsigned slot, const GameObjectRef &object) {
+        if (IsGunEquipped(object) >= 0) { return; }
+        guns[slot] = object;
+    }
+
     void SetDefaults(std::uint32_t corePackHash) {
         for (GameObjectRef &gun : guns) {
             gun.packHash = corePackHash;

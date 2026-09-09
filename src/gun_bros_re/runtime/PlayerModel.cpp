@@ -659,7 +659,7 @@ bool GetPlayerMuzzle(PlayerModel &model, int hand, int node, MeshBoneTransform &
     MeshBoneTransform muzzle{};
     // CGun::FireBullet zero-initializes the node and retains that origin when
     // a model has no named muzzle (for example pack5 gun 60).
-    model.weapon->gun.GetAnimation().GetNodeAt(node, muzzle);
+    model.ActiveWeapon().gun.GetAnimation().GetNodeAt(node, muzzle);
     float identity[kMatrix4dElements];
     Matrix4dIdentity(identity);
     float transform[kMatrix4dElements];

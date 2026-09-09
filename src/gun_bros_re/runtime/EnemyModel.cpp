@@ -99,15 +99,15 @@ bool LoadEnemyCatalog(CResTOCManager &toc, PackTables &tables,
     return complete;
 }
 
-bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
-                    bool createBuffers, const CShaderProgram *program,
-                    EnemySpawnMode spawnMode, EnemyModel &out, EnemyModelCache *cache) {
-    out.configs.clear();
+static bool LoadEnemyConfigs(PackTables &tables, const EnemyTemplateData &entry,
+    bool createBuffers, const CShaderProgram *program,
+    std::vector<std::shared_ptr<EnemyModelConfig>> &configs, EnemyModelCache *cache) {
+    configs.clear();
     const std::uint64_t key = (static_cast<std::uint64_t>(entry.packHash) << 32) | entry.ordinal;
     bool cached = false;
     if (cache != nullptr) {
         const auto found = cache->entries.find(key);
-        if (found != cache->entries.end()) { out.configs = found->second; ++cache->hits; cached = true; }
+        if (found != cache->entries.end()) { configs = found->second; ++cache->hits; cached = true; }
         else { ++cache->misses; }
     }
 
@@ -120,13 +120,13 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
                                         config.meshOrdinal, meshPayload)) {
             std::printf("[enemy] %s: mesh %u unreadable\n", entry.owner.c_str(),
                         config.meshOrdinal);
-            out.configs.push_back(std::move(loaded));
+            configs.push_back(std::move(loaded));
             continue;
         }
 
         CArrayInputStream meshStream(meshPayload);
         if (!loaded->mesh.Init(meshStream)) {
-            out.configs.push_back(std::move(loaded));
+            configs.push_back(std::move(loaded));
             continue;
         }
 
@@ -139,7 +139,7 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
                 !loaded->texture.Create(decoded, GL_REPEAT)) {
                 std::printf("[enemy] %s: atlas %u unreadable\n",
                             entry.owner.c_str(), config.imageOrdinal);
-                out.configs.push_back(std::move(loaded));
+                configs.push_back(std::move(loaded));
                 continue;
             }
 
@@ -147,19 +147,35 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
                 !loaded->buffer.SetMesh(loaded->mesh)) {
                 std::printf("[enemy] %s: config %zu has no GL buffer\n",
                             entry.owner.c_str(), i);
-                out.configs.push_back(std::move(loaded));
+                configs.push_back(std::move(loaded));
                 continue;
             }
         }
 
         loaded->valid = true;
-        out.configs.push_back(std::move(loaded));
+        configs.push_back(std::move(loaded));
     }
 
-    if (out.configs.empty()) {
+    if (configs.empty()) {
         return false;
     }
-    if (cache != nullptr && !cached) { cache->entries[key] = out.configs; }
+    if (cache != nullptr && !cached) { cache->entries[key] = configs; }
+
+    return true;
+}
+
+bool PreloadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
+    const CShaderProgram &program, EnemyModelCache &cache) {
+    std::vector<std::shared_ptr<EnemyModelConfig>> configs;
+    if (!LoadEnemyConfigs(tables, entry, true, &program, configs, &cache)) { return false; }
+    for (const auto &config : configs) { if (!config->valid) { return false; } }
+    return true;
+}
+
+bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
+                    bool createBuffers, const CShaderProgram *program,
+                    EnemySpawnMode spawnMode, EnemyModel &out, EnemyModelCache *cache) {
+    if (!LoadEnemyConfigs(tables, entry, createBuffers, program, out.configs, cache)) { return false; }
 
     out.configMeshes.assign(out.configs.size(), nullptr);
     for (std::size_t i = 0; i < out.configs.size(); ++i) {

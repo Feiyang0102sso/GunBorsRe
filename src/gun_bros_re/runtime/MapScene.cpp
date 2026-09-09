@@ -249,6 +249,8 @@ struct PropSprite {
 struct PlacedProp {
     std::shared_ptr<CProp> runtime;
     int objectId = -1;
+    unsigned objectLayer = 0;
+    bool active = true;
     CombatId lastDamager = 0;
     float x;
     float y;
@@ -894,7 +896,9 @@ const PropSlot *RuntimeSlotFor(const PlacedProp &prop, unsigned slot) {
 }
 
 const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
-    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 2); }
+    static const PropSlot inactive;
+    if (!prop.active) { return &inactive; }
+    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 0); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->background;
     }
@@ -905,6 +909,8 @@ const PropSlot *BackgroundSlotFor(const PlacedProp &prop) {
 }
 
 const PropSlot *MainSlotFor(const PlacedProp &prop) {
+    static const PropSlot inactive;
+    if (!prop.active) { return &inactive; }
     if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 1); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->main;
@@ -916,7 +922,9 @@ const PropSlot *MainSlotFor(const PlacedProp &prop) {
 }
 
 const PropSlot *ForegroundSlotFor(const PlacedProp &prop) {
-    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 0); }
+    static const PropSlot inactive;
+    if (!prop.active) { return &inactive; }
+    if (prop.runtime != nullptr) { return RuntimeSlotFor(prop, 2); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return &prop.sprite->foreground;
     }
@@ -1597,6 +1605,7 @@ void AddParticleQuads(const LoadedMap &loaded, CQuadBatch &batch,
 
 /** The original disables both collision shapes in the destroyed state. */
 bool PropHasCollision(const PlacedProp &prop) {
+    if (!prop.active) { return false; }
     if (prop.runtime != nullptr) { return !prop.runtime->IsRemoved(); }
     if (prop.sprite->interactiveKind == InteractivePropKind::None) {
         return true;
@@ -1671,6 +1680,7 @@ void LoadProps(CResTOCManager &tocManager, LoadedMap &loaded, int selectedObject
             prop.y = static_cast<float>(object.y);
             prop.sprite = &found->second;
             prop.objectId = static_cast<int>(i);
+            prop.objectLayer = loaded.map.GetObjectLayer(layerIndex).GetLayerIndex();
             loaded.props.push_back(prop);
             placed++;
         }
@@ -1897,32 +1907,70 @@ public:
     }
 
     void Reset() override {
-        unsigned scripted = 0;
+        for (PlacedProp &prop : m_map.props) { prop.active = false; }
+        BuildCollisionScene(m_map);
+    }
+
+    void StartLayer(int layer) override {
+        // Original OnStart spawns this layer's props. Changing the update
+        // layer does not remove objects already added to CLevel's pools.
+        unsigned spawned = 0;
         for (PlacedProp &prop : m_map.props) {
+            if (prop.objectLayer != static_cast<unsigned>(layer) || prop.active) { continue; }
+            bool manual = false;
+            for (unsigned index = 0; index < m_map.map.GetObjectLayerCount(); ++index) {
+                const auto &objects = m_map.map.GetObjectLayer(index);
+                if (objects.GetLayerIndex() == prop.objectLayer) {
+                    manual = m_level.IsManualSpawnTag(objects.GetObjects()[prop.objectId].spawnTag);
+                    break;
+                }
+            }
+            // CLayerObject::OnStart skips instances whose auto-spawn bit was
+            // cleared by SetSpawnMode. Native SpawnInstance activates them later.
+            if (manual) { continue; }
+            prop.active = true;
+            ++spawned;
             if (prop.runtime == nullptr) { continue; }
-            ++scripted;
             prop.runtime->SetLevelContext(&m_level);
             prop.runtime->Bind(prop.sprite->data, &prop.sprite->durations);
             SyncPlayers(prop);
         }
         BuildCollisionScene(m_map);
-        std::printf("[prop] runtime scripts=%u\n", scripted);
+        std::printf("[prop] start layer=%d spawned=%u\n", layer, spawned);
+    }
+
+    bool Spawn(int layer, int objectId) override {
+        for (PlacedProp &prop : m_map.props) {
+            if (prop.objectLayer != static_cast<unsigned>(layer) || prop.objectId != objectId) { continue; }
+            if (prop.active) { return true; }
+            prop.active = true;
+            if (prop.runtime != nullptr) {
+                prop.runtime->SetLevelContext(&m_level);
+                prop.runtime->Bind(prop.sprite->data, &prop.sprite->durations);
+                SyncPlayers(prop);
+            }
+            BuildCollisionScene(m_map);
+            return true;
+        }
+        return false;
     }
 
     void SendMessage(int objectId, int message) override {
         for (PlacedProp &prop : m_map.props) {
-            if (prop.objectId != objectId || prop.runtime == nullptr) { continue; }
+            if (!prop.active || prop.objectId != objectId || prop.runtime == nullptr) { continue; }
             const unsigned previous = prop.runtime->GetStateId();
             prop.runtime->HandleMessage(message);
             SyncPlayers(prop);
-            std::printf("[prop] id=%d message=%d state=%u->%u\n", objectId, message, previous, prop.runtime->GetStateId());
+            if (previous != prop.runtime->GetStateId()) {
+                std::printf("[prop] id=%d message=%d state=%u->%u\n", objectId, message, previous, prop.runtime->GetStateId());
+            }
             return;
         }
     }
 
     bool GetObjectPosition(int objectId, float &x, float &y) const override {
         for (const PlacedProp &prop : m_map.props) {
-            if (prop.objectId != objectId || (prop.runtime != nullptr && prop.runtime->IsRemoved())) { continue; }
+            if (!prop.active || prop.objectId != objectId || (prop.runtime != nullptr && prop.runtime->IsRemoved())) { continue; }
             x = prop.x; y = prop.y; return true;
         }
         return false;
@@ -1935,8 +1983,11 @@ public:
         m_bodyLayer = bodyLayer;
         m_bulletLayer = bulletLayer;
         for (PlacedProp &prop : m_map.props) {
-            if (prop.runtime == nullptr) { continue; }
-            prop.runtime->Update(deltaMs, PlayerInside(prop));
+            if (!prop.active || prop.runtime == nullptr) { continue; }
+            // CLevel::TransformObjectElapseMS :114280 scales every PROP,
+            // including its timer. Brothers and human bullets are exempt.
+            const int propDeltaMs = std::max(1, int(std::lround(deltaMs * m_level.GetObjectTimeScale())));
+            prop.runtime->Update(propDeltaMs, PlayerInside(prop));
             SyncPlayers(prop);
             for (const PropAction &action : prop.runtime->TakeActions()) { ApplyAction(prop, action); }
             if (prop.runtime->CollisionChanged()) { changed = true; prop.runtime->ClearCollisionChanged(); }
@@ -1948,7 +1999,7 @@ public:
         float radius, const std::vector<CombatId> &skip) override {
         CombatTrace nearest;
         for (const PlacedProp &prop : m_map.props) {
-            if (prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0 || hit.ownerType != 0) { continue; }
+            if (!prop.active || prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0 || hit.ownerType != 0) { continue; }
             const CombatId id = kPropIdBase + prop.objectId;
             if (std::find(skip.begin(), skip.end(), id) != skip.end()) { continue; }
             const auto &shape = prop.runtime->GetCollision(true);
@@ -1967,7 +2018,7 @@ public:
 
     HitResult ApplyHit(CombatId target, const CombatHit &hit) override {
         for (PlacedProp &prop : m_map.props) {
-            if (kPropIdBase + prop.objectId != target || prop.runtime == nullptr || prop.runtime->IsRemoved()) { continue; }
+            if (!prop.active || kPropIdBase + prop.objectId != target || prop.runtime == nullptr || prop.runtime->IsRemoved()) { continue; }
             prop.lastDamager = hit.owner;
             prop.runtime->Damage(hit.damage, hit.flags);
             SyncPlayers(prop);
@@ -1981,7 +2032,7 @@ public:
         // CProp::CanCollide accepts human/AI gun ownership, not enemy shots.
         if (hit.ownerType != 0) { return; }
         for (PlacedProp &prop : m_map.props) {
-            if (prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0) { continue; }
+            if (!prop.active || prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0) { continue; }
             const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
             if (vertices.empty()) { continue; }
             float left = vertices[0].x, right = left, top = vertices[0].y, bottom = top;
@@ -2007,10 +2058,34 @@ public:
 
     unsigned GetHitCount() const { return m_hitCount; }
 
+    unsigned CheckEntryRoutes() {
+        unsigned tested = 0, failures = 0;
+        for (PlacedProp &prop : m_map.props) {
+            if (!prop.active || prop.runtime == nullptr || !prop.runtime->ChecksEntry()) { continue; }
+            const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
+            if (vertices.empty()) { ++failures; continue; }
+            float x = 0, y = 0;
+            for (const auto &point : vertices) { x += point.x; y += point.y; }
+            x = prop.x + x / vertices.size();
+            y = prop.y + y / vertices.size();
+            unsigned routes = 0;
+            for (const auto &point : vertices) {
+                const float dx = prop.x + point.x - x, dy = prop.y + point.y - y;
+                if (m_scene.CanWalkTo(x + dx * 2, y + dy * 2, x, y)) { ++routes; }
+            }
+            std::printf("[map-entry-check] prop=%08x:%u id=%d centre=%.1f,%.1f vertices=%zu routes=%u\n",
+                prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, x, y, vertices.size(), routes);
+            if (routes == 0) { ++failures; }
+            ++tested;
+        }
+        std::printf("[map-entry-check] tested=%u failures=%u\n", tested, failures);
+        return failures;
+    }
+
     unsigned CheckDamageContracts() {
         unsigned tested = 0, failures = 0;
         for (const PlacedProp &prop : m_map.props) {
-            if (prop.runtime == nullptr || prop.runtime->GetHealth() <= 0) { continue; }
+            if (!prop.active || prop.runtime == nullptr || prop.runtime->GetHealth() <= 0) { continue; }
             // Independent instance: checking a barrel must not damage the
             // account or change its real level-script progress.
             CProp probe;
@@ -2030,9 +2105,9 @@ public:
 private:
     static constexpr CombatId kPropIdBase = 1ull << 62;
     void SyncPlayers(PlacedProp &prop) {
-        prop.foreground = prop.runtime->GetPlayer(0);
+        prop.foreground = prop.runtime->GetPlayer(2);
         prop.main = prop.runtime->GetPlayer(1);
-        prop.background = prop.runtime->GetPlayer(2);
+        prop.background = prop.runtime->GetPlayer(0);
     }
 
     bool PlayerInside(const PlacedProp &prop) const {
@@ -2130,6 +2205,20 @@ void BuildCollisionMarkers(const LoadedMap &loaded, CMarkerBatch &markers) {
  * the number the game starts every level with.
  */
 constexpr float kLevelCameraScale = 0.8f;
+
+/** Convert world anchors and native pixel sizes to the HUD's logical canvas. */
+void ProjectEnemyHealthBars(std::vector<CombatScene::HealthBar> &bars,
+    float cameraX, float cameraY, float zoom, int width, int height) {
+    for (auto &bar : bars) {
+        bar.x = (bar.x - cameraX) * zoom * 1024 / width;
+        bar.y = (bar.y - cameraY) * zoom * 768 / height;
+        bar.width *= 1024.0f / width;
+        bar.height *= 768.0f / height;
+        bar.border *= 1024.0f / width;
+        // Centre in screen space, after the world anchor has been projected.
+        bar.x -= bar.width * 0.5f;
+    }
+}
 
 /** "3 player spawns, 41 enemy spawns" -- what the K overlay should show. */
 void ReportSpawns(const LoadedMap &loaded);
@@ -2294,6 +2383,13 @@ bool EquipControlledPlayer(PackTables &tables, LoadedMap &loaded,
         !CreatePlayerBuffers(player, program)) { return false; }
     PosePlayer(player);
     return true;
+}
+
+void AppendSurvivalShortcut(std::vector<KeyCode> &inputs, KeyCode key) {
+    // Desktop binding policy: F/R are not gameplay shortcuts. Pointer Retry
+    // and NextItem actions are dispatched separately and remain available.
+    if (key == KeyCode::F || key == KeyCode::R) { return; }
+    inputs.push_back(key);
 }
 
 bool UpdateControlledPlayer(LoadedMap &loaded, const CWindow &window,
@@ -2984,7 +3080,7 @@ bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &p
 int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy) {
+    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy, CWindow *sharedWindow, bool feedbackStudy) {
     std::string capturePath = screenshotPath;
     unsigned checkFailures = 0;
     CResTOCManager toc;
@@ -3012,8 +3108,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         gameContext->profile.Grant(6, rifle);
         gameContext->profile.configuration.guns[1] = rifle;
     }
-    CWindow window;
-    if (!window.Open("Gun Bros - Survival", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    CWindow ownedWindow;
+    CWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
+    if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     window.SetEscapeCloses(false);
     window.EnableCheats(gameContext != nullptr);
     MovieRenderer loadingMovies;
@@ -3046,7 +3143,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     }
     std::size_t weaponSlot = weaponIndex % weapons.size();
     unsigned equippedWeaponSlot = 0;
-    std::size_t tutorialWeaponPending = weapons.size();
+    std::size_t pendingWeapon = weapons.size();
+    unsigned pendingEquippedSlot = 0, primaryEquippedSlot = 0;
+    bool swapEventAccepted = false;
+    unsigned combatSwapEvents = 0;
     if (gameContext != nullptr) {
         // CBrother::Bind :135820 selects the saved 1001 activeWeaponSlot.
         equippedWeaponSlot = gameContext->profile.activeWeaponSlot;
@@ -3282,6 +3382,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     else if (gameContext != nullptr && gameContext->profile.nativeArchive && !gameContext->tutorial && gameContext->planet < 4) {
         archiveLevel = &gameContext->profile.nativeArchive->survivalLevels[gameContext->planet];
     }
+    session.SetDialogHud(&survivalHud);
     if (!session.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
     const bool horde = archiveMission != nullptr && archiveMission->data.type == 2;
     if (horde && gameContext != nullptr) {
@@ -3302,7 +3403,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     bool savedDeath = false;
     // CMap::SetObjectLayer (:91935) activates one layer. Preview may combine
     // layers, but survival must not inherit deathmatch/campaign obstacles.
-    LoadProps(toc, loaded, session.GetLevel().GetObjectLayer());
+    // Correction: preload all layers, then OnStart activates only authored
+    // layers in script order; previously spawned props survive layer switches.
+    LoadProps(toc, loaded);
     BuildCollisionScene(loaded);
     MapPropWorld props(loaded, scene, session.GetLevel(), effects);
     session.SetProps(&props);
@@ -3310,7 +3413,287 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     session.Restart(startX, startY);
     loading.Finish();
     if (loading.Cancelled()) { return 0; }
+    if (feedbackStudy) {
+        // Real BIG instances and the same clocks as RunSurvival; no source save.
+        vitals.invincible = true;
+        session.SetOriginalHud(&survivalHud);
+        session.Restart(startX, startY);
+        for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
+        survivalHud.OnOriginalWaveClear(session.GetLevel().GetWave(), true, 100, false);
+        const float beforeX = scene.playerX;
+        const float beforeY = scene.playerY;
+        for (unsigned tick = 0; tick < 20; ++tick) { session.Update(16, 1, 0, false); }
+        const float moved = std::hypot(scene.playerX - beforeX, scene.playerY - beforeY);
+        if (moved <= 0) { ++checkFailures; }
+        std::printf("[feedback-check] notice-moving=%.3f interstitial=%d failures=%u\n", moved, survivalHud.HasInterstitial(), checkFailures);
+        // The spire's four phases come from pack7 PROP33's Flow. Compare the
+        // runtime clock against native 58's actual Q8 scale, not guessed seconds.
+        for (PlacedProp &prop : loaded.props) {
+            if (!prop.active || prop.runtime == nullptr || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
+            CProp &spire = *prop.runtime;
+            const bool layersCorrect = spire.GetAnimation(2) == 255 &&
+                BackgroundSlotFor(prop) == RuntimeSlotFor(prop, 0) &&
+                ForegroundSlotFor(prop) == RuntimeSlotFor(prop, 2);
+            if (!layersCorrect) { ++checkFailures; }
+            spire.HandleMessage(0);
+            const unsigned activeState = spire.GetStateId();
+            const int timer = spire.GetTimerMs();
+            const int step = std::max(1, int(std::lround(16 * session.GetLevel().GetObjectTimeScale())));
+            const int expected = (timer + step - 1) / step * 16;
+            int elapsed = 0;
+            while (spire.GetStateId() == activeState && elapsed < expected + 32) { props.Update(16); elapsed += 16; }
+            if (elapsed != expected) { ++checkFailures; }
+            const unsigned cooldownState = spire.GetStateId();
+            const int cooldown = spire.GetTimerMs();
+            int cooled = 0;
+            while (spire.GetStateId() == cooldownState && cooled < cooldown + 32) { props.Update(16); cooled += 16; }
+            if (cooled != (cooldown + 15) / 16 * 16) { ++checkFailures; }
+            std::printf("[feedback-check] spire-layers=%d active=%d expected=%d cooldown=%d expected=%d failures=%u\n",
+                layersCorrect, elapsed, expected, cooled, cooldown, checkFailures);
+        }
+        // Two real attacks in one update, with separate human and AI owners.
+        // Probe pack1's first sixteen authored enemy templates (including
+        // shields and dormant map objects), rather than assuming all accept hits.
+        unsigned simultaneousHits = 0;
+        for (std::size_t index = 0; index < enemies.size(); ++index) {
+            if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal > 15) { continue; }
+            CombatEnemy *actor = scene.Spawn(index, scene.playerX + 250, scene.playerY);
+            if (actor == nullptr) { ++checkFailures; continue; }
+            CEnemy &enemy = actor->model.enemy;
+            for (unsigned tick = 0; tick < 100; ++tick) { enemy.Update(16); }
+            const float health = enemy.combat.health;
+            CombatHit hit;
+            hit.owner = kPlayerCombatId;
+            hit.ownerType = 0;
+            hit.damage = health / 10;
+            hit.part = 0;
+            hit.x = enemy.combat.x;
+            hit.y = enemy.combat.y + 100;
+            hit.projectile = 10001;
+            const HitResult first = scene.ApplyHit(enemy.combat.id, hit);
+            hit.owner = kBrotherCombatId;
+            hit.projectile = 10002;
+            const HitResult second = scene.ApplyHit(enemy.combat.id, hit);
+            for (unsigned tick = 0; tick < 100; ++tick) { enemy.Update(16); }
+            if (first == HitResult::Hit && second == HitResult::Hit) {
+                ++simultaneousHits;
+                if (enemy.combat.hitCount != 2 || std::abs(health - enemy.combat.health - hit.damage * 2) > 0.01f) { ++checkFailures; }
+            }
+            std::printf("[feedback-hit] enemy=%s first=%d second=%d hp=%.2f->%.2f pending=%d hits=%d\n",
+                enemies[index].owner.c_str(), int(first), int(second), health, enemy.combat.health, enemy.combat.collisionPending, enemy.combat.hitCount);
+        }
+        {
+            // Native HandleCollision does not pause a projectile when a state
+            // has no hit handler. A dormant original turret must not swallow a
+            // penetrating round before it reaches the ordinary enemy behind it.
+            WeaponEffects probeEffects(toc, tables, program);
+            CombatScene probe(tables, program, enemies, player, vitals, probeEffects, loaded.playerTemplate->gameScale);
+            probe.Reset();
+            CombatEnemy *front = nullptr, *back = nullptr;
+            for (std::size_t index = 0; index < enemies.size(); ++index) {
+                if (enemies[index].packHash != CStringToKey("pack1")) { continue; }
+                if (enemies[index].ordinal == 6) { front = probe.Spawn(index, 600, 450); }
+                if (enemies[index].ordinal == 0) { back = probe.Spawn(index, 600, 550); }
+            }
+            if (front == nullptr || back == nullptr) { return 1; }
+            for (unsigned tick = 0; tick < 100; ++tick) { back->model.enemy.Update(16); }
+            GameObjectRef round;
+            for (const auto &gun : weapons) {
+                std::vector<std::uint8_t> bytes;
+                const auto &ref = gun.data.GetBulletRef();
+                if (ref.IsNull() || !tables.ReadSectionResource(ref.packHash, GameSection::Bullet, ref.localIndex, bytes)) { continue; }
+                CArrayInputStream input(bytes);
+                CBullet::Template bullet;
+                if (!bullet.Init(input)) { return 1; }
+                if ((bullet.GetFlags() & 0x140) == 0x40) { round = ref; break; }
+            }
+            if (round.IsNull()) { return 1; }
+            if (probeEffects.SpawnProjectile(round, 600, 350, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            float matrix[16];
+            probe.PlayerMatrix(matrix);
+            for (unsigned tick = 0; tick < 90; ++tick) { probeEffects.Update(player, matrix, 0, 16); }
+            const float damage = back->model.enemy.combat.totalDamage;
+            if (damage <= 0) { ++checkFailures; }
+            std::printf("[feedback-piercing] bullet=%08x:%u front-pending=%d back-damage=%.2f failures=%u\n",
+                round.packHash, round.localIndex, front->model.enemy.combat.collisionPending, damage, checkFailures);
+        }
+        // Regression: the native bar size reads LEVEL variable 4, not the
+        // revolution index. Exercise actual BIG enemies and the production draw data.
+        {
+            CLevel &level = session.GetLevel();
+            const int savedWave = level.GetWave();
+            const auto savedFlag = *level.VariableResolver(4);
+            *level.VariableResolver(4) = 0;
+            level.SetWave(0);
+            const auto firstBars = scene.EnemyHealthBars();
+            const auto screenBars = scene.EnemyHealthBars(1600.0f / 480);
+            if (screenBars.empty() || screenBars[0].width != 100 || screenBars[0].height != 13) { ++checkFailures; }
+            level.SetWave(level.GetWavesPerRevolution());
+            const auto laterBars = scene.EnemyHealthBars();
+            *level.VariableResolver(4) = 1;
+            const auto flaggedBars = scene.EnemyHealthBars();
+            if (firstBars.empty() || laterBars.empty() || flaggedBars.empty()) { ++checkFailures; }
+            else {
+                if (firstBars[0].width != laterBars[0].width || flaggedBars[0].width != firstBars[0].width * 2) { ++checkFailures; }
+                std::printf("[audio-health-check] bar first=%.1f later=%.1f flag=%.1f failures=%u\n",
+                    firstBars[0].width, laterBars[0].width, flaggedBars[0].width, checkFailures);
+            }
+            level.SetWave(savedWave);
+            *level.VariableResolver(4) = savedFlag;
+        }
+        // A single-part original enemy supplies an independent GetBounds
+        // centre. Check the final screen rectangle, not just its dimensions.
+        {
+            WeaponEffects anchorEffects(toc, tables, program);
+            CombatScene anchorScene(tables, program, enemies, player, vitals, anchorEffects, loaded.playerTemplate->gameScale);
+            CombatEnemy *target = nullptr;
+            for (std::size_t index = 0; index < enemies.size(); ++index) {
+                if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 0) {
+                    target = anchorScene.Spawn(index, 640, 480);
+                    break;
+                }
+            }
+            if (target == nullptr || target->model.enemy.GetPartCount() != 1) { ++checkFailures; }
+            else {
+                const auto *mesh = target->model.enemy.GetPart(0).controller.GetAnimation().GetMesh();
+                if (mesh == nullptr) { ++checkFailures; }
+                else {
+                    const float centre = target->model.enemy.combat.x + int(mesh->GetBounds().centerX);
+                    float maxError = 0;
+                    unsigned cases = 0;
+                    for (int screenWidth : {1024, 1600, 1920}) {
+                        const int screenHeight = screenWidth * 3 / 4;
+                        for (float zoom : {0.5f, 1.0f, 2.6f}) {
+                            auto bars = anchorScene.EnemyHealthBars(std::min(screenWidth / 480.0f, screenHeight / 320.0f));
+                            ProjectEnemyHealthBars(bars, 100, 200, zoom, screenWidth, screenHeight);
+                            if (bars.size() != 1) { ++checkFailures; continue; }
+                            const float actual = (bars[0].x + bars[0].width * 0.5f) * screenWidth / 1024;
+                            const float expected = (centre - 100) * zoom;
+                            maxError = std::max(maxError, std::abs(actual - expected));
+                            ++cases;
+                        }
+                    }
+                    if (maxError > 0.01f || cases != 9) { ++checkFailures; }
+                    std::printf("[healthbar-alignment-check] cases=%u max-centre-error-px=%.3f failures=%u\n", cases, maxError, checkFailures);
+                }
+            }
+        }
+        // Reproduce a group death through the original enemy export and the
+        // same CombatScene/WeaponEffects path used by ordinary combat.
+        CAudioPlayer backendAudio;
+        std::vector<std::uint64_t> deathWavs;
+        for (unsigned kinds = 1; kinds <= 2; ++kinds) {
+            std::vector<GameObjectRef> batchDeathSounds;
+            WeaponEffects deathEffects(toc, tables, program);
+            CombatScene deathScene(tables, program, enemies, player, vitals, deathEffects, loaded.playerTemplate->gameScale);
+            deathScene.Reset();
+            for (std::size_t index = 0; index < enemies.size(); ++index) {
+                if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal >= kinds) { continue; }
+                for (unsigned count = 0; count < 12; ++count) {
+                    CombatEnemy *actor = deathScene.Spawn(index, 800, 500);
+                    if (actor == nullptr) { ++checkFailures; continue; }
+                    actor->model.enemy.Damage(actor->model.enemy.combat.health);
+                    if (count == 0) {
+                        const auto moveIndex = actor->model.enemy.GetPart(0).controller.GetMoveIndex();
+                        if (moveIndex >= 0) {
+                            for (const auto &sound : enemies[index].moveSet.GetMoves()[moveIndex].sounds) {
+                                std::vector<std::uint8_t> bytes;
+                                const auto pack = enemies[index].moveSet.GetPackHash();
+                                const auto key = (std::uint64_t(pack) << 32) | sound.soundId;
+                                if (!tables.ReadSectionResource(pack, GameSection::Wav, sound.soundId, bytes) || !backendAudio.Load(key, bytes)) { ++checkFailures; continue; }
+                                if (std::find(deathWavs.begin(), deathWavs.end(), key) == deathWavs.end()) { deathWavs.push_back(key); }
+                                GameObjectRef deathSound;
+                                deathSound.packHash = pack;
+                                deathSound.localIndex = sound.soundId;
+                                batchDeathSounds.push_back(deathSound);
+                                std::printf("[audio-health-check] death-move-wav=%08x:%u enemy=%s\n", pack, sound.soundId, enemies[index].owner.c_str());
+                            }
+                        }
+                    }
+                    if (kinds == 2 && count == 0) {
+                        // Inspect, but do not consume, the original death export.
+                        for (const auto &action : actor->model.enemy.combat.actions) {
+                            if (action.kind != EnemyAction::Kind::Sound) { continue; }
+                            std::vector<std::uint8_t> bytes;
+                            if (!tables.ReadSectionResource(action.resource.packHash, GameSection::SoundEffect, action.resource.localIndex, bytes)) { ++checkFailures; continue; }
+                            CArrayInputStream input(bytes);
+                            CGameAssetRef wav;
+                            wav.Init(input);
+                            if (input.Overran() || wav.assetId < 0 || !tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, bytes)) { ++checkFailures; continue; }
+                            const auto key = (std::uint64_t(wav.packHash) << 32) | wav.assetId;
+                            if (!backendAudio.Load(key, bytes)) { ++checkFailures; continue; }
+                            deathWavs.push_back(key);
+                            std::printf("[audio-health-check] death-wav=%08x:%d enemy=%s\n", wav.packHash, wav.assetId, enemies[index].owner.c_str());
+                        }
+                    }
+                }
+            }
+            deathScene.Update(16, 0, 0, false);
+            const auto sounds = deathEffects.GetSoundCueCount();
+            if (sounds != kinds) { ++checkFailures; }
+            std::printf("[audio-health-check] group-death kinds=%u actors=%u sounds=%zu expected=%u failures=%u\n",
+                kinds, kinds * 12, sounds, kinds, checkFailures);
+            // Repeat the actual authored sound across a production tick
+            // boundary. Do not assume a random death move always cues at t=0.
+            deathScene.Update(16, 0, 0, false);
+            for (const auto &sound : batchDeathSounds) { deathEffects.PlayMoveSound(sound); }
+            if (deathEffects.GetSoundCueCount() != sounds + kinds) { ++checkFailures; }
+            std::printf("[audio-health-check] next-tick kinds=%u new-sounds=%zu failures=%u\n", kinds, deathEffects.GetSoundCueCount() - sounds, checkFailures);
+        }
+        if (deathWavs.size() != 2 || deathWavs[0] == deathWavs[1]) { ++checkFailures; }
+        else { checkFailures += backendAudio.CheckSilentPlayback(deathWavs[0], deathWavs[1]); }
+        if (simultaneousHits == 0) { ++checkFailures; }
+        std::printf("[feedback-hit] simultaneous-templates=%u failures=%u\n", simultaneousHits, checkFailures);
+        std::printf("[feedback-check] failures=%u\n", checkFailures);
+        // Capture through the production map/HUD draw, centred on the spire.
+        session.Restart(startX, startY);
+        for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
+        for (const PlacedProp &prop : loaded.props) {
+            if (!prop.active || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
+            scene.playerX = prop.x + 150;
+            scene.playerY = prop.y - 30;
+            for (std::size_t index = 0; index < enemies.size(); ++index) {
+                // ENEMY20's actual states 4/6 show/hide the bar. ENEMY3's
+                // actual spawn export hides it. Do not write variable 15 here.
+                if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 3) {
+                    const auto before = scene.EnemyHealthBars().size();
+                    CombatEnemy *hidden = scene.Spawn(index, prop.x + 270, prop.y - 80);
+                    if (hidden == nullptr || hidden->model.enemy.combat.variables[15] != 0 || scene.EnemyHealthBars().size() != before) { ++checkFailures; }
+                    std::printf("[audio-health-check] authored-hidden enemy=pack1:3 failures=%u\n", checkFailures);
+                }
+                if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 20) {
+                    CombatEnemy *target = scene.Spawn(index, prop.x + 270, prop.y + 80);
+                    if (target != nullptr) {
+                        const auto before = scene.EnemyHealthBars().size();
+                        if (target->model.enemy.combat.variables[15] != 0) { ++checkFailures; }
+                        target->model.enemy.SetState(4);
+                        if (target->model.enemy.combat.variables[15] != 1 || scene.EnemyHealthBars().size() != before + 1) { ++checkFailures; }
+                        target->model.enemy.SetState(6);
+                        if (target->model.enemy.combat.variables[15] != 0 || scene.EnemyHealthBars().size() != before) { ++checkFailures; }
+                        target->model.enemy.SetState(4);
+                        std::printf("[audio-health-check] authored-toggle enemy=pack1:20 states=4/6 failures=%u\n", checkFailures);
+                    }
+                }
+            }
+            break;
+        }
+        capturePath = "out/healthbar-alignment.png";
+        for (unsigned tick = 0; tick < 30; ++tick) { session.Update(16, 0, 0, false); }
+    }
     if (check) { checkFailures += session.CheckLevelSounds(); }
+    if (check) { checkFailures += props.CheckEntryRoutes(); }
+    if (check) { checkFailures += session.CheckTriggerRoutes(startX, startY); }
+    if (check) {
+        // Inspect the actual placed resources, after LEVEL messages and Bind.
+        for (const PlacedProp &prop : loaded.props) {
+            if (!prop.active || prop.runtime == nullptr) { continue; }
+            std::printf("[map-interaction] prop=%08x:%u id=%d pos=%.1f,%.1f state=%u removed=%d health=%.1f animations=%d,%d,%d body=%zu bullet=%zu\n",
+                prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, prop.x, prop.y,
+                prop.runtime->GetStateId(), prop.runtime->IsRemoved(), prop.runtime->GetHealth(),
+                prop.runtime->GetAnimation(0), prop.runtime->GetAnimation(1), prop.runtime->GetAnimation(2),
+                prop.runtime->GetCollision().GetEdges().size(), prop.runtime->GetCollision(true).GetEdges().size());
+        }
+    }
     if (check && withBrother) {
         const float distance = std::hypot(scene.playerX - brother.x, scene.playerY - brother.y);
         const bool separated = distance >= scene.GetPlayerRadius() * 2;
@@ -4071,10 +4454,17 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     const std::uint64_t controlsInitialBucks = pickupProfile->warbucks;
     const bool controlsInitialSound = pickupProfile->soundEnabled;
     const unsigned controlsInitialGrenades = pickupProfile->GetPowerupCount(rightPowerup);
+    const GameObjectRef controlsInitialLeft = leftPowerup;
     // Run the real HUD hit tests and the same host action path. No OS input.
     constexpr float controlClicks[][2] = {{300,720}, {250,328}, {700,524}, {250,230},
         {320,524}, {510,385}, {710,720}, {20,20}, {200,530}, {200,350}};
     constexpr unsigned controlClickCount = sizeof(controlClicks) / sizeof(controlClicks[0]);
+    // Test through the production key dispatcher after the mouse regression.
+    const KeyCode controlKeys[] = {KeyCode::Digit1, KeyCode::Escape, KeyCode::Digit2,
+        KeyCode::Q, KeyCode::None, KeyCode::E, KeyCode::F, KeyCode::R};
+    const unsigned controlKeyCount = sizeof(controlKeys) / sizeof(controlKeys[0]);
+    unsigned controlsBeforeKeys = 0;
+    unsigned controlsLeftBeforeKeys = 0;
     // Presentation reads a snapshot; its actions re-enter the same keyboard path.
     const auto buildHudState = [&]() {
         SurvivalHudState state;
@@ -4097,6 +4487,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         state.kills = scene.GetTotalKills();
         state.enemies = session.CountEnemies();
         state.weaponSlot = equippedWeaponSlot;
+        state.swapKeyDown = window.IsKeyDown(KeyCode::Digit2) || window.IsKeyDown(KeyCode::N) || window.IsKeyDown(KeyCode::M);
         state.weapon = weapons[weaponSlot].name;
         if (gameContext != nullptr) {
             state.guns[0] = gameContext->profile.configuration.guns[0];
@@ -4118,6 +4509,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         state.soundEnabled = pickupProfile->soundEnabled;
         state.musicEnabled = pickupProfile->musicEnabled;
         state.originalUi = gameContext != nullptr && pickupProfile->nativeArchive.has_value();
+        if (performanceStudy) { state.originalUi = true; }
         state.dockedSticks = pickupProfile->options.DockedSticks();
         state.powerupStatus.healthPercent = static_cast<int>(std::lround(vitals.health * 100 / vitals.maximum));
         state.powerupStatus.shield = player.weapon->brother.IsShield();
@@ -4155,7 +4547,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     Camera camera;
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    std::printf("[survival] WASD move, mouse aim/fire, R restart, space pause, 1-7/N/M weapon, C collision\n");
+    std::printf("[survival] WASD move, mouse aim/fire, Q/E powerups, 1 shop, 2 swap weapon, Esc/space pause\n");
     auto debugTicks = window.GetTicksMs();
     float debugFrameMs = 16.7f;
     // Deterministic 1,200 rendered frames, with real waves, AI and projectiles.
@@ -4265,10 +4657,29 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (action == SurvivalHudAction::NextItem) { pointerKey = KeyCode::F; }
         if (action == SurvivalHudAction::Weapon1) { pointerKey = KeyCode::Digit1; }
         if (action == SurvivalHudAction::Weapon2) { pointerKey = KeyCode::Digit2; }
-        if (action == SurvivalHudAction::SwapWeapon) { pointerKey = KeyCode::Q; }
+        if (action == SurvivalHudAction::SwapWeapon) { pointerKey = KeyCode::Digit2; }
         std::vector<KeyCode> inputs;
         if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) { inputs.push_back(key); }
+        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) { AppendSurvivalShortcut(inputs, key); }
+        const int controlsWaveBeforeInput = session.GetLevel().GetWave();
+        if (checkControls && controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
+            const unsigned step = controlFrame - controlClickCount;
+            if (step == 0 || step == 4) {
+                vitals.invincible = true;
+                // Wait through real intro/cooldown updates; do not bypass Use().
+                for (unsigned tick = 0; tick < 250; ++tick) { session.Update(16, 0, 0, false); }
+            }
+            if (step == 0) {
+                // Distinct slots catch accidental Q -> right-item routing.
+                leftPowerup = controlsInitialLeft;
+                // The isolated legacy test account starts without this item.
+                pickupProfile->AddPowerup(leftPowerup, 1);
+                controlsLeftBeforeKeys = pickupProfile->GetPowerupCount(leftPowerup);
+                controlsBeforeKeys = pickupProfile->GetPowerupCount(rightPowerup);
+                vitals.health = 1;
+            }
+            AppendSurvivalShortcut(inputs, controlKeys[step]);
+        }
         for (KeyCode key : inputs) {
             if (shopOpen) {
                 if (key == KeyCode::Space || key == KeyCode::Escape) {
@@ -4279,12 +4690,22 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 continue;
             }
             if (key == KeyCode::Space || key == KeyCode::Escape) {
-                if (!session.GetDialogText().empty()) { session.CompleteDialog(); }
-                else if (!paused || !survivalHud.BackFromHelp()) { paused = !paused; }
+                if (!paused || !survivalHud.BackFromHelp()) { paused = !paused; }
             }
             if (key == KeyCode::C) { showCollisions = !showCollisions; }
-            if (key == KeyCode::G && !paused && !session.IsTransitioning()) {
-                if (powerups.SelectResource(rightPowerup)) { powerups.Use(); }
+            if ((key == KeyCode::Q || key == KeyCode::E || key == KeyCode::G) &&
+                !paused && !vitals.dead && !session.IsTransitioning()) {
+                GameObjectRef item = rightPowerup;
+                if (key == KeyCode::Q) { item = leftPowerup; }
+                if (powerups.SelectResource(item)) { powerups.Use(); }
+                continue;
+            }
+            if (key == KeyCode::Digit1 && gameContext != nullptr && !paused && !vitals.dead && !session.IsTransitioning()) {
+                shopOpen = true;
+                itemChoice = false;
+                shopMessage.clear();
+                accumulator = 0;
+                continue;
             }
             if (key == KeyCode::F) {
                 powerups.SelectResource(rightPowerup);
@@ -4292,6 +4713,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 if (powerups.GetSelected() != nullptr) { rightPowerup = powerups.GetSelected()->resource; }
             }
             if (key == KeyCode::R) {
+                pendingWeapon = weapons.size();
+                swapEventAccepted = false;
                 if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
                 session.Restart(startX, startY);
                 if (gameContext != nullptr) { gameContext->accountedKills = 0; gameContext->accountedWeaponExperience.clear(); }
@@ -4304,30 +4727,41 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             std::size_t nextWeapon = weaponSlot;
             if (gameContext == nullptr) {
                 KeyCode weaponKey = key;
-                if (key == KeyCode::Q) { weaponKey = KeyCode::N; }
                 nextWeapon = SelectWeaponKey(weapons, weaponSlot, weaponKey);
             }
-            else if (key == KeyCode::Digit1 || key == KeyCode::Digit2 || key == KeyCode::N || key == KeyCode::M || key == KeyCode::Q) {
-                equippedWeaponSlot = 1 - equippedWeaponSlot;
-                if (key == KeyCode::Digit1) { equippedWeaponSlot = 0; }
-                if (key == KeyCode::Digit2) { equippedWeaponSlot = 1; }
-                const GameObjectRef &ref = gameContext->profile.configuration.guns[equippedWeaponSlot];
+            else if (!paused && !vitals.dead && pendingWeapon >= weapons.size() &&
+                (key == KeyCode::Digit2 || key == KeyCode::N || key == KeyCode::M)) {
+                pendingEquippedSlot = 1 - equippedWeaponSlot;
+                const GameObjectRef &ref = gameContext->profile.configuration.guns[pendingEquippedSlot];
                 for (std::size_t index = 0; index < weapons.size(); ++index) {
                     if (weapons[index].packHash == ref.packHash && weapons[index].ordinal == ref.localIndex) { nextWeapon = index; break; }
                 }
             }
             if (nextWeapon != weaponSlot && !vitals.dead) {
-                if (tutorial && session.GetLevel().GetTutorialStep() == 2) {
-                    tutorialWeaponPending = nextWeapon;
+                if (gameContext != nullptr) {
+                    // Load both authored guns before starting the lowering move.
+                    // Keep the brother, torso controller, health and effects alive.
+                    if (player.uiOtherWeapon == nullptr) {
+                        primaryEquippedSlot = equippedWeaponSlot;
+                        if (!PreparePlayerUIWeapon(tables, weapons[nextWeapon].data, weapons[nextWeapon].owner, player) ||
+                            !CreatePlayerBuffers(player, program)) { return 1; }
+                    }
+                    pendingWeapon = nextWeapon;
+                    swapEventAccepted = false;
+                    if (checkControls) {
+                        std::printf("[combat-swap-check] queued old=%zu requested=%zu unchanged=1\n", weaponSlot, pendingWeapon);
+                    }
                     continue;
                 }
                 if (!EquipControlledPlayer(tables, loaded, program, weapons[nextWeapon])) { return 1; }
-                // In-flight bullets and timed powerup effects belong to the
-                // actor world. Only the old gun's beam/loop sound ends here.
                 effects.RetireOwner(kPlayerCombatId);
                 weaponSlot = nextWeapon;
             }
             if (gameContext != nullptr && !vitals.dead) { gameContext->profile.activeWeaponSlot = equippedWeaponSlot; }
+        }
+        if (checkControls && (controlFrame == controlClickCount + 3 || controlFrame == controlClickCount + 5)) {
+            // Throwing consumes inventory at the authored animation event.
+            for (unsigned tick = 0; tick < 60; ++tick) { session.Update(16, 0, 0, false); }
         }
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
@@ -4355,32 +4789,55 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             accumulator = 16;
             performancePilot->Update(16, moveX, moveY);
         }
+        if (checkControls && !paused && !shopOpen) { accumulator = 960; }
         effects.SetPaused(paused || shopOpen);
         music.SetPaused(paused || shopOpen);
         music.Update();
+        const std::size_t shotsBeforeSwap = effects.GetShotCount();
+        const bool checkSwapFiring = checkControls && (controlFrame == 6 || controlFrame == controlClickCount + 2);
         while (accumulator >= 16) {
             if (!session.HasOriginalHud()) { survivalHud.Advance(16); }
-            if (tutorialWeaponPending < weapons.size()) {
+            if (pendingWeapon < weapons.size() && !swapEventAccepted) {
                 SetPlayerInput(player, false, false);
-                player.weapon->brother.OnSwapGun();
+                swapEventAccepted = player.weapon->brother.OnSwapGun();
             }
             if (!vitals.dead) {
-                const bool shoot = tutorialWeaponPending >= weapons.size() &&
-                    (performanceStudy || firePreview || (window.IsLeftMouseDown() && !hudOwnsPointer));
+                const bool shoot = pendingWeapon >= weapons.size() &&
+                    (performanceStudy || firePreview || checkSwapFiring || (window.IsLeftMouseDown() && !hudOwnsPointer));
                 session.Update(16, moveX, moveY, shoot);
             }
             else {
                 // CLevel::UpdateAfterDeath keeps an already-used powerup alive.
                 session.UpdateAfterDeath(16);
             }
-            if (tutorialWeaponPending < weapons.size() && player.weapon->brother.TakeWeaponSwap()) {
-                if (!EquipControlledPlayer(tables, loaded, program, weapons[tutorialWeaponPending])) { return 1; }
-                weaponSlot = tutorialWeaponPending;
-                tutorialWeaponPending = weapons.size();
+            if (pendingWeapon < weapons.size() && player.weapon->brother.TakeWeaponSwap()) {
+                effects.RetireOwner(kPlayerCombatId);
+                const auto &torso = player.weapon->brother.GetTorso().GetAnimation();
+                const CMesh *outgoingMesh = torso.GetMesh();
+                const int outgoingTime = torso.GetTimeMs();
+                SelectPlayerUIWeapon(player, pendingEquippedSlot == primaryEquippedSlot);
+                if (checkControls && (torso.GetMesh() != outgoingMesh || torso.GetTimeMs() != outgoingTime)) { ++checkFailures; }
+                weaponSlot = pendingWeapon;
+                equippedWeaponSlot = pendingEquippedSlot;
+                player.gunResource.packHash = weapons[weaponSlot].packHash;
+                player.gunResource.localIndex = static_cast<std::uint8_t>(weapons[weaponSlot].ordinal);
+                player.masteryExperience = gameContext->profile.GetWeaponExperience(player.gunResource);
+                player.ActiveWeapon().gun.SetMasteryExperience(player.masteryExperience);
+                gameContext->profile.activeWeaponSlot = equippedWeaponSlot;
+                pendingWeapon = weapons.size();
+                ++combatSwapEvents;
+                if (checkControls) {
+                    std::printf("[combat-swap-check] native-event=%u slot=%u torso-preserved=1\n", combatSwapEvents, equippedWeaponSlot);
+                }
             }
             AdvanceProps(loaded.props, 16);
             AdvanceTileLayers(loaded.map, 16);
             accumulator -= 16;
+        }
+        if (checkSwapFiring) {
+            const std::size_t shots = effects.GetShotCount() - shotsBeforeSwap;
+            if (shots == 0) { ++checkFailures; }
+            std::printf("[combat-swap-check] fire-after-switch=%zu failures=%u\n", shots, checkFailures);
         }
         if (session.GetLevel().GetWave() != lastSavedWave || (vitals.dead && !savedDeath) ||
             session.GetLevel().GetTutorialStep() != lastSavedTutorialStep) {
@@ -4440,6 +4897,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         const auto performanceWorld = std::chrono::steady_clock::now();
         SurvivalHudState hudState = buildHudState();
+        // CCamera constructor :64622: viewport factor is independent of zoom.
+        const float healthBarViewportScale = std::min(width / 480.0f, height / 320.0f);
+        hudState.enemyHealthBars = scene.EnemyHealthBars(healthBarViewportScale);
+        ProjectEnemyHealthBars(hudState.enemyHealthBars, camera.x, camera.y, camera.zoom, width, height);
         hudState.indicators = session.GetLevel().GetIndicators();
         for (CLevelIndicator &indicator : hudState.indicators) {
             indicator.x = (indicator.x - camera.x) * camera.zoom * 1024 / width;
@@ -4470,16 +4931,36 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (checkControls && controlFrame < controlClickCount) {
             if (controlFrame == 1 && !window.SaveFrame("out/combat-controls-shop.png")) { return 1; }
             if (controlFrame == 7 && !window.SaveFrame("out/combat-controls-pause.png")) { return 1; }
+            if (controlFrame + 1 == controlClickCount) {
+                const bool purchased = pickupProfile->warbucks == controlsInitialBucks - 4 &&
+                    pickupProfile->GetPowerupCount(rightPowerup) == controlsInitialGrenades + 10;
+                const bool equipped = leftPowerup.packHash == rightPowerup.packHash && leftPowerup.localIndex == 13 && rightPowerup.localIndex == 13;
+                const bool controlsPassed = purchased && equipped && equippedWeaponSlot == 1 &&
+                    pickupProfile->soundEnabled != controlsInitialSound && !paused && !shopOpen;
+                std::printf("[combat-controls-check] purchase=%d equip-both=%d weapon=%u sound=%d resume=%d failures=%d\n",
+                    purchased, equipped, equippedWeaponSlot, pickupProfile->soundEnabled != controlsInitialSound, !paused && !shopOpen, !controlsPassed);
+                if (!controlsPassed) { ++checkFailures; }
+            }
+        }
+        if (checkControls && controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
+            const unsigned step = controlFrame - controlClickCount;
+            bool passed = true;
+            if (step == 0) { passed = shopOpen; }
+            if (step == 1) { passed = !shopOpen && !paused; }
+            if (step == 2) { passed = equippedWeaponSlot == 0 && combatSwapEvents == 2; }
+            if (step == 3) { passed = equippedWeaponSlot == 0 && controlsLeftBeforeKeys > 0 &&
+                pickupProfile->GetPowerupCount(leftPowerup) == controlsLeftBeforeKeys - 1 &&
+                pickupProfile->GetPowerupCount(rightPowerup) == controlsBeforeKeys; }
+            if (step == 5) { passed = equippedWeaponSlot == 0 && pickupProfile->GetPowerupCount(rightPowerup) == controlsBeforeKeys - 1; }
+            if (step == 6 || step == 7) { passed = inputs.empty() && equippedWeaponSlot == 0 &&
+                session.GetLevel().GetWave() == controlsWaveBeforeInput && rightPowerup.localIndex == 13; }
+            std::printf("[shortcut-check] step=%u key=%d passed=%d inventory=%u\n", step,
+                static_cast<int>(controlKeys[step]), passed, pickupProfile->GetPowerupCount(rightPowerup));
+            if (!passed) { ++checkFailures; }
+        }
+        if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
             ++controlFrame;
-            if (controlFrame < controlClickCount) { window.Present(); continue; }
-            const bool purchased = pickupProfile->warbucks == controlsInitialBucks - 4 &&
-                pickupProfile->GetPowerupCount(rightPowerup) == controlsInitialGrenades + 10;
-            const bool equipped = leftPowerup.packHash == rightPowerup.packHash && leftPowerup.localIndex == 13 && rightPowerup.localIndex == 13;
-            const bool controlsPassed = purchased && equipped && equippedWeaponSlot == 1 &&
-                pickupProfile->soundEnabled != controlsInitialSound && !paused && !shopOpen;
-            std::printf("[combat-controls-check] purchase=%d equip-both=%d weapon=%u sound=%d resume=%d failures=%d\n",
-                purchased, equipped, equippedWeaponSlot, pickupProfile->soundEnabled != controlsInitialSound, !paused && !shopOpen, !controlsPassed);
-            if (!controlsPassed) { ++checkFailures; }
+            if (controlFrame < controlClickCount + controlKeyCount) { window.Present(); continue; }
         }
         if (!capturePath.empty()) {
             if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium, check && horde)) { return 1; }

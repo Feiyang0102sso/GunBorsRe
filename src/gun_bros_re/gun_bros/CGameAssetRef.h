@@ -18,6 +18,7 @@
 #include "engine/CArrayInputStream.h"
 
 #include <cstdint>
+#include <vector>
 
 // A null reference: no pack, nothing to resolve.
 constexpr std::uint32_t kNullPackHash = 0;
@@ -70,6 +71,9 @@ struct GameObjectRef {
  *           entries: uint32 packHash, uint8 localIndex
  */
 struct RequirementList {
+    struct Entry { std::uint8_t objectType; GameObjectRef object; };
+    // Preserve authored dependencies for the loading phase (:191802).
+    std::vector<Entry> objects;
     std::uint32_t groupCount;
     std::uint32_t entryCount;
 

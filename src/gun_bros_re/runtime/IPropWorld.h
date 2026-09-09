@@ -8,6 +8,8 @@ class IPropWorld {
 public:
     virtual ~IPropWorld() = default;
     virtual void Reset() = 0;
+    virtual void StartLayer(int layer) {}
+    virtual bool Spawn(int layer, int objectId) { return false; }
     virtual void Update(int deltaMs) = 0;
     virtual void SendMessage(int objectId, int message) = 0;
     virtual bool GetObjectPosition(int objectId, float &x, float &y) const { return false; }

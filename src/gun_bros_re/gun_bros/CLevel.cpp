@@ -83,6 +83,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     for (bool &manual : m_manualSpawnTags) { manual = false; }
     m_pathLayer = -1;
     m_triggerLayer = -1;
+    m_triggerCount = 0;
     m_dialogResource = -1;
     m_dialogCloseRequested = false;
     m_nextLevel = {};
@@ -143,6 +144,8 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
     case 3:
         if (m_objectLayer != first) { m_spawnedObjects.clear(); }
         m_objectLayer = first;
+        // SetObjectLayer :91935 calls CLayerObject::OnStart :126249 immediately.
+        if (m_world != nullptr) { m_world->StartObjectLayer(first); }
         return 0;
     case 4: m_pathLayer = first; return 0;
     case 7: m_triggerLayer = first; return 0;
@@ -209,6 +212,7 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
     case 35: m_timerMs = first; m_timerFunction = second; return 0;
     case 40:
         m_dialogResource = first;
+        m_dialogArrow = static_cast<unsigned>(second);
         m_dialogCloseRequested = false;
         m_dialogAutoClose = argumentCount >= 3 && arguments[2] != 0;
         ++m_dialogSerial;
@@ -354,6 +358,7 @@ void CLevel::Update(int deltaMs) {
 bool CLevel::OnTrigger(int group) {
     if (m_cleared || group < 0 || group >= 32 || !m_triggerEnabled[group] || m_triggerPauseMs[group] > 0) { return false; }
     // OnTrigger :116252; Init :120973 enables exactly 32 groups.
+    ++m_triggerCount;
     m_interpreter.CallExportFunction(6, static_cast<std::int16_t>(group));
     std::printf("[level] trigger group=%d\n", group);
     return true;

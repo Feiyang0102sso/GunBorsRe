@@ -4,12 +4,14 @@
 #ifndef GUN_BROS_RE_SURVIVALHUD_H
 #define GUN_BROS_RE_SURVIVALHUD_H
 #include "runtime/MovieRenderer.h"
+#include "runtime/OriginalDialogPopup.h"
 #include "gun_bros/CInputPadMeter.h"
 #include "gun_bros/CMenuPopupPrompt.h"
 #include "runtime/StoreCatalog.h"
 #include "gun_bros/CLevelIndicator.h"
 #include "gun_bros/CProfileManager.h"
 #include "runtime/PowerupCatalog.h"
+#include "runtime/CombatScene.h"
 
 enum class SurvivalHudAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
     SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks };
@@ -28,6 +30,7 @@ struct SurvivalHudState {
     bool paused = false, dead = false, cleared = false, transitioning = false, withBrother = false;
     bool shopOpen = false, itemChoice = false, soundEnabled = true, musicEnabled = true;
     bool originalUi = false, dockedSticks = true;
+    bool swapKeyDown = false;
     PowerupStatus powerupStatus;
     std::uint64_t coins = 0, warbucks = 0;
     float moveX = 0, moveY = 0, aimX = 0, aimY = 0;
@@ -41,11 +44,16 @@ struct SurvivalHudState {
     float brotherLabelX = 0, brotherLabelY = 0, brotherLabelAlpha = 0;
     GameObjectRef guns[2], powerup;
     std::vector<CLevelIndicator> indicators;
+    std::vector<CombatScene::HealthBar> enemyHealthBars;
 };
 
 /** The same rectangles drive drawing and pointer input; no gameplay is owned here. */
 class SurvivalHud {
 public:
+    bool ShowDialog(const std::string &text, bool automatic, unsigned arrow) { return m_dialog.Show(m_movies, text, automatic, arrow); }
+    void UpdateDialog(unsigned deltaMs) { m_dialog.Update(deltaMs); }
+    void ClearDialog(bool immediate) { m_dialog.Clear(immediate); }
+    bool IsDialogDone() const { return m_dialog.IsDone(); }
     bool Init(CResTOCManager &toc, PackTables &tables);
     bool Draw(const SurvivalHudState &state);
     void Advance(int deltaMs);
@@ -66,8 +74,10 @@ public:
     void ReportSelectorPurchase(PurchaseResult result, const SurvivalHudState &state);
     const StoreEntry *SelectedItem() const;
 private:
+    CDialogPopup m_dialog;
     struct Button;
     friend int RunOriginalHudCheck(const std::string &bigDirectory);
+    friend int RunOriginalDialogCheck(const std::string &bigDirectory);
     friend int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory);
     friend int RunOriginalPauseCheck(const std::string &bigDirectory);
     bool DrawOriginalPause(const SurvivalHudState &state);

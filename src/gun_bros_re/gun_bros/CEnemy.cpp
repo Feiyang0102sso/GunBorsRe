@@ -48,6 +48,8 @@ void CEnemy::Bind(const CScript &script, const CMoveSetMesh &moveSet,
     stun.ClearStunned();
     m_moveSet = &moveSet;
     m_configMeshes = configMeshes;
+    // Bind :73421 seeds the health-bar flag; Spawn must preserve script state.
+    combat.variables[15] = 1;
 
     // One part until the script says otherwise. This is the line that makes
     // the script, not the template, the authority on an enemy's shape.
@@ -89,7 +91,6 @@ bool CEnemy::Spawn() {
     combat.dead = false;
     combat.removed = false;
     combat.variables[6] = 100;
-    combat.variables[15] = 1;
     const bool ran = m_interpreter.CallExportFunction(kExportSpawn);
     combat.maxHealth = combat.health;
     return ran;

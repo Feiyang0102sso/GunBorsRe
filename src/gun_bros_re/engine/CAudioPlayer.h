@@ -29,6 +29,9 @@ public:
 
     /** Decode and cache a RIFF/WAVE resource under a caller-owned key. */
     bool Load(std::uint64_t key, const std::vector<std::uint8_t> &wavBytes);
+    bool HasSound(std::uint64_t key) const;
+    /** Research-only: exercise real SDL streams at zero gain, even with --mute. */
+    unsigned CheckSilentPlayback(std::uint64_t first, std::uint64_t second);
     /** Cache decoded signed little-endian 16-bit PCM from the media decoder. */
     bool LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &samples, unsigned sampleRate, unsigned channels);
 

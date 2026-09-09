@@ -52,6 +52,7 @@ constexpr std::uint32_t kLevelVariableCount = 8;
 /** A level and the script it runs. */
 class CLevel : public IScriptObject {
 public:
+    bool IsManualSpawnTag(unsigned char tag) const { return m_manualSpawnTags[tag]; }
     /**
      * What a LEVEL resource holds.
      *
@@ -112,6 +113,8 @@ public:
     bool GetStringResource(int index, CGameAssetRef &out) const;
     int GetDialogResource() const { return m_dialogResource; }
     unsigned GetDialogSerial() const { return m_dialogSerial; }
+    unsigned GetDialogArrow() const { return m_dialogArrow; }
+    unsigned GetTriggerCount() const { return m_triggerCount; }
     bool DoesDialogAutoClose() const { return m_dialogAutoClose; }
     bool IsDialogCloseRequested() const { return m_dialogCloseRequested; }
     const GameObjectRef &GetNextLevel() const { return m_nextLevel; }
@@ -122,6 +125,8 @@ public:
     void UpdateIndicators(int deltaMs, float left, float top, float width, float height);
     const std::vector<CLevelIndicator> &GetIndicators() const { return m_indicators; }
     int GetWave() const { return m_variables[0]; }
+    /** DrawEnemyHealthBars :120501 reads Flow variable 4, not GetRevolution. */
+    bool HasLargeEnemyHealthBars() const { return m_variables[4] != 0; }
     // CLevel::GetRevolution/GetRevolutionCount use Flow variable 2 as divisor.
     int GetWavesPerRevolution() const { return m_variables[2]; }
     int GetRealWave() const {
@@ -165,6 +170,7 @@ public:
 
 private:
     bool m_tutorialEnabled = false;
+    unsigned m_triggerCount = 0;
     std::int16_t m_tutorialStep = -1;
     bool m_brotherCanShoot = true;
     std::vector<CLevelIndicator> m_indicators;
@@ -202,6 +208,7 @@ private:
     int m_triggerLayer = -1;
     bool m_triggerEnabled[32] = {};
     int m_triggerPauseMs[32] = {};
+    unsigned m_dialogArrow = 0;
     int m_dialogResource = -1;
     unsigned m_dialogSerial = 0;
     bool m_dialogAutoClose = false;

@@ -20,6 +20,8 @@
  *
  * The two animation bytes are stored in the opposite order to the one they are
  * written in: the first byte on the wire is the FOREGROUND animation.
+ * Runtime now parses the complete move set as well. Native slot numbers
+ * are a separate order: 0 background (+208), 1 main (+104), 2 foreground (+156).
  */
 
 #ifndef GUN_BROS_RE_GUN_BROS_CPROP_H
@@ -96,7 +98,7 @@ public:
         CMoveSet m_moveSet;
     };
 
-    /** Runtime uses original slot numbers: 0 foreground, 1 main, 2 background. */
+    /** Runtime uses original slot numbers: 0 background, 1 main, 2 foreground. */
     void Bind(const Template &data, const std::vector<std::vector<std::uint16_t>> *durations = nullptr);
     void Update(int deltaMs, bool playerInside);
     void HandleMessage(int message);
@@ -113,10 +115,12 @@ public:
     unsigned GetUnsupportedCount() const { return m_unsupported; }
     bool IsRemoved() const { return m_template != nullptr && m_template->RemoveWhenDead() && m_health <= 0; }
     const CCollisionData &GetEntryCollision() const { return m_collision; }
+    bool ChecksEntry() const { return m_checkEntry; }
     void SetResearchState(std::uint8_t state) { m_interpreter.SetState(state); }
     bool CollisionChanged() const { return m_collisionChanged; }
     void ClearCollisionChanged() { m_collisionChanged = false; }
     float GetHealth() const { return m_health; }
+    int GetTimerMs() const { return m_timerMs; }
 private:
     void SetAnimation(int slot, int animation);
     void QueueResource(PropAction::Kind kind, int resource, int group = 3);

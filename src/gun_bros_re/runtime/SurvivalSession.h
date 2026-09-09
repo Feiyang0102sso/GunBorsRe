@@ -18,17 +18,20 @@ public:
     void Restart(float x, float y);
     void SetHorde(bool enabled) { m_horde = enabled; m_archive = false; m_scene.SetHorde(enabled); }
     void SetStartWave(int wave) { m_startWave = wave; }
+    void SetDialogHud(SurvivalHud *hud) { m_dialogHud = hud; }
     void SetOriginalHud(SurvivalHud *hud) { m_originalHud = hud; }
     bool HasOriginalHud() const { return m_originalHud != nullptr; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
     void UpdateAfterDeath(int deltaMs);
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const override;
+    void StartObjectLayer(int layer) override;
     bool SpawnMapObject(const PlacedObject &object, int objectId) override;
     void SendEnemyMessage(int objectId, int message) override;
     void SendPropMessage(int objectId, int message) override;
     void PlayLevelSound(const GameObjectRef &sound) override;
     unsigned CheckLevelSounds();
+    unsigned CheckTriggerRoutes(float startX, float startY);
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPowerups(PowerupScene *powerups) { m_powerups = powerups; }
     void OnWaveCleared(unsigned perfectRewardPercent) override;
@@ -48,7 +51,7 @@ public:
     unsigned GetPowerupCount(unsigned localIndex) const override;
 private:
     void UpdateDialog(int deltaMs);
-    void UpdateArchiveMap(float previousX, float previousY);
+    void UpdateMapInteractions(float previousX, float previousY);
     void UpdateCamera(int deltaMs = 0);
     CLevel::Template m_template;
     CLevel m_level;
@@ -63,14 +66,15 @@ private:
     int m_startWave = 0;
     bool m_archive = false;
     bool m_horde = false;
+    SurvivalHud *m_dialogHud = nullptr;
     SurvivalHud *m_originalHud = nullptr;
     bool m_bossWave = false;
     float m_viewWidth = 572;
     float m_viewHeight = 429;
     CResTOCManager *m_toc = nullptr;
     std::string m_dialogText;
+    bool m_dialogBound = false;
     unsigned m_dialogSerial = 0;
-    int m_dialogElapsedMs = 0;
     PickupScene *m_pickups = nullptr;
     WeaponEffects *m_effects = nullptr;
     IPropWorld *m_props = nullptr;

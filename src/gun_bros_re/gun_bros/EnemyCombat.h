@@ -55,6 +55,7 @@ struct EnemyCombat {
     float lastDamage = 0;
     float totalDamage = 0;
     float hitFlash = 0;
+    int healthBarFlashMs = 0; // CEnemy::Damage mem+1240, independent of mesh tint.
     bool dead = false;
     bool removed = false;
     bool targetable = true;

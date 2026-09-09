@@ -99,6 +99,10 @@ public:
     /** Tear everything down. Safe to call when not open. */
     void Close();
 
+    unsigned GetSurfaceId() const;
+    unsigned GetSurfaceGeneration() const { return m_surfaceGeneration; }
+    void GetPosition(int &x, int &y) const;
+
     bool IsOpen() const { return m_window != nullptr; }
 
     /**
@@ -159,6 +163,7 @@ public:
 
 private:
     SDL_Window *m_window;
+    unsigned m_surfaceGeneration = 0;
     SDL_GLContext m_context;
     bool m_sdlInitialised;
     bool m_quitRequested;

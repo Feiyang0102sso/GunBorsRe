@@ -144,6 +144,10 @@ bool LoadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
                     bool createBuffers, const CShaderProgram *program,
                     EnemySpawnMode spawnMode, EnemyModel &out, EnemyModelCache *cache = nullptr);
 
+/** Decode/upload authored configs without spawning or running enemy scripts. */
+bool PreloadEnemyModel(PackTables &tables, const EnemyTemplateData &entry,
+    const CShaderProgram &program, EnemyModelCache &cache);
+
 /** Which config a part is currently showing, or -1 when it shows nothing. */
 std::int32_t EnemyPartConfig(const EnemyModel &model, std::uint32_t partIndex);
 

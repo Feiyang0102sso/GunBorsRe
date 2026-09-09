@@ -9,6 +9,7 @@
 #include "runtime/PowerupCatalog.h"
 #include "engine/platform/CWindow.h"
 #include "gun_bros/CResTOCManager.h"
+#include "gun_bros/CLevel.h"
 #include "engine/CPNG.h"
 #include <algorithm>
 #include <cstdio>
@@ -72,6 +73,72 @@ bool SurvivalHud::Init(CResTOCManager &toc, PackTables &tables) {
     return true;
 }
 
+/** Original pack12 LEVEL string references exercise the radio popup end to end. */
+int RunOriginalDialogCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    CWindow window;
+    if (!window.Open("Gun Bros", 1024, 768)) { return 1; }
+    SurvivalHud hud;
+    if (!hud.Init(toc, tables)) { return 1; }
+    const int packIndex = toc.GetPackIndexFromName("pack12");
+    if (packIndex < 0) { return 1; }
+    const unsigned hash = toc.GetPack(packIndex)->GetPackHash();
+    unsigned tested = 0, failures = 0;
+    const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Level);
+    for (unsigned ordinal = 0; ordinal < count; ++ordinal) {
+        std::vector<std::uint8_t> bytes;
+        if (!tables.ReadSectionResource(hash, GameSection::Level, ordinal, bytes)) { return 1; }
+        CArrayInputStream input(bytes);
+        CLevel::Template data;
+        if (!data.Init(input) || input.Available() != 0) { return 1; }
+        for (const auto &resource : data.script.GetResources()) {
+            if (resource.sectionOrType != 254) { continue; }
+            CGameAssetRef ref;
+            ref.packHash = resource.packHash;
+            ref.assetId = resource.resourceId;
+            const auto text = ReadGameString(toc, ref);
+            if (text.empty()) {
+                // LEVEL resource 6 is not consumed by its ShowDialog call.
+                // Keep the unresolved reference visible; do not create text.
+                std::printf("[dialog-check] unreadable string=%08x:%u length=%zu\n", ref.packHash, ref.assetId, text.size());
+                continue;
+            }
+            if (!hud.ShowDialog(text, true, 0)) { ++failures; continue; }
+            SurvivalHudState state;
+            state.dialog = text;
+            if (hud.Pointer(state, 800, 600, true) == SurvivalHudAction::Continue ||
+                hud.CapturesPointer(state, 800, 600)) { std::printf("[dialog-check] invented input capture\n"); ++failures; }
+            unsigned elapsed = 0;
+            while (!hud.IsDialogDone() && elapsed < 60000) {
+                hud.UpdateDialog(16);
+                elapsed += 16;
+                if (elapsed == 3008) {
+                    glViewport(0, 0, 1024, 768);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    if (!hud.m_dialog.Draw() || !window.SaveFrame("out/original-dialog-" + std::to_string(tested) + ".png")) { ++failures; }
+                }
+            }
+            if (!hud.IsDialogDone() || elapsed <= 1000) { std::printf("[dialog-check] auto close failed\n"); ++failures; }
+            // Script-owned dialogs remain until native70 requests the outro.
+            if (!hud.ShowDialog(text, false, 0)) { ++failures; }
+            for (unsigned tick = 0; tick < 4000; ++tick) { hud.UpdateDialog(16); }
+            if (hud.IsDialogDone()) { std::printf("[dialog-check] manual closed early\n"); ++failures; }
+            hud.ClearDialog(false);
+            if (hud.IsDialogDone()) { ++failures; }
+            for (unsigned tick = 0; tick < 1000; ++tick) { hud.UpdateDialog(16); }
+            if (!hud.IsDialogDone()) { std::printf("[dialog-check] outro not completed\n"); ++failures; }
+            std::printf("[dialog-check] LEVEL=%u string=%08x:%u pages=%u elapsed=%u text=%s\n",
+                ordinal, ref.packHash, ref.assetId, hud.m_dialog.PageCount(), elapsed, text.c_str());
+            ++tested;
+        }
+    }
+    if (tested == 0) { ++failures; }
+    std::printf("[dialog-check] original-strings=%u failures=%u\n", tested, failures);
+    return failures != 0;
+}
+
 void SurvivalHud::Icon(unsigned type, const GameObjectRef &object, const MovieRegion &region) {
     if (object.IsNull()) { return; }
     if (type == 17 && region.width < 60) {
@@ -119,9 +186,6 @@ std::vector<SurvivalHud::Button> SurvivalHud::Buttons(const SurvivalHudState &st
                 {{0, 0, 434, 365, 156, 36}, SurvivalHudAction::CancelItem, "CANCEL"}};
         }
         return {{{0, 0, 434, 365, 156, 36}, SurvivalHudAction::CloseShop, "RESUME"}};
-    }
-    if (!state.dialog.empty() && state.tutorialStep < 0) {
-        return {{{0, 0, 716, 572, 256, 56}, SurvivalHudAction::Continue, "CONTINUE"}};
     }
     if (state.paused && !state.dead && !state.cleared) {
         const Button entries[] = {
@@ -217,7 +281,6 @@ SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, f
 
 bool SurvivalHud::CapturesPointer(const SurvivalHudState &state, float x, float y) const {
     if (state.shopOpen || state.paused || state.dead || state.cleared) { return true; }
-    if (!state.dialog.empty() && state.tutorialStep < 0) { return true; }
     for (const Button &button : Buttons(state)) {
         if (button.rect.Contains(x, y)) { return true; }
     }
@@ -231,6 +294,16 @@ void SurvivalHud::Centre(const std::string &text, float y, unsigned font, float 
 }
 
 bool SurvivalHud::Draw(const SurvivalHudState &state) {
+    for (const auto &bar : state.enemyHealthBars) {
+        // Original Utility::DrawRect border 0xFF7F8C98 and red fill.
+        m_movies.Rectangle(bar.x, bar.y, bar.width, 1, 127 / 255.0f, 140 / 255.0f, 152 / 255.0f, 1);
+        m_movies.Rectangle(bar.x, bar.y + bar.height - 1, bar.width, 1, 127 / 255.0f, 140 / 255.0f, 152 / 255.0f, 1);
+        m_movies.Rectangle(bar.x, bar.y, 1, bar.height, 127 / 255.0f, 140 / 255.0f, 152 / 255.0f, 1);
+        m_movies.Rectangle(bar.x + bar.width - 1, bar.y, 1, bar.height, 127 / 255.0f, 140 / 255.0f, 152 / 255.0f, 1);
+        m_movies.Rectangle(bar.x + bar.border, bar.y + bar.border,
+            (bar.width - 2 * bar.border) * bar.fraction, bar.height - 2 * bar.border,
+            bar.red, std::max(0.0f, bar.red - 200 / 255.0f), std::max(0.0f, bar.red - 200 / 255.0f), 1);
+    }
     if (!state.shopOpen) { m_selectorBound = false; m_selectorHits.clear(); }
     if (!state.paused && m_pauseBound) { m_pauseHelp = false; ResetPauseList(); }
     ObserveProgress(state);
@@ -376,31 +449,11 @@ bool SurvivalHud::Draw(const SurvivalHudState &state) {
         Centre(title, 205, 5, 0.95f);
         Centre(waveTitle + "   " + waveSubtitle, 297, 0, 0.75f);
         Centre("KILLS " + std::to_string(state.kills) + "     " + reward, 345, 0, 0.85f);
-        Centre("WASD: MOVE   MOUSE: AIM / FIRE   1 / 2: WEAPONS", 415, 0, 0.67f);
-        Centre("G: USE ITEM   F: NEXT ITEM   ESC / SPACE: PAUSE", 446, 0, 0.67f);
+        Centre("WASD: MOVE   MOUSE: AIM / FIRE   2: SWAP WEAPON", 415, 0, 0.67f);
+        Centre("Q / E: LEFT / RIGHT ITEM   1: SHOP   ESC: PAUSE", 446, 0, 0.67f);
     }
-    if (!state.dialog.empty()) {
-        // CDialogPopup draws the original radio portrait beside its text region.
-        m_movies.Rectangle(50, 128, 550, 94, 0.02f, 0.14f, 0.21f, 0.72f);
-        m_movies.Rectangle(50, 128, 550, 3, 0.48f, 0.83f, 1, 0.9f);
-        m_movies.DrawSpriteFitted(1, 87, 0, 50, 128, 280, 94);
-        std::istringstream words(state.dialog);
-        std::string word, line;
-        float y = 152;
-        while (words >> word) {
-            if (m_movies.TextWidth(line + " " + word, 0, 0.8f) > 435) {
-                m_movies.Text(line, 150, y, 0, 0.8f);
-                line.clear();
-                y += 27;
-            }
-            if (!line.empty()) { line += ' '; }
-            line += word;
-        }
-        m_movies.Text(line, 150, y, 0, 0.8f);
-        if (state.tutorialStep == 0) { m_movies.Text("WASD + MOUSE", 150, 204, 1, 0.65f); }
-        if (state.tutorialStep == 2) { m_movies.Text("Q", 708, 648, 0, 1.1f); }
-        if (state.tutorialStep == 5) { m_movies.Text("G", 936, 449, 0, 1.1f); }
-    }
+    // CDialogPopup draws the original radio portrait beside its text region.
+    if (!m_dialog.Draw()) { return false; }
     for (const Button &button : Buttons(state)) {
         const MovieRegion &rect = button.rect;
         if (button.label[0] == 0) { continue; }
@@ -1322,7 +1375,7 @@ bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
                     animation = 35;
                     // Base::UpdateInput :88480 uses 36 for a held touch in
                     // region 3. Actions still fire once on the down edge.
-                    if (hud.m_previousDown && region.Contains(hud.m_mouseX, hud.m_mouseY) &&
+                    if ((state.swapKeyDown || (hud.m_previousDown && region.Contains(hud.m_mouseX, hud.m_mouseY))) &&
                         !state.shopOpen && !state.paused && !state.dead && !state.cleared) {
                         animation = 36;
                     }
@@ -1458,6 +1511,15 @@ int RunOriginalHudCheck(const std::string &bigDirectory) {
         glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
         if (currentPixels != pressedPixels) { ++failures; }
         if (button.action == SurvivalHudAction::SwapWeapon) {
+            // Keyboard state must select the exact same authored pressed art.
+            hud.Pointer(state, -1, -1, false);
+            state.swapKeyDown = true;
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (!hud.DrawOriginalControls(state)) { ++failures; }
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+            if (currentPixels != pressedPixels) { ++failures; }
+            state.swapKeyDown = false;
+            hud.Pointer(state, x, y, true);
             // Moving off restores the artwork; moving back does not fire a
             // second switch. A paused menu must not leave the HUD held down.
             if (hud.Pointer(state, -1, -1, true) != SurvivalHudAction::None) { ++failures; }

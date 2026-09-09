@@ -24,14 +24,19 @@ void GameObjectRef::Init(CArrayInputStream &stream) {
 void RequirementList::Init(CArrayInputStream &stream) {
     groupCount = stream.ReadUInt8();
     entryCount = 0;
+    objects.clear();
 
     for (std::uint32_t group = 0; group < groupCount; ++group) {
-        stream.ReadUInt8();  // object type; nothing preloads yet
+        const auto objectType = stream.ReadUInt8();  // object type; nothing preloads yet
+        // The old consumer discarded this field; loading now retains it.
         const std::uint8_t entries = stream.ReadUInt8();
 
         for (std::uint8_t entry = 0; entry < entries; ++entry) {
-            stream.ReadUInt32();  // pack hash
-            stream.ReadUInt8();   // local index, 255 meaning "skip"
+            Entry requirement;
+            requirement.objectType = objectType;
+            requirement.object.packHash = stream.ReadUInt32();  // pack hash
+            requirement.object.localIndex = stream.ReadUInt8();   // local index, 255 meaning "skip"
+            objects.push_back(requirement);
             entryCount++;
         }
     }

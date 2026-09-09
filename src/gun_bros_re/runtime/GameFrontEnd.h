@@ -22,6 +22,10 @@ int RunRefineryMenuCheck(const std::string &bigDirectory);
 int RunGreetingCheck(const std::string &bigDirectory);
 int RunPlayerSelectCheck(const std::string &bigDirectory);
 int RunPostGameMenuCheck(const std::string &bigDirectory);
+class CWindow;
+int RunDualWeaponCheck(const std::string &bigDirectory);
+int RunSceneTransitionCheck(const std::string &bigDirectory);
+int RunOriginalDialogCheck(const std::string &bigDirectory);
 int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screenshotPath = "", unsigned page = 0,
-    bool originalProfile = false, const std::string &profilePath = "");
+    bool originalProfile = false, const std::string &profilePath = "", CWindow *sharedWindow = nullptr);
 #endif

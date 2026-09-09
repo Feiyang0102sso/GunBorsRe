@@ -58,9 +58,11 @@ void CProp::Bind(const Template &data, const std::vector<std::vector<std::uint16
     m_collision = data.GetCollision();
     m_bulletCollision = data.GetBulletCollision();
     m_collisionChanged = true;
-    SetAnimation(0, data.GetForegroundAnimation());
+    // Native slots are background/main/foreground. DrawBackground :123549
+    // consumes +208 (slot 0); DrawForeground :123555 consumes +156 (slot 2).
+    SetAnimation(0, data.GetBackgroundAnimation());
     SetAnimation(1, data.GetMainAnimation());
-    SetAnimation(2, data.GetBackgroundAnimation());
+    SetAnimation(2, data.GetForegroundAnimation());
     if (data.GetScript().IsPresent()) {
         m_interpreter.SetScript(data.GetScript(), *this);
         m_interpreter.CallExportFunction(0);

@@ -28,6 +28,7 @@
 #include "gun_bros/WeaponEffects.h"
 #include "gun_bros/CParticleEffect.h"
 #include "runtime/MapScene.h"
+#include "runtime/StartupSequence.h"
 #include "runtime/EnemyModel.h"
 #include "engine/CQuadBatch.h"
 #include "engine/CMatrix4d.h"
@@ -292,6 +293,7 @@ struct MenuTestClick { float x; float y; unsigned advanceMs = 0; };
 /** All GL owners are destroyed before the menu window's context. */
 class GameMenu {
 public:
+    explicit GameMenu(CWindow *sharedWindow = nullptr) : window(sharedWindow ? *sharedWindow : ownedWindow) {}
     /** Integration harness input; it still goes through rendered button hit tests. */
     void SetTestClick(const MenuTestClick &click) { mouseX = click.x; mouseY = click.y; clicked = true; }
     /** Temporarily route this frame's click exclusively to a modal panel. */
@@ -914,7 +916,8 @@ public:
         return true;
     }
 
-    CWindow window;
+    CWindow ownedWindow;
+    CWindow &window;
     // Menu time; the integration harness advances it instead of real ticks.
     std::uint64_t clock = 0;
     // Under the harness the real pointer must not scroll anything, or a stray
@@ -1237,6 +1240,13 @@ bool MatchesEquipmentSlot(const StoreEntry &entry, unsigned slot,
 GameObjectRef &Equipped(CProfileManager &profile, unsigned slot) {
     if (slot < 2) { return profile.configuration.guns[slot]; }
     return profile.configuration.armor[kArmorSlots[slot]];
+}
+
+/** Shared compact/expanded store status, distinct from the preview slot. */
+bool IsStoreObjectEquipped(CProfileManager &profile, unsigned slot, const GameObjectRef &object) {
+    // CStoreAggregator::GetItemStatus :155316 requests IsGunEquipped(..., -1).
+    if (slot < 2) { return profile.configuration.IsGunEquipped(object) >= 0; }
+    return slot < 5 && SameObject(Equipped(profile, slot), object);
 }
 
 std::string ItemPrice(const CStoreItem &item) {
@@ -2071,11 +2081,7 @@ bool EquipStoreItem(CProfileManager &profile, const CStoreItem &item, const std:
         if (object.type == 6 && gunCount < 2) {
             const unsigned slot = (profile.activeWeaponSlot + gunCount) & 1;
             ++gunCount;
-            bool alreadyEquipped = false;
-            for (const GameObjectRef &gun : configuration.guns) {
-                if (SameObject(gun, object.object)) { alreadyEquipped = true; }
-            }
-            if (!alreadyEquipped) { configuration.guns[slot] = object.object; }
+            configuration.SetGun(slot, object.object);
         } else if (object.type == 2) {
             bool alreadyEquipped = false;
             for (const GameObjectRef &part : configuration.armor) {
@@ -2277,7 +2283,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
             // GetItemStatus :155316 excludes consumables from the OWNED state.
             if (ref.type == 17) { owned = false; }
             bool equipped = false;
-            if (slotKind < 5) { equipped = SameObject(Equipped(profile, slotKind), ref.object); }
+            if (slotKind < 5) { equipped = IsStoreObjectEquipped(profile, slotKind, ref.object); }
             MovieRegion stamp;
             if ((owned || equipped) && CardRegion(view, shopBox, kCardStampRegion, face, stamp)) {
                 unsigned stampSprite = kOwnedStamp;
@@ -2478,7 +2484,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         if (item.data.singlePurchase != 0) { owned = OwnsBundle(profile, item.data); }
         if (ref.type == 17) { owned = false; }
         bool equipped = false;
-        if (state.slot < 5) { equipped = SameObject(Equipped(profile, state.slot), ref.object); }
+        if (state.slot < 5) { equipped = IsStoreObjectEquipped(profile, state.slot, ref.object); }
         MovieRegion region;
         if (CardRegion(view, shopBox, kCardIconRegion, face, region)) {
             view.Icon(toc, tables, item, region.x, region.y, region.width, region.height, region.alpha, true);
@@ -2571,7 +2577,8 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         const PurchaseResult result = profile.AcquireItem(item.data, level);
         state.message = PurchaseMessage(result);
         if (result == PurchaseResult::Purchased || result == PurchaseResult::Owned) {
-            if (purchaseSlot < 5) { Equipped(profile, purchaseSlot) = item.data.objects[0].object; }
+            if (purchaseSlot < 2) { profile.configuration.SetGun(purchaseSlot, item.data.objects[0].object); }
+            else if (purchaseSlot < 5) { Equipped(profile, purchaseSlot) = item.data.objects[0].object; }
             if (item.data.singlePurchase != 0 && result == PurchaseResult::Purchased) {
                 if (!EquipStoreItem(profile, item.data, armors)) { return false; }
                 state.shopPreview = false;
@@ -5210,8 +5217,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     const CPlayerProgress::Template &progressData, const CRefinementManager::Template &refinement,
     const std::vector<StoreEntry> &store, const std::vector<WeaponEntry> &weapons,
     const std::vector<ArmorEntry> &armors, MenuState &state, const std::filesystem::path &savePath,
-    const std::string &capturePath, const std::vector<MenuTestClick> *testClicks = nullptr, bool originalProfile = false) {
-    GameMenu view;
+    const std::string &capturePath, const std::vector<MenuTestClick> *testClicks = nullptr, bool originalProfile = false, CWindow *sharedWindow = nullptr) {
+    GameMenu view(sharedWindow);
     if (!view.Open(toc, tables)) { return -3; }
     view.animateNavigation = capturePath.empty();
     view.scripted = testClicks != nullptr;
@@ -5498,7 +5505,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                 const GameObjectTypeRef &ref = item.data.objects[0];
                 std::string price = ItemPrice(item.data);
                 if (profile.Owns(ref.type, ref.object)) { price = "OWNED"; }
-                if (state.slot < 5 && SameObject(Equipped(profile, state.slot), ref.object)) { price = "EQUIPPED"; }
+                if (state.slot < 5 && IsStoreObjectEquipped(profile, state.slot, ref.object)) { price = "EQUIPPED"; }
                 view.Text(x + 82, y + 53, price, 1.25f, 0.93f, 0.74f, 0.33f);
                 if (state.slot == 5) {
                     view.Text(x + 82, y + 80, "PACK " + std::to_string(item.data.objects.size()) + " / OWN " +
@@ -5542,7 +5549,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                     const PurchaseResult result = profile.AcquireItem(selected.data, progress.GetLevel());
                     state.message = PurchaseMessage(result);
                     if (result == PurchaseResult::Purchased || result == PurchaseResult::Owned) {
-                        if (state.slot < 5) { Equipped(profile, state.slot) = ref.object; }
+                        if (state.slot < 2) { profile.configuration.SetGun(state.slot, ref.object); }
+                        else if (state.slot < 5) { Equipped(profile, state.slot) = ref.object; }
                         else { state.message = "ITEMS ADDED - G USE / F SELECT IN GAME"; }
                         if (!profile.SaveToDisk(savePath)) { return -3; }
                     }
@@ -8275,8 +8283,47 @@ int RunGameMenuCheck(const std::string &bigDirectory) {
     return 0;
 }
 
+/** Exercise real scene entry points; generation detects SDL ID reuse after Quit. */
+int RunSceneTransitionCheck(const std::string &bigDirectory) {
+    CWindow window;
+    if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    const unsigned generation = window.GetSurfaceGeneration();
+    const unsigned surface = window.GetSurfaceId();
+    int initialX = 0, initialY = 0, initialWidth = 0, initialHeight = 0;
+    window.GetPosition(initialX, initialY);
+    window.GetDrawableSize(initialWidth, initialHeight);
+    PNGImage pixel;
+    pixel.width = 1; pixel.height = 1; pixel.pixels = {23, 45, 67, 255};
+    CTexture witness;
+    if (!witness.Create(pixel)) { return 1; }
+    unsigned failures = 0;
+    for (unsigned scene = 0; scene < 4; ++scene) {
+        int result = 0;
+        if (scene == 0) {
+            result = RunStartupSequence("out/scene-transition-logo.png", 2000, &window);
+        } else if (scene == 2) {
+            result = RunSurvival(bigDirectory, "pack2", 7, 0, -1, "out/scene-transition-game.png",
+                0, false, false, false, 2, 0, nullptr, false, false, nullptr, false, &window);
+        } else {
+            result = RunGameFrontEnd(bigDirectory, "out/scene-transition-menu.png", 2, false,
+                "out/scene-transition-profile", &window);
+        }
+        int x = 0, y = 0, width = 0, height = 0;
+        window.GetPosition(x, y);
+        window.GetDrawableSize(width, height);
+        const bool retained = window.GetSurfaceId() == surface && window.GetSurfaceGeneration() == generation &&
+            x == initialX && y == initialY && width == initialWidth && height == initialHeight && glIsTexture(witness.GetHandle());
+        std::printf("[scene-transition-check] scene=%u result=%d generation=%u retained=%d\n",
+            scene, result, window.GetSurfaceGeneration(), retained);
+        if (result != 0 || !retained) { ++failures; }
+    }
+    return failures != 0;
+}
+
 int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screenshotPath, unsigned page, bool originalProfile,
-    const std::string &profilePath) {
+    const std::string &profilePath, CWindow *sharedWindow) {
+    CWindow ownedWindow;
+    CWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
     PackTables tables(toc);
@@ -8286,7 +8333,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
     std::vector<WeaponEntry> weapons;
     std::vector<ArmorEntry> armor;
     {
-        CWindow loadingWindow;
+        CWindow &loadingWindow = window;
         if (!loadingWindow.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
         MovieRenderer loadingMovies;
         CResPackTOC *core = toc.GetPack(toc.GetCorePackIndex());
@@ -8323,7 +8370,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
     if (profile.nativeArchive && state.page == 1) { state.page = 2; }
     if (profile.nativeArchive && state.page == 7) { state.page = 0; }
     while (true) {
-        const int choice = ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, savePath, screenshotPath, nullptr, originalProfile);
+        const int choice = ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, savePath, screenshotPath, nullptr, originalProfile, &window);
         if (choice == -3) { return 1; }
         if (choice == -2) { return 0; }
         if (choice < 0) { return !profile.SaveToDisk(savePath); }
@@ -8342,7 +8389,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
                 tutorialPack = tables.GetPackName(data.mapRef.packHash);
                 tutorialMap = data.mapRef.localIndex;
             }
-            if (RunSurvival(bigDirectory, tutorialPack, tutorialMap, 0, -1, "", 0, false, false, false, 2, 0, &context, true) != 0) { return 1; }
+            if (RunSurvival(bigDirectory, tutorialPack, tutorialMap, 0, -1, "", 0, false, false, false, 2, 0, &context, true, false, nullptr, false, &window) != 0) { return 1; }
             if (profile.tutorialCompleted) { BeginPostGame(state, context, weapons); }
             else { state.Navigate(25, true); }
             continue;
@@ -8363,7 +8410,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
                 SurvivalGameContext context{profile, savePath};
                 context.hordeStart = static_cast<int>(state.hordeStart);
                 if (RunSurvival(bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, "", 0, false, false, false, 2,
-                    selected.data.value64, &context, profile.brotherEnabled, false, &selected) != 0) { return 1; }
+                    selected.data.value64, &context, profile.brotherEnabled, false, &selected, false, &window) != 0) { return 1; }
                 BeginPostGame(state, context, weapons);
                 continue;
             }
@@ -8379,7 +8426,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
             SurvivalGameContext context{profile, savePath};
             context.hordeStart = static_cast<int>(state.hordeStart);
             if (RunSurvival(bigDirectory, "pack11", 0, 0, -1, "", 0, false, false, false, 2,
-                selected->data.value64, &context, profile.brotherEnabled, false, selected) != 0) { return 1; }
+                selected->data.value64, &context, profile.brotherEnabled, false, selected, false, &window) != 0) { return 1; }
             BeginPostGame(state, context, weapons);
             continue;
         }
@@ -8403,7 +8450,100 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
             mapPack = kPlanetPacks[choice];
             mapIndex = kPlanetMaps[choice];
         }
-        if (RunSurvival(bigDirectory, mapPack, mapIndex, 0, -1, "", 0, false, false, false, 2, wave, &context, profile.brotherEnabled) != 0) { return 1; }
+        if (RunSurvival(bigDirectory, mapPack, mapIndex, 0, -1, "", 0, false, false, false, 2, wave, &context, profile.brotherEnabled, false, nullptr, false, &window) != 0) { return 1; }
         BeginPostGame(state, context, weapons);
     }
+}
+
+/** Real BIG cards, native save copies and actual expanded-card input. */
+int RunDualWeaponCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    std::vector<StoreEntry> store;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armor;
+    if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
+        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    const auto path = std::filesystem::path("out/dual-weapon-check") / std::to_string(GetTickCount64());
+    CProfileManager profile;
+    if (!LoadNativeProfile(toc, tables, profile, path, std::filesystem::path(ASSET_ROOT) / "saves")) { return 1; }
+    std::vector<unsigned> entries;
+    for (unsigned index = 0; index < store.size() && entries.size() < 3; ++index) {
+        const auto &item = store[index].data;
+        if (item.objects.size() != 1 || item.objects[0].type != 6 || item.singlePurchase != 0) { continue; }
+        const auto &ref = item.objects[0].object;
+        const auto *weapon = FindWeaponEntry(weapons, ref);
+        if (weapon == nullptr || weapon->visualOnly) { continue; }
+        bool duplicate = false;
+        for (unsigned existing : entries) { if (SameObject(store[existing].data.objects[0].object, ref)) { duplicate = true; } }
+        if (duplicate) { continue; }
+        entries.push_back(index);
+        profile.Grant(6, ref);
+        // Gold weapons still expose EQUIP: exercise the duplicate-write guard.
+        profile.AddWeaponExperience(ref, weapon->data.GetMasteryThreshold(2), weapon->data.GetMasteryThreshold(2));
+    }
+    if (entries.size() != 3) { return 1; }
+    const GameObjectRef first = store[entries[0]].data.objects[0].object;
+    const GameObjectRef second = store[entries[1]].data.objects[0].object;
+    const GameObjectRef third = store[entries[2]].data.objects[0].object;
+    GameMenu view;
+    if (!view.Open(toc, tables)) { return 1; }
+    const unsigned card = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
+    const CMovie *movie = view.movies.GetMovie(card);
+    unsigned start = 0, end = 0;
+    MovieRegion content, body, actions, label;
+    const auto *equip = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
+    if (movie == nullptr || equip == nullptr || !movie->GetChapterRange(1, start, end) ||
+        !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
+        !view.movies.Region(card, 0, end, body) ||
+        !view.movies.Region(view.movies.Ordinal(equip->movies[0]), 1, 0, label)) { return 1; }
+    const StoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
+        content.y + content.height / 2 - body.height / 2, 1, end};
+    if (!CardRegion(view, card, kCardActionRegion, face, actions)) { return 1; }
+    unsigned failures = 0;
+    for (unsigned active : {0u, 1u}) {
+        profile.configuration.guns = {first, second};
+        profile.activeWeaponSlot = active;
+        unsigned stamps = 0;
+        for (const auto &gun : profile.configuration.guns) { if (IsStoreObjectEquipped(profile, active, gun)) { ++stamps; } }
+        if (stamps != 2) { ++failures; }
+        for (unsigned step = 0; step < 2; ++step) {
+            MenuState state;
+            state.page = 2;
+            state.shopGunSlot = active;
+            state.slot = active;
+            state.shopDetailOpen = true;
+            state.shopFocusAmount = 1;
+            state.shopDetailTime = end;
+            state.selectedItem = entries[1 - active];
+            if (step == 1) { state.selectedItem = entries[2]; }
+            view.Begin(2);
+            view.SetTestClick({actions.x + actions.width - label.width / 2, actions.y + label.height / 2});
+            if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path)) { return 1; }
+            bool correct = SameObject(profile.configuration.guns[0], first) && SameObject(profile.configuration.guns[1], second);
+            if (step == 1) {
+                correct = SameObject(profile.configuration.guns[active], third);
+                if (active == 0) { correct = correct && SameObject(profile.configuration.guns[1], second); }
+                else { correct = correct && SameObject(profile.configuration.guns[0], first); }
+            }
+            const bool distinct = !SameObject(profile.configuration.guns[0], profile.configuration.guns[1]);
+            if (!correct || !distinct) { ++failures; }
+            std::printf("[dual-weapon-check] active=%u stamps=%u step=%u correct=%d distinct=%d\n", active, stamps, step, correct, distinct);
+            if (step == 0) {
+                state.shopDetailOpen = false;
+                view.Begin(2);
+                if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path) ||
+                    !view.window.SaveFrame("out/dual-weapon-slot-" + std::to_string(active) + ".png")) { return 1; }
+            }
+        }
+        CProfileManager restored;
+        if (!LoadNativeProfile(toc, tables, restored, path, path / "absent-source")) { return 1; }
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            if (!SameObject(profile.configuration.guns[slot], restored.configuration.guns[slot])) { ++failures; }
+        }
+        if (restored.activeWeaponSlot != active) { ++failures; }
+    }
+    std::printf("[dual-weapon-check] failures=%u\n", failures);
+    return failures != 0;
 }

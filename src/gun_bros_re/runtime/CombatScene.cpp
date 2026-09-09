@@ -299,7 +299,7 @@ void CombatScene::Reset() {
         // Reset the script and gun state as well as health. The replacement
         // copies templates before retiring the old equipment.
         if (EquipPlayerWeapon(m_tables, m_player.weapon->playerScript,
-            m_player.weapon->data, "arena reset", m_player)) {
+            m_player.ActiveWeapon().data, "arena reset", m_player)) {
             CreatePlayerBuffers(m_player, m_program);
         }
     }
@@ -323,6 +323,42 @@ void CombatScene::Reset() {
     kills = 0;
     spawned = 0;
     invalidSpawns = 0;
+}
+
+bool CombatScene::PreloadEnemies(const RequirementList &requirements, const CScript &levelScript) {
+    // CMap::GetRequirements :92483 and RequirementList::Add :191754/191802.
+    // Only immutable meshes/textures enter this cache; no Flow export runs.
+    std::vector<ScriptResourceRef> pending = levelScript.GetResources();
+    for (const auto &entry : requirements.objects) {
+        ScriptResourceRef ref;
+        ref.packHash = entry.object.packHash;
+        ref.sectionOrType = entry.objectType;
+        ref.resourceId = entry.object.localIndex;
+        pending.push_back(ref);
+    }
+    unsigned loaded = 0;
+    for (std::size_t index = 0; index < pending.size(); ++index) {
+        const auto ref = pending[index];
+        if (ref.sectionOrType != static_cast<unsigned>(GameSection::Enemy) - 1 || ref.resourceId == 255) { continue; }
+        const std::uint64_t key = (static_cast<std::uint64_t>(ref.packHash) << 32) | ref.resourceId;
+        if (m_enemyModelCache.entries.count(key) != 0) { continue; }
+        const EnemyTemplateData *data = nullptr;
+        for (const auto &entry : m_catalog) {
+            if (entry.packHash == ref.packHash && entry.ordinal == ref.resourceId) { data = &entry; break; }
+        }
+        if (data == nullptr || !PreloadEnemyModel(m_tables, *data, m_program, m_enemyModelCache)) {
+            std::printf("[preload] enemy=%08x:%u failed\n", ref.packHash, ref.resourceId);
+            return false;
+        }
+        ++loaded;
+        const auto &dependencies = data->script.GetResources();
+        pending.insert(pending.end(), dependencies.begin(), dependencies.end());
+    }
+    // Runtime counters measure misses during gameplay, separately from preload.
+    m_enemyModelCache.hits = 0;
+    m_enemyModelCache.misses = 0;
+    std::printf("[preload] enemy-templates=%u map-references=%zu\n", loaded, requirements.objects.size());
+    return true;
 }
 
 CombatEnemy *CombatScene::Spawn(std::size_t entry, float x, float y) {
@@ -691,6 +727,53 @@ CombatTrace CombatScene::Trace(const CombatHit &hit, float x, float y, float dx,
     return result;
 }
 
+std::vector<CombatScene::HealthBar> CombatScene::EnemyHealthBars(float viewportScale) const {
+    // CLevel::DrawEnemyHealthBars :120454: native 30x4 and inset 1.
+    // BIG controls visibility and the larger-bar flag; it has no size table.
+    // Correction: mem+311032 is LEVEL variable 4 (the script's boss-wave
+    // flag), NOT the revolution. Camera mem+0 is min(width/480,height/320),
+    // NOT SnapScale/GetScale. These sizes are already physical screen pixels.
+    float waveScale = 1;
+    if (m_level != nullptr && m_level->HasLargeEnemyHealthBars()) { waveScale = 2; }
+    const float width = int(30 * viewportScale * waveScale);
+    const float height = int(4 * viewportScale * waveScale);
+    const float border = int(viewportScale * waveScale);
+    std::vector<HealthBar> bars;
+    for (const auto &actor : enemies) {
+        const CEnemy &enemy = actor->model.enemy;
+        const EnemyCombat &state = enemy.combat;
+        if (!state.enabled || state.removed || state.dead || state.health <= 0 ||
+            state.maxHealth <= 0 || state.variables[15] == 0) { continue; }
+        const CMesh *body = enemy.GetPart(0).controller.GetAnimation().GetMesh();
+        if (body == nullptr) { continue; }
+        const float scale = body->GetBounds().inverseExtent * actor->data->gameScale;
+        bool first = true;
+        float left = 0, right = 0, top = 0;
+        for (unsigned part = 0; part < enemy.GetPartCount(); ++part) {
+            const CMesh *mesh = enemy.GetPart(part).controller.GetAnimation().GetMesh();
+            if (mesh == nullptr) { continue; }
+            const MeshBounds &bounds = mesh->GetBounds();
+            const int extent = int(std::max(std::abs(bounds.maxX - bounds.minX),
+                std::abs(bounds.maxY - bounds.minY)) * scale);
+            if (extent == 0) { continue; }
+            const float partLeft = int(bounds.centerX) - extent / 2;
+            const float partTop = int(bounds.centerY) - extent / 2;
+            if (first) { left = partLeft; right = partLeft + extent; top = partTop; first = false; }
+            else { left = std::min(left, partLeft); right = std::max(right, partLeft + extent); top = std::min(top, partTop); }
+        }
+        if (first) { continue; }
+        // GetBounds :67485 adds a native 20-unit margin. The damage pulse is
+        // cos((remainingMs/1000+1)*pi/2)*-50 added to original red 0xC80000.
+        const float bright = std::cos((state.healthBarFlashMs * 0.001f + 1) * 3.14159265f * 0.5f) * -50;
+        // Preserve the world-space top centre until projection. Width is in
+        // screen pixels and must not become a camera-scaled world offset.
+        bars.push_back({state.x + (left + right) * 0.5f,
+            state.y + top - 20, width, height, border,
+            std::min(1.0f, state.health / state.maxHealth), (200 + bright) / 255});
+    }
+    return bars;
+}
+
 HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
     if (target == kBrotherCombatId && m_brotherModel != nullptr) {
         if (hit.ownerType != 1) { return HitResult::Ignored; }
@@ -897,6 +980,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // Equipment changes create a new script host; reconnect before input.
     m_player.weapon->brother.SetLevelContext(m_level);
     if (deltaMs <= 0) { return; }
+    m_effects.BeginAudioFrame();
     deaths.clear();
     levelEvents.clear();
     pickupSpawns.clear();
@@ -906,7 +990,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         const float length = std::hypot(moveX, moveY);
         if (length > 0 && m_player.weapon->brother.CanMove()) {
             const float speed = kPlayerSpeed * PlayerArmorMultiplier(m_player, 2) * m_player.weapon->brother.GetFrenzyMultiplier(2) *
-                m_player.weapon->gun.GetMasterySpeedMod() * 0.01f;
+                m_player.ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f;
             playerX += moveX / length * speed * deltaMs * 0.001f;
             playerY += moveY / length * speed * deltaMs * 0.001f;
         }

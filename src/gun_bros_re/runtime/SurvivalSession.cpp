@@ -11,6 +11,9 @@
 #include <cmath>
 #include <cstdio>
 
+// CBrother constructor :139098; CPlayer::Move uses the full radius for triggers.
+constexpr float kBrotherTriggerRadius = 22.0f;
+
 SurvivalSession::SurvivalSession(CombatScene &scene, CMap &map,
     const std::vector<EnemyTemplateData> &catalog) : m_scene(scene), m_map(map), m_catalog(catalog) {
     m_scene.SetLevel(&m_level);
@@ -56,14 +59,14 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
                 m_template = std::move(candidate);
                 if (selectedLevel != nullptr) {
                     std::printf("[survival] selected explicit LEVEL %u:%u for MAP %u:%u\n", level.packHash, level.localIndex, mapPack, mapIndex);
-                    return true;
+                    return m_scene.PreloadEnemies(m_map.GetRequirements(), m_template.script);
                 }
             }
         }
     }
     if (!requested.IsNull() && selectedLevel == nullptr) {
         std::printf("[survival] selected retail Mission LEVEL %u:%u for MAP %u:%u\n", requested.packHash, requested.localIndex, mapPack, mapIndex);
-        return true;
+        return m_scene.PreloadEnemies(m_map.GetRequirements(), m_template.script);
     }
     std::printf("[survival] no retail survival level for requested map\n");
     return false;
@@ -132,7 +135,15 @@ bool SurvivalSession::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int
     return true;
 }
 
+void SurvivalSession::StartObjectLayer(int layer) {
+    if (m_props != nullptr) { m_props->StartLayer(layer); }
+}
+
 bool SurvivalSession::SpawnMapObject(const PlacedObject &object, int objectId) {
+    if (object.objectType == static_cast<unsigned>(PlacedObjectType::Prop)) {
+        if (m_props == nullptr) { return false; }
+        return m_props->Spawn(m_level.GetObjectLayer(), objectId);
+    }
     if (object.objectType == static_cast<unsigned>(PlacedObjectType::Pickup)) {
         GameObjectRef pickup;
         pickup.packHash = object.packHash;
@@ -158,7 +169,12 @@ bool SurvivalSession::SpawnMapObject(const PlacedObject &object, int objectId) {
 void SurvivalSession::SendEnemyMessage(int objectId, int message) {
     for (const auto &actor : m_scene.enemies) {
         if (actor->objectId == objectId) {
+            const unsigned before = actor->model.enemy.GetStateId();
             actor->model.enemy.HandleMessage(message);
+            if (before != actor->model.enemy.GetStateId()) {
+                std::printf("[map-enemy] id=%d message=%d state=%u->%u\n",
+                    objectId, message, before, actor->model.enemy.GetStateId());
+            }
             return;
         }
     }
@@ -203,6 +219,9 @@ unsigned SurvivalSession::CheckLevelSounds() {
     const auto &resources = m_template.script.GetResources();
     for (unsigned index = 0; index < resources.size(); ++index) {
         if (resources[index].sectionOrType != static_cast<unsigned>(GameSection::SoundEffect) - 1) { continue; }
+        // Each reference is checked independently. Some authored entries share
+        // a WAV, so checking them in one tick would correctly coalesce them.
+        m_effects->BeginAudioFrame();
         const std::size_t before = m_effects->GetSoundCueCount();
         const std::int16_t argument = static_cast<std::int16_t>(index);
         m_level.FunctionResolver(20, &argument, 1);
@@ -210,6 +229,47 @@ unsigned SurvivalSession::CheckLevelSounds() {
         ++checked;
     }
     std::printf("[level-sound-check] references=%u failures=%u\n", checked, failures);
+    return failures;
+}
+
+unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY) {
+    unsigned failures = 0, tested = 0;
+    for (unsigned layerIndex = 0; layerIndex < m_map.GetCollisionLayerCount(); ++layerIndex) {
+        const auto &layer = m_map.GetCollisionLayer(layerIndex);
+        if (static_cast<int>(layer.GetLayerIndex()) != m_level.GetTriggerLayer()) { continue; }
+        const auto &geometry = layer.GetCollision();
+        std::vector<unsigned> groups;
+        for (const auto &edge : geometry.GetEdges()) {
+            if (std::find(groups.begin(), groups.end(), edge.group) != groups.end()) { continue; }
+            bool reached = false;
+            const auto &a = geometry.GetVertices()[edge.firstVertex];
+            const auto &b = geometry.GetVertices()[edge.secondVertex];
+            const float length = std::hypot(b.x - a.x, b.y - a.y);
+            if (length == 0) { continue; }
+            const float nx = -(b.y - a.y) / length, ny = (b.x - a.x) / length;
+            for (int side : {-1, 1}) {
+                Restart(startX, startY);
+                // Let the original intro complete before supplying movement.
+                for (unsigned tick = 0; tick < 250; ++tick) { Update(16, 0, 0, false); }
+                m_scene.playerX = (a.x + b.x) * 0.5f + nx * 45 * side;
+                m_scene.playerY = (a.y + b.y) * 0.5f + ny * 45 * side;
+                const unsigned before = m_level.GetTriggerCount();
+                for (unsigned tick = 0; tick < 45; ++tick) { Update(16, -nx * side, -ny * side, false); }
+                reached = m_level.GetTriggerCount() > before;
+                if (reached) { break; }
+            }
+            std::printf("[map-trigger-check] layer=%u group=%u reached=%d position=%.1f,%.1f\n",
+                layer.GetLayerIndex(), edge.group, reached, m_scene.playerX, m_scene.playerY);
+            if (reached) { groups.push_back(edge.group); ++tested; }
+        }
+        std::vector<unsigned> expected;
+        for (const auto &edge : geometry.GetEdges()) {
+            if (std::find(expected.begin(), expected.end(), edge.group) == expected.end()) { expected.push_back(edge.group); }
+        }
+        if (groups.size() != expected.size()) { ++failures; }
+    }
+    Restart(startX, startY);
+    std::printf("[map-trigger-check] groups=%u failures=%u\n", tested, failures);
     return failures;
 }
 
@@ -278,39 +338,48 @@ void SurvivalSession::CompleteDialog() {
 }
 
 void SurvivalSession::UpdateDialog(int deltaMs) {
-    if (m_level.IsDialogCloseRequested()) { CompleteDialog(); return; }
+    if (m_level.IsDialogCloseRequested() && m_dialogHud != nullptr) { m_dialogHud->ClearDialog(false); }
     if (m_dialogSerial != m_level.GetDialogSerial()) {
         m_dialogSerial = m_level.GetDialogSerial();
-        m_dialogElapsedMs = 0;
         m_dialogText.clear();
+        m_dialogBound = false;
+        if (m_dialogHud != nullptr) { m_dialogHud->ClearDialog(true); }
         CGameAssetRef resource;
         if (m_toc != nullptr && m_level.GetStringResource(m_level.GetDialogResource(), resource)) {
             m_dialogText = ReadGameString(*m_toc, resource);
             std::printf("[campaign-dialog] %s\n", m_dialogText.c_str());
+            if (m_dialogHud != nullptr) { m_dialogBound = m_dialogHud->ShowDialog(m_dialogText, m_level.DoesDialogAutoClose(), m_level.GetDialogArrow()); }
+            if (!m_dialogBound) {
+                std::printf("[dialog] original Movie binding failed resource=%d\n", m_level.GetDialogResource());
+            }
         }
     }
     if (m_level.GetDialogResource() < 0) { m_dialogText.clear(); return; }
-    m_dialogElapsedMs += deltaMs;
     // Desktop reading duration; original movie/text-box pagination remains
     // separate research. Native argument three means automatic close, not pause.
-    const int readingMs = 2000 + static_cast<int>(m_dialogText.size()) * 40;
-    if (m_level.DoesDialogAutoClose() && m_dialogElapsedMs >= readingMs) { CompleteDialog(); }
+    // The historical estimate above is superseded by CDialogPopup playback.
+    if (m_dialogHud != nullptr) {
+        m_dialogHud->UpdateDialog(static_cast<unsigned>(deltaMs));
+        if (m_dialogBound && m_dialogHud->IsDialogDone()) { CompleteDialog(); }
+    }
 }
 
-void SurvivalSession::UpdateArchiveMap(float previousX, float previousY) {
-    const float scaleRatio = 0.8f / m_map.GetCamera().GetScale();
-    const float viewWidth = m_viewWidth * scaleRatio;
-    const float viewHeight = m_viewHeight * scaleRatio;
-    float left = m_scene.playerX - viewWidth * 0.5f;
-    float top = m_scene.playerY - viewHeight * 0.5f;
-    const MapRectangle bounds = m_map.GetVisibleBounds();
-    if (!bounds.IsEmpty()) {
-        if (bounds.width <= viewWidth) { left = bounds.x + (bounds.width - viewWidth) * 0.5f; }
-        else { left = std::clamp(left, static_cast<float>(bounds.x), bounds.x + bounds.width - viewWidth); }
-        if (bounds.height <= viewHeight) { top = bounds.y + (bounds.height - viewHeight) * 0.5f; }
-        else { top = std::clamp(top, static_cast<float>(bounds.y), bounds.y + bounds.height - viewHeight); }
+void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
+    if (m_archive) {
+        const float scaleRatio = 0.8f / m_map.GetCamera().GetScale();
+        const float viewWidth = m_viewWidth * scaleRatio;
+        const float viewHeight = m_viewHeight * scaleRatio;
+        float left = m_scene.playerX - viewWidth * 0.5f;
+        float top = m_scene.playerY - viewHeight * 0.5f;
+        const MapRectangle bounds = m_map.GetVisibleBounds();
+        if (!bounds.IsEmpty()) {
+            if (bounds.width <= viewWidth) { left = bounds.x + (bounds.width - viewWidth) * 0.5f; }
+            else { left = std::clamp(left, static_cast<float>(bounds.x), bounds.x + bounds.width - viewWidth); }
+            if (bounds.height <= viewHeight) { top = bounds.y + (bounds.height - viewHeight) * 0.5f; }
+            else { top = std::clamp(top, static_cast<float>(bounds.y), bounds.y + bounds.height - viewHeight); }
+        }
+        m_level.UpdateProximitySpawns(left, top, viewWidth, viewHeight);
     }
-    m_level.UpdateProximitySpawns(left, top, viewWidth, viewHeight);
     for (unsigned index = 0; index < m_map.GetCollisionLayerCount(); ++index) {
         const CLayerCollision &layer = m_map.GetCollisionLayer(index);
         if (static_cast<int>(layer.GetLayerIndex()) != m_level.GetTriggerLayer()) { continue; }
@@ -321,7 +390,10 @@ void SurvivalSession::UpdateArchiveMap(float previousX, float previousY) {
             if (!edge.enabled) { continue; }
             const float fraction = CombatGeometry::EdgeFraction(previousX, previousY,
                 m_scene.playerX - previousX, m_scene.playerY - previousY,
-                geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex], m_scene.GetPlayerRadius());
+                // CBrother constructor :139098 stores 22.0; CPlayer::Move
+                // :100866 passes the full radius to TestTrigger, while wall
+                // resolution uses half. Trigger regions remain authored BIG data.
+                geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex], kBrotherTriggerRadius);
             if (fraction < nearest) { nearest = fraction; group = edge.group; }
         }
         if (group >= 0 && nearest <= 1) { m_level.OnTrigger(group); }
@@ -343,12 +415,12 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         // InterstitialSequenceCallback :86336 emits LEVEL event 2 only after
         // the last authored Movie completes. BOKOR keeps its script clock alive.
         if (m_originalHud->TakeInterstitialCompletion()) { m_level.HandleEvent(2); }
-        if (m_originalHud->HasInterstitial() && !m_horde) { UpdateCamera(deltaMs); return; }
+        // CGame::Update :76581 keeps CLevel::Update running under the Movie.
+        // The script's object multiplier supplies slow motion, not a pause.
     }
     if (m_originalHud == nullptr && m_transitionMs > 0) {
         m_transitionMs -= deltaMs;
         if (m_transitionMs <= 0) { m_level.HandleEvent(2); }
-        if (!m_horde) { UpdateCamera(deltaMs); return; }
     }
     const int previousWave = m_level.GetWave();
     m_level.Update(deltaMs);
@@ -358,7 +430,8 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     if (!m_level.CanPlayerMove()) { moveX = 0; moveY = 0; }
     if (!m_level.CanPlayerShoot()) { fire = false; }
     m_scene.Update(deltaMs, moveX, moveY, fire);
-    if (m_archive) { UpdateArchiveMap(previousX, previousY); }
+    // CPlayer::Move checks triggers in every mode, including retail survival.
+    UpdateMapInteractions(previousX, previousY);
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
     if (m_props != nullptr) { m_props->Update(deltaMs); }
     if (m_pickups != nullptr) {

@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <map>
+#include <chrono>
 
 namespace {
 
@@ -34,10 +35,55 @@ struct PlayingSound {
 struct CAudioPlayer::Impl {
     std::map<std::uint64_t, DecodedSound> sounds;
     std::vector<PlayingSound> playing;
+    std::vector<SDL_AudioStream *> idleStreams;
+    SDL_AudioDeviceID device = 0;
     bool paused = false;
     std::uint64_t pauseStartMs = 0;
     float volume = 1;
     bool musicChannel = false;
+    bool silentDeviceValidation = false;
+    unsigned devicesOpened = 0;
+    unsigned streamsCreated = 0;
+
+    // Host counterpart of Cocoa's reusable OpenAL source pool. SDL streams
+    // remain bound to one device; bursts do not open a device per enemy.
+    void Recycle(SDL_AudioStream *stream) {
+        SDL_ClearAudioStream(stream);
+        idleStreams.push_back(stream);
+    }
+
+    SDL_AudioStream *Acquire(const SDL_AudioSpec &specification) {
+        if (device == 0) {
+            device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+            if (device == 0) {
+                std::printf("[audio] could not open device: %s\n", SDL_GetError());
+                return nullptr;
+            }
+            ++devicesOpened;
+            if (paused) { SDL_PauseAudioDevice(device); }
+        }
+        SDL_AudioStream *stream = nullptr;
+        if (!idleStreams.empty()) {
+            stream = idleStreams.back();
+            idleStreams.pop_back();
+            if (!SDL_SetAudioStreamFormat(stream, &specification, nullptr)) {
+                std::printf("[audio] could not reuse stream: %s\n", SDL_GetError());
+                SDL_DestroyAudioStream(stream);
+                return nullptr;
+            }
+        } else {
+            SDL_AudioSpec output{};
+            if (!SDL_GetAudioDeviceFormat(device, &output, nullptr)) { return nullptr; }
+            stream = SDL_CreateAudioStream(&specification, &output);
+            if (stream == nullptr) { return nullptr; }
+            if (!SDL_BindAudioStream(device, stream)) {
+                SDL_DestroyAudioStream(stream);
+                return nullptr;
+            }
+            ++streamsCreated;
+        }
+        return stream;
+    }
 };
 
 CAudioPlayer::CAudioPlayer() : m_impl(new Impl()) {}
@@ -63,6 +109,8 @@ CAudioPlayer::~CAudioPlayer() {
     for (std::size_t i = 0; i < m_impl->playing.size(); ++i) {
         SDL_DestroyAudioStream(m_impl->playing[i].stream);
     }
+    for (SDL_AudioStream *stream : m_impl->idleStreams) { SDL_DestroyAudioStream(stream); }
+    if (m_impl->device != 0) { SDL_CloseAudioDevice(m_impl->device); }
 }
 
 bool CAudioPlayer::Load(std::uint64_t key,
@@ -102,21 +150,19 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
     if (found == m_impl->sounds.end()) {
         return false;
     }
-
     // Keep loading and key validation active during silent regression runs.
-    if (g_muted || (!m_impl->musicChannel && !g_effectsEnabled)) {
+    if (!m_impl->silentDeviceValidation && (g_muted || (!m_impl->musicChannel && !g_effectsEnabled))) {
         return true;
     }
 
     Update();
     if (m_impl->playing.size() >= kMaximumPlayingSounds) {
-        SDL_DestroyAudioStream(m_impl->playing.front().stream);
+        m_impl->Recycle(m_impl->playing.front().stream);
         m_impl->playing.erase(m_impl->playing.begin());
     }
 
     const DecodedSound &sound = found->second;
-    SDL_AudioStream *stream = SDL_OpenAudioDeviceStream(
-        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &sound.specification, nullptr, nullptr);
+    SDL_AudioStream *stream = m_impl->Acquire(sound.specification);
     if (stream == nullptr) {
         std::printf("[audio] could not open playback stream: %s\n", SDL_GetError());
         return false;
@@ -124,11 +170,12 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
     SDL_SetAudioStreamGain(stream, m_impl->volume);
     if (!SDL_PutAudioStreamData(stream, sound.samples.data(),
                                 static_cast<int>(sound.samples.size())) ||
-        !SDL_FlushAudioStream(stream) || !SDL_ResumeAudioStreamDevice(stream)) {
+        !SDL_FlushAudioStream(stream)) {
         std::printf("[audio] could not queue sound: %s\n", SDL_GetError());
         SDL_DestroyAudioStream(stream);
         return false;
     }
+    if (!m_impl->paused) { SDL_ResumeAudioDevice(m_impl->device); }
 
     const std::uint32_t bytesPerFrame = SDL_AUDIO_FRAMESIZE(sound.specification);
     std::uint64_t durationMs = 0;
@@ -148,7 +195,7 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
     playing.loop = loop;
     playing.owner = owner;
     m_impl->playing.push_back(playing);
-    if (m_impl->paused) { SDL_PauseAudioStreamDevice(stream); }
+    if (m_impl->paused) { SDL_PauseAudioDevice(m_impl->device); }
     return true;
 }
 
@@ -171,7 +218,7 @@ void CAudioPlayer::Update() {
             continue;
         }
 
-        SDL_DestroyAudioStream(playing.stream);
+        m_impl->Recycle(playing.stream);
         m_impl->playing.erase(m_impl->playing.begin() + index);
     }
 }
@@ -180,15 +227,19 @@ void CAudioPlayer::Stop(std::uint64_t key) {
     std::size_t index = 0;
     while (index < m_impl->playing.size()) {
         if (m_impl->playing[index].key == key) {
-            SDL_DestroyAudioStream(m_impl->playing[index].stream);
+            m_impl->Recycle(m_impl->playing[index].stream);
             m_impl->playing.erase(m_impl->playing.begin() + index);
         } else { ++index; }
     }
 }
 
 void CAudioPlayer::StopAll() {
-    for (const PlayingSound &sound : m_impl->playing) { SDL_DestroyAudioStream(sound.stream); }
+    for (const PlayingSound &sound : m_impl->playing) { m_impl->Recycle(sound.stream); }
     m_impl->playing.clear();
+}
+
+bool CAudioPlayer::HasSound(std::uint64_t key) const {
+    return m_impl->sounds.find(key) != m_impl->sounds.end();
 }
 
 bool CAudioPlayer::LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &samples, unsigned sampleRate, unsigned channels) {
@@ -206,7 +257,7 @@ bool CAudioPlayer::LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &s
 void CAudioPlayer::StopOwner(std::uint64_t owner) {
     for (std::size_t i = 0; i < m_impl->playing.size();) {
         if (m_impl->playing[i].owner == owner && m_impl->playing[i].loop) {
-            SDL_DestroyAudioStream(m_impl->playing[i].stream);
+            m_impl->Recycle(m_impl->playing[i].stream);
             m_impl->playing.erase(m_impl->playing.begin() + i);
         } else { ++i; }
     }
@@ -217,11 +268,57 @@ void CAudioPlayer::SetPaused(bool paused) {
     const std::uint64_t nowMs = SDL_GetTicks();
     if (paused) { m_impl->pauseStartMs = nowMs; }
     for (PlayingSound &sound : m_impl->playing) {
-        if (paused) { SDL_PauseAudioStreamDevice(sound.stream); }
-        else {
+        if (!paused) {
             sound.finishMs += nowMs - m_impl->pauseStartMs;
-            SDL_ResumeAudioStreamDevice(sound.stream);
         }
     }
+    if (m_impl->device != 0) {
+        if (paused) { SDL_PauseAudioDevice(m_impl->device); }
+        else { SDL_ResumeAudioDevice(m_impl->device); }
+    }
     m_impl->paused = paused;
+}
+
+unsigned CAudioPlayer::CheckSilentPlayback(std::uint64_t first, std::uint64_t second) {
+    // Tests the real device/stream path without making the user's speakers play.
+    StopAll();
+    const float volume = m_impl->volume;
+    SetVolume(0);
+    m_impl->silentDeviceValidation = true;
+    const unsigned devicesBefore = m_impl->devicesOpened;
+    const unsigned streamsBefore = m_impl->streamsCreated;
+    const auto start = std::chrono::steady_clock::now();
+    unsigned failures = 0;
+    for (unsigned round = 0; round < 8; ++round) {
+        if (!Play(first) || !Play(second)) { ++failures; }
+        SetPaused(true);
+        SetPaused(false);
+        StopAll();
+    }
+    const unsigned devices = m_impl->devicesOpened - devicesBefore;
+    const unsigned streams = m_impl->streamsCreated - streamsBefore;
+    if (devices > 1 || streams > 2) { ++failures; }
+    const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    std::printf("[audio-backend-check] plays=16 devices=%u streams=%u elapsed-ms=%.3f failures=%u\n", devices, streams, elapsed, failures);
+    const auto warmStart = std::chrono::steady_clock::now();
+    for (unsigned round = 0; round < 100; ++round) {
+        if (!Play(first) || !Play(second)) { ++failures; }
+        StopAll();
+    }
+    const auto warmElapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - warmStart).count();
+    if (m_impl->devicesOpened != devicesBefore + devices || m_impl->streamsCreated != streamsBefore + streams) { ++failures; }
+    if (!Play(first, true, 101) || !Play(second, true, 102)) { ++failures; }
+    StopOwner(101);
+    if (m_impl->playing.size() != 1 || m_impl->playing[0].owner != 102) { ++failures; }
+    SetPaused(true);
+    if (!SDL_AudioDevicePaused(m_impl->device)) { ++failures; }
+    Update();
+    if (m_impl->playing.size() != 1) { ++failures; }
+    SetPaused(false);
+    Stop(second);
+    if (!m_impl->playing.empty()) { ++failures; }
+    std::printf("[audio-backend-check] warm-plays=200 elapsed-ms=%.3f owner-loop-pause failures=%u\n", warmElapsed, failures);
+    m_impl->silentDeviceValidation = false;
+    SetVolume(volume);
+    return failures;
 }

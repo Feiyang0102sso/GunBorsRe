@@ -48,8 +48,9 @@ int RunMediaCheck() {
     return failures != 0;
 }
 
-int RunStartupSequence(const std::string &screenshotPath, unsigned advanceMs) {
-    CWindow window;
+int RunStartupSequence(const std::string &screenshotPath, unsigned advanceMs, CWindow *sharedWindow) {
+    CWindow ownedWindow;
+    CWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     CMediaVideo video;
     MediaAudio decoded;

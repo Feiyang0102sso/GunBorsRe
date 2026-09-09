@@ -126,6 +126,21 @@ CWindow::~CWindow() {
 }
 
 bool CWindow::Open(const std::string &title, int width, int height) {
+    if (IsOpen()) {
+        // Scene boundaries retain the HWND, GL objects, focus and user sizing.
+        // Only transient input belongs to the previous scene.
+        m_keyPresses.clear();
+        m_cheatCodes.clear();
+        m_cheatPrefix.clear();
+        m_dragDeltaX = 0;
+        m_dragDeltaY = 0;
+        m_wheelDelta = 0;
+        m_rightDrag = false;
+        m_escapeCloses = true;
+        m_cheatsEnabled = false;
+        for (bool &down : m_keyDown) { down = false; }
+        return true;
+    }
     Close();
     m_quitRequested = false;
     m_keyPresses.clear();
@@ -158,6 +173,7 @@ bool CWindow::Open(const std::string &title, int width, int height) {
     }
     SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED,
                           SDL_WINDOWPOS_CENTERED);
+    ++m_surfaceGeneration;
     // Host tool access lives in the window chrome, outside original BIG menus.
     // Right-click the title bar / Alt+Space opens the permanent research entry.
     const auto properties = SDL_GetWindowProperties(m_window);
@@ -195,6 +211,8 @@ bool CWindow::Open(const std::string &title, int width, int height) {
 
     return true;
 }
+
+unsigned CWindow::GetSurfaceId() const { return SDL_GetWindowID(m_window); }
 
 void CWindow::Close() {
     if (m_context != nullptr) {
@@ -372,6 +390,10 @@ void CWindow::GetDrawableSize(int &width, int &height) const {
     width = 0;
     height = 0;
     SDL_GetWindowSizeInPixels(m_window, &width, &height);
+}
+
+void CWindow::GetPosition(int &x, int &y) const {
+    SDL_GetWindowPosition(m_window, &x, &y);
 }
 
 std::uint64_t CWindow::GetTicksMs() const {

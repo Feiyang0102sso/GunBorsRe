@@ -22,6 +22,8 @@ class WeaponEffects {
 public:
     WeaponEffects(CResTOCManager &toc, PackTables &tables, const CShaderProgram &program);
     ~WeaponEffects();
+    /** Windows audio adaptation: coalesce identical one-shots within one tick. */
+    void BeginAudioFrame();
     /** Consume gun cues, then advance both new and existing projectiles. */
     void Update(PlayerModel &player, const float *modelToScene, float facingDegrees,
                 int deltaMs, const WeaponCollision *collision = nullptr);

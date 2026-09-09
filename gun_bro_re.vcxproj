@@ -135,6 +135,7 @@
     <ClCompile Include="src\gun_bros_re\runtime\OriginalPowerupSelector.cpp" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CInputPadMeter.h" />
     <ClInclude Include="src\gun_bros_re\runtime\OriginalTextLayout.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\OriginalDialogPopup.h" />
     <ClCompile Include="src\gun_bros_re\runtime\PowerupMoviePlayer.cpp" />
     <ClCompile Include="src\gun_bros_re\runtime\MovieRenderer.cpp" />
     <ClCompile Include="src\gun_bros_re\engine\CBitmapFont.cpp" />

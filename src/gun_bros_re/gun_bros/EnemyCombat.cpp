@@ -152,6 +152,7 @@ void CEnemy::Damage(float amount) {
     combat.totalDamage += combat.lastDamage;
     combat.health = std::max(0.0f, combat.health - amount);
     combat.hitFlash = 1;
+    combat.healthBarFlashMs = 1000; // CEnemy::Damage :71563.
     ++combat.hitCount;
     if (combat.health == 0) {
         combat.dead = true;
@@ -251,6 +252,7 @@ void CEnemy::SetBehaviour(const std::int16_t *arguments, int count) {
 }
 
 void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
+    combat.healthBarFlashMs = std::max(0, combat.healthBarFlashMs - deltaMs);
     combat.previousX = combat.x;
     combat.previousY = combat.y;
     combat.hitFlash = std::max(0.0f, combat.hitFlash - deltaMs * 0.004f);

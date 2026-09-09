@@ -120,6 +120,11 @@ struct PlayerModel {
     unsigned masteryExperience = 0;
     std::map<std::uint64_t, unsigned> masteryByWeapon;
     unsigned brotherIndex = 0;
+    /** Both menu and combat retain the outgoing torso until its move ends. */
+    PlayerWeaponState &ActiveWeapon() const {
+        if (uiActiveWeapon != nullptr) { return *uiActiveWeapon; }
+        return *weapon;
+    }
 };
 
 /**

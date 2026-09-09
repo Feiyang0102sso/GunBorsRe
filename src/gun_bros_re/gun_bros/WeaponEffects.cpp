@@ -12,6 +12,7 @@
 #include <array>
 #include <cmath>
 #include <map>
+#include <set>
 
 namespace {
 constexpr float kRadians = 3.14159265f / 180.0f;
@@ -193,6 +194,8 @@ struct WeaponEffects::Impl {
     std::uint32_t randomState = 1;
     std::size_t shotsFired = 0;
     std::size_t soundCues = 0;
+    std::set<std::uint64_t> frameSounds;
+    std::map<std::uint64_t, CGameAssetRef> soundReferences;
     std::uint64_t nextEffectHandle = 1;
     float playerX = 0, playerY = 0;
     std::map<std::uint32_t, std::unique_ptr<CSpriteGlu>> spritePacks;
@@ -274,15 +277,22 @@ struct WeaponEffects::Impl {
             if (actor == kPlayerCombatId) { loopSound = 0; }
             return;
         }
-        std::vector<std::uint8_t> payload;
-        if (!tables.ReadSectionResource(cue.resource.packHash, GameSection::SoundEffect,
-            cue.resource.localIndex, payload)) {
-            std::printf("[weapon-audio] missing sound %08x:%u\n", cue.resource.packHash, cue.resource.localIndex);
-            return;
+        const auto key = ResourceKey(cue.resource);
+        auto found = soundReferences.find(key);
+        if (found == soundReferences.end()) {
+            std::vector<std::uint8_t> payload;
+            if (!tables.ReadSectionResource(cue.resource.packHash, GameSection::SoundEffect,
+                cue.resource.localIndex, payload)) {
+                std::printf("[weapon-audio] missing sound %08x:%u\n", cue.resource.packHash, cue.resource.localIndex);
+                return;
+            }
+            CArrayInputStream stream(payload);
+            CGameAssetRef wav;
+            wav.Init(stream);
+            if (stream.Overran()) { return; }
+            found = soundReferences.emplace(key, wav).first;
         }
-        CArrayInputStream stream(payload);
-        CGameAssetRef wav;
-        wav.Init(stream);
+        const CGameAssetRef &wav = found->second;
         if (wav.assetId < 0) { return; }
         PlayWav(wav.packHash, wav.assetId, cue.kind == GunCue::Kind::LoopSound, actor);
     }
@@ -291,18 +301,26 @@ struct WeaponEffects::Impl {
         CGameAssetRef wav;
         wav.packHash = packHash;
         wav.assetId = ordinal;
-        std::vector<std::uint8_t> payload;
         const std::uint64_t key = (static_cast<std::uint64_t>(wav.packHash) << 32) | wav.assetId;
-        if (!tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, payload)) {
-            std::printf("[weapon-audio] missing WAV %08x:%d\n", wav.packHash, wav.assetId);
-            return;
+        // User-verified simultaneous-death behaviour. Coalesce by resolved WAV,
+        // not enemy ID; no invented cooldown or suppression in following ticks.
+        if (!loop && frameSounds.find(key) != frameSounds.end()) { return; }
+        if (!audio.HasSound(key)) {
+            std::vector<std::uint8_t> payload;
+            if (!tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, payload)) {
+                std::printf("[weapon-audio] missing WAV %08x:%d\n", wav.packHash, wav.assetId);
+                return;
+            }
+            if (!audio.Load(key, payload)) { return; }
         }
-        if (!audio.Load(key, payload)) { return; }
         if (loop) {
             audio.StopOwner(actor);
             if (actor == kPlayerCombatId) { loopSound = key; }
         }
-        if (audio.Play(key, loop, actor)) { ++soundCues; }
+        if (audio.Play(key, loop, actor)) {
+            ++soundCues;
+            if (!loop) { frameSounds.insert(key); }
+        }
     }
 
     void StartEffect(const GameObjectRef &ref, float x, float y, float z, float angle, Shot *owner) {
@@ -502,7 +520,13 @@ void WeaponEffects::StopEffect(std::uint64_t handle) {
     }
 }
 
-void WeaponEffects::AdvanceAmbientEffects(int deltaMs) { m_impl->AdvanceParticles(deltaMs); }
+void WeaponEffects::AdvanceAmbientEffects(int deltaMs) {
+    BeginAudioFrame();
+    m_impl->AdvanceParticles(deltaMs);
+    m_impl->audio.Update();
+}
+
+void WeaponEffects::BeginAudioFrame() { m_impl->frameSounds.clear(); }
 
 CombatId WeaponEffects::SpawnProjectile(const GameObjectRef &resource, float x, float y,
     float z, float direction, float speed, CombatId owner, int ownerType, int part, int node) {
@@ -607,6 +631,7 @@ void WeaponEffects::Clear() {
     m_impl->activeEffects.clear();
     m_impl->particles.clear();
     m_impl->audio.StopAll();
+    m_impl->frameSounds.clear();
     m_impl->loopSound = 0;
 }
 
@@ -665,7 +690,7 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
     const float beamLength = kMaximumBeamLength;
     // CLevel::UpdateNormal iterates a growing object list: bullets spawned
     // by a player are advanced before their first draw in the same tick.
-    for (const GunCue &cue : player.weapon->gun.TakeCues()) {
+    for (const GunCue &cue : player.ActiveWeapon().gun.TakeCues()) {
         if (cue.kind == GunCue::Kind::RemoveBullet) {
             if (scene.world != nullptr) { RemoveOldestProjectile(owner); }
             else if (!scene.shots.empty()) {
@@ -692,10 +717,10 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             shot->id = scene.nextProjectile++;
             shot->owner = owner;
             shot->weapon = player.gunResource;
-            shot->weaponMasteryLimit = player.weapon->data.GetMasteryLimit();
+            shot->weaponMasteryLimit = player.ActiveWeapon().data.GetMasteryLimit();
             float masteryRoll = 1;
-            if (player.weapon->gun.GetMasteryLevel() > 0) { masteryRoll = scene.Random(0, 1); }
-            shot->masteryDamageMultiplier = player.weapon->gun.GetMasteryDamageMultiplier(masteryRoll);
+            if (player.ActiveWeapon().gun.GetMasteryLevel() > 0) { masteryRoll = scene.Random(0, 1); }
+            shot->masteryDamageMultiplier = player.ActiveWeapon().gun.GetMasteryDamageMultiplier(masteryRoll);
             if (scene.world != nullptr) { shot->powerupMultiplier = scene.world->GetProjectilePowerupMultiplier(owner); }
             shot->part = hand;
             shot->visual = visual;
@@ -728,6 +753,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
     int deltaMs, const WeaponCollision *collision) {
     Impl &scene = *m_impl;
     if (!player.weapon || deltaMs <= 0) { return; }
+    if (scene.world == nullptr) { BeginAudioFrame(); }
     scene.playerX = modelToScene[3];
     scene.playerY = modelToScene[7];
     EmitBrother(player, modelToScene, facingDegrees, kPlayerCombatId, collision);
@@ -777,7 +803,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         const float radians = shot->direction * kRadians;
         if (shot->beam) {
             if (shot->owner == kPlayerCombatId) {
-                if (!player.weapon->gun.IsShooting()) { shot->script.removed = true; }
+                if (!player.ActiveWeapon().gun.IsShooting()) { shot->script.removed = true; }
                 ProjectMuzzle(player, modelToScene, shot->source.hand, shot->source.node, shot->x, shot->y, shot->z);
                 shot->direction = direction;
             } else if (scene.world != nullptr && !scene.world->Anchor(shot->owner, shot->part,
@@ -795,7 +821,10 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             shot->x += dx * fraction; shot->y += dy * fraction;
             hitWall = fraction < 1.0f;
         }
-        if (scene.world != nullptr && shot->script.HasActiveCollision() && !shot->pendingHit && !shot->script.removed) {
+        // CEnemy::HandleCollision :71435 leaves an unhandled event pending in
+        // the enemy, but single-player bullets keep moving/testing collisions.
+        // Only the multiplayer ApplyCollision branch :71676 pauses a bullet.
+        if (scene.world != nullptr && shot->script.HasActiveCollision() && !shot->script.removed) {
             float x = startX, y = startY;
             float dx = shot->x - startX, dy = shot->y - startY;
             if (shot->beam) {
@@ -829,7 +858,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
                     shot->length *= trace.fraction;
                     break;
                 }
-                if (shot->script.removed || shot->pendingHit) {
+                if (shot->script.removed) {
                     shot->x = hit.x;
                     shot->y = hit.y;
                     break;

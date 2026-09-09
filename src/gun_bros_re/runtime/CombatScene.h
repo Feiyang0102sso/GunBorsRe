@@ -52,6 +52,8 @@ public:
     void SetMap(CMap &map, const CCollisionData &collision, WeaponCollision &weaponCollision,
         float cameraScale, float playerRadius);
     CombatEnemy *Spawn(std::size_t entry, float x, float y);
+    /** Original map requirements and LEVEL script references, before simulation. */
+    bool PreloadEnemies(const RequirementList &requirements, const CScript &levelScript);
     CombatEnemy *SpawnNearby(std::size_t entry);
     void Update(int deltaMs, float moveX, float moveY, bool shoot);
     void PlayerMatrix(float *matrix) const;
@@ -69,6 +71,13 @@ public:
     void EnemyMatrix(const CombatEnemy &enemy, float *matrix) const;
     /** Shared centres for the actual hit test and the collision overlay. */
     void EnemyCircle(const CombatEnemy &enemy, int part, float &x, float &y, float &radius) const;
+    struct HealthBar {
+        float x, y, width, height, border, fraction, red;
+    };
+    /** BIG bounds give world top-centre x/y; width/height/border are screen pixels.
+     * The HUD projection converts this anchor to a screen top-left rectangle.
+     */
+    std::vector<HealthBar> EnemyHealthBars(float viewportScale = 1) const;
     CombatEnemy *Find(CombatId id);
     std::size_t AliveCount() const;
     float GetPlayerRadius() const { return m_playerRadius; }

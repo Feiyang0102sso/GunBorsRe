@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 enum class MapViewMode { Preview, GameView };
+class CWindow;
 struct SurvivalGameContext;
 struct MissionEntry;
 int RunMapPreview(const std::string &bigDirectory, const std::string &packShortName,
@@ -17,5 +18,5 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
     SurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
-    const MissionEntry *archiveMission = nullptr, bool performanceStudy = false);
+    const MissionEntry *archiveMission = nullptr, bool performanceStudy = false, CWindow *sharedWindow = nullptr, bool feedbackStudy = false);
 #endif
