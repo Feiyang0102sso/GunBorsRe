@@ -84,6 +84,7 @@ void PrintUsage() {
         "  --social-check      original offline social UI; no invented native rewards\n"
         "  --planet-menu-check original map, mode overlay and four retail selections\n"
         "  --mission-menu-check original mission cards, requirements and wave selection\n"
+        "  --play-interaction-check  verify selection, mode effects, back and scrolling\n"
         "  --header-check      original navigation, meters, entrance and input\n"
         "  --refinery-menu-check original refinery layout, transfers and native saving\n"
         "  --greeting-check original greeting animation and exit-time daily rewards\n"
@@ -273,6 +274,7 @@ int main(int argc, char **argv) {
     bool checkOptions = false;
     bool checkSocial = false;
     bool checkPlanetMenu = false;
+    bool checkPlayInteraction = false;
     bool checkMissionMenu = false;
     bool checkHeader = false;
     bool checkRefineryMenu = false;
@@ -473,6 +475,8 @@ int main(int argc, char **argv) {
             checkOptions = true;
         } else if (std::strcmp(argument, "--social-check") == 0) {
             checkSocial = true;
+        } else if (std::strcmp(argument, "--play-interaction-check") == 0) {
+            checkPlayInteraction = true;
         } else if (std::strcmp(argument, "--mission-menu-check") == 0) {
             checkMissionMenu = true;
         } else if (std::strcmp(argument, "--header-check") == 0) {
@@ -787,6 +791,7 @@ int main(int argc, char **argv) {
     if (checkOptions) { return RunOptionsCheck(bigDirectory); }
     if (checkSocial) { return RunSocialOfflineCheck(bigDirectory); }
     if (checkPlanetMenu) { return RunPlanetMenuCheck(bigDirectory); }
+    if (checkPlayInteraction) { return RunPlayInteractionCheck(bigDirectory); }
     if (checkMissionMenu) { return RunMissionMenuCheck(bigDirectory); }
     if (checkHeader) { return RunNavigationBarCheck(bigDirectory); }
     if (checkRefineryMenu) { return RunRefineryMenuCheck(bigDirectory); }

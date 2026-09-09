@@ -106,6 +106,17 @@ def main():
                  ", ".join(movies), entry["action"], entry["parameter"]))
     target = ROOT / "src/gun_bros_re/runtime/OriginalMenuData.inc"
     target.write_text("\n".join(generated) + "\n", encoding="utf-8")
+    # CreateContentParticle :149304 reads signed shorts at table+48/+50.
+    # MultiplayerOverlay::Bind :250662 consumes both from entry zero.
+    mode = tables["MDS_BUTTON_MP_TOGGLE"]
+    packed_particles = mode["entries"][0]["words"][8]
+    particles = struct.unpack("<2h", struct.pack("<I", packed_particles))
+    mode_target = ROOT / "src/gun_bros_re/runtime/OriginalModeParticleData.inc"
+    mode_target.write_text(
+        "\n".join(provenance) + "\n"
+        + "// MDS_BUTTON_MP_TOGGLE: original pack and two particle ordinals.\n"
+        + '{%s, {%d, %d}}\n' % (json.dumps(mode["pack"]), particles[0], particles[1]),
+        encoding="utf-8")
     # NAVBAR_MAIN at VA 0x3c3cc0: shared movie index, count, then branch IDs.
     # CMenuNavigationBar::Init :143357 maps branch-1 to MDS_BUTTON_TRUNK.
     navigation_offset = offset_of(0x3C3CC0)

@@ -443,6 +443,7 @@
     <ClInclude Include="src\gun_bros_re\runtime\MovieStudy.h" />
     <ClInclude Include="src\gun_bros_re\runtime\OriginalMenuData.h" />
     <None Include="src\gun_bros_re\runtime\OriginalMenuData.inc" />
+    <None Include="src\gun_bros_re\runtime\OriginalModeParticleData.inc" />
     <ClInclude Include="src\gun_bros_re\runtime\PowerupMoviePlayer.h" />
     <ClInclude Include="src\gun_bros_re\runtime\StartupSequence.h" />
     <ClInclude Include="src\gun_bros_re\runtime\SurvivalHud.h" />

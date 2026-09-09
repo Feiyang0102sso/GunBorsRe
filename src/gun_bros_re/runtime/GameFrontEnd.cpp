@@ -25,6 +25,8 @@
 #include "gun_bros/Planet.h"
 #include "gun_bros/CLevel.h"
 #include "gun_bros/CBGM.h"
+#include "gun_bros/WeaponEffects.h"
+#include "gun_bros/CParticleEffect.h"
 #include "runtime/MapScene.h"
 #include "runtime/EnemyModel.h"
 #include "engine/CQuadBatch.h"
@@ -65,6 +67,46 @@ bool SameObject(const GameObjectRef &first, const GameObjectRef &second) {
     return first.packHash == second.packHash && first.localIndex == second.localIndex;
 }
 
+/** Windows pointer adapter for CMenuMovieControl's continuous playback.
+ * Geometry and base speed come from the Movie. Integrate native damping at a
+ * fixed 60 Hz reference so desktop frame rate does not change flick distance.
+ */
+struct MenuScrollMotion {
+    float velocity = 0;
+    std::uint64_t lastTick = 0, lastMotionTick = 0;
+    bool captured = false;
+
+    void Update(float &position, std::uint64_t clock, float delta, float wheel, bool held,
+        bool pressedInside, bool enabled, float maximum, float stride, unsigned duration) {
+        const float seconds = std::min(0.05f, static_cast<float>(clock - lastTick) / 1000);
+        lastTick = clock;
+        if (!enabled || maximum <= 0) { velocity = 0; captured = false; return; }
+        const float baseSpeed = stride * 1000 / std::max(1u, duration);
+        if (pressedInside) { captured = true; velocity = 0; }
+        if (captured && held) {
+            position -= delta;
+            if (delta != 0 && seconds > 0) {
+                velocity = std::clamp(-delta / seconds, -5 * baseSpeed, 5 * baseSpeed);
+                lastMotionTick = clock;
+            } else if (clock - lastMotionTick > 80) { velocity = 0; }
+        } else {
+            captured = false;
+            // CalculateBaseVelocity :141749 sets 250000 / chapter-ms;
+            // UpdatePlaybackSpeed :141086 subtracts this * dt^2 / 2.
+            const float deceleration = baseSpeed * (250000.0f / std::max(1u, duration)) / 120;
+            const float speed = std::abs(velocity);
+            const float travelTime = std::min(seconds, speed / deceleration);
+            const float distance = speed * travelTime - deceleration * travelTime * travelTime / 2;
+            if (velocity < 0) { position -= distance; }
+            else { position += distance; }
+            velocity = std::copysign(std::max(0.0f, speed - deceleration * seconds), velocity);
+        }
+        if (wheel != 0) { position -= wheel * stride; velocity = 0; }
+        position = std::clamp(position, 0.0f, maximum);
+        if ((position == 0 && velocity < 0) || (position == maximum && velocity > 0)) { velocity = 0; }
+    }
+};
+
 struct MenuState {
     unsigned page = 0;
     unsigned planet = 0;
@@ -84,6 +126,8 @@ struct MenuState {
     std::uint64_t shopSwapLastTick = 0;
     bool shopSwapKeyRequested = false;
     float shopScroll = 0;
+    MenuScrollMotion shopMotion, missionMotion, waveMotion;
+    float missionPosition = 0, wavePosition = 0;
     std::uint64_t shopDetailStart = 0;
     std::uint64_t shopDetailLastTick = 0;
     unsigned shopDetailTime = 0;
@@ -207,6 +251,11 @@ struct MenuState {
             shopDetailOpen = false;
         }
         if (target == page) { return; }
+        // A hidden control must not resume an old fling on another page.
+        shopMotion = MenuScrollMotion{};
+        missionMotion = MenuScrollMotion{};
+        waveMotion = MenuScrollMotion{};
+        modeLastTick = 0;
         if (page == 24 && greetingBound) {
             greetingTarget = target;
             greetingExitRequested = true;
@@ -225,6 +274,10 @@ struct MenuState {
         page = target;
     }
     void Back() {
+        shopMotion = MenuScrollMotion{};
+        missionMotion = MenuScrollMotion{};
+        waveMotion = MenuScrollMotion{};
+        modeLastTick = 0;
         if (page == 24 && greetingBound) { Navigate(0, true); return; }
         if (history.empty()) { page = 0; return; }
         page = history.back();
@@ -244,6 +297,8 @@ public:
     /** Temporarily route this frame's click exclusively to a modal panel. */
     bool ExchangeClick(bool enabled) { const bool previous = clicked; clicked = enabled; return previous; }
     bool Open(CResTOCManager &toc, PackTables &tables) {
+        resourceToc = &toc;
+        resourceTables = &tables;
         if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return false; }
         window.SetEscapeCloses(false);
         window.EnableCheats(true);
@@ -309,11 +364,15 @@ public:
         dragX = pixelsX * kMenuWidth / width;
         dragY = pixelsY * kMenuHeight / height;
         if (down && !previousDown) { dragDistance = 0; }
+        pointerPressed = down && !previousDown;
+        pointerHeld = down;
         dragDistance += std::abs(dragX) + std::abs(dragY);
         // CMenuMission handles selection on release; dragging must never enter a planet.
         clicked = !down && previousDown && dragDistance < 9;
         previousDown = down;
         if (scripted) {
+            pointerPressed = false;
+            pointerHeld = false;
             dragX = 0;
             dragY = 0;
             dragDistance = 0;
@@ -945,6 +1004,65 @@ public:
         movies.Rectangle(area.x, area.y, area.width, area.height, 0, 0, 0, area.alpha * 0.5f);
     }
     float dragX = 0, dragY = 0;
+    bool pointerHeld = false, pointerPressed = false;
+    bool PrepareModeEffects() {
+        if (modeEffects[0]) { return true; }
+        static const struct { const char *pack; int ordinals[2]; } binding =
+#include "runtime/OriginalModeParticleData.inc"
+        ;
+        const int pack = resourceToc->GetPackIndexFromName(binding.pack);
+        if (pack < 0) { return false; }
+        for (unsigned index = 0; index < 2; ++index) {
+            if (binding.ordinals[index] < 0) { return false; }
+            modeEffectRefs[index].packHash = resourceToc->GetPack(pack)->GetPackHash();
+            modeEffectRefs[index].localIndex = static_cast<std::uint8_t>(binding.ordinals[index]);
+            std::vector<std::uint8_t> bytes;
+            if (!resourceTables->ReadSectionResource(modeEffectRefs[index].packHash, GameSection::ParticleEffect,
+                modeEffectRefs[index].localIndex, bytes)) { return false; }
+            CParticleEffect effect;
+            CArrayInputStream input(bytes);
+            if (!effect.Init(input) || input.Available() != 0) { return false; }
+            modeEffects[index] = std::make_unique<WeaponEffects>(*resourceToc, *resourceTables, imageProgram);
+        }
+        // Bind stops the selection burst; the second emitter runs continuously.
+        return modeEffects[1]->StartPersistentEffect(modeEffectRefs[1], 0, 0) != 0;
+    }
+    bool StartModeSelectionEffect() {
+        if (!PrepareModeEffects()) { return false; }
+        modeEffects[0]->Clear();
+        return modeEffects[0]->StartPersistentEffect(modeEffectRefs[0], 0, 0) != 0;
+    }
+    bool AdvanceModeEffects(unsigned elapsed) {
+        if (!PrepareModeEffects()) { return false; }
+        for (auto &effect : modeEffects) { effect->AdvanceAmbientEffects(elapsed); }
+        return true;
+    }
+    void DrawModeEffects(const MovieRegion &label) {
+        // LabelCallback :250137 positions the burst at label top-center and
+        // the persistent glow at its center, before drawing the text itself.
+        for (unsigned index = 0; index < 2; ++index) {
+            float transform[16];
+            std::copy(movies.CurrentProjection(), movies.CurrentProjection() + 16, transform);
+            float y = label.y;
+            if (index == 1) { y += label.height / 2; }
+            Matrix4dTranslate(transform, label.x + label.width / 2, y);
+            modeEffects[index]->Draw(transform);
+        }
+    }
+    std::size_t ModeParticleCount() const {
+        if (!modeEffects[0]) { return 0; }
+        return modeEffects[0]->GetParticleCount();
+    }
+    void Scroll(MenuScrollMotion &motion, float &position, const MovieRegion &viewport,
+        bool enabled, float maximum, float stride, unsigned duration) {
+        const bool inside = MouseIn(viewport.x, viewport.y, viewport.width, viewport.height);
+        float wheel = 0;
+        if (enabled && inside) { wheel = window.TakeWheelDelta(); }
+        bool pressed = pointerPressed && inside;
+        bool held = pointerHeld;
+        if (scripted && dragX != 0) { pressed = inside; held = true; }
+        motion.Update(position, clock, dragX, wheel, held, pressed, enabled, maximum, stride, duration);
+    }
     bool animateNavigation = true;
     bool inputEnabled = true;
     bool verifyPlayerProjection = false;
@@ -968,8 +1086,12 @@ public:
         }
     }
 private:
+    CResTOCManager *resourceToc = nullptr;
+    PackTables *resourceTables = nullptr;
     CShaderProgram textProgram;
     CShaderProgram imageProgram;
+    std::array<std::unique_ptr<WeaponEffects>, 2> modeEffects;
+    std::array<GameObjectRef, 2> modeEffectRefs;
     CMarkerBatch markers;
     CQuadBatch images;
     CTexture titleImage;
@@ -1542,7 +1664,7 @@ void DrawStoreCategories(GameMenu &view, const MovieRegion &bar, MenuState &stat
             {
                 state.shopCategory = category;
                 if (state.page == 17) { state.page = 2; }
-                state.shopScroll = 0;
+                state.shopScroll = 0; state.shopMotion = MenuScrollMotion{};
                 state.shopFilter = 0;
                 state.selectedItem = -1;
                 state.shopDetailOpen = false;
@@ -2066,16 +2188,11 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         !RequireRegion(view, storeScroll, 0, kScrollRestTime, viewport, "belt viewport")) { return false; }
     const float columnPitch = std::max(1.0f, secondSlot.x - firstSlot.x);
     const float maximumScroll = std::max(0.0f, (columns - 1.0f) * columnPitch);
-    if (!modalOpen && view.MouseIn(content.x, viewport.y, content.width, viewport.height)) {
-        state.shopScroll -= view.dragX;
-        state.shopScroll -= view.window.TakeWheelDelta() * columnPitch;
-    }
-    state.shopScroll = std::clamp(state.shopScroll, 0.0f, maximumScroll);
-    if (!view.window.IsLeftMouseDown()) {
-        const float settled = std::round(state.shopScroll / columnPitch) * columnPitch;
-        state.shopScroll += (settled - state.shopScroll) * 0.25f;
-        if (std::abs(settled - state.shopScroll) < 0.5f) { state.shopScroll = settled; }
-    }
+    unsigned scrollStart = 0, scrollEnd = 0, nextScrollStart = 0, nextScrollEnd = 0;
+    const CMovie *scrollMovie = view.movies.GetMovie(storeScroll);
+    if (scrollMovie == nullptr || !scrollMovie->GetChapterRange(1, scrollStart, scrollEnd) ||
+        !scrollMovie->GetChapterRange(2, nextScrollStart, nextScrollEnd)) { return false; }
+    view.Scroll(state.shopMotion, state.shopScroll, viewport, !modalOpen, maximumScroll, columnPitch, nextScrollStart - scrollStart);
 
     int purchaseIndex = -1;
     unsigned purchaseSlot = 0;
@@ -2312,7 +2429,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
             if (!state.shopFilterOpen || !view.Hit(touchX, touchY, optionTouch.width, optionTouch.height)) { continue; }
             view.NotePress(optionPlate, optionX, y, optionLabel.width, optionLabel.height);
             if (bit == 0) { state.shopFilter = 0; } else { state.shopFilter ^= bit; }
-            state.shopScroll = 0;
+            state.shopScroll = 0; state.shopMotion = MenuScrollMotion{};
         }
     }
 
@@ -2493,6 +2610,7 @@ public:
                 region.x + region.width / 2, region.y + region.height / 2, 1, alpha);
         }
         const std::string label = view.movies.NamedString(entry->strings[0]);
+        if (selected) { view.DrawModeEffects(region); }
         return view.movies.Text(label, region.x + (region.width - view.movies.TextWidth(label, 0)) / 2,
             region.y + (region.height - view.movies.TextHeight(0)) / 2, 0, 1, 0, alpha);
     }
@@ -2519,9 +2637,11 @@ bool DrawOriginalModeOverlay(GameMenu &view, MenuState &state) {
         if (!view.animateNavigation) { state.modeTime = openEnd; }
         if (state.modeSelected) { state.modePhase = 2; state.modeTime = idleStart; }
     }
+    if (state.modeLastTick == 0) { state.modeLastTick = view.clock; }
     const unsigned elapsed = static_cast<unsigned>(view.clock - state.modeLastTick);
     state.modeLastTick = view.clock;
     state.modeSpriteTime += elapsed;
+    if (!view.AdvanceModeEffects(elapsed)) { return false; }
     if (state.modePhase == 0) { state.modeTime = std::min(openEnd, state.modeTime + elapsed); }
     if (state.modePhase == 1) {
         state.modeTime = std::min(idleEnd, state.modeTime + elapsed);
@@ -2551,6 +2671,7 @@ bool DrawOriginalModeOverlay(GameMenu &view, MenuState &state) {
             state.modeSelected = true;
             state.modeTime = foldStart;
             state.modePhase = 1;
+            if (!view.StartModeSelectionEffect()) { return false; }
             if (state.page == 22) { state.Navigate(0, true); }
         } else {
             // SetSelection :250261 uses table 189/2 when multiplayer service
@@ -2608,6 +2729,14 @@ bool DrawOriginalStarMap(GameMenu &view, MenuState &state, const CProfileManager
         state.starLastTick = view.clock;
         state.starFadeTime = 0;
         if (!view.animateNavigation) { state.starFadeTime = 350; }
+        // SetSelectedIndex :162296 queues the first slot for the end of OnShow.
+        if (state.starSelectedSlot < 1) {
+            state.starSelectedSlot = 1;
+            state.starLocked = false;
+            unsigned chapterStart = 0, chapterEnd = 0;
+            if (!map->GetChapterRange(0, chapterStart, chapterEnd)) { return false; }
+            state.starTargetTime = chapterEnd;
+        }
     }
     const unsigned elapsed = static_cast<unsigned>(view.clock - state.starLastTick);
     state.starLastTick = view.clock;
@@ -2884,32 +3013,26 @@ public:
 };
 
 /** A page transition is the authored chapter 1; chapter 2 is the next page's
- * matching pose. The wheel is a Windows adapter for one native page gesture. */
-bool AdvanceMissionPage(const CMovie &movie, unsigned elapsed, unsigned &page, unsigned &time, bool &moving, bool reverse) {
-    unsigned start = 0, end = 0, nextStart = 0, nextEnd = 0;
-    if (!movie.GetChapterRange(1, start, end) || !movie.GetChapterRange(2, nextStart, nextEnd)) { return false; }
-    if (!moving) { time = std::min(start, time + elapsed); return true; }
-    if (reverse) {
-        time -= std::min(elapsed, time - start);
-        if (time == start) { moving = false; }
-    } else {
-        time = std::min(nextStart, time + elapsed);
-        if (time == nextStart) { ++page; time = start; moving = false; }
+ * matching pose. The wheel is a Windows adapter for one native page gesture.
+ * Historical note above described the former one-page adapter. Continuous
+ * control now maps arbitrary positions onto those same authored poses.
+ */
+/** Map continuous scroll onto the original repeating Movie chapter. */
+bool ScrollMissionMovie(GameMenu &view, MenuScrollMotion &motion, float &position,
+    const CMovie &movie, const MovieRegion &viewport, float stride, unsigned maximum,
+    bool enabled, unsigned &page, unsigned &time, bool &moving) {
+    unsigned start = 0, end = 0, next = 0, nextEnd = 0;
+    if (!movie.GetChapterRange(1, start, end) || !movie.GetChapterRange(2, next, nextEnd) || stride <= 0 || next <= start) { return false; }
+    // Saved progress and research jumps choose a whole option at rest.
+    if (!motion.captured && motion.velocity == 0 && time == start && page != static_cast<unsigned>(position / stride)) {
+        position = page * stride;
     }
-    return true;
-}
-
-bool BeginMissionPage(const CMovie &movie, bool reverse, unsigned maximum, unsigned &page,
-    unsigned &time, bool &moving, bool &direction) {
-    if (moving || (reverse && page == 0) || (!reverse && page >= maximum)) { return true; }
-    unsigned start = 0, end = 0;
-    if (reverse) {
-        if (!movie.GetChapterRange(2, start, end)) { return false; }
-        --page;
-    } else if (!movie.GetChapterRange(1, start, end)) { return false; }
-    time = start;
-    moving = true;
-    direction = reverse;
+    const bool opening = time < start;
+    view.Scroll(motion, position, viewport, enabled && !opening, maximum * stride, stride, next - start);
+    if (opening) { moving = false; return true; }
+    page = static_cast<unsigned>(position / stride);
+    time = start + static_cast<unsigned>((position / stride - page) * (next - start));
+    moving = motion.captured || motion.velocity != 0;
     return true;
 }
 
@@ -3066,16 +3189,14 @@ public:
         const unsigned waveOrdinal = view.movies.Ordinal("GLU_MOVIE_WAVE_SELECT");
         const CMovie *waveMovie = view.movies.GetMovie(waveOrdinal);
         if (waveMovie == nullptr) { return false; }
-        if (view.MouseIn(region.x, region.y, region.width, region.height)) {
-            const float wheel = view.window.TakeWheelDelta();
-            state.missionScroll -= view.dragX;
-            if (wheel != 0 || std::abs(state.missionScroll) >= region.width / 4) {
-                const bool reverse = wheel > 0 || state.missionScroll < 0;
-                if (!BeginMissionPage(*waveMovie, reverse, pageCount - 1, state.wavePage, state.missionWaveTime,
-                    state.missionWaveMoving, state.missionWaveReverse)) { return false; }
-                state.missionScroll = 0;
-            }
-        }
+        unsigned waveStart = 0, waveEnd = 0;
+        MovieRegion waveFirst, waveNext;
+        if (!waveMovie->GetChapterRange(1, waveStart, waveEnd) ||
+            !view.movies.Region(waveOrdinal, 1, waveStart, waveFirst) ||
+            !view.movies.Region(waveOrdinal, 2, waveStart, waveNext)) { return false; }
+        if (!ScrollMissionMovie(view, state.waveMotion, state.wavePosition, *waveMovie, region,
+            waveNext.x - waveFirst.x, pageCount - 1, focused && !state.missionClosing && state.modePhase == 2,
+            state.wavePage, state.missionWaveTime, state.missionWaveMoving)) { return false; }
         {
             StoreRegionClip clip(view, region);
             MissionWaveCallbacks callbacks(view, state, profile, index, view.MouseIn(region.x, region.y, region.width, region.height), launched);
@@ -3089,7 +3210,7 @@ public:
         const CMovie *bar = view.movies.GetMovie(scrollOrdinal);
         if (bar == nullptr) { return false; }
         unsigned barTime = 0;
-        if (pageCount > 1) { barTime = bar->duration * state.wavePage / (pageCount - 1); }
+        if (pageCount > 1) { barTime = static_cast<unsigned>(bar->duration * state.wavePosition / ((waveNext.x - waveFirst.x) * (pageCount - 1))); }
         return view.movies.Draw(scrollOrdinal, barTime, region.x + (region.width - scrollbar.width) / 2, region.y + region.height - 4);
     }
     GameMenu &view;
@@ -3128,6 +3249,8 @@ public:
             state.missionScroll = 0;
             state.missionWaveTime = 0;
             state.missionWaveMoving = false;
+            state.waveMotion = MenuScrollMotion{};
+            state.wavePosition = 0;
             const auto &mission = view.planetEntries[state.planet].missions[index];
             const unsigned progress = NativeMissionProgress(profile, mission.level);
             state.wavePage = 0;
@@ -3162,34 +3285,28 @@ bool DrawOriginalMissionInfo(GameMenu &view, MenuState &state, const CProfileMan
         state.missionListMoving = false;
         state.missionFocused = -1;
         state.missionScroll = 0;
+        state.missionPosition = 0;
+        state.missionMotion = MenuScrollMotion{};
         if (!view.animateNavigation) { state.missionTime = mainEnd; state.missionListTime = listStart; }
     }
     const unsigned elapsed = static_cast<unsigned>(view.clock - state.missionLastTick);
     state.missionLastTick = view.clock;
     state.missionTime += elapsed;
-    if (!AdvanceMissionPage(*list, elapsed, state.missionFirst, state.missionListTime, state.missionListMoving, state.missionListReverse)) { return false; }
+    if (state.missionListTime < listStart) { state.missionListTime = std::min(listStart, state.missionListTime + elapsed); }
     const CMovie *waveMovie = view.movies.GetMovie(view.movies.Ordinal("GLU_MOVIE_WAVE_SELECT"));
-    if (waveMovie == nullptr || !AdvanceMissionPage(*waveMovie, elapsed, state.wavePage, state.missionWaveTime,
-        state.missionWaveMoving, state.missionWaveReverse)) { return false; }
+    unsigned waveStart = 0, waveEnd = 0;
+    if (waveMovie == nullptr || !waveMovie->GetChapterRange(1, waveStart, waveEnd)) { return false; }
+    if (state.missionWaveTime < waveStart) { state.missionWaveTime = std::min(waveStart, state.missionWaveTime + elapsed); }
     MissionInfoCallbacks info(view, state);
     if (!view.movies.Draw(mainOrdinal, std::min(mainEnd, state.missionTime), 512, 384, kMenuWidth, kMenuHeight, 0, 1, &info)) { return false; }
     MovieRegion viewport, firstSlot, nextSlot;
     if (!view.movies.Region(listOrdinal, 0, listStart, viewport) || !view.movies.Region(listOrdinal, 1, listStart, firstSlot) ||
         !view.movies.Region(listOrdinal, 2, listStart, nextSlot)) { return false; }
     const unsigned count = static_cast<unsigned>(view.planetEntries[state.planet].missions.size());
-    if (state.missionFocused < 0 && state.modePhase == 2 && view.MouseIn(viewport.x, viewport.y, viewport.width, viewport.height)) {
-        const float wheel = view.window.TakeWheelDelta();
-        state.missionScroll -= view.dragX;
-        const float stride = nextSlot.x - firstSlot.x;
-        if (wheel != 0 || std::abs(state.missionScroll) >= stride) {
-            const bool reverse = wheel > 0 || state.missionScroll < 0;
-            unsigned maximum = 0;
-            if (count > 3) { maximum = count - 3; }
-            if (!BeginMissionPage(*list, reverse, maximum, state.missionFirst, state.missionListTime,
-                state.missionListMoving, state.missionListReverse)) { return false; }
-            state.missionScroll = 0;
-        }
-    }
+    unsigned maximum = 0;
+    if (count > 3) { maximum = count - 3; }
+    if (!ScrollMissionMovie(view, state.missionMotion, state.missionPosition, *list, viewport, nextSlot.x - firstSlot.x,
+        maximum, state.missionFocused < 0 && state.modePhase == 2, state.missionFirst, state.missionListTime, state.missionListMoving)) { return false; }
     {
         StoreRegionClip clip(view, viewport);
         MissionListCallbacks callbacks(view, state, profile, launched);
@@ -3220,7 +3337,9 @@ bool DrawOriginalMissionInfo(GameMenu &view, MenuState &state, const CProfileMan
     if (back == nullptr || !back->GetChapterRange(0, start, backEnd)) { return false; }
     const float backX = planetRegion.x + planetRegion.width / 2, backY = planetRegion.y + planetRegion.height / 2;
     if (!view.movies.Draw(backOrdinal, std::min(state.missionTime, backEnd), backX, backY)) { return false; }
-    for (const auto &region : view.movies.Regions(backOrdinal, 0, backX, backY)) {
+    // The authored touch-only region has visible=0 at both keyframes. The
+    // original button queries it independently of drawing visibility.
+    for (const auto &region : view.movies.Regions(backOrdinal, std::min(state.missionTime, backEnd), backX, backY, true)) {
         if (region.index != 0 || !view.Hit(region.x, region.y, region.width, region.height)) { continue; }
         if (state.missionFocused < 0) { state.Navigate(0, true); }
         else { state.missionClosing = true; state.missionFocusTime = 0; }
@@ -6629,6 +6748,153 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
     std::printf("[mission-menu-check] all authored missions focus wave-clicks=%u horde-clicks=%u fresh-profile script locks failures=0\n",
         testedWaves, testedHordes);
     return 0;
+}
+
+/** Replay input through the same PLAY callbacks as the GUI, with native saves. */
+int RunPlayInteractionCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    CProfileManager profile;
+    const auto path = std::filesystem::path("out/play-interaction-check") / std::to_string(GetTickCount64());
+    if (!LoadNativeProfile(toc, tables, profile, path, std::filesystem::path(ASSET_ROOT) / "saves")) { return 1; }
+    GameMenu view;
+    if (!view.Open(toc, tables)) { return 1; }
+    view.scripted = true;
+    view.animateNavigation = true;
+    MenuState state;
+    unsigned failures = 0;
+    for (unsigned frame = 0; frame < 150; ++frame) {
+        view.clock += 16; view.Begin(0); view.SetTestClick({-1, -1});
+        if (!DrawOriginalStarMap(view, state, profile) || !DrawOriginalModeOverlay(view, state)) { return 1; }
+    }
+    const bool autoSelected = state.starSelectedSlot == 1 && state.starLocked;
+    if (!autoSelected) { ++failures; }
+    std::printf("[play-interaction] auto-selected=%d slot=%d locked=%d failures=%u\n", autoSelected, state.starSelectedSlot, state.starLocked, failures);
+    const unsigned modeOrdinal = view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP");
+    MovieRegion mode;
+    if (!view.movies.Region(modeOrdinal, 1, state.modeTime, mode)) { return 1; }
+    view.Begin(0); view.SetTestClick({mode.x + mode.width / 2, mode.y + mode.height / 2});
+    if (!DrawOriginalModeOverlay(view, state)) { return 1; }
+    const unsigned before = state.modeTime;
+    view.clock += 80; view.Begin(0); view.SetTestClick({-1, -1});
+    if (!DrawOriginalModeOverlay(view, state)) { return 1; }
+    const bool animated = state.modeTime != before && state.modePhase == 1;
+    if (!animated || view.ModeParticleCount() == 0) { ++failures; }
+    if (!view.window.SaveFrame((path / "mode-select.png").string())) { return 1; }
+    std::printf("[play-interaction] mode-intermediate=%d time=%u..%u failures=%u\n", animated, before, state.modeTime, failures);
+    view.clock += 3000; view.Begin(0); view.SetTestClick({-1, -1});
+    if (!DrawOriginalModeOverlay(view, state)) { return 1; }
+    state.Navigate(21);
+    view.animateNavigation = false;
+    bool launch = false;
+    view.Begin(21); view.SetTestClick({-1, -1});
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    const unsigned mainOrdinal = view.movies.Ordinal("GLU_MOVIE_MISSION_MENU");
+    const unsigned backOrdinal = view.movies.Ordinal("GLU_MOVIE_BACK_BUTTON");
+    unsigned start = 0, end = 0;
+    MovieRegion planet, back;
+    if (!view.movies.GetMovie(mainOrdinal)->GetChapterRange(0, start, end) ||
+        !view.movies.Region(mainOrdinal, 0, end, planet) ||
+        !view.movies.GetMovie(backOrdinal)->GetChapterRange(0, start, end)) { return 1; }
+    for (const auto &region : view.movies.Regions(backOrdinal, end, planet.x + planet.width / 2, planet.y + planet.height / 2, true)) {
+        if (region.index == 0) { back = region; }
+    }
+    view.Begin(21); view.SetTestClick({std::max(1.0f, back.x + back.width / 2), back.y + back.height / 2});
+    std::printf("[play-interaction] back-bounds=%.1f,%.1f %.1fx%.1f frame=%u mission=%u\n", back.x, back.y, back.width, back.height, end, state.missionTime);
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (state.page != 0) { ++failures; }
+    std::printf("[play-interaction] back-page=%u failures=%u\n", state.page, failures);
+    state.Navigate(21); state.missionBound = false;
+    view.Begin(21); view.SetTestClick({-1, -1});
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    const unsigned listOrdinal = view.movies.Ordinal("GLU_MOVIE_MISSION_LIST");
+    MovieRegion viewport, first, second;
+    if (!view.movies.GetMovie(listOrdinal)->GetChapterRange(1, start, end) ||
+        !view.movies.Region(listOrdinal, 0, start, viewport) || !view.movies.Region(listOrdinal, 1, start, first) ||
+        !view.movies.Region(listOrdinal, 2, start, second)) { return 1; }
+    view.clock += 16; view.Begin(21);
+    view.SetTestClick({viewport.x + viewport.width / 2, viewport.y + viewport.height / 2});
+    view.ExchangeClick(false); view.dragX = -(second.x - first.x) / 8;
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    const bool followsDrag = state.missionListTime != start || state.missionFirst != 0;
+    if (!followsDrag) { ++failures; }
+    std::printf("[play-interaction] list-follows-small-drag=%d time=%u rest=%u failures=%u\n", followsDrag, state.missionListTime, start, failures);
+    const float stride = second.x - first.x;
+    // Equal flicks must travel equally at 30/60-ish desktop frame cadences.
+    float referenceDistance = 0;
+    for (unsigned frameMs : {16u, 32u}) {
+        MenuScrollMotion motion;
+        float position = 0;
+        motion.Update(position, 16, -stride / 2, 0, true, true, true, stride * 100, stride, end - start + 1);
+        unsigned clock = 16;
+        while (clock < 1616) {
+            clock += frameMs;
+            motion.Update(position, clock, 0, 0, false, false, true, stride * 100, stride, end - start + 1);
+        }
+        if (frameMs == 16) { referenceDistance = position; }
+        else if (std::abs(position - referenceDistance) > 0.1f) { ++failures; }
+    }
+    for (unsigned frame = 0; frame < 6; ++frame) {
+        view.clock += 16; view.Begin(21);
+        view.SetTestClick({viewport.x + viewport.width / 2, viewport.y + viewport.height / 2});
+        view.ExchangeClick(false); view.dragX = -stride / 2;
+        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    }
+    const float released = state.missionPosition;
+    view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (state.missionPosition <= released || released < stride * 3) { ++failures; }
+    for (unsigned frame = 0; frame < 180; ++frame) {
+        view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
+        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    }
+    const float maximum = (view.planetEntries[state.planet].missions.size() - 3) * stride;
+    if (state.missionPosition > maximum || state.missionMotion.velocity != 0) { ++failures; }
+    if (!view.window.SaveFrame((path / "revolutions-after-flick.png").string())) { return 1; }
+    std::printf("[play-interaction] list-release=%.1f coast=%.1f maximum=%.1f failures=%u\n", released, state.missionPosition, maximum, failures);
+    // Focus a real visible REV and swipe its wave selector continuously.
+    MovieRegion card;
+    if (!view.movies.Region(listOrdinal, 1, state.missionListTime, card)) { return 1; }
+    view.Begin(21); view.SetTestClick({card.x + card.width / 2, card.y + card.height / 2});
+    if (!DrawOriginalMissionInfo(view, state, profile, launch) || state.missionFocused < 0) { return 1; }
+    for (unsigned frame = 0; frame < 65; ++frame) {
+        view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
+        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    }
+    const unsigned boxOrdinal = view.movies.Ordinal("GLU_MOVIE_MISSION_BOX");
+    MovieRegion box, waves;
+    if (!view.movies.Region(boxOrdinal, 0, state.missionCardTime, box)) { return 1; }
+    for (const auto &region : view.movies.Regions(boxOrdinal, state.missionCardTime,
+        kMenuWidth / 2 - box.width / 2, kMenuHeight / 2 - box.height / 2)) {
+        if (region.index == 8) { waves = region; }
+    }
+    const float waveBefore = state.wavePosition;
+    view.clock += 16; view.Begin(21);
+    view.SetTestClick({waves.x + waves.width / 2, waves.y + waves.height / 2});
+    view.ExchangeClick(false); view.dragX = waves.width * 3;
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    const float waveLeft = state.wavePosition;
+    view.clock += 16; view.Begin(21);
+    view.SetTestClick({waves.x + waves.width / 2, waves.y + waves.height / 2});
+    view.ExchangeClick(false); view.dragX = -waves.width * 5;
+    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (state.wavePosition <= waveLeft || state.wavePage < 2 || launch) { ++failures; }
+    if (!view.window.SaveFrame((path / "waves-after-drag.png").string())) { return 1; }
+    std::printf("[play-interaction] waves-before=%.1f left=%.1f right=%.1f page=%u failures=%u\n", waveBefore, waveLeft, state.wavePosition, state.wavePage, failures);
+    // The same radial back action must close an expanded card, then the planet.
+    for (unsigned press = 0; press < 2; ++press) {
+        view.Begin(21); view.SetTestClick({std::max(1.0f, back.x + back.width / 2), back.y + back.height / 2});
+        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+        if (press == 0 && !state.missionClosing) { ++failures; }
+        for (unsigned frame = 0; frame < 40 && state.page == 21; ++frame) {
+            view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
+            if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+        }
+    }
+    if (state.page != 0) { ++failures; }
+    std::printf("[play-interaction] nested-back-page=%u failures=%u\n", state.page, failures);
+    return failures != 0;
 }
 
 int RunPlanetMenuCheck(const std::string &bigDirectory) {

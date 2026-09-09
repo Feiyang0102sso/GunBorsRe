@@ -15,6 +15,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory);
 int RunOptionsCheck(const std::string &bigDirectory);
 int RunSocialOfflineCheck(const std::string &bigDirectory);
 int RunPlanetMenuCheck(const std::string &bigDirectory);
+int RunPlayInteractionCheck(const std::string &bigDirectory);
 int RunMissionMenuCheck(const std::string &bigDirectory);
 int RunNavigationBarCheck(const std::string &bigDirectory);
 int RunRefineryMenuCheck(const std::string &bigDirectory);
