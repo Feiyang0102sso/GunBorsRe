@@ -15,6 +15,9 @@ struct GameObjectTypeRef {
 class CStoreItem {
 public:
     bool Init(CArrayInputStream &stream);
+    // Loader identity, corresponding to original cached pack/index at +356/+358.
+    // This is not an extra field in the serialized STORE payload.
+    GameObjectRef resource;
     std::uint8_t type = 0;
     std::uint8_t flags = 0;
     std::uint32_t value8 = 0;

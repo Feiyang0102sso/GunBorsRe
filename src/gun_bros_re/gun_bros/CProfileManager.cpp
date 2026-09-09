@@ -12,7 +12,7 @@
 #include <algorithm>
 
 namespace {
-constexpr unsigned kProfileVersion = 10;
+constexpr unsigned kProfileVersion = 11;
 constexpr unsigned kMaximumInventoryRecords = 1024;
 
 void WriteRef(std::ostream &stream, const GameObjectRef &ref) {
@@ -51,6 +51,7 @@ void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager
     inventory.clear();
     powerups.clear();
     weaponMastery.clear();
+    purchasedPackages.clear();
     options.Reset();
     musicEnabled = true;
     soundEnabled = true;
@@ -68,6 +69,14 @@ void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager
         if (!armor.IsNull()) { Grant(2, armor); }
     }
     refinery.Bind(refinement);
+}
+
+bool CProfileManager::IsPackagePurchased(const GameObjectRef &ref) const {
+    // CPackageOfferMgr::IsPackagePurchased :396345 tests key existence.
+    for (const GameObjectRef &entry : purchasedPackages) {
+        if (entry.packHash == ref.packHash && entry.localIndex == ref.localIndex) { return true; }
+    }
+    return false;
 }
 
 bool CProfileManager::Owns(unsigned type, const GameObjectRef &ref) const {
@@ -110,6 +119,10 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
     // own runtime systems; do not charge for an item we cannot deliver.
     // Stage 10: supported consumables now use their own count inventory.
     if (item.type >= 14 || item.objects.empty()) { return PurchaseResult::Unsupported; }
+    if (!award && item.singlePurchase != 0) {
+        if (item.resource.IsNull()) { return PurchaseResult::Unsupported; }
+        if (IsPackagePurchased(item.resource)) { return PurchaseResult::Owned; }
+    }
     bool missing = false;
     for (const GameObjectTypeRef &ref : item.objects) {
         if (ref.type == 17 && IsPlayablePowerup(ref.object)) {
@@ -146,6 +159,9 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
         else if (item.type <= 9) { ++statistics[11]; }
         else if (item.type <= 13) { ++statistics[12]; }
     }
+    // CStoreAggregator::AcquireItem :158173 records only an actual purchase,
+    // separately from the consumable counts and the award branch.
+    if (!award && item.singlePurchase != 0) { purchasedPackages.push_back(item.resource); }
     return PurchaseResult::Purchased;
 }
 
@@ -261,6 +277,15 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
             candidate.weaponMastery.push_back(entry);
         }
     }
+    candidate.purchasedPackages.clear();
+    if (version >= 11) {
+        if (!(stream >> count) || count > kMaximumInventoryRecords) { return false; }
+        for (unsigned index = 0; index < count; ++index) {
+            GameObjectRef ref;
+            if (!ReadRef(stream, ref) || ref.IsNull()) { return false; }
+            candidate.purchasedPackages.push_back(ref);
+        }
+    }
     if (!(stream >> end) || end != "END") { return false; }
     for (const GameObjectRef &ref : candidate.configuration.guns) {
         if (!candidate.Owns(6, ref)) { return false; }
@@ -314,6 +339,8 @@ bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
     stream << '\n' << tutorialCompleted << ' ' << tutorialSteps;
     stream << '\n' << weaponMastery.size() << '\n';
     for (const auto &entry : weaponMastery) { WriteRef(stream, entry.resource); stream << entry.experience << '\n'; }
+    stream << purchasedPackages.size() << '\n';
+    for (const auto &ref : purchasedPackages) { WriteRef(stream, ref); }
     stream << "\nEND\n";
     stream.close();
     if (stream.fail()) { return false; }

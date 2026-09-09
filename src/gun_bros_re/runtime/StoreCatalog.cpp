@@ -41,6 +41,7 @@ bool LoadStoreCatalog(CResTOCManager &toc, PackTables &tables, std::vector<Store
             StoreEntry entry;
             entry.ref.packHash = pack->GetPackHash();
             entry.ref.localIndex = static_cast<std::uint8_t>(index);
+            entry.data.resource = entry.ref;
             entry.owner = pack->GetShortName() + " store " + std::to_string(index);
             if (!entry.data.Init(stream) || stream.Available() != 0) {
                 std::printf("[store] invalid record %s remaining=%zu\n", entry.owner.c_str(), stream.Available());
@@ -158,6 +159,22 @@ int RunProgressCheck(const std::string &bigDirectory) {
     const unsigned coreHash = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
     profile.Reset(coreHash, refinementData);
     bool testedPurchase = false;
+    // User regression: a consumable-containing, one-time package must never
+    // charge again. Select by the original flag, not by a translated name.
+    for (const StoreEntry &entry : catalog) {
+        if (entry.data.singlePurchase == 0) { continue; }
+        CProfileManager packageBuyer;
+        packageBuyer.Reset(coreHash, refinementData);
+        packageBuyer.coins = entry.data.commonPrice * 2ULL;
+        packageBuyer.warbucks = entry.data.rarePrice * 2ULL;
+        const auto first = packageBuyer.AcquireItem(entry.data, data.GetMaximumLevel());
+        const auto balance = packageBuyer.warbucks;
+        const auto second = packageBuyer.AcquireItem(entry.data, data.GetMaximumLevel());
+        const bool passed = first == PurchaseResult::Purchased && second == PurchaseResult::Owned && packageBuyer.warbucks == balance;
+        std::printf("[package-once-check] resource=%u:%u first=%u second=%u unchanged-balance=%d passed=%d\n",
+            entry.ref.packHash, entry.ref.localIndex, unsigned(first), unsigned(second), packageBuyer.warbucks == balance, passed);
+        if (!passed) { ++failures; }
+    }
     for (const StoreEntry &entry : catalog) {
         if (entry.name != "Mad Dogs") { continue; }
         const CStoreItem &item = entry.data;

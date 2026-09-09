@@ -1298,6 +1298,9 @@ void DrawCardPrice(GameMenu &view, const CStoreItem &item, const MovieRegion &ro
 /** A bundle is owned once every object it hands over is. Only the records with
  * the single-purchase flag are treated this way. */
 bool OwnsBundle(const CProfileManager &profile, const CStoreItem &item) {
+    // The historical inventory approximation below does not apply to a
+    // single-purchase package: CPackageOfferMgr keeps an independent key.
+    if (item.singlePurchase != 0) { return profile.IsPackagePurchased(item.resource); }
     for (const GameObjectTypeRef &object : item.objects) {
         if (!profile.Owns(object.type, object.object)) { return false; }
     }
@@ -1966,7 +1969,8 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         items.push_back(static_cast<unsigned>(store.size())); itemSlots.push_back(6);
         items.push_back(static_cast<unsigned>(store.size() + 1)); itemSlots.push_back(6);
         for (unsigned index = 0; index < store.size(); ++index) {
-            if (store[index].data.singlePurchase == 0) { continue; }
+            if (state.shopCategory != 0 || store[index].data.singlePurchase == 0 ||
+                profile.IsPackagePurchased(store[index].ref)) { continue; }
             items.push_back(index);
             itemSlots.push_back(6);
             break;
@@ -1976,7 +1980,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
     // keeps the record out of the list entirely.
     std::vector<std::pair<int, unsigned>> ordered;
     for (unsigned index = 0; index < store.size(); ++index) {
-        if (store[index].data.displayOrder < 0 || store[index].data.value242 == 1) { continue; }
+        if (store[index].data.displayOrder < 0 || store[index].data.value242 == 1 || store[index].data.singlePurchase != 0) { continue; }
         ordered.push_back({store[index].data.displayOrder, index});
     }
     std::sort(ordered.begin(), ordered.end());
@@ -2043,7 +2047,11 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
     // control. Its input must cover the same authored viewport as drawing.
     const bool listHover = view.MouseIn(content.x, viewport.y, content.width, viewport.height);
     // The belt has its own viewport; the content region alone cuts the second row.
-    view.Clip(content.x, viewport.y, content.width, viewport.height);
+    // STORE_SCROLL region 0 is the control's input rectangle, not a vertical
+    // drawing clip. CMenuStore::ItemCallback :178878 and CMovieRegion::Draw
+    // :109978 allow corner sprites outside it. Clip only horizontally; the
+    // host framebuffer supplies the vertical boundary, just as for CMovie.
+    view.Clip(content.x, 0, content.width, kMenuHeight);
     for (unsigned offset = 0; offset < kDrawnColumns; ++offset) {
         const unsigned column = firstColumn + offset;
         if (column >= columns) { break; }
@@ -2410,6 +2418,12 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         if (result == PurchaseResult::Purchased || result == PurchaseResult::Owned) {
             if (purchaseSlot < 5) { Equipped(profile, purchaseSlot) = item.data.objects[0].object; }
             if (!profile.SaveToDisk(savePath)) { return false; }
+            if (item.data.singlePurchase != 0) {
+                state.shopDetailOpen = false;
+                state.shopDetailClosing = false;
+                state.shopPreview = false;
+                state.selectedItem = -1;
+            }
         }
     }
     return true;
@@ -5094,6 +5108,10 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             std::printf("[cheat] %s\n", cheat.c_str());
         }
         for (KeyCode key = view.window.TakeKeyPress(); key != KeyCode::None; key = view.window.TakeKeyPress()) {
+            if (state.page == 14) {
+                if (key == KeyCode::Space || key == KeyCode::Enter) { activate = true; }
+                continue;
+            }
             if (state.currencyPending || state.refineryTransfer >= 0) { continue; }
             if (profile.nativeArchive && (state.page == 25 || state.page == 29)) { continue; }
             if (state.storePromptRequested || state.storePopup.IsActive()) {
@@ -5480,7 +5498,12 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                 }
             } else if (state.page == 14) {
                 if (!view.TitleImage()) { return -3; }
-                if (view.Button(330, 620, 364, 72, "TAP TO PLAY", true) || activate) {
+                // User-requested desktop prompt, not an authored Movie/text.
+                // The glyphs themselves come from the original BIG font11.
+                if ((view.clock / 600) % 2 == 0) {
+                    view.CenterText("TAP TO CONTINUE", kMenuWidth * 0.5f, kMenuHeight * 0.88f, 11, 1.0f);
+                }
+                if (view.Hit(0, 0, kMenuWidth, kMenuHeight) || activate) {
                     unsigned nextPage = 25;
                     if (profile.tutorialCompleted) { nextPage = 24; }
                     if (profile.nativeArchive && !profile.firstLaunch) { nextPage = 24; }
@@ -7186,7 +7209,99 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
     return 0;
 }
 
-int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool bankOnly) {
+/** Focused regression for the user's splash, package and clipped badge report. */
+int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<StoreEntry> &store,
+    const std::vector<WeaponEntry> &weapons, const std::vector<ArmorEntry> &armor) {
+    const auto root = std::filesystem::path("out/ui-feedback-2026-09-09");
+    const auto save = root / ("profile-" + std::to_string(GetTickCount64()));
+    CProfileManager profile;
+    profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+    if (!LoadNativeProfile(toc, tables, profile, save, std::filesystem::path(ASSET_ROOT) / "saves")) { return 1; }
+    {
+        GameMenu view;
+        if (!view.Open(toc, tables)) { return 1; }
+        MovieRegion viewport, column, content, badge, sprite;
+        const unsigned scroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
+        if (!view.movies.Region(scroll, 0, kScrollRestTime, viewport) ||
+            !view.movies.Region(scroll, 1, kScrollRestTime, column) ||
+            !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content)) { return 1; }
+        StoreCardFace face;
+        face.x = column.x;
+        face.y = column.y;
+        if (!CardRegion(view, view.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), kCardBadgeRegion, face, badge) ||
+            !view.movies.SpriteBounds(0, 88, sprite)) { return 1; }
+        const float badgeTop = badge.y + badge.height / 2 + sprite.y;
+        std::printf("[ui-feedback-check] content-y=%.1f viewport-y=%.1f column-y=%.1f badge-top=%.1f sprite-height=%.1f\n",
+            content.y, viewport.y, column.y, badgeTop, sprite.height);
+        if (badgeTop < content.y) {
+            std::printf("[ui-feedback-check] first-row badge clipped by %.1f pixels failures=1\n", viewport.y - badgeTop);
+            return 1;
+        }
+    }
+    for (unsigned phase = 0; phase < 4; ++phase) {
+        MenuState state;
+        state.page = 14;
+        profile.firstLaunch = phase == 3;
+        std::vector<MenuTestClick> clicks;
+        if (phase == 0) { clicks.push_back({-1, -1, 1200}); }
+        if (phase == 1) { clicks.push_back({-1, -1, 600}); }
+        if (phase >= 2) { clicks.push_back({12, 12, 16}); }
+        const auto screenshot = root / ("splash-" + std::to_string(phase) + ".png");
+        if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, save,
+            screenshot.string(), &clicks) != -2) { return 1; }
+        unsigned expectedPage = 14;
+        if (phase == 2) { expectedPage = 24; }
+        if (phase == 3) { expectedPage = 25; }
+        if (state.page != expectedPage) { return 1; }
+        std::printf("[ui-feedback-check] splash-phase=%u page=%u wait blink click original-entry failures=0\n", phase, state.page);
+    }
+    profile.firstLaunch = false;
+    const StoreEntry *package = nullptr;
+    unsigned packageIndex = 0;
+    for (unsigned index = 0; index < store.size(); ++index) {
+        if (store[index].data.singlePurchase != 0) { package = &store[index]; packageIndex = index; break; }
+    }
+    if (package == nullptr) { return 1; }
+    MenuTestClick packageCard, buyPackage;
+    {
+        GameMenu view;
+        if (!view.Open(toc, tables)) { return 1; }
+        MovieRegion column, body, right, label;
+        StoreCardFace face;
+        const auto *entry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+        if (entry == nullptr || !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, kScrollRestTime, column)) { return 1; }
+        face.x = column.x; face.y = column.y;
+        const unsigned box = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
+        if (!CardRegion(view, box, kCardBodyRegion, face, body) || !CardRegion(view, box, kCardRightRegion, face, right) ||
+            !view.movies.Region(view.movies.Ordinal(entry->movies[0]), 1, 0, label)) { return 1; }
+        packageCard = {body.x + 10, body.y + 10, 1000};
+        buyPackage = {right.x + right.width - label.width / 2, right.y + right.height - label.height / 2, 1000};
+        if (label.width <= right.width) { buyPackage.x = right.x + right.width / 2; }
+    }
+    for (unsigned phase = 0; phase < 7; ++phase) {
+        MenuState state;
+        state.page = 2;
+        state.shopGunSlot = profile.activeWeaponSlot;
+        if (phase == 0 || phase == 1) { state.shopCategory = 2; }
+        if (phase == 2) { state.shopCategory = 1; }
+        std::vector<MenuTestClick> clicks{{-1, -1, 1000}};
+        if (phase == 1 || phase == 2 || phase == 3 || phase == 6) { clicks.push_back(packageCard); }
+        if (phase == 4) { clicks.push_back(buyPackage); }
+        const auto screenshot = root / ("store-" + std::to_string(phase) + ".png");
+        if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, save,
+            screenshot.string(), &clicks) != -2) { return 1; }
+        if (phase == 3 && state.selectedItem != static_cast<int>(packageIndex)) { return 1; }
+        if ((phase == 1 || phase == 2 || phase == 6) && state.selectedItem == static_cast<int>(packageIndex)) { return 1; }
+        if (phase == 4 && (!profile.IsPackagePurchased(package->ref) || state.shopDetailOpen)) { return 1; }
+        if (phase == 5 && (!profile.LoadFromDisk(save) || !profile.IsPackagePurchased(package->ref))) { return 1; }
+        std::printf("[ui-feedback-check] store-phase=%u category=%u selected=%d package-purchased=%u failures=0\n",
+            phase, state.shopCategory, state.selectedItem, profile.IsPackagePurchased(package->ref));
+    }
+    return 0;
+}
+
+int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool bankOnly, bool feedbackOnly) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
     PackTables tables(toc);
@@ -7201,6 +7316,7 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     if (bankOnly) { return CheckBank(toc, tables, progress, refinement, store, weapons, armor); }
+    if (feedbackOnly) { return CheckUiFeedback(toc, tables, progress, refinement, store, weapons, armor); }
     if (cardsOnly) { return CheckStoreCards(toc, tables, profile, progress, refinement, store, weapons, armor); }
     unsigned closedStart = 0, closedEnd = 0, slideStart = 0, slideEnd = 0;
     MovieRegion closedButton, openButton, openPanel, optionLabel;
@@ -7408,21 +7524,51 @@ int RunGameMenuCheck(const std::string &bigDirectory) {
     itemState.shopCategory = 2;
     // Speed Boost is the store's first power-up row: one Warbuck for five
     // charges, so two purchases leave ten.
-    const std::vector<MenuTestClick> itemClicks = {{486, 582}, {486, 582}, {-100, -100}};
+    // Resolve that row and its purchase button from BIG. A package no longer
+    // occupies the first POWER UPS cell, so the old second-row click is stale.
+    const StoreEntry *firstPowerup = nullptr;
+    for (const StoreEntry &entry : store) {
+        if (entry.data.displayOrder < 0 || entry.data.value242 == 1 || entry.data.singlePurchase != 0 ||
+            !MatchesEquipmentSlot(entry, 5, weapons, armor)) { continue; }
+        if (firstPowerup == nullptr || entry.data.displayOrder < firstPowerup->data.displayOrder) { firstPowerup = &entry; }
+    }
+    if (firstPowerup == nullptr) { return 1; }
+    MenuTestClick buyPowerup;
+    {
+        GameMenu probe;
+        if (!probe.Open(toc, tables)) { return 1; }
+        MovieRegion column, right, label;
+        const auto *entry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+        if (entry == nullptr || !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, kScrollRestTime, column)) { return 1; }
+        const StoreCardFace face{column.x, column.y};
+        if (!CardRegion(probe, probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), kCardRightRegion, face, right) ||
+            !probe.movies.Region(probe.movies.Ordinal(entry->movies[0]), 1, 0, label)) { return 1; }
+        buyPowerup = {right.x + right.width - label.width / 2, right.y + right.height - label.height / 2};
+        if (label.width <= right.width) { buyPowerup.x = right.x + right.width / 2; }
+    }
+    itemProfile.coins = 2ULL * firstPowerup->data.commonPrice;
+    itemProfile.warbucks = 2ULL * firstPowerup->data.rarePrice;
+    std::uint64_t expectedCoins = itemProfile.coins, expectedWarbucks = itemProfile.warbucks;
+    if (firstPowerup->data.commonPrice != 0) { expectedCoins = 0; }
+    else { expectedWarbucks = 0; }
+    const GameObjectRef speedBoost = firstPowerup->data.objects[0].object;
+    unsigned expectedCount = 0;
+    for (const auto &object : firstPowerup->data.objects) {
+        if (object.type == 17 && SameObject(object.object, speedBoost)) { expectedCount += 2; }
+    }
+    const std::vector<MenuTestClick> itemClicks = {buyPowerup, buyPowerup, {-100, -100}};
     const std::filesystem::path itemPath = "out/menu-powerup-profile-check.dat";
     if (ShowGameMenu(toc, tables, itemProfile, progress, refinement, store, weapons, armor,
         itemState, itemPath, "out/game-menu-items-check.png", &itemClicks) != -2) { return 1; }
-    GameObjectRef speedBoost;
-    speedBoost.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
-    speedBoost.localIndex = 16;
-    if (itemProfile.warbucks != 8 || itemProfile.GetPowerupCount(speedBoost) != 10) {
+    if (itemProfile.coins != expectedCoins || itemProfile.warbucks != expectedWarbucks || itemProfile.GetPowerupCount(speedBoost) != expectedCount) {
         std::printf("[menu-check] failed warbucks=%llu speed-boost=%u\n",
             itemProfile.warbucks, itemProfile.GetPowerupCount(speedBoost));
         return 1;
     }
     restored.Reset(core, refinement);
-    if (!restored.LoadFromDisk(itemPath) || restored.GetPowerupCount(speedBoost) != 10) { return 1; }
-    std::printf("[menu-check] consumable-bought-twice=10 warbucks=8 saved=10 failures=0\n");
+    if (!restored.LoadFromDisk(itemPath) || restored.GetPowerupCount(speedBoost) != expectedCount) { return 1; }
+    std::printf("[menu-check] consumable-bought-twice=%u warbucks=%llu saved=%u failures=0\n",
+        expectedCount, itemProfile.warbucks, restored.GetPowerupCount(speedBoost));
     CProfileManager previewProfile;
     previewProfile.Reset(core, refinement);
     const CProfileManager beforePreview = previewProfile;
@@ -7665,12 +7811,9 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
     state.shopGunSlot = profile.activeWeaponSlot;
     state.page = std::min(page, 29u);
     if (page == 0 && screenshotPath.empty()) {
-        if (profile.nativeArchive) {
-            // CGunBros::EnterShell :79648 uses player select on first launch,
-            // otherwise greeting. The old host TAP TO PLAY is a research page.
-            state.page = 24;
-            if (profile.firstLaunch) { state.page = 25; }
-        } else { state.page = 14; }
+        // Desktop splash requested by the user precedes EnterShell's original
+        // first-launch player selection / returning-player greeting.
+        state.page = 14;
     }
     if (profile.nativeArchive && state.page == 1) { state.page = 2; }
     if (profile.nativeArchive && state.page == 7) { state.page = 0; }

@@ -93,6 +93,7 @@ void PrintUsage() {
         "  --pause-check original pause list, help and native preferences\n"
         "  --postgame-menu-check original wrapup with actual native survival results\n"
         "  --store-template-check    verify BIG store filter and shared item cards\n"
+        "  --ui-feedback-check       verify splash, package purchase and store badges\n"
         "  --daily-bonus-check       original rewards, calendar cycle and save checks\n"
         "  --tutorial-check          original move, fire, swap and grenade tutorial\n"
         "  --performance-check       record 1200 real gameplay frames to CSV\n"
@@ -314,6 +315,7 @@ int main(int argc, char **argv) {
     bool playGame = false;
     bool checkGameMenu = false;
     bool checkStoreTemplate = false;
+    bool checkUiFeedback = false;
     bool checkStoreCards = false;
     unsigned menuPage = 0;
     bool movieRegions = false;
@@ -501,6 +503,8 @@ int main(int argc, char **argv) {
             checkStoreCards = true;
         } else if (std::strcmp(argument, "--store-template-check") == 0) {
             checkStoreTemplate = true;
+        } else if (std::strcmp(argument, "--ui-feedback-check") == 0) {
+            checkUiFeedback = true;
         } else if (std::strcmp(argument, "--tutorial-check") == 0) {
             checkTutorial = true;
         } else if (std::strcmp(argument, "--daily-bonus-check") == 0) {
@@ -790,6 +794,7 @@ int main(int argc, char **argv) {
     if (checkPostGame) { return RunPostGameMenuCheck(bigDirectory); }
     if (checkStoreCards) { return RunStoreTemplateCheck(bigDirectory, true); }
     if (checkStoreTemplate) { return RunStoreTemplateCheck(bigDirectory); }
+    if (checkUiFeedback) { return RunStoreTemplateCheck(bigDirectory, false, false, true); }
     if (checkDailyBonus) { return RunDailyBonusCheck(bigDirectory); }
     if (checkTutorial) { return RunTutorialPlayCheck(bigDirectory); }
     if (checkPerformance) { return RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0, nullptr, true, false, nullptr, true); }

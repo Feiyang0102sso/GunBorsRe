@@ -32,6 +32,7 @@ public:
     bool LoadFromDisk(const std::filesystem::path &path);
     bool SaveToDisk(const std::filesystem::path &path) const;
     bool Owns(unsigned type, const GameObjectRef &ref) const;
+    bool IsPackagePurchased(const GameObjectRef &ref) const;
     void Grant(unsigned type, const GameObjectRef &ref);
     void AddPowerup(const GameObjectRef &ref, unsigned count);
     unsigned GetPowerupCount(const GameObjectRef &ref) const;
@@ -64,6 +65,8 @@ public:
     std::vector<GameObjectTypeRef> inventory;
     std::vector<PowerupInventoryEntry> powerups;
     std::vector<WeaponMasteryEntry> weaponMastery;
+    // CPackageOfferMgr Collection (1018), keyed by original STORE reference.
+    std::vector<GameObjectRef> purchasedPackages;
     COptionsMgr options;
     bool musicEnabled = true;
     bool soundEnabled = true;

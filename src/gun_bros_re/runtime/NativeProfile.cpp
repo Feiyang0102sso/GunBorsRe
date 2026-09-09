@@ -516,6 +516,17 @@ bool ApplyArchive(CProfileManager &profile, NativeProfileArchive archive) {
     }
     candidate.inventory.clear();
     candidate.powerups.clear();
+    candidate.purchasedPackages.clear();
+    // saves/save_payloads.bt: 1018 entries have an 8-byte collection key,
+    // two preserved alignment bytes and a uint32 value. AddItem initializes
+    // that value to zero; existence, not value, means purchased (:396345).
+    const auto &packages = archive.records[18].payload;
+    for (std::size_t offset = 4; offset < packages.size(); offset += 14) {
+        if (packages[offset + 5] != 22) { continue; }
+        const GameObjectRef ref = CollectionRef(packages, offset);
+        if (!CheckRef(archive, ref, 22)) { return false; }
+        candidate.purchasedPackages.push_back(ref);
+    }
     const auto &purchases = archive.records[2].payload;
     for (std::size_t offset = 4; offset < purchases.size(); offset += 10) {
         const GameObjectRef ref = CollectionRef(purchases, offset);
@@ -818,6 +829,12 @@ bool SaveNativeProfile(const CProfileManager &profile, const std::filesystem::pa
         const std::size_t offset = EnsureRecord(mastery, 14, 6, weapon.resource);
         if (Get32(mastery, offset + 10) != weapon.experience) { Put32(mastery, offset + 10, weapon.experience); mastery[offset + 6] = 1; }
     }
+    auto &packages = archive.records[18].payload;
+    for (const GameObjectRef &ref : profile.purchasedPackages) {
+        if (!CheckRef(archive, ref, 22)) { return false; }
+        // Existing values and padding survive; new AddItem values are zero.
+        EnsureRecord(packages, 14, 22, ref);
+    }
     for (unsigned index = 0; index < archive.records.size(); ++index) {
         if (archive.records[index].payload != archive.records[index].originalPayload && archive.status[index] != 4) { archive.status[index] = 1; }
     }
@@ -910,6 +927,30 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
         if (changed.nativeArchive->records[index].payload != imported.records[index].payload) { return 1; }
     }
     std::printf("[native-profile-check] semantic-load save-reload balances equipment tips daily stats waves mastery unknown-preserved failures=0\n");
+    std::vector<StoreEntry> store;
+    if (!LoadStoreCatalog(toc, tables, store)) { return 1; }
+    unsigned packagesTested = 0;
+    for (const StoreEntry &entry : store) {
+        if (entry.data.singlePurchase == 0) { continue; }
+        CProfileManager buyer = profile;
+        buyer.purchasedPackages.clear();
+        buyer.nativeArchive->records[18].payload.assign(4, 0);
+        buyer.coins = static_cast<std::uint64_t>(entry.data.commonPrice) * 2;
+        buyer.warbucks = static_cast<std::uint64_t>(entry.data.rarePrice) * 2;
+        if (buyer.AcquireItem(entry.data, entry.data.requiredLevel) != PurchaseResult::Purchased ||
+            !buyer.SaveToDisk(root / "package")) { return 1; }
+        // Clear memory so this proves the serialized 1018 record gates buying.
+        buyer.purchasedPackages.clear();
+        if (!buyer.LoadFromDisk(root / "package") || !buyer.IsPackagePurchased(entry.ref)) { return 1; }
+        const auto coins = buyer.coins, warbucks = buyer.warbucks;
+        if (buyer.AcquireItem(entry.data, entry.data.requiredLevel) != PurchaseResult::Owned ||
+            buyer.coins != coins || buyer.warbucks != warbucks) { return 1; }
+        const auto &payload = buyer.nativeArchive->records[18].payload;
+        if (payload.size() != 18 || Get32(payload, 0) != 1 || payload[9] != 22 || Get32(payload, 14) != 0) { return 1; }
+        ++packagesTested;
+    }
+    if (packagesTested == 0) { return 1; }
+    std::printf("[native-profile-check] packages=%u save-1018-reload second-charge-rejected zero-value-is-owned failures=0\n", packagesTested);
     CProfileManager fresh;
     fresh.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto freshPath = root / ("launch-" + std::to_string(GetTickCount64()));
@@ -963,7 +1004,6 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
     }
     std::printf("[native-profile-check] horde mission-score refs=%u original-strides lower-score-preserved perfect-bit reload failures=0\n", hordeRecords);
     CDailyBonusTracking daily;
-    std::vector<StoreEntry> store;
     if (!daily.Load(toc, tables) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
     // Deliberate test clock: below/exactly one day and exactly the reset gap.
     constexpr std::int64_t firstLaunchTime = 200000;

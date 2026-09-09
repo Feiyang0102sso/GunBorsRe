@@ -8,7 +8,7 @@ int RunProfilePlayCheck(const std::string &bigDirectory);
 int RunTutorialPlayCheck(const std::string &bigDirectory);
 int RunGameMenuCheck(const std::string &bigDirectory);
 /** Isolated store template playback, hit testing and screenshot acceptance. */
-int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly = false, bool bankOnly = false);
+int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly = false, bool bankOnly = false, bool feedbackOnly = false);
 /** Original upgrade phases, resource mutations and isolated purchase/reload. */
 int RunUpgradePopupCheck(const std::string &bigDirectory);
 int RunOptionsCheck(const std::string &bigDirectory);
