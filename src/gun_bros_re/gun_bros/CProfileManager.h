@@ -33,6 +33,7 @@ public:
     bool SaveToDisk(const std::filesystem::path &path) const;
     bool Owns(unsigned type, const GameObjectRef &ref) const;
     bool IsPackagePurchased(const GameObjectRef &ref) const;
+    bool IsPackageHidden(const GameObjectRef &ref) const;
     void Grant(unsigned type, const GameObjectRef &ref);
     void AddPowerup(const GameObjectRef &ref, unsigned count);
     unsigned GetPowerupCount(const GameObjectRef &ref) const;
@@ -67,6 +68,9 @@ public:
     std::vector<WeaponMasteryEntry> weaponMastery;
     // CPackageOfferMgr Collection (1018), keyed by original STORE reference.
     std::vector<GameObjectRef> purchasedPackages;
+    // Session-only adapter for the original cached store override: show OWNED
+    // until restart, then apply CStoreItemOverride's purchased-package hiding.
+    std::vector<GameObjectRef> packagesPurchasedThisSession;
     COptionsMgr options;
     bool musicEnabled = true;
     bool soundEnabled = true;

@@ -15,6 +15,10 @@ struct StoreEntry {
     CStoreItem data;
 };
 
+class CProfileManager;
+/** CStoreItemOverride local ownership rule; preserves the original resource. */
+int GetStoreDisplayOrder(const CStoreItem &item, const CProfileManager &profile);
+
 std::string ReadGameString(CResTOCManager &toc, const CGameAssetRef &ref);
 bool LoadStoreCatalog(CResTOCManager &toc, PackTables &tables, std::vector<StoreEntry> &catalog);
 /** Original smallest adequate IAP, or largest available when none suffices. */

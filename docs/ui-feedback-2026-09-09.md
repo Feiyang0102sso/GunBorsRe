@@ -2,6 +2,8 @@
 
 本阶段按用户最新要求优先处理三项；不扩展此前八小时任务。
 
+后续纠正：用户确认原版规则为“本次保留 OWNED，重启隐藏”，且礼包内容应自动装备。以下早期“仅未购显示／关闭详情”描述已由[购买流程纠正](starter-pack-purchase-2026-09-09.md)替代；前轮测试未验证实际自动装备，不能据此认定完整购买流程已完成。
+
 ## 方案与验收
 
 1. 一次性礼包：遵循 `CStoreAggregator::CanItemBeAcquired`（155172）、`AcquireItem`（158044）和 `CPackageOfferMgr::AddItem`（396370）。原 STORE 引用作为购买键，写入原存档 1018 的 CollectionValue32；键存在表示买过，不能把 value=0 误解为未购买。仅 GUNS 显示未购买的礼包。验收连续购买、余额、原生存档重载和分类。

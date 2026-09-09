@@ -52,6 +52,7 @@ void CProfileManager::Reset(std::uint32_t corePackHash, const CRefinementManager
     powerups.clear();
     weaponMastery.clear();
     purchasedPackages.clear();
+    packagesPurchasedThisSession.clear();
     options.Reset();
     musicEnabled = true;
     soundEnabled = true;
@@ -91,6 +92,14 @@ unsigned CProfileManager::GetWeaponExperience(const GameObjectRef &ref) const {
         if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) { return entry.experience; }
     }
     return 0;
+}
+
+bool CProfileManager::IsPackageHidden(const GameObjectRef &ref) const {
+    if (!IsPackagePurchased(ref)) { return false; }
+    for (const GameObjectRef &entry : packagesPurchasedThisSession) {
+        if (entry.packHash == ref.packHash && entry.localIndex == ref.localIndex) { return false; }
+    }
+    return true;
 }
 
 void CProfileManager::AddWeaponExperience(const GameObjectRef &ref, unsigned amount, unsigned maximum) {
@@ -161,7 +170,10 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
     }
     // CStoreAggregator::AcquireItem :158173 records only an actual purchase,
     // separately from the consumable counts and the award branch.
-    if (!award && item.singlePurchase != 0) { purchasedPackages.push_back(item.resource); }
+    if (!award && item.singlePurchase != 0) {
+        purchasedPackages.push_back(item.resource);
+        packagesPurchasedThisSession.push_back(item.resource);
+    }
     return PurchaseResult::Purchased;
 }
 

@@ -1939,6 +1939,42 @@ bool DrawCurrencyCard(GameMenu &view, CResTOCManager &toc, PackTables &tables,
     return true;
 }
 
+/** CStoreAggregator::EquipItem :156082 and SetGun/SetArmor :171658.
+ * Granting inventory and equipping it are separate original menu actions.
+ */
+bool EquipStoreItem(CProfileManager &profile, const CStoreItem &item, const std::vector<ArmorEntry> &armors) {
+    CPlayerConfiguration configuration = profile.configuration;
+    unsigned gunCount = 0;
+    for (const GameObjectTypeRef &object : item.objects) {
+        if (object.type == 6 && gunCount < 2) {
+            const unsigned slot = (profile.activeWeaponSlot + gunCount) & 1;
+            ++gunCount;
+            bool alreadyEquipped = false;
+            for (const GameObjectRef &gun : configuration.guns) {
+                if (SameObject(gun, object.object)) { alreadyEquipped = true; }
+            }
+            if (!alreadyEquipped) { configuration.guns[slot] = object.object; }
+        } else if (object.type == 2) {
+            bool alreadyEquipped = false;
+            for (const GameObjectRef &part : configuration.armor) {
+                if (SameObject(part, object.object)) { alreadyEquipped = true; }
+            }
+            if (alreadyEquipped) { continue; }
+            const ArmorEntry *part = nullptr;
+            for (const ArmorEntry &entry : armors) {
+                if (entry.packHash == object.object.packHash && entry.ordinal == object.object.localIndex) { part = &entry; break; }
+            }
+            if (part == nullptr || part->data.GetSlot() >= configuration.armor.size()) {
+                std::printf("[store] Cannot equip armor pack=%u ordinal=%u\n", object.object.packHash, object.object.localIndex);
+                return false;
+            }
+            configuration.armor[part->data.GetSlot()] = object.object;
+        }
+    }
+    profile.configuration = configuration;
+    return true;
+}
+
 bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfileManager &profile,
     unsigned level, const std::vector<StoreEntry> &store, const std::vector<WeaponEntry> &weapons,
     const std::vector<ArmorEntry> &armors, MenuState &state, const std::filesystem::path &savePath) {
@@ -1970,7 +2006,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         items.push_back(static_cast<unsigned>(store.size() + 1)); itemSlots.push_back(6);
         for (unsigned index = 0; index < store.size(); ++index) {
             if (state.shopCategory != 0 || store[index].data.singlePurchase == 0 ||
-                profile.IsPackagePurchased(store[index].ref)) { continue; }
+                profile.IsPackageHidden(store[index].ref)) { continue; }
             items.push_back(index);
             itemSlots.push_back(6);
             break;
@@ -1978,10 +2014,12 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
     }
     // CStoreItem's trailing int16 is the store's own row order; a negative value
     // keeps the record out of the list entirely.
+    // Correction: OverrideItem :233074 makes owned negative-order gear visible.
     std::vector<std::pair<int, unsigned>> ordered;
     for (unsigned index = 0; index < store.size(); ++index) {
-        if (store[index].data.displayOrder < 0 || store[index].data.value242 == 1 || store[index].data.singlePurchase != 0) { continue; }
-        ordered.push_back({store[index].data.displayOrder, index});
+        const int order = GetStoreDisplayOrder(store[index].data, profile);
+        if (order < 0 || store[index].data.value242 == 1 || store[index].data.singlePurchase != 0) { continue; }
+        ordered.push_back({order, index});
     }
     std::sort(ordered.begin(), ordered.end());
     for (const std::pair<int, unsigned> &row : ordered) {
@@ -2417,13 +2455,11 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         state.message = PurchaseMessage(result);
         if (result == PurchaseResult::Purchased || result == PurchaseResult::Owned) {
             if (purchaseSlot < 5) { Equipped(profile, purchaseSlot) = item.data.objects[0].object; }
-            if (!profile.SaveToDisk(savePath)) { return false; }
-            if (item.data.singlePurchase != 0) {
-                state.shopDetailOpen = false;
-                state.shopDetailClosing = false;
+            if (item.data.singlePurchase != 0 && result == PurchaseResult::Purchased) {
+                if (!EquipStoreItem(profile, item.data, armors)) { return false; }
                 state.shopPreview = false;
-                state.selectedItem = -1;
             }
+            if (!profile.SaveToDisk(savePath)) { return false; }
         }
     }
     return true;
@@ -7294,11 +7330,214 @@ int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgre
         if (phase == 3 && state.selectedItem != static_cast<int>(packageIndex)) { return 1; }
         if ((phase == 1 || phase == 2 || phase == 6) && state.selectedItem == static_cast<int>(packageIndex)) { return 1; }
         if (phase == 4 && (!profile.IsPackagePurchased(package->ref) || state.shopDetailOpen)) { return 1; }
-        if (phase == 5 && (!profile.LoadFromDisk(save) || !profile.IsPackagePurchased(package->ref))) { return 1; }
+        if (phase == 5) {
+            // A disk reload in the same session must retain OWNED. Reset models
+            // a new process before applying the original purchased-item override.
+            profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+            if (!LoadNativeProfile(toc, tables, profile, save) || !profile.IsPackagePurchased(package->ref)) { return 1; }
+        }
         std::printf("[ui-feedback-check] store-phase=%u category=%u selected=%d package-purchased=%u failures=0\n",
             phase, state.shopCategory, state.selectedItem, profile.IsPackagePurchased(package->ref));
     }
     return 0;
+}
+
+/** Fresh inventory and one live menu, including purchase from an expanded card. */
+int RunPackagePurchaseCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    CRefinementManager::Template refinement;
+    std::vector<StoreEntry> store;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armor;
+    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
+        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    const StoreEntry *package = nullptr;
+    for (const StoreEntry &entry : store) {
+        if (entry.data.singlePurchase != 0) { package = &entry; break; }
+    }
+    if (package == nullptr) { return 1; }
+    const auto root = std::filesystem::path("out/package-purchase-check") / std::to_string(GetTickCount64());
+    GameMenu view;
+    if (!view.Open(toc, tables)) { return 1; }
+    view.scripted = true;
+    view.animateNavigation = false;
+    const unsigned box = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
+    MovieRegion column, content, body, right, button, actions;
+    unsigned start = 0, end = 0;
+    const auto *buy = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+    if (buy == nullptr || !view.movies.GetMovie(box)->GetChapterRange(1, start, end) ||
+        !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, kScrollRestTime, column) ||
+        !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
+        !view.movies.Region(view.movies.Ordinal(buy->movies[0]), 1, 0, button)) { return 1; }
+    StoreCardFace folded{column.x, column.y};
+    if (!CardRegion(view, box, kCardBodyRegion, folded, body) || !CardRegion(view, box, kCardRightRegion, folded, right)) { return 1; }
+    const MenuTestClick openClick{body.x + 10, body.y + 10};
+    MenuTestClick foldedBuy{right.x + right.width - button.width / 2, right.y + right.height - button.height / 2};
+    if (button.width <= right.width) { foldedBuy.x = right.x + right.width / 2; }
+    if (!view.movies.Region(box, kCardBodyRegion, end, body)) { return 1; }
+    const StoreCardFace expanded{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
+        content.y + content.height / 2 - body.height / 2, 1, end};
+    if (!CardRegion(view, box, kCardActionRegion, expanded, actions)) { return 1; }
+    const MenuTestClick expandedBuy{actions.x + actions.width - button.width / 2, actions.y + button.height / 2};
+    unsigned failures = 0;
+    for (unsigned mode = 0; mode < 2; ++mode) {
+        CProfileManager profile;
+        profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+        const auto save = root / std::to_string(mode);
+        if (!LoadNativeProfile(toc, tables, profile, save, root / "absent-source")) { return 1; }
+        profile.coins = package->data.commonPrice;
+        profile.warbucks = package->data.rarePrice;
+        profile.activeWeaponSlot = mode;
+        const CPlayerConfiguration initialConfiguration = profile.configuration;
+        MenuState state;
+        state.page = 2;
+        state.shopGunSlot = mode;
+        std::vector<MenuTestClick> clicks{{-1, -1, 1000}};
+        if (mode == 1) { clicks.push_back(openClick); clicks.push_back({-1, -1, 1000}); clicks.push_back(expandedBuy); }
+        else { clicks.push_back(foldedBuy); }
+        clicks.push_back({-1, -1, 1000});
+        for (const MenuTestClick &click : clicks) {
+            view.clock += click.advanceMs;
+            view.Begin(2); view.SetTestClick(click);
+            if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+        }
+        if (!view.window.SaveFrame((save / "after-purchase.png").string())) { return 1; }
+        const bool purchased = profile.IsPackagePurchased(package->ref);
+        unsigned delivered = 0, equipped = 0, gear = 0;
+        for (const auto &object : package->data.objects) {
+            if (object.type == 17) {
+                unsigned expected = 0;
+                for (const auto &other : package->data.objects) {
+                    if (other.type == 17 && SameObject(other.object, object.object)) { ++expected; }
+                }
+                if (profile.GetPowerupCount(object.object) != expected) { ++failures; }
+                continue;
+            }
+            ++gear;
+            if (profile.Owns(object.type, object.object)) { ++delivered; }
+            if (object.type == 6) {
+                for (const auto &gun : profile.configuration.guns) { if (SameObject(gun, object.object)) { ++equipped; break; } }
+            } else if (object.type == 2) {
+                for (const auto &part : profile.configuration.armor) { if (SameObject(part, object.object)) { ++equipped; break; } }
+            }
+        }
+        if (!purchased || state.shopDetailOpen != (mode == 1) || delivered != gear || equipped != gear ||
+            profile.IsPackageHidden(package->ref)) { ++failures; }
+        unsigned gunIndex = 0, restoredRows = 0;
+        for (const auto &object : package->data.objects) {
+            if (object.type == 6 && gunIndex < 2) {
+                if (!SameObject(profile.configuration.guns[(mode + gunIndex) & 1], object.object)) { ++failures; }
+                ++gunIndex;
+            }
+            if (object.type != 2) { continue; }
+            for (const ArmorEntry &part : armor) {
+                if (part.packHash == object.object.packHash && part.ordinal == object.object.localIndex &&
+                    !SameObject(profile.configuration.armor[part.data.GetSlot()], object.object)) { ++failures; }
+            }
+            for (const StoreEntry &entry : store) {
+                if (entry.data.objects.size() == 1 && entry.data.objects[0].type == 2 &&
+                    SameObject(entry.data.objects[0].object, object.object) && entry.data.displayOrder < 0) {
+                    if (GetStoreDisplayOrder(entry.data, profile) < 0) { ++failures; }
+                    ++restoredRows;
+                }
+            }
+        }
+        const auto coins = profile.coins;
+        const auto warbucks = profile.warbucks;
+        const auto inventory = profile.inventory.size();
+        const auto acquiredConfiguration = profile.configuration;
+        // Clicking the former BUY area must not acquire or equip again.
+        view.clock += 1000; view.Begin(2);
+        if (mode == 0) { view.SetTestClick(foldedBuy); }
+        else { view.SetTestClick(expandedBuy); }
+        if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+        if (profile.AcquireItem(package->data, package->data.requiredLevel) != PurchaseResult::Owned ||
+            profile.coins != coins || profile.warbucks != warbucks || profile.inventory.size() != inventory) { ++failures; }
+        // Re-entering categories must preserve the session's OWNED card.
+        for (unsigned category : {1u, 2u, 0u}) {
+            state = MenuState{};
+            state.page = 2; state.shopCategory = category; state.shopGunSlot = mode;
+            view.clock += 1000;
+            view.Begin(2); view.SetTestClick(openClick);
+            if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+            bool selectedPackage = state.selectedItem >= 0 && static_cast<unsigned>(state.selectedItem) < store.size() &&
+                SameObject(store[state.selectedItem].ref, package->ref);
+            if (selectedPackage != (category == 0)) { ++failures; }
+        }
+        if (!profile.LoadFromDisk(save) || profile.IsPackageHidden(package->ref)) { ++failures; }
+        CProfileManager restarted;
+        restarted.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+        if (!LoadNativeProfile(toc, tables, restarted, save, root / "absent-source") ||
+            !restarted.IsPackageHidden(package->ref)) { return 1; }
+        for (unsigned slot = 0; slot < acquiredConfiguration.guns.size(); ++slot) {
+            if (!SameObject(restarted.configuration.guns[slot], acquiredConfiguration.guns[slot])) { ++failures; }
+        }
+        for (unsigned slot = 0; slot < acquiredConfiguration.armor.size(); ++slot) {
+            if (!SameObject(restarted.configuration.armor[slot], acquiredConfiguration.armor[slot])) { ++failures; }
+        }
+        for (const auto &object : package->data.objects) {
+            if (object.type == 17) {
+                unsigned expected = 0;
+                for (const auto &other : package->data.objects) {
+                    if (other.type == 17 && SameObject(other.object, object.object)) { ++expected; }
+                }
+                if (restarted.GetPowerupCount(object.object) != expected || profile.GetPowerupCount(object.object) != expected) { ++failures; }
+            } else if (!restarted.Owns(object.type, object.object)) { ++failures; }
+        }
+        state = MenuState{}; state.page = 2; state.shopGunSlot = mode;
+        view.clock += 1000; view.Begin(2); view.SetTestClick(openClick);
+        if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+        if (state.selectedItem >= 0 && static_cast<unsigned>(state.selectedItem) < store.size() &&
+            SameObject(store[state.selectedItem].ref, package->ref)) { ++failures; }
+        if (!view.window.SaveFrame((save / "after-restart.png").string())) { return 1; }
+        // Owned bundle-only armor remains selectable after changing equipment.
+        restarted.configuration = initialConfiguration;
+        std::vector<std::pair<int, unsigned>> ownedArmor;
+        for (unsigned index = 0; index < store.size(); ++index) {
+            const auto &item = store[index].data;
+            if (item.objects.size() != 1 || item.objects[0].type != 2 || item.value242 == 1 ||
+                !restarted.Owns(2, item.objects[0].object)) { continue; }
+            const int order = GetStoreDisplayOrder(item, restarted);
+            if (order >= 0) { ownedArmor.push_back({order, index}); }
+        }
+        std::sort(ownedArmor.begin(), ownedArmor.end());
+        MovieRegion firstColumn, secondColumn, equipButton;
+        const auto *equipEntry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
+        const unsigned scroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
+        if (equipEntry == nullptr || !view.movies.Region(scroll, kFirstColumnRegion, kScrollRestTime, firstColumn) ||
+            !view.movies.Region(scroll, kFirstColumnRegion + 1, kScrollRestTime, secondColumn) ||
+            !view.movies.Region(view.movies.Ordinal(equipEntry->movies[0]), 1, 0, equipButton)) { return 1; }
+        unsigned armorClicks = 0;
+        for (unsigned position = 0; position < ownedArmor.size(); ++position) {
+            const auto &item = store[ownedArmor[position].second].data;
+            if (item.displayOrder >= 0) { continue; }
+            state = MenuState{}; state.page = 2; state.shopCategory = 1;
+            state.shopGunSlot = mode; state.shopFilter = kOwnedFilterBit;
+            state.shopScroll = (position / 2) * (secondColumn.x - firstColumn.x);
+            const StoreCardFace face{firstColumn.x, firstColumn.y + (position % 2) * (firstColumn.height / 2 + 5)};
+            MovieRegion price;
+            if (!CardRegion(view, box, kCardPriceRegion, face, price)) { return 1; }
+            view.clock += 1000; view.Begin(2);
+            view.SetTestClick({price.x + price.width - equipButton.width / 2, price.y + price.height - equipButton.height / 2});
+            if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+            ++armorClicks;
+        }
+        for (unsigned slot = 0; slot < acquiredConfiguration.armor.size(); ++slot) {
+            if (!SameObject(restarted.configuration.armor[slot], acquiredConfiguration.armor[slot])) { ++failures; }
+        }
+        if (armorClicks != restoredRows) { ++failures; }
+        state = MenuState{}; state.page = 2; state.shopCategory = 1; state.shopFilter = kOwnedFilterBit; state.shopGunSlot = mode;
+        view.clock += 1000; view.Begin(2); view.SetTestClick({-1, -1});
+        if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save) ||
+            !view.window.SaveFrame((save / "armor-re-equipped.png").string())) { return 1; }
+        std::printf("[package-purchase-check] expanded=%u purchased=%u detail-open=%u gear-delivered=%u/%u gear-equipped=%u/%u failures=%u\n",
+            mode, purchased, state.shopDetailOpen, delivered, gear, equipped, gear, failures);
+        std::printf("[package-purchase-check] restored-armor-rows=%u session-owned restart-hidden loadout-reloaded repeat-rejected failures=%u\n", restoredRows, failures);
+        std::printf("[package-purchase-check] armor-equip-clicks=%u failures=%u\n", armorClicks, failures);
+    }
+    return failures != 0;
 }
 
 int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool bankOnly, bool feedbackOnly) {
