@@ -12,7 +12,8 @@
 #include <filesystem>
 #include <algorithm>
 
-int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::string &screenshotPath, unsigned advanceMs, bool gallery) {
+int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::string &screenshotPath, unsigned advanceMs,
+    bool gallery, bool regionOverlay) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
     CWindow window;
@@ -34,7 +35,9 @@ int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::
         }
     }
     if (gallery) { std::filesystem::create_directories("out/ui-movies"); }
-    bool overlay = false;
+    // User regions carry the original layout, so screenshots must show them too.
+    bool overlay = regionOverlay;
+    renderer.SetRegionOverlay(overlay);
     std::uint64_t start = window.GetTicksMs();
     while (window.PumpEvents()) {
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
@@ -194,16 +197,53 @@ int RunMovieCheck(const std::string &bigDirectory) {
     if (!window.SaveFrame("out/ui-wave-components.png")) { ++failures; }
     // Original shop badges and card backgrounds share archetype 5 with waves.
     // Keep this contact sheet in the permanent movie check for future research.
-    for (unsigned sheet = 0; sheet < 3; ++sheet) {
+    for (unsigned sheet = 0; sheet < 4; ++sheet) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         for (unsigned cell = 0; cell < 20; ++cell) {
             const unsigned animation = sheet * 20 + cell;
+            if (animation >= 65) { break; }
             const float x = 10 + (cell % 4) * 254.0f;
             const float y = 10 + (cell / 4) * 149.0f;
             fontRenderer.Text("5:" + std::to_string(animation), x, y, 0, 0.6f);
             fontRenderer.DrawSpriteFitted(5, animation, 0, x, y + 22, 235, 115);
         }
         if (!window.SaveFrame("out/ui-shop-sprites-" + std::to_string(sheet) + ".png")) { ++failures; }
+    }
+    // Archetype 0 is the shared menu character: currency icons, mastery stars,
+    // button plates. Sheeting all of it keeps icon hunts out of guesswork.
+    for (unsigned sheet = 0; sheet < 10; ++sheet) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        for (unsigned cell = 0; cell < 20; ++cell) {
+            const unsigned animation = sheet * 20 + cell;
+            if (animation >= 193) { break; }
+            const float x = 10 + (cell % 4) * 254.0f;
+            const float y = 10 + (cell / 4) * 149.0f;
+            fontRenderer.Text("0:" + std::to_string(animation), x, y, 0, 0.6f);
+            fontRenderer.DrawSpriteFitted(0, animation, 0, x, y + 22, 235, 115);
+        }
+        if (!window.SaveFrame("out/ui-menu-sprites-" + std::to_string(sheet) + ".png")) { ++failures; }
+    }
+    // CMenuSystem::Load pulls character 23 with the menu itself and CMenuStore
+    // adds 26; between them they hold the currency icons and the mastery meter.
+    // Character 19 is the small player portrait set the menus print.
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    for (unsigned cell = 0; cell < 20; ++cell) {
+        const float x = 10 + (cell % 4) * 254.0f;
+        const float y = 10 + (cell / 4) * 149.0f;
+        if (!fontRenderer.DrawSpriteFitted(19, cell, 0, x, y + 22, 235, 115)) { break; }
+        fontRenderer.Text("19:" + std::to_string(cell), x, y, 0, 0.6f);
+    }
+    if (!window.SaveFrame("out/ui-portrait-sprites.png")) { ++failures; }
+    for (unsigned character = 23; character <= 26; character += 3) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        for (unsigned cell = 0; cell < 20; ++cell) {
+            const float x = 10 + (cell % 4) * 254.0f;
+            const float y = 10 + (cell / 4) * 149.0f;
+            // Both characters end before the sheet does; stop at the first gap.
+            if (!fontRenderer.DrawSpriteFitted(character, cell, 0, x, y + 22, 235, 115)) { break; }
+            fontRenderer.Text(std::to_string(character) + ":" + std::to_string(cell), x, y, 0, 0.6f);
+        }
+        if (!window.SaveFrame("out/ui-currency-sprites-" + std::to_string(character) + ".png")) { ++failures; }
     }
     // CInputPad uses archetype 1 for both sticks and the bottom-rail actions.
     for (unsigned sheet = 0; sheet < 3; ++sheet) {

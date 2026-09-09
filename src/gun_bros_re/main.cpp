@@ -57,6 +57,7 @@ void PrintUsage() {
         "  --movie-check             parse original Glu UI timelines\n"
         "  --movie <0..147>           inspect original UI; arrows browse, C regions\n"
         "  --movie-gallery           render every original core UI movie\n"
+        "  --movie-regions           outline the user regions that define the original layout\n"
         "  --help, -h                show available options and exit\n"
         "  --mute                    disable sound playback for every mode\n"
         "  --game                    planets, equipment, shop and local profile\n"
@@ -252,6 +253,7 @@ int main(int argc, char **argv) {
     bool playGame = false;
     bool checkGameMenu = false;
     unsigned menuPage = 0;
+    bool movieRegions = false;
     bool checkArmorRendering = false;
     bool checkLevelFlow = false;
     bool playSurvival = false;
@@ -321,6 +323,9 @@ int main(int argc, char **argv) {
         } else if (std::strcmp(argument, "--movie-gallery") == 0) {
             movieStudy = true;
             movieGallery = true;
+        } else if (std::strcmp(argument, "--movie-regions") == 0) {
+            movieRegions = true;
+            --modeArgumentCount;
         } else if (std::strcmp(argument, "--hud-check") == 0) { checkHud = true; }
         else if (std::strcmp(argument, "--movie-check") == 0) {
             checkMovies = true;
@@ -508,7 +513,7 @@ int main(int argc, char **argv) {
     if (checkMedia) { return RunMediaCheck(); }
     if (checkHud) { return RunSurvivalHudCheck(bigDirectory); }
     if (checkMovies) { return RunMovieCheck(bigDirectory); }
-    if (movieStudy) { return RunMovieStudy(bigDirectory, movieOrdinal, screenshotPath, advanceMs, movieGallery); }
+    if (movieStudy) { return RunMovieStudy(bigDirectory, movieOrdinal, screenshotPath, advanceMs, movieGallery, movieRegions); }
     if (introStudy) { return RunStartupSequence(screenshotPath, advanceMs); }
     if ((playGame || playOriginalProfile) && screenshotPath.empty() && !skipIntro) {
         const int result = RunStartupSequence();

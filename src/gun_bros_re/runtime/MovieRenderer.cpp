@@ -49,6 +49,28 @@ int MovieRenderer::FindMovie(const char *name) const {
     return static_cast<int>(handle - m_pack->GetResValue("GLU_MOVIE_MOVIE"));
 }
 
+unsigned MovieRenderer::Ordinal(const char *name) {
+    auto found = m_ordinals.find(name);
+    if (found != m_ordinals.end()) { return found->second; }
+    const int ordinal = FindMovie(name);
+    if (ordinal < 0) {
+        std::printf("[movie] unknown alias %s\n", name);
+        ++m_failures;
+        return 0;
+    }
+    m_ordinals[name] = static_cast<unsigned>(ordinal);
+    return static_cast<unsigned>(ordinal);
+}
+
+bool MovieRenderer::Region(unsigned ordinal, unsigned index, unsigned time, MovieRegion &region) {
+    for (const MovieRegion &candidate : Regions(ordinal, time)) {
+        if (candidate.index != index) { continue; }
+        region = candidate;
+        return true;
+    }
+    return false;
+}
+
 CBitmapFont *MovieRenderer::GetFont(unsigned index) {
     auto found = m_fonts.find(index);
     if (found != m_fonts.end()) { return found->second.get(); }
@@ -316,7 +338,7 @@ bool MovieRenderer::DrawFitted(unsigned ordinal, unsigned time, float x, float y
     return false;
 }
 
-bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, float width, float height, unsigned depth) {
+bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, float width, float height, unsigned depth, float alpha) {
     const unsigned failuresBefore = m_failures;
     if (depth > 8) { ++m_failures; return false; }
     CMovie *movie = GetMovie(ordinal);
@@ -345,7 +367,7 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
             if (child == nullptr) { return false; }
             unsigned childTime = time - frame.time;
             if (frame.content[1] != 0 && child->duration > 0) { childTime %= child->duration; }
-            if (!Draw(frame.content[0], childTime, x, y, width, height, depth + 1)) { return false; }
+            if (!Draw(frame.content[0], childTime, x, y, width, height, depth + 1, alpha)) { return false; }
             continue;
         }
         if (object.type != 0 && object.type != 1 && object.type != 7) { continue; }
@@ -371,7 +393,7 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
             }
             const SourceRect source{0, 0, 1, 256};
             m_batch.AddTransformedQuad(*m_gradients[key], x + metrics.x, y + metrics.y, metrics.width, metrics.height,
-                source, false, false, BlendMode::Alpha, 0, 0, 1, 1, 0, frame.alpha);
+                source, false, false, BlendMode::Alpha, 0, 0, 1, 1, 0, frame.alpha * alpha);
             Flush();
             continue;
         }
@@ -404,7 +426,7 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
                 m_batch.AddTransformedQuad(*quad.page, x + metrics.x + quad.offsetX, y + metrics.y + quad.offsetY,
                     static_cast<float>(quad.Width()), static_cast<float>(quad.Height()), quad.source,
                     quad.flipHorizontal, quad.flipVertical, quad.blend, x + metrics.x, y + metrics.y,
-                    frame.scaleX, frame.scaleY, frame.rotation, frame.alpha, quad.rotateTexture);
+                    frame.scaleX, frame.scaleY, frame.rotation, frame.alpha * alpha, quad.rotateTexture);
             }
         } else {
             // Panel strips repeat their original pixels; edge tiles crop rather than stretch.
@@ -447,7 +469,7 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
                         source.y += static_cast<unsigned short>(std::max(0.0f, sourceY));
                         m_batch.AddTransformedQuad(*quad.page, x + metrics.x + drawX, y + metrics.y + drawY, drawWidth, drawHeight,
                             source, quad.flipHorizontal, quad.flipVertical, quad.blend, x + metrics.x, y + metrics.y,
-                            1, 1, frame.rotation, frame.alpha, quad.rotateTexture);
+                            1, 1, frame.rotation, frame.alpha * alpha, quad.rotateTexture);
                     }
                 }
             }

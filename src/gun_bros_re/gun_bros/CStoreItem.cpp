@@ -21,9 +21,9 @@ bool CStoreItem::Init(CArrayInputStream &stream) {
         group.resize(stream.ReadUInt16());
         for (std::int32_t &value : group) { value = stream.ReadInt32(); }
     }
-    value240 = stream.ReadInt16();
+    displayOrder = stream.ReadInt16();
     value242 = stream.ReadUInt8();
-    value243 = stream.ReadUInt8();
+    singlePurchase = stream.ReadUInt8();
     value244 = stream.ReadUInt8();
     return !stream.Overran();
 }

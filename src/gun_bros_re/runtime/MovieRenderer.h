@@ -9,6 +9,7 @@
 #include "engine/CBitmapFont.h"
 #include "engine/CMarkerBatch.h"
 #include <map>
+#include <string>
 
 struct MovieRegion {
     unsigned index = 0;
@@ -26,7 +27,12 @@ public:
     bool Init(CResPackTOC &pack, CResPackTOC &core);
     CMovie *GetMovie(unsigned ordinal);
     int FindMovie(const char *name) const;
-    bool Draw(unsigned ordinal, unsigned time, float x = 512, float y = 384, float width = 1024, float height = 768, unsigned depth = 0);
+    /** Resolve and cache a movie ordinal from its original resource alias. */
+    unsigned Ordinal(const char *name);
+    /** One user region of a movie; the original screen layouts are built from these. */
+    bool Region(unsigned ordinal, unsigned index, unsigned time, MovieRegion &region);
+    bool Draw(unsigned ordinal, unsigned time, float x = 512, float y = 384, float width = 1024, float height = 768,
+        unsigned depth = 0, float alpha = 1);
     bool DrawNamed(const char *name, unsigned time, float x = 512, float y = 384);
     bool DrawFitted(unsigned ordinal, unsigned time, float x, float y, float width, float height, unsigned regionIndex = 0);
     std::string NamedString(const char *name);
@@ -63,6 +69,7 @@ private:
     CMarkerBatch m_markers;
     float m_projection[16]{};
     std::map<unsigned, CMovie> m_movies;
+    std::map<std::string, unsigned> m_ordinals;
     std::map<unsigned, Animation> m_animations;
     std::map<unsigned, std::unique_ptr<CBitmapFont>> m_fonts;
     std::map<std::string, std::string> m_strings;

@@ -24,11 +24,16 @@ public:
     std::uint32_t commonPrice = 0;
     std::uint32_t rarePrice = 0;
     std::uint8_t value32 = 0;
-    CGameAssetRef assets[6]; // [1] icon, [2] name, [5] loadout description.
+    // [1] icon, [2] name, [3] description, [4] the expanded card's stat
+    // template and [5] the folded card's power template. The templates use
+    // `^fN` font switches and `#KEY` value slots.
+    CGameAssetRef assets[6];
     std::array<std::vector<std::int32_t>, 8> statGroups;
-    std::int16_t value240 = 0;
+    // Store display order; CStoreAggregator sorts on it and -1 hides the row.
+    std::int16_t displayOrder = 0;
     std::uint8_t value242 = 0;
-    std::uint8_t value243 = 0;
+    // Set on the starter bundle alone: the record may only be bought once.
+    std::uint8_t singlePurchase = 0;
     std::uint8_t value244 = 0;
 };
 #endif

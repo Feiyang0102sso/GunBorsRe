@@ -166,3 +166,70 @@
 22:27 UTC 完成本轮交接，后台续跑 `gun-bros-2` 已暂停并核对状态；任务未归档，等待人工验收。授权窗口内约 3 小时 55 分钟完成上述阶段，不声称剩余未实现项已经完成。
 
 本轮已改进主要界面与可玩流程，但**尚未达到逐像素／逐帧 1:1**。仍有菜单插值、星图拖动曲线、部分卡片排布与字体尺寸、免费 Warbucks 美术、教程 22 项提示标记、枪 XP 助攻和熟练度奖励 XP、复活道具与真实多人服务等缺口。自动战斗使用测试无敌及指定武器，不代表原版普通难度的平衡验收；纯 AI 后期清场失败单独保留。原资源、用户截图和 saves 不提交版本库。
+
+## J 商店按原版 region 重建（2026-09-08 晚）
+
+用户反馈：商店和原版"明显不是一个东西"，简介和熟练度全没了，选中商店时导航栏没有高亮，
+一堆 UI 是歪的，另外每次切场景都有明显的换窗口动作。
+
+- 根因不是 BIG 没解析出来。原版每个菜单屏幕的布局都由具名 CMovie 的 user region 定义，
+  `GameFrontEnd.cpp` 一直在用手写坐标。完整依据与 region 数值见
+  [原版界面布局的真正来源](ui-original-layout.md)。
+- `MovieNames.inc` 从 60 个名字补全为二进制里全部 115 个 `GLU_MOVIE_*`
+  （`GLU_MOVIE__SOUNDS_` 是声音段键，不是电影，已排除）。重跑 `--movie-check`
+  得到完整的别名→序号映射，175 电影 0 失败。
+- 商店改由 `GLU_MOVIE_STORE_MENU`(37) / `STORE_SCROLL`(38) / `SHOP_BOX`(39) /
+  `SORT_BAR`(41) 的 region 驱动：分类条、横向传送带、折叠卡、展开卡、FILTER 下拉、
+  右侧人物、换枪钮全部按原版尺寸摆放，`< 1/37 >` 分页和 BACK 按钮按原版去掉。
+- 简介来自 `assets[3]`（此前错读 `assets[5]`）。卡面的 POWER 与 DMG/RPM/SPD 改为
+  渲染原版模板串 `assets[5]` / `assets[4]`，`#KEY` 用 `statGroups` 按当前熟练度填值。
+  展开卡接上 `GLU_MOVIE_WEAPON_UPGRADE_MASTERY` 的三格星条作为 UPGRADE LEVEL。
+- 主导航选中项改用 TRUNK_BUTTONS 的第 1 章（点亮底板）；原来用的第 3 章是普通态。
+- 免费 Warbucks 卡接上原美术精灵 5:36，此前只有文字。
+- 新增 `--movie-regions`：截图时把 user region 画出来，后续每个屏幕都靠它对位。
+- 集成检查新增展开卡用例（`out/game-menu-detail.png`），断言简介与属性列真的读到数据。
+  脚本驱动下屏蔽真实鼠标拖动与滚轮，修掉了一次因物理鼠标划过窗口导致的偶发失败。
+
+验收：
+
+| 检查 | 命令／证据 | 结果 |
+|---|---|---|
+| Release 构建 | MSBuild `/p:Configuration=Release` | 成功 |
+| 菜单集成 | `--game-menu-check --mute` 连续 3 次 | 均退出 0 |
+| Release UI | `test-muted.ps1 -Phase UI` | 8/8 Passed，受保护文件变化 0 |
+| Release 核心 | `test-muted.ps1 -Phase Core` | 20/20 完成，19 Passed，1 已知 PROP 43 |
+| 原图对照 | `out/shot-store10.png`、`out/game-menu-detail.png` 与 `out/reference/` | 已目视 |
+
+未做完的部分列在 [ui-original-layout.md](ui-original-layout.md) 的"仍未解决"一节：
+`^fN` 字体表映射、价格货币图标、商品排序、STORE 的红色 `!` 角标、盔甲卡图标与
+正负着色、道具的细分筛选。**单窗口宿主（消除切场景时的换窗口动作）按约定放在商店之后单独做，本轮未动。**
+
+## K 商店与升级页第二轮（用户逐条反馈）
+
+用户给了一张 STORE_ITEM 记录的十六进制标注图并追问"这些数据到底在哪儿"。
+逐条对下来，之前列为"未解决"的项目全部有据可查，没有一处是编的或写死的，
+对照表见 [原版界面布局的真正来源](ui-original-layout.md) 的第二轮小节。
+
+- 商店顺序在 `CStoreItem` 尾部 int16，负数不进列表；礼包的一次性购买是尾部另一个字节，
+  全表只有 STARTER PACK 为 1。两者都改成了有名字的字段并导出到 `out/store-check.txt`。
+- 货币图标是精灵 23:1 / 23:7，熟练度星章是 5:39/40/41，兄弟头像是 0:161+序号，
+  红色 `!` 是 0:140。新增角色 0 / 19 / 23 / 26 的联系图，避免以后再靠猜。
+- 升级页整页改为 `GLU_MOVIE_UPGRADE_POPUP`(138) 的 region 驱动，CURRENT/NEXT 列出
+  POWER/DMG/RPM/SPEED 的真实数值加暴击档位，星条开页时跑到实际进度。
+- 点卡片不再直接预览，PREVIEW 按钮才预览；满级只剩 EQUIP；按钮字号统一、
+  宽度取 MDS 指定的按钮电影；按钮按下播原版爆闪；换枪触发原版脚本事件；
+  右侧人物可鼠标拖动旋转。
+
+验收：
+
+| 检查 | 命令／证据 | 结果 |
+|---|---|---|
+| Release 构建 | MSBuild `/p:Configuration=Release` | 成功 |
+| 菜单集成 | `--game-menu-check --mute` | 退出 0，新增熟练度星章与展开卡用例 |
+| Release UI | `test-muted.ps1 -Phase UI` | 8/8 Passed，受保护文件变化 0 |
+| Release 核心 | `test-muted.ps1 -Phase Core` | 20/20 完成，19 Passed，1 已知 PROP 43 |
+| 原图对照 | `out/store-v2.png`、`out/fidelity-results-mastery.png`、`out/game-menu-detail.png` | 已目视 |
+
+集成检查的点击坐标随新顺序重算：Mad Dogs 落到第 2 列下卡、免费 ER97E 落到上卡；
+道具用例改为买两次 Speed Boost（1 战争钞票换 5 个，共 10 个），因为原版把血包的
+`displayOrder` 设成了负数，它本来就不该出现在商店里。

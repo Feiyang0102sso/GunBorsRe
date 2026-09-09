@@ -41,6 +41,9 @@ constexpr const char *kPageNames[] = {"PLANETS", "EQUIPMENT", "SHOP", "REFINERY"
 constexpr const char *kSlotNames[] = {"WEAPON 1", "WEAPON 2", "HELMET", "ARMOR", "PANTS", "ITEMS"};
 constexpr unsigned kArmorSlots[] = {0, 0, 2, 1, 0};
 constexpr float kMenuWidth = 1024;
+// The store's character column starts where the black content area does; the
+// original character reaches up past the category tabs on that side.
+constexpr float kStoreMeshClipTop = 133;
 constexpr float kMenuHeight = 768;
 constexpr const char *kActivityNames[] = {"FIRST TOUR", "TARGET PRACTICE", "PRIME DEFENDER", "ARMED AND READY",
     "HAVEN PATROL", "EXTERMINATOR", "SPACE EXPLORER", "REVOLUTION"};
@@ -70,7 +73,13 @@ struct MenuState {
     int currencyItem = -1;
     unsigned shopCategory = 0;
     unsigned shopGunSlot = 0;
-    unsigned shopColumn = 0;
+    float shopScroll = 0;
+    std::uint64_t shopDetailStart = 0;
+    // Selecting a card never previews; only the PREVIEW button does.
+    bool shopPreview = false;
+    float playerSpin = 0;
+    // When the upgrade page opened, so its meter can run up to its real value.
+    std::uint64_t masteryOpened = 0;
     unsigned shopFilter = 0;
     bool shopFilterOpen = false;
     bool shopDetailOpen = false;
@@ -178,6 +187,12 @@ public:
         // CMenuMission handles selection on release; dragging must never enter a planet.
         clicked = !down && previousDown && dragDistance < 9;
         previousDown = down;
+        if (scripted) {
+            dragX = 0;
+            dragY = 0;
+            dragDistance = 0;
+            window.TakeWheelDelta();
+        }
         movies.Draw(47, 1600);
         if (page == 3) { movies.Draw(36, 1600); }
         if (page == 2) { movies.Rectangle(0, 132, 1024, 627, 0, 0, 0); }
@@ -356,9 +371,11 @@ public:
             const OriginalMenuEntry *entry = OriginalMenuData("MDS_BUTTON_TRUNK", navigationEntries[region.index]);
             const unsigned sprite = entry->sprites[0];
             if (navigationPages[region.index] == activePage || region.Contains(mouseX, mouseY)) {
-                // CMenuMovieButton::Focus :144634 selects chapter 3. Its
-                // original cyan plate surrounds the dynamic trunk icon.
-                movies.DrawFitted(14, 350, region.x, region.y, region.width, region.height, 1);
+                // GLU_MOVIE_TRUNK_BUTTONS chapter 1 is the lit plate with the
+                // outline; chapter 3 is the plain resting plate. Rendering the
+                // movie at both times is what settled which one the original
+                // screenshots show behind the selected trunk icon.
+                movies.DrawFitted(14, 150, region.x, region.y, region.width, region.height, 1);
             }
             const float bounce = std::sin(entrance * 3.14159265f) * 0.15f;
             const float iconScale = 0.65f + entrance * 0.35f + bounce;
@@ -397,7 +414,8 @@ public:
         images.Draw(imageProgram, projection);
     }
 
-    void Icon(CResTOCManager &toc, PackTables &tables, const StoreEntry &entry, float x, float y, float size = 66) {
+    void Icon(CResTOCManager &toc, PackTables &tables, const StoreEntry &entry, float x, float y, float width,
+        float height, float alpha = 1) {
         const CGameAssetRef &ref = entry.data.assets[1];
         if (ref.assetId < 0 || ref.IsNull()) { return; }
         const std::uint64_t key = (static_cast<std::uint64_t>(ref.packHash) << 32) | static_cast<unsigned>(ref.assetId);
@@ -410,17 +428,20 @@ public:
             icons[key] = std::move(texture);
         }
         const CTexture &texture = *icons[key];
-        const float scale = std::min(size / texture.GetWidth(), size / texture.GetHeight());
+        const float scale = std::min(width / texture.GetWidth(), height / texture.GetHeight());
+        const float drawnWidth = texture.GetWidth() * scale;
+        const float drawnHeight = texture.GetHeight() * scale;
         const SourceRect source{0, 0, static_cast<std::uint16_t>(texture.GetWidth()), static_cast<std::uint16_t>(texture.GetHeight())};
         images.Begin();
-        images.AddQuad(texture, x, y, texture.GetWidth() * scale, texture.GetHeight() * scale, source, false, false, BlendMode::Alpha);
+        images.AddTransformedQuad(texture, x + (width - drawnWidth) * 0.5f, y + (height - drawnHeight) * 0.5f,
+            drawnWidth, drawnHeight, source, false, false, BlendMode::Alpha, 0, 0, 1, 1, 0, alpha);
         images.Upload();
         images.Draw(imageProgram, projection);
     }
 
     bool DrawEquippedPlayer(CResTOCManager &toc, PackTables &tables, const CProfileManager &profile,
         const std::vector<WeaponEntry> &weapons, const std::vector<ArmorEntry> &armors, unsigned slot,
-        const GameObjectTypeRef *previewItem = nullptr, bool storeLayout = false) {
+        const GameObjectTypeRef *previewItem = nullptr, const MovieRegion *storePanel = nullptr, float spin = 0) {
         unsigned gunSlot = 0;
         if (slot == 1) { gunSlot = 1; }
         // Preview substitutes only the model configuration. Ownership, currency
@@ -430,6 +451,8 @@ public:
             if (previewItem->type == 6) { configuration.guns[gunSlot] = previewItem->object; }
             if (previewItem->type == 2 && slot >= 2 && slot <= 4) { configuration.armor[kArmorSlots[slot]] = previewItem->object; }
         }
+        // Switching weapon slot is the original's swap, not just a rebuild.
+        const bool swapped = equippedPreview != nullptr && previewGunSlot != gunSlot;
         bool changed = equippedPreview == nullptr || previewGunSlot != gunSlot;
         if (equippedPreview != nullptr && equippedPreview->brotherIndex != profile.playerBrother) { changed = true; }
         if (!SameObject(previewConfiguration.guns[gunSlot], configuration.guns[gunSlot])) { changed = true; }
@@ -463,11 +486,16 @@ public:
             previewConfiguration = configuration;
             previewGunSlot = gunSlot;
             previewTicks = window.GetTicksMs();
+            // CPlayer::OnSwapGun :101048 hands input event 5 to the player
+            // script, which owns the swap animation.
+            if (swapped) { equippedPreview->weapon->brother.OnSwapGun(); }
         }
-        if (!storeLayout) { Rect(20, 414, 180, 280, 0.035f, 0.07f, 0.10f); }
-        std::string previewTitle = "EQUIPPED";
-        if (previewItem != nullptr) { previewTitle = "PREVIEW"; }
-        if (!storeLayout) { Text(38, 432, previewTitle, 1.75f, 0.93f, 0.74f, 0.33f); }
+        if (storePanel == nullptr) {
+            Rect(20, 414, 180, 280, 0.035f, 0.07f, 0.10f);
+            std::string previewTitle = "EQUIPPED";
+            if (previewItem != nullptr) { previewTitle = "PREVIEW"; }
+            Text(38, 432, previewTitle, 1.75f, 0.93f, 0.74f, 0.33f);
+        }
         const std::uint64_t now = window.GetTicksMs();
         AdvancePlayer(*equippedPreview, static_cast<int>(std::min<std::uint64_t>(now - previewTicks, 100)));
         previewTicks = now;
@@ -475,13 +503,26 @@ public:
         window.GetDrawableSize(width, height);
         // Restrict the model's depth and long weapon geometry to its sidebar panel.
         glEnable(GL_SCISSOR_TEST);
+        // The store's own GLU_MOVIE_STORE_MENU region frames the character.
         float panelX = 20, panelBottom = 686, panelWidth = 180, panelHeight = 232;
-        if (storeLayout) { panelX = 548; panelBottom = 717; panelWidth = 476; panelHeight = 565; }
+        if (storePanel != nullptr) {
+            panelX = storePanel->x;
+            panelBottom = storePanel->y + storePanel->height;
+            panelWidth = storePanel->width;
+            panelHeight = storePanel->height;
+        }
         const int previewX = static_cast<int>(panelX * width / kMenuWidth);
         const int previewY = static_cast<int>((kMenuHeight - panelBottom) * height / kMenuHeight);
         const int previewWidth = static_cast<int>(panelWidth * width / kMenuWidth);
         const int previewHeight = static_cast<int>(panelHeight * height / kMenuHeight);
-        glScissor(previewX, previewY, previewWidth, previewHeight);
+        // The region frames the model, but the original character reaches above
+        // and below it, so only the column and the bar above it clip.
+        int clipY = previewY, clipHeight = previewHeight;
+        if (storePanel != nullptr) {
+            clipY = 0;
+            clipHeight = static_cast<int>((kMenuHeight - kStoreMeshClipTop) * height / kMenuHeight);
+        }
+        glScissor(previewX, clipY, previewWidth, clipHeight);
         glViewport(previewX, previewY, previewWidth, previewHeight);
         glClear(GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
@@ -493,12 +534,15 @@ public:
         Matrix4dScale(bounds.inverseExtent, normalise);
         Matrix4dRotationX(3.14159265f * 0.5f, tilt);
         // The authored idle pose faces away from this camera; show the front.
-        Matrix4dRotationZ(3.14159265f, facing);
+        // Dragging the model adds to that turn about its own vertical axis.
+        Matrix4dRotationZ(3.14159265f + spin, facing);
         Matrix4dMultiply(normalise, centre, local);
         Matrix4dMultiply(facing, local, turned);
         Matrix4dMultiply(tilt, turned, oriented);
         float cameraWidth = 1.6f;
-        if (storeLayout) { cameraWidth = 0.90f; }
+        // Widest value that still keeps the whole figure inside its region;
+        // the outstretched weapons, not the height, set the limit.
+        if (storePanel != nullptr) { cameraWidth = 0.75f; }
         Matrix4dOrthoCentred(cameraWidth, cameraWidth * panelHeight / panelWidth, 4, viewProjection);
         Matrix4dMultiply(viewProjection, oriented, model);
         DrawPlayer(*equippedPreview, imageProgram, model);
@@ -556,6 +600,33 @@ public:
     }
 
     CWindow window;
+    // Menu time; the integration harness advances it instead of real ticks.
+    std::uint64_t clock = 0;
+    // Under the harness the real pointer must not scroll anything, or a stray
+    // drag over the window moves a list out from under a scripted click.
+    bool scripted = false;
+    // The plate movies own the press burst; remember the last press so the
+    // following frames can play it where the button was.
+    unsigned pressMovie = 0;
+    float pressX = 0, pressY = 0, pressWidth = 0, pressHeight = 0;
+    std::uint64_t pressStart = 0;
+
+    void NotePress(unsigned movie, float x, float y, float width, float height) {
+        pressMovie = movie;
+        pressX = x;
+        pressY = y;
+        pressWidth = width;
+        pressHeight = height;
+        pressStart = clock;
+    }
+
+    /** Chapter 1 of a button movie is its release burst; it runs 300 ms. */
+    void DrawPress() {
+        if (pressMovie == 0 || clock < pressStart) { return; }
+        const std::uint64_t elapsed = clock - pressStart;
+        if (elapsed >= 300) { return; }
+        movies.DrawFitted(pressMovie, 100 + static_cast<unsigned>(elapsed), pressX, pressY, pressWidth, pressHeight, 1);
+    }
     MovieRenderer movies;
     std::string names[6], descriptions[6];
     float dragX = 0, dragY = 0;
@@ -702,60 +773,398 @@ std::string UpperLabel(std::string label) {
     return label;
 }
 
-/** The original store draws two cards per column (ItemCallback :178878).
- * Item identity and purchases still come directly from the BIG catalog. */
+// GLU_MOVIE_STORE_MENU carries the whole screen skeleton. Its four user
+// regions are bound, in this order, by CMenuStore::Init (:180199) to the
+// content list, the category row, the player mesh and the gun swap button.
+constexpr unsigned kStoreContentRegion = 0;
+constexpr unsigned kStoreCategoryRegion = 1;
+constexpr unsigned kStorePlayerRegion = 2;
+constexpr unsigned kStoreGunSwapRegion = 3;
+// CMenuStore::CategoryCallback places each category button four pixels after
+// the previous one, starting at the left edge of the category region.
+constexpr float kCategoryGap = 4;
+// GLU_MOVIE_STORE_SCROLL holds five card columns. Slot 1 is the leftmost one
+// on screen and every further slot is one column to the right; the slots that
+// reach past the player already carry the original half transparency.
+constexpr unsigned kFirstColumnRegion = 1;
+constexpr unsigned kDrawnColumns = 3;
+constexpr unsigned kScrollRestTime = 400;
+// GLU_MOVIE_SHOP_BOX regions. Chapter 0 is the folded 254x164 card; chapter 2
+// expands the same card to 500x328 and reveals the stats, the upgrade meter,
+// the description and the action row.
+constexpr unsigned kCardBodyRegion = 0;
+// Region 1 is the hex plate the OWNED/EQUIPPED stamps lie across; the icon
+// itself fits region 5, which is what the original card art measures.
+constexpr unsigned kCardStampRegion = 1;
+constexpr unsigned kCardCategoryRegion = 2;
+constexpr unsigned kCardBadgeRegion = 3;
+constexpr unsigned kCardRightRegion = 4;
+constexpr unsigned kCardIconRegion = 5;
+constexpr unsigned kCardNameRegion = 6;
+constexpr unsigned kCardPriceRegion = 7;
+constexpr unsigned kCardUpgradeRegion = 8;
+constexpr unsigned kCardDescriptionRegion = 9;
+constexpr unsigned kCardActionRegion = 10;
+constexpr unsigned kCardStatsRegion = 11;
+constexpr unsigned kCardFoldedTime = 0;
+constexpr unsigned kCardExpandStart = 800;
+constexpr unsigned kCardOpenTime = 1300;
+// GLU_MOVIE_SORT_BAR: region 0 is the FILTER button, region 1 the drop-down.
+constexpr unsigned kSortButtonRegion = 0;
+constexpr unsigned kSortPanelRegion = 1;
+constexpr unsigned kSortClosedTime = 101;
+constexpr unsigned kSortOpenTime = 277;
+// CMenuStore::SortButtonCallback stacks the options at 1.5 button heights.
+constexpr float kSortRowSpacing = 1.5f;
+// Owned and equipped markers, from the sprite character the store loads.
+constexpr unsigned kOwnedStamp = 17;
+constexpr unsigned kEquippedStamp = 18;
+// The two promotional cards in the first column: the invite/loot panel and the
+// free Warbucks money pile, both from the same sprite character.
+constexpr unsigned kInviteCard = 52;
+constexpr unsigned kFreeWarbucksCard = 36;
+// Bronze, silver and gold mastery badges for the folded card's corner region.
+constexpr unsigned kMasteryBadge = 39;
+// CGun::Template::GetMasteryLevel tops out here; a mastered gun cannot upgrade.
+constexpr unsigned kMaxMasteryLevel = 3;
+// Currency icons come from the sprite character CMenuSystem::Load pulls with
+// the menu itself: 23:1 is the coin stack, 23:7 the Warbuck bundle.
+constexpr unsigned kCurrencyCharacter = 23;
+constexpr unsigned kCoinIcon = 1;
+constexpr unsigned kWarbuckIcon = 7;
+// MDS_BUTTON_STORE_ITEMS rows: buy, equip and upgrade.
+constexpr unsigned kBuyButtonEntry = 0;
+constexpr unsigned kEquipButtonEntry = 3;
+constexpr unsigned kUpgradeButtonEntry = 4;
+constexpr float kActionButtonWidth = 130;
+constexpr float kActionButtonHeight = 34;
+// Filter bits. Categories keep the low bits so a gun category maps directly.
+constexpr unsigned kOwnedFilterBit = 1u << 7;
+// GLU_MOVIE_WEAPON_UPGRADE_MASTERY is positioned by its origin and has no
+// fitting region, so its authored extent is used to centre it.
+constexpr float kMasteryMeterWidth = 214;
+constexpr float kMasteryMeterHeight = 42;
+constexpr float kMasteryCellWidth = 69;
+
+/** One card face placed on screen, with the belt's own fade applied. */
+struct StoreCardFace {
+    float x = 0;
+    float y = 0;
+    float alpha = 1;
+    unsigned time = kCardFoldedTime;
+};
+
+/** A layout region must exist; a miss means the movie or chapter is wrong. */
+bool RequireRegion(GameMenu &view, unsigned movie, unsigned index, unsigned time, MovieRegion &region, const char *what) {
+    if (view.movies.Region(movie, index, time, region)) { return true; }
+    std::printf("[store] missing region %u of movie %u at %u ms (%s)\n", index, movie, time, what);
+    return false;
+}
+
+/** SHOP_BOX regions resolved for a card whose own origin sits at (x, y). */
+bool CardRegion(GameMenu &view, unsigned card, unsigned index, const StoreCardFace &face, MovieRegion &region) {
+    for (const MovieRegion &candidate : view.movies.Regions(card, face.time, face.x, face.y)) {
+        if (candidate.index != index) { continue; }
+        region = candidate;
+        return true;
+    }
+    return false;
+}
+
+// Every menu button prints its label at the same size; the original never
+// squeezes one to fit a narrower plate, it picks a wider plate instead.
+constexpr float kButtonLabelScale = 0.85f;
+
+/** Centre one original label inside a plate. */
+void PlateLabel(GameMenu &view, const std::string &label, float x, float y, float width, float height) {
+    view.movies.Text(label, x + (width - view.movies.TextWidth(label, 5, kButtonLabelScale)) * 0.5f,
+        y + (height - 27 * kButtonLabelScale) * 0.5f, 5, kButtonLabelScale);
+}
+
+/** Draw one MDS_BUTTON_STORE_ITEMS plate. Its width is the width of the button
+ * movie that row names, right aligned on `right`: BUY and EQUIP take the small
+ * plate, UPGRADE the large one, which is why UPGRADE reaches further left. */
+bool StoreItemButton(GameMenu &view, unsigned entryIndex, float right, float y, float height, bool enabled) {
+    const OriginalMenuEntry *entry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", entryIndex);
+    if (entry == nullptr) { return false; }
+    MovieRegion label;
+    float width = 96;
+    if (view.movies.Region(view.movies.Ordinal(entry->movies[0]), 1, 0, label)) { width = label.width; }
+    const float x = right - width;
+    const unsigned sprite = entry->sprites[0];
+    view.movies.DrawSpriteFitted(sprite >> 16, sprite & 255, 0, x, y, width, height);
+    PlateLabel(view, view.movies.NamedString(entry->strings[0]), x, y, width, height);
+    if (!enabled || !view.Hit(x, y, width, height)) { return false; }
+    view.NotePress(view.movies.Ordinal(entry->movies[0]), x, y, width, height);
+    return true;
+}
+
+/** Right aligned price: the original prints the currency sprite and the number,
+ * never the currency's name. */
+void DrawCardPrice(GameMenu &view, const CStoreItem &item, const MovieRegion &row, float scale, float alpha) {
+    if (item.commonPrice == 0 && item.rarePrice == 0) {
+        const std::string free = view.movies.NamedString("IDS_SHOP_FREE");
+        view.movies.Text(free, row.x + row.width - view.movies.TextWidth(free, 0, scale),
+            row.y + (row.height - 27 * scale) * 0.5f, 0, scale, 0, alpha);
+        return;
+    }
+    unsigned icon = kCoinIcon;
+    std::uint32_t amount = item.commonPrice;
+    if (item.commonPrice == 0) {
+        icon = kWarbuckIcon;
+        amount = item.rarePrice;
+    }
+    const std::string text = std::to_string(amount);
+    const float textWidth = view.movies.TextWidth(text, 0, scale);
+    const float iconSize = row.height * 1.3f;
+    view.movies.Text(text, row.x + row.width - textWidth, row.y + (row.height - 27 * scale) * 0.5f, 0, scale, 0, alpha);
+    view.movies.DrawSpriteFitted(kCurrencyCharacter, icon, 0, row.x + row.width - textWidth - iconSize,
+        row.y + (row.height - iconSize) * 0.5f, iconSize, iconSize);
+}
+
+/** A bundle is owned once every object it hands over is. Only the records with
+ * the single-purchase flag are treated this way. */
+bool OwnsBundle(const CProfileManager &profile, const CStoreItem &item) {
+    for (const GameObjectTypeRef &object : item.objects) {
+        if (!profile.Owns(object.type, object.object)) { return false; }
+    }
+    return !item.objects.empty();
+}
+
+const WeaponEntry *FindWeaponEntry(const std::vector<WeaponEntry> &weapons, const GameObjectRef &ref) {
+    for (const WeaponEntry &weapon : weapons) {
+        if (weapon.packHash == ref.packHash && weapon.ordinal == ref.localIndex) { return &weapon; }
+    }
+    return nullptr;
+}
+
+/** Category caption under the icon, from the weapon or armour catalogue. */
+std::string StoreItemKind(const StoreEntry &item, unsigned slot, const std::vector<WeaponEntry> &weapons) {
+    if (slot == 6) { return "SPECIAL"; }
+    if (slot >= 2 && slot < 5) { return kSlotNames[slot]; }
+    if (slot == 5) { return "POWER UP"; }
+    const WeaponEntry *weapon = FindWeaponEntry(weapons, item.data.objects[0].object);
+    if (weapon == nullptr) { return "SPECIAL"; }
+    return UpperLabel(WeaponCategoryName(weapon->category));
+}
+
+/** The three cell upgrade meter. CMenuStore::Load pulls sprite character 26
+ * for exactly this movie, so the store shares the upgrade popup's artwork. */
+void DrawMasteryMeter(GameMenu &view, const WeaponEntry &weapon, unsigned experience, const MovieRegion &area) {
+    const unsigned meter = view.movies.Ordinal("GLU_MOVIE_WEAPON_UPGRADE_MASTERY");
+    CMovie *movie = view.movies.GetMovie(meter);
+    if (movie == nullptr) { return; }
+    const unsigned level = weapon.data.GetMasteryLevel(experience);
+    unsigned time = movie->duration;
+    if (level < 3 && movie->chapters.size() > level) {
+        unsigned lower = 0;
+        if (level > 0) { lower = weapon.data.GetMasteryThreshold(level - 1); }
+        const unsigned upper = weapon.data.GetMasteryThreshold(level);
+        unsigned endTime = movie->duration;
+        if (movie->chapters.size() > level + 1) { endTime = movie->chapters[level + 1]; }
+        const unsigned startTime = movie->chapters[level];
+        time = startTime + static_cast<unsigned>((static_cast<std::uint64_t>(experience - lower) *
+            (endTime - startTime - 1)) / std::max(1u, upper - lower));
+    }
+    const std::string title = view.movies.NamedString("IDS_WEAPONMASTERY_STORE_TITLE");
+    view.movies.Text(title, area.x + (area.width - view.movies.TextWidth(title, 1, 0.85f)) * 0.5f, area.y, 1, 0.85f);
+    const float meterX = area.x + (area.width - kMasteryMeterWidth) * 0.5f;
+    const float meterY = area.y + 30;
+    view.movies.Draw(meter, time, meterX, meterY);
+    // The meter itself carries no captions; the original prints the tier below.
+    for (unsigned cell = 0; cell < 3; ++cell) {
+        const std::string label = "LVL " + std::to_string(cell + 1);
+        view.movies.Text(label, meterX + cell * kMasteryCellWidth +
+            (kMasteryCellWidth - view.movies.TextWidth(label, 1, 0.7f)) * 0.5f,
+            meterY + kMasteryMeterHeight + 4, 1, 0.7f);
+    }
+}
+
+/** Store display strings are templates: `^fN` marks a font switch and `#KEY` a
+ * value slot. The `^fN` code indexes a font table this rebuild has not resolved
+ * yet; against the iOS card, labels use the blue menu font and values the blue
+ * digit font. Pieces wrap inside their own card region and each line is centred
+ * there, which is what stacks POWER above its number. */
+void DrawStoreTemplate(GameMenu &view, const std::string &text, const MovieRegion &area, float scale,
+    const std::vector<std::pair<std::string, std::string>> &values, float alpha = 1, float valueScale = 1.3f) {
+    constexpr unsigned kLabelFont = 1;
+    constexpr unsigned kValueFont = 9;
+    struct TemplatePiece {
+        std::string text;
+        unsigned font = kLabelFont;
+        float scale = 1;
+        float width = 0;
+    };
+    std::vector<std::vector<TemplatePiece>> lines(1);
+    std::istringstream tokens(text);
+    std::string token;
+    while (tokens >> token) {
+        bool isValue = false;
+        while (token.size() >= 3 && token[0] == '^' && token[1] == 'f') { token.erase(0, 3); }
+        if (!token.empty() && token[0] == '#') {
+            isValue = true;
+            std::string replaced;
+            for (const auto &value : values) {
+                if (value.first == token.substr(1)) { replaced = value.second; break; }
+            }
+            token = replaced;
+        }
+        if (token.empty()) { continue; }
+        TemplatePiece piece;
+        piece.text = UpperLabel(token);
+        piece.scale = scale;
+        if (isValue) {
+            piece.font = kValueFont;
+            piece.scale = scale * valueScale;
+        }
+        piece.width = view.movies.TextWidth(piece.text, piece.font, piece.scale);
+        float used = 0;
+        bool lineHasValue = false;
+        for (const TemplatePiece &placed : lines.back()) {
+            used += placed.width + 6 * scale;
+            if (placed.font == kValueFont) { lineHasValue = true; }
+        }
+        // A row ends when it no longer fits, and also when a new label follows a
+        // value, which is what puts each of DMG, RPM and SPD on its own row.
+        bool wrap = used + piece.width > area.width;
+        if (lineHasValue && !isValue) { wrap = true; }
+        if (!lines.back().empty() && wrap) { lines.push_back({}); }
+        lines.back().push_back(piece);
+    }
+    float y = area.y;
+    for (const std::vector<TemplatePiece> &line : lines) {
+        if (line.empty()) { continue; }
+        // Rows keep one height so a larger value does not push the next row
+        // down over the card's action button.
+        const float lineHeight = 28 * scale;
+        float lineWidth = 0;
+        for (const TemplatePiece &piece : line) { lineWidth += piece.width + 6 * scale; }
+        lineWidth -= 6 * scale;
+        float x = area.x + (area.width - lineWidth) * 0.5f;
+        for (const TemplatePiece &piece : line) {
+            view.movies.Text(piece.text, x, y + lineHeight - 30 * piece.scale, piece.font, piece.scale, 0, alpha);
+            x += piece.width + 6 * scale;
+        }
+        y += lineHeight;
+    }
+}
+
+/** The current mastery tier's values for the card templates. */
+std::vector<std::pair<std::string, std::string>> StoreStatValues(const CStoreItem &item, std::size_t mastery) {
+    constexpr const char *keys[] = {"POWER", "DMG", "RPM", "SPD"};
+    std::vector<std::pair<std::string, std::string>> values;
+    for (unsigned stat = 0; stat < 4; ++stat) {
+        const auto &column = item.statGroups[stat];
+        if (column.empty()) { continue; }
+        const int value = column[std::min(mastery, column.size() - 1)];
+        std::string text = std::to_string(value);
+        // The speed column is a percentage offset and keeps its sign.
+        if (stat == 3 && value >= 0) { text = "+" + text; }
+        values.push_back({keys[stat], text});
+    }
+    return values;
+}
+
+/** The four category tabs. Their widths come from the button movie each
+ * MDS_BUTTON_STORE_CATEGORIES row names, not from measured screenshots. */
+void DrawStoreCategories(GameMenu &view, const MovieRegion &bar, MenuState &state, bool interactive) {
+    // The focus overlays belong to the same button movies: small 75, medium 76,
+    // large 77 and extra large 78, in the same order as the movie ordinals.
+    const unsigned smallPlate = view.movies.Ordinal("GLU_MOVIE_BUTTON_SMALL");
+    float x = bar.x;
+    for (unsigned category = 0; category < 4; ++category) {
+        const OriginalMenuEntry *entry = OriginalMenuData("MDS_BUTTON_STORE_CATEGORIES", category);
+        if (entry == nullptr) { continue; }
+        const unsigned plate = view.movies.Ordinal(entry->movies[0]);
+        MovieRegion touch, label;
+        if (!view.movies.Region(plate, 0, 0, touch) || !view.movies.Region(plate, 1, 0, label)) { continue; }
+        const float width = label.width;
+        const float touchX = x + touch.x - label.x;
+        const float touchY = bar.y + touch.y - label.y;
+        const bool selected = category == state.shopCategory;
+        unsigned sprite = entry->sprites[1];
+        // The bank tab keeps its green plate whether or not it is selected.
+        if (selected || category == 3) { sprite = entry->sprites[0]; }
+        view.movies.DrawSpriteFitted(sprite >> 16, sprite & 255, 0, x, bar.y, width, bar.height);
+        if (selected) {
+            view.movies.DrawSpriteFitted(0, 75 + plate - smallPlate, 0, touchX, touchY, touch.width, touch.height);
+        }
+        PlateLabel(view, view.movies.NamedString(entry->strings[0]), x, bar.y, width, bar.height);
+        if (interactive && view.Hit(touchX, touchY, touch.width, touch.height)) {
+            view.NotePress(plate, x, bar.y, width, bar.height);
+            if (category == 3) { state.Navigate(17); }
+            else {
+                state.shopCategory = category;
+                state.shopScroll = 0;
+                state.shopFilter = 0;
+                state.selectedItem = -1;
+                state.shopDetailOpen = false;
+            }
+        }
+        x += width + kCategoryGap;
+    }
+}
+
+/** Original sort rows for the selected category: ALL, OWNED and then the
+ * categories this rebuild can actually filter on. The remaining power-up sort
+ * keys have no matching classification in the parsed records yet. */
+unsigned StoreFilterRows(unsigned category, const char *&table) {
+    if (category == 1) { table = "MDS_BUTTON_STORE_SORT_ARMOR"; return 5; }
+    if (category == 2) { table = "MDS_BUTTON_STORE_SORT_POWERUP"; return 2; }
+    table = "MDS_BUTTON_STORE_SORT_GUNS";
+    return 9;
+}
+
+/** The original store draws two cards per column (ItemCallback :178878) on a
+ * horizontal belt and expands the focused card in place. Item identity and
+ * purchases still come directly from the BIG catalog. */
 bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfileManager &profile,
     unsigned level, const std::vector<StoreEntry> &store, const std::vector<WeaponEntry> &weapons,
     const std::vector<ArmorEntry> &armors, MenuState &state, const std::filesystem::path &savePath) {
-    constexpr float categoryX[] = {8, 112, 246, 480};
-    constexpr float categoryWidth[] = {100, 130, 230, 130};
-    constexpr const char *categoryNames[] = {"GUNS", "ARMOR", "POWER UPS", "BANK"};
-    for (unsigned category = 0; category < 4; ++category) {
-        const OriginalMenuEntry *entry = OriginalMenuData("MDS_BUTTON_STORE_CATEGORIES", category);
-        unsigned sprite = entry->sprites[1];
-        if (category == state.shopCategory || category == 3) { sprite = entry->sprites[0]; }
-        view.movies.DrawSpriteFitted(0, sprite, 0, categoryX[category], 142, categoryWidth[category], 36);
-        if (category == state.shopCategory) {
-            unsigned glow = 76;
-            if (category == 0) { glow = 75; }
-            if (category == 2) { glow = 78; }
-            view.movies.DrawSpriteFitted(0, glow, 0, categoryX[category] - 5, 137, categoryWidth[category] + 10, 46);
-        }
-        const float scale = 0.95f;
-        const float labelWidth = view.movies.TextWidth(categoryNames[category], 5, scale);
-        view.movies.Text(categoryNames[category], categoryX[category] + (categoryWidth[category] - labelWidth) / 2, 146, 5, scale);
-        if (view.Hit(categoryX[category], 140, categoryWidth[category], 40)) {
-            if (category == 3) { state.Navigate(17); return true; }
-            state.shopCategory = category;
-            state.shopColumn = 0;
-            state.shopFilter = 0;
-            state.selectedItem = -1;
-            state.shopDetailOpen = false;
-        }
-    }
+    const unsigned storeMenu = view.movies.Ordinal("GLU_MOVIE_STORE_MENU");
+    const unsigned storeScroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
+    const unsigned shopBox = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
+    const unsigned sortBar = view.movies.Ordinal("GLU_MOVIE_SORT_BAR");
+    MovieRegion content, categoryBar, playerPanel, gunSwap;
+    if (!RequireRegion(view, storeMenu, kStoreContentRegion, 0, content, "content") ||
+        !RequireRegion(view, storeMenu, kStoreCategoryRegion, 0, categoryBar, "categories") ||
+        !RequireRegion(view, storeMenu, kStorePlayerRegion, 0, playerPanel, "player") ||
+        !RequireRegion(view, storeMenu, kStoreGunSwapRegion, 0, gunSwap, "gun swap")) { return false; }
+    const bool modalOpen = state.shopDetailOpen || state.shopFilterOpen;
+    DrawStoreCategories(view, categoryBar, state, !modalOpen);
 
     std::vector<unsigned> items;
     std::vector<unsigned> itemSlots;
-    // The first column links to the local friend/currency flows. The next
-    // original card is the 28-Warbuck starter bundle with its actual payload.
-    if (state.shopCategory == 0 && state.shopFilter == 0) {
+    // The first column links to the local friend and currency flows, on every
+    // category page. The starter bundle follows as the store's own first row.
+    if (state.shopFilter == 0) {
         items.push_back(static_cast<unsigned>(store.size())); itemSlots.push_back(6);
         items.push_back(static_cast<unsigned>(store.size() + 1)); itemSlots.push_back(6);
         for (unsigned index = 0; index < store.size(); ++index) {
-            if (store[index].name == "STARTER PACK!") { items.push_back(index); itemSlots.push_back(6); break; }
+            if (store[index].data.singlePurchase == 0) { continue; }
+            items.push_back(index);
+            itemSlots.push_back(6);
+            break;
         }
     }
+    // CStoreItem's trailing int16 is the store's own row order; a negative value
+    // keeps the record out of the list entirely.
+    std::vector<std::pair<int, unsigned>> ordered;
     for (unsigned index = 0; index < store.size(); ++index) {
+        if (store[index].data.displayOrder < 0) { continue; }
+        ordered.push_back({store[index].data.displayOrder, index});
+    }
+    std::sort(ordered.begin(), ordered.end());
+    for (const std::pair<int, unsigned> &row : ordered) {
+        const unsigned index = row.second;
         unsigned slot = state.shopGunSlot;
         int category = -1;
         bool matches = false;
         if (state.shopCategory == 0) {
             matches = MatchesEquipmentSlot(store[index], slot, weapons, armors);
             if (matches) {
-                for (const WeaponEntry &weapon : weapons) {
-                    const GameObjectRef &ref = store[index].data.objects[0].object;
-                    if (weapon.packHash == ref.packHash && weapon.ordinal == ref.localIndex) { category = weapon.category; break; }
-                }
+                const WeaponEntry *weapon = FindWeaponEntry(weapons, store[index].data.objects[0].object);
+                if (weapon != nullptr) { category = weapon->category; }
             }
         } else if (state.shopCategory == 1) {
             for (slot = 2; slot < 5; ++slot) {
@@ -766,143 +1175,367 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
             matches = MatchesEquipmentSlot(store[index], slot, weapons, armors);
         }
         if (!matches) { continue; }
-        if (state.shopFilter != 0 && category >= 0 && (state.shopFilter & (1u << category)) == 0) { continue; }
+        const unsigned categoryFilter = state.shopFilter & ~kOwnedFilterBit;
+        if (categoryFilter != 0 && category >= 0 && (categoryFilter & (1u << category)) == 0) { continue; }
+        if ((state.shopFilter & kOwnedFilterBit) != 0) {
+            const GameObjectTypeRef &ref = store[index].data.objects[0];
+            if (!profile.Owns(ref.type, ref.object)) { continue; }
+        }
         items.push_back(index);
         itemSlots.push_back(slot);
     }
     const unsigned columns = static_cast<unsigned>((items.size() + 1) / 2);
-    if (state.shopColumn >= columns) { state.shopColumn = 0; }
-    const float wheel = view.window.TakeWheelDelta();
-    if (wheel < 0 && state.shopColumn + 1 < columns) { ++state.shopColumn; }
-    if (wheel > 0 && state.shopColumn > 0) { --state.shopColumn; }
-    if (view.Button(36, 672, 60, 36, "<") && state.shopColumn > 0) { --state.shopColumn; }
-    if (view.Button(486, 672, 60, 36, ">") && state.shopColumn + 1 < columns) { ++state.shopColumn; }
-    view.Text(226, 683, std::to_string(state.shopColumn + 1) + " / " + std::to_string(std::max(1u, columns)), 1.4f);
+
+    // The belt scrolls by whole columns; drag and wheel move the same pixel
+    // offset and it settles back onto a column once the button is released.
+    MovieRegion firstSlot, secondSlot;
+    if (!RequireRegion(view, storeScroll, kFirstColumnRegion, kScrollRestTime, firstSlot, "first column") ||
+        !RequireRegion(view, storeScroll, kFirstColumnRegion + 1, kScrollRestTime, secondSlot, "second column")) { return false; }
+    const float columnPitch = std::max(1.0f, secondSlot.x - firstSlot.x);
+    const float maximumScroll = std::max(0.0f, (columns - 1.0f) * columnPitch);
+    if (!modalOpen && view.MouseIn(content.x, content.y, content.width, content.height)) {
+        state.shopScroll -= view.dragX;
+        state.shopScroll -= view.window.TakeWheelDelta() * columnPitch;
+    }
+    state.shopScroll = std::clamp(state.shopScroll, 0.0f, maximumScroll);
+    if (!view.window.IsLeftMouseDown()) {
+        const float settled = std::round(state.shopScroll / columnPitch) * columnPitch;
+        state.shopScroll += (settled - state.shopScroll) * 0.25f;
+        if (std::abs(settled - state.shopScroll) < 0.5f) { state.shopScroll = settled; }
+    }
 
     int purchaseIndex = -1;
     unsigned purchaseSlot = 0;
-    for (unsigned offset = 0; offset < 4 && state.shopColumn * 2 + offset < items.size(); ++offset) {
-        const unsigned position = state.shopColumn * 2 + offset;
-        const unsigned index = items[position];
-        const unsigned slot = itemSlots[position];
-        const float x = 36 + (offset / 2) * 258.0f;
-        const float y = 265 + (offset % 2) * 202.0f;
-        if (index >= store.size()) {
-            if (index == store.size()) { view.movies.DrawSpriteFitted(5, 52, 0, x, y, 250, 162); }
-            else {
-                view.movies.Draw(39, 0, x, y);
-                view.movies.Text("GET FREE", x + 13, y + 15, 6, 0.85f);
-                view.movies.Text("WARBUCKS", x + 13, y + 98, 6, 0.7f);
+    int focusedColumn = -1, focusedRow = 0;
+    const unsigned firstColumn = static_cast<unsigned>(std::max(0.0f, std::floor(state.shopScroll / columnPitch)));
+    const bool listHover = view.MouseIn(content.x, content.y, content.width, content.height);
+    // The belt has its own viewport; the content region alone cuts the second row.
+    MovieRegion viewport;
+    if (!RequireRegion(view, storeScroll, 0, kScrollRestTime, viewport, "belt viewport")) { return false; }
+    view.Clip(content.x, viewport.y, content.width, viewport.height);
+    for (unsigned offset = 0; offset < kDrawnColumns; ++offset) {
+        const unsigned column = firstColumn + offset;
+        if (column >= columns) { break; }
+        MovieRegion slot;
+        if (!view.movies.Region(storeScroll, kFirstColumnRegion + offset, kScrollRestTime, slot)) { continue; }
+        const float slotX = firstSlot.x + column * columnPitch - state.shopScroll;
+        for (unsigned row = 0; row < 2; ++row) {
+            const unsigned position = column * 2 + row;
+            if (position >= items.size()) { break; }
+            const unsigned index = items[position];
+            const unsigned slotKind = itemSlots[position];
+            if (state.shopDetailOpen && state.selectedItem == static_cast<int>(index)) {
+                focusedColumn = static_cast<int>(column);
+                focusedRow = static_cast<int>(row);
+                continue;
             }
-            if (!state.shopDetailOpen && !state.shopFilterOpen && view.Hit(x, y, 250, 162)) {
-                if (index == store.size()) { state.Navigate(9); }
-                else { state.Navigate(17); }
-                return true;
+            StoreCardFace face;
+            face.x = slotX;
+            // ItemCallback stacks the second card at half the slot height plus five.
+            face.y = slot.y + row * (slot.height / 2 + 5);
+            face.alpha = slot.alpha;
+            MovieRegion body;
+            if (!CardRegion(view, shopBox, kCardBodyRegion, face, body)) { continue; }
+            const bool cardEnabled = !modalOpen && listHover;
+            if (index >= store.size()) {
+                // The invite friends card art, then the free Warbucks entry.
+                view.movies.Draw(shopBox, face.time, face.x, face.y, 1024, 768, 0, face.alpha);
+                unsigned promoSprite = kInviteCard;
+                if (index != store.size()) { promoSprite = kFreeWarbucksCard; }
+                view.movies.DrawSpriteFitted(5, promoSprite, 0, body.x, body.y, body.width, body.height);
+                if (index != store.size()) {
+                    // The money pile is art only; the original prints the words.
+                    view.CenterText("GET FREE", body.x + body.width * 0.5f, body.y + 12, 6, 0.85f);
+                    view.CenterText("WARBUCKS", body.x + body.width * 0.5f, body.y + 108, 6, 0.7f);
+                }
+                if (cardEnabled && view.Hit(body.x, body.y, body.width, body.height)) {
+                    if (index == store.size()) { state.Navigate(9); } else { state.Navigate(17); }
+                    view.EndClip();
+                    return true;
+                }
+                continue;
             }
-            continue;
-        }
-        const StoreEntry &item = store[index];
-        const GameObjectTypeRef &ref = item.data.objects[0];
-        view.movies.Rectangle(x, y, 250, 162, 0, 0, 0);
-        // Core movie 39 owns the hexagon card and its 800..1300 ms expansion.
-        view.movies.Draw(39, 0, x, y);
-        view.movies.Text(item.name, x + 10, y + 5, 1, 1, 232);
-        view.Icon(toc, tables, item, x + 15, y + 32, 105);
-        std::string kind = "POWER UP";
-        if (slot == 6) { kind = "SPECIAL"; }
-        if (slot < 2) {
-            for (const WeaponEntry &weapon : weapons) {
-                if (weapon.packHash == ref.object.packHash && weapon.ordinal == ref.object.localIndex) {
-                    kind = WeaponCategoryName(weapon.category); break;
+            const StoreEntry &item = store[index];
+            const GameObjectTypeRef &ref = item.data.objects[0];
+            MovieRegion name, icon, kind, price, right;
+            if (!CardRegion(view, shopBox, kCardNameRegion, face, name) ||
+                !CardRegion(view, shopBox, kCardIconRegion, face, icon) ||
+                !CardRegion(view, shopBox, kCardCategoryRegion, face, kind) ||
+                !CardRegion(view, shopBox, kCardPriceRegion, face, price) ||
+                !CardRegion(view, shopBox, kCardRightRegion, face, right)) { continue; }
+            view.movies.Rectangle(body.x, body.y, body.width, body.height, 0, 0, 0, face.alpha);
+            view.movies.Draw(shopBox, face.time, face.x, face.y, 1024, 768, 0, face.alpha);
+            view.movies.Text(item.name, name.x, name.y, 1, 1.1f, body.width - 24, face.alpha);
+            // The icon sits between the name and the category row, as on the
+            // original card; region 5 alone would run under the title.
+            view.Icon(toc, tables, item, icon.x, name.y + name.height, icon.width,
+                kind.y - name.y - name.height, face.alpha);
+            view.movies.Text(StoreItemKind(item, slotKind, weapons), kind.x, kind.y, 1, 0.95f, kind.width, face.alpha);
+            bool owned = profile.Owns(ref.type, ref.object);
+            // A single-purchase bundle counts as owned once every part of it is.
+            if (item.data.singlePurchase != 0) { owned = OwnsBundle(profile, item.data); }
+            bool equipped = false;
+            if (slotKind < 5) { equipped = SameObject(Equipped(profile, slotKind), ref.object); }
+            MovieRegion stamp;
+            if ((owned || equipped) && CardRegion(view, shopBox, kCardStampRegion, face, stamp)) {
+                unsigned stampSprite = kOwnedStamp;
+                if (equipped) { stampSprite = kEquippedStamp; }
+                view.movies.DrawSpriteFitted(5, stampSprite, 0, stamp.x, stamp.y + stamp.height * 0.26f,
+                    stamp.width, stamp.height * 0.58f);
+            }
+            if (!owned || slotKind == 5) { DrawCardPrice(view, item.data, price, 0.62f, face.alpha); }
+            // The folded card prints the record's own power template. Bundles
+            // leave it empty and put their promo line in the stat template.
+            const WeaponEntry *cardWeapon = FindWeaponEntry(weapons, ref.object);
+            unsigned cardMastery = 0;
+            if (cardWeapon != nullptr) { cardMastery = cardWeapon->data.GetMasteryLevel(profile.GetWeaponExperience(ref.object)); }
+            std::string rightTemplate = ReadGameString(toc, item.data.assets[5]);
+            if (rightTemplate.empty()) { rightTemplate = ReadGameString(toc, item.data.assets[4]); }
+            if (!rightTemplate.empty()) {
+                MovieRegion templateArea = right;
+                templateArea.height -= kActionButtonHeight;
+                DrawStoreTemplate(view, rightTemplate, templateArea, 1.14f,
+                    StoreStatValues(item.data, cardMastery), face.alpha);
+            }
+            if (slotKind == 5) {
+                const std::string own = "OWN " + std::to_string(profile.GetPowerupCount(ref.object));
+                view.movies.Text(own, right.x, right.y, 1, 0.8f, right.width, face.alpha);
+            }
+            if (item.data.requiredLevel > level) {
+                const std::string locked = view.movies.NamedString("IDS_SHOP_LEVEL") + " " +
+                    std::to_string(item.data.requiredLevel);
+                view.movies.Text(locked, right.x, right.y, 1, 0.7f, right.width, face.alpha);
+            }
+            // The corner region carries the bronze/silver/gold mastery badge.
+            if (slotKind < 2 && cardMastery > 0) {
+                MovieRegion badge;
+                if (CardRegion(view, shopBox, kCardBadgeRegion, face, badge)) {
+                    view.movies.DrawSpriteFitted(5, kMasteryBadge + static_cast<unsigned>(cardMastery) - 1, 0,
+                        badge.x, badge.y, badge.width, badge.height);
                 }
             }
-        } else if (slot < 5) { kind = kSlotNames[slot]; }
-        view.movies.Text(UpperLabel(kind), x + 9, y + 140, 1, 0.95f);
-        bool owned = profile.Owns(ref.type, ref.object);
-        bool equipped = false;
-        if (slot < 5) { equipped = SameObject(Equipped(profile, slot), ref.object); }
-        if (owned || equipped) {
-            unsigned badgeSprite = 17;
-            if (equipped) { badgeSprite = 18; }
-            view.movies.DrawSpriteFitted(5, badgeSprite, 0, x + 6, y + 59, 139, 74);
-        }
-        if (!owned || slot == 5) {
-            view.movies.Text(ItemPrice(item.data), x + 133, y + 60, 0, 0.62f, 108);
-        }
-        if (slot < 2 && !item.data.statGroups[0].empty()) {
-            // Store stat column 0 is POWER; row 0 is the initial mastery tier.
-            view.Text(x + 146, y + 31, "POWER " + std::to_string(item.data.statGroups[0][0]), 1.7f);
-        }
-        if (slot == 5) { view.Text(x + 138, y + 34, "OWN " + std::to_string(profile.GetPowerupCount(ref.object)), 1.3f); }
-        if (item.data.requiredLevel > level) { view.Text(x + 139, y + 35, "LEVEL " + std::to_string(item.data.requiredLevel), 1.3f); }
-        std::string action = "BUY";
-        if (owned && slot < 5) { action = "EQUIP"; }
-        if (equipped) { action = "EQUIPPED"; }
-        if (!state.shopDetailOpen && !state.shopFilterOpen && view.Button(x + 144, y + 102, 96, 36, action, !owned)) {
-            purchaseIndex = static_cast<int>(index); purchaseSlot = slot;
-        }
-        if (!state.shopDetailOpen && !state.shopFilterOpen && view.Hit(x, y, 250, 162)) {
-            state.selectedItem = static_cast<int>(index);
-            state.slot = slot;
-            state.shopDetailOpen = true;
-        }
-    }
-    const GameObjectTypeRef *preview = nullptr;
-    unsigned previewSlot = state.shopGunSlot;
-    if (state.shopDetailOpen && state.selectedItem >= 0 && state.slot < 5) {
-        preview = &store[state.selectedItem].data.objects[0]; previewSlot = state.slot;
-    }
-    if (!view.DrawEquippedPlayer(toc, tables, profile, weapons, armors, previewSlot, preview, true)) { return false; }
-    view.movies.DrawSpriteFitted(0, 125, 0, 907, 153, 80, 80);
-    view.movies.Text(std::to_string(state.shopGunSlot + 1), 934, 175, 6, 0.8f);
-    if (view.Hit(907, 153, 80, 80)) { state.shopGunSlot = 1 - state.shopGunSlot; state.shopDetailOpen = false; }
-
-    if (view.Button(832, 720, 192, 42, "FILTER")) { state.shopFilterOpen = !state.shopFilterOpen; state.shopDetailOpen = false; }
-    if (state.shopFilterOpen) {
-        view.movies.Rectangle(700, 239, 324, 477, 0.01f, 0.035f, 0.06f, 0.98f);
-        if (view.Button(720, 255, 284, 40, "ALL", state.shopFilter == 0)) { state.shopFilter = 0; state.shopColumn = 0; }
-        unsigned filterCount = 7;
-        if (state.shopCategory == 1) { filterCount = 3; }
-        if (state.shopCategory == 2) { filterCount = 0; }
-        for (unsigned index = 0; index < filterCount; ++index) {
-            std::string label = UpperLabel(WeaponCategoryName(index));
-            if (state.shopCategory == 1) { label = kSlotNames[index + 2]; }
-            if (view.Button(720, 305 + index * 49.0f, 284, 40, label, (state.shopFilter & (1u << index)) != 0)) {
-                state.shopFilter ^= 1u << index; state.shopColumn = 0;
+            unsigned action = kBuyButtonEntry;
+            if (owned && slotKind < 5) { action = kEquipButtonEntry; }
+            const bool soldOut = item.data.singlePurchase != 0 && owned;
+            // Only guns carry a mastery meter, and a mastered one has nothing
+            // left to buy, so it keeps the plain EQUIP plate.
+            if (equipped && slotKind < 2 && cardMastery < kMaxMasteryLevel) { action = kUpgradeButtonEntry; }
+            if (!soldOut && StoreItemButton(view, action, right.x + right.width,
+                right.y + right.height - kActionButtonHeight, kActionButtonHeight, cardEnabled)) {
+                if (action == kUpgradeButtonEntry) {
+                    state.masteryWeapon = ref.object;
+                    state.Navigate(26);
+                } else {
+                    purchaseIndex = static_cast<int>(index);
+                    purchaseSlot = slotKind;
+                }
+            } else if (cardEnabled && view.Hit(body.x, body.y, body.width, body.height)) {
+                state.selectedItem = static_cast<int>(index);
+                state.slot = slotKind;
+                state.shopDetailOpen = true;
+                state.shopPreview = false;
+                state.shopDetailStart = view.clock;
             }
         }
     }
-    if (state.shopDetailOpen && state.selectedItem >= 0) {
+    view.EndClip();
+    // The belt's own gradient fades the far column out behind the player.
+    view.movies.Draw(storeScroll, kScrollRestTime);
+
+    const GameObjectTypeRef *preview = nullptr;
+    unsigned previewSlot = state.shopGunSlot;
+    if (state.shopPreview && state.selectedItem >= 0 && state.selectedItem < static_cast<int>(store.size()) &&
+        state.slot < 5) {
+        preview = &store[state.selectedItem].data.objects[0];
+        previewSlot = state.slot;
+    }
+    // The original lets the player turn the model by dragging it.
+    if (!modalOpen && view.MouseIn(playerPanel.x, playerPanel.y, playerPanel.width, playerPanel.height)) {
+        state.playerSpin += view.dragX * 0.012f;
+    }
+    if (!view.DrawEquippedPlayer(toc, tables, profile, weapons, armors, previewSlot, preview, &playerPanel,
+        state.playerSpin)) { return false; }
+    // MDS_BUTTON_STORE_GUN_SWAP is the round weapon slot toggle.
+    const OriginalMenuEntry *swapEntry = OriginalMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+    if (swapEntry != nullptr) {
+        const unsigned sprite = swapEntry->sprites[0];
+        view.movies.DrawSpriteFitted(sprite >> 16, sprite & 255, 0, gunSwap.x, gunSwap.y, gunSwap.width, gunSwap.height);
+    }
+    const std::string slotLabel = std::to_string(state.shopGunSlot + 1);
+    view.movies.Text(slotLabel, gunSwap.x + (gunSwap.width - view.movies.TextWidth(slotLabel, 6, 0.8f)) * 0.5f,
+        gunSwap.y + gunSwap.height * 0.26f, 6, 0.8f);
+    if (!modalOpen && view.Hit(gunSwap.x, gunSwap.y, gunSwap.width, gunSwap.height)) {
+        state.shopGunSlot = 1 - state.shopGunSlot;
+        state.shopDetailOpen = false;
+    }
+
+    // The FILTER button and its drop-down both live in GLU_MOVIE_SORT_BAR.
+    unsigned sortTime = kSortClosedTime;
+    if (state.shopFilterOpen) { sortTime = kSortOpenTime; }
+    MovieRegion sortButton;
+    if (!RequireRegion(view, sortBar, kSortButtonRegion, sortTime, sortButton, "filter button")) { return false; }
+    view.movies.Draw(sortBar, sortTime);
+    PlateLabel(view, view.movies.NamedString("IDS_SHOP_FILTER"), sortButton.x, sortButton.y,
+        sortButton.width, sortButton.height);
+    if (!state.shopDetailOpen && view.Hit(sortButton.x, sortButton.y, sortButton.width, sortButton.height)) {
+        state.shopFilterOpen = !state.shopFilterOpen;
+    }
+    if (state.shopFilterOpen) {
+        const char *table = nullptr;
+        const unsigned rows = StoreFilterRows(state.shopCategory, table);
+        const unsigned optionPlate = view.movies.Ordinal("GLU_MOVIE_BUTTON_LG");
+        MovieRegion optionLabel, sortPanel;
+        if (!RequireRegion(view, optionPlate, 1, 0, optionLabel, "filter option") ||
+            !RequireRegion(view, sortBar, kSortPanelRegion, kSortOpenTime, sortPanel, "filter panel")) { return false; }
+        const float optionX = sortPanel.x + (sortPanel.width - optionLabel.width) * 0.5f;
+        for (unsigned row = 0; row < rows; ++row) {
+            const OriginalMenuEntry *entry = OriginalMenuData(table, row);
+            if (entry == nullptr) { continue; }
+            const float y = sortPanel.y + row * optionLabel.height * kSortRowSpacing;
+            unsigned bit = 0;
+            if (row == 1) { bit = kOwnedFilterBit; }
+            if (row >= 2) { bit = 1u << (row - 2); }
+            bool selected = state.shopFilter == 0;
+            if (bit != 0) { selected = (state.shopFilter & bit) != 0; }
+            unsigned sprite = entry->sprites[1];
+            if (selected) { sprite = entry->sprites[0]; }
+            view.movies.DrawSpriteFitted(sprite >> 16, sprite & 255, 0, optionX, y, optionLabel.width, optionLabel.height);
+            PlateLabel(view, view.movies.NamedString(entry->strings[0]), optionX, y, optionLabel.width, optionLabel.height);
+            if (!view.Hit(optionX, y, optionLabel.width, optionLabel.height)) { continue; }
+            view.NotePress(optionPlate, optionX, y, optionLabel.width, optionLabel.height);
+            if (bit == 0) { state.shopFilter = 0; } else { state.shopFilter ^= bit; }
+            state.shopScroll = 0;
+        }
+    }
+
+    if (state.shopDetailOpen && state.selectedItem >= 0 && state.selectedItem < static_cast<int>(store.size())) {
         const StoreEntry &item = store[state.selectedItem];
-        view.movies.Rectangle(45, 215, 500, 433, 0, 0, 0);
-        view.movies.DrawFitted(39, 1300, 45, 215, 500, 433);
-        view.movies.Text(item.name, 65, 235, 5, 1, 420);
-        view.Icon(toc, tables, item, 65, 290, 218);
-        view.movies.Text(ItemPrice(item.data), 288, 337, 0, 0.8f, 230);
+        const GameObjectTypeRef &ref = item.data.objects[0];
+        StoreCardFace face;
+        const std::uint64_t elapsed = view.clock - state.shopDetailStart;
+        face.time = kCardExpandStart + static_cast<unsigned>(std::min<std::uint64_t>(elapsed, kCardOpenTime - kCardExpandStart));
+        MovieRegion body;
+        if (!CardRegion(view, shopBox, kCardBodyRegion, face, body)) { return false; }
+        // The card grows out of its own place on the belt and stays in the list.
+        float grownX = content.x, grownY = content.y;
+        if (focusedColumn >= 0) {
+            MovieRegion slot;
+            if (view.movies.Region(storeScroll, kFirstColumnRegion, kScrollRestTime, slot)) {
+                grownX = firstSlot.x + focusedColumn * columnPitch - state.shopScroll;
+                grownY = slot.y + focusedRow * (slot.height / 2 + 5);
+            }
+        }
+        face.x = std::clamp(grownX, content.x, content.x + content.width - body.width);
+        face.y = std::clamp(grownY, content.y, content.y + content.height - body.height);
+        // The expanded halves of the card only become visible on the last key,
+        // so its contents are laid out against the fully open chapter.
+        StoreCardFace open = face;
+        open.time = kCardOpenTime;
+        MovieRegion name, icon, kind, price, stats, upgrade, description, actions;
+        if (!CardRegion(view, shopBox, kCardBodyRegion, open, body) ||
+            !CardRegion(view, shopBox, kCardNameRegion, open, name) ||
+            !CardRegion(view, shopBox, kCardIconRegion, open, icon) ||
+            !CardRegion(view, shopBox, kCardCategoryRegion, open, kind) ||
+            !CardRegion(view, shopBox, kCardPriceRegion, open, price) ||
+            !CardRegion(view, shopBox, kCardStatsRegion, open, stats) ||
+            !CardRegion(view, shopBox, kCardUpgradeRegion, open, upgrade) ||
+            !CardRegion(view, shopBox, kCardDescriptionRegion, open, description) ||
+            !CardRegion(view, shopBox, kCardActionRegion, open, actions)) {
+            std::printf("[store] expanded card regions missing at %u ms\n", open.time);
+            return false;
+        }
+        view.movies.Rectangle(body.x, body.y, body.width, body.height, 0, 0, 0);
+        view.movies.Draw(shopBox, face.time, face.x, face.y);
+        const bool expanded = face.time >= kCardOpenTime;
+        if (!expanded) { return true; }
+        view.movies.Text(item.name, name.x, name.y, 1, 1.1f, body.width * 0.46f);
+        view.Icon(toc, tables, item, icon.x, name.y + name.height, icon.width,
+            price.y - name.y - name.height);
+        view.movies.Text(StoreItemKind(item, state.slot, weapons), price.x, price.y, 1, 0.9f);
+        DrawCardPrice(view, item.data, price, 0.8f, 1);
+        const WeaponEntry *weapon = FindWeaponEntry(weapons, ref.object);
+        if (state.slot < 2 && weapon != nullptr) {
+            const unsigned experience = profile.GetWeaponExperience(ref.object);
+            const std::size_t mastery = weapon->data.GetMasteryLevel(experience);
+            // The expanded card prints the record's own damage/rate/speed template.
+            DrawStoreTemplate(view, ReadGameString(toc, item.data.assets[4]), stats, 0.8f,
+                StoreStatValues(item.data, mastery), 1, 0.75f);
+            DrawMasteryMeter(view, *weapon, experience, upgrade);
+        }
         if (state.slot >= 2 && state.slot < 5) {
             for (const ArmorEntry &armor : armors) {
-                const GameObjectRef &ref = item.data.objects[0].object;
-                if (armor.packHash != ref.packHash || armor.ordinal != ref.localIndex) { continue; }
-                CArmor attributes; attributes.Bind(armor.data); attributes.Equip();
+                if (armor.packHash != ref.object.packHash || armor.ordinal != ref.object.localIndex) { continue; }
+                CArmor attributes;
+                attributes.Bind(armor.data);
+                attributes.Equip();
                 constexpr const char *labels[] = {"DEFENSE", "ATTACK", "SPEED", "XP", "XPLODIUM"};
                 for (unsigned stat = 0; stat < 5; ++stat) {
-                    view.Text(290, 380 + stat * 28.0f, std::string(labels[stat]) + " " + std::to_string(attributes.GetAttribute(stat)) + "%", 1.6f);
+                    const std::string text = std::string(labels[stat]) + " " +
+                        std::to_string(attributes.GetAttribute(stat)) + "%";
+                    view.movies.Text(text, upgrade.x, upgrade.y + stat * 24.0f, 1, 0.75f);
                 }
                 break;
             }
         }
         if (state.slot == 5) {
+            // CStoreAggregator::IsItemExcludedFromGameType :156283 keeps the
+            // per-mode availability in these value8 bits.
             constexpr const char *modes[] = {"CLASSIC", "LIVE", "VS"};
             for (unsigned mode = 0; mode < 3; ++mode) {
                 const bool available = (item.data.value8 & (1u << mode)) == 0;
                 unsigned statusSprite = 174;
                 if (available) { statusSprite = 173; }
-                view.movies.DrawSpriteFitted(0, statusSprite, 0, 291, 402 + mode * 43.0f, 28, 28);
-                view.Text(329, 410 + mode * 43.0f, modes[mode], 1.9f);
+                const float y = upgrade.y + mode * 34.0f;
+                view.movies.DrawSpriteFitted(0, statusSprite, 0, upgrade.x, y, 24, 24);
+                view.movies.Text(modes[mode], upgrade.x + 32, y, 1, 0.8f);
             }
         }
-        if (view.Button(310, 580, 200, 44, "BUY", true)) { purchaseIndex = state.selectedItem; purchaseSlot = state.slot; }
-        if (view.Button(65, 580, 160, 44, "CLOSE")) { state.shopDetailOpen = false; }
+        view.Paragraph(description.x, description.y, description.width,
+            UpperLabel(ReadGameString(toc, item.data.assets[3])), 0.62f);
+        const bool owned = profile.Owns(ref.type, ref.object);
+        bool equipped = false;
+        if (state.slot < 5) { equipped = SameObject(Equipped(profile, state.slot), ref.object); }
+        if (owned || equipped) {
+            unsigned stampSprite = kOwnedStamp;
+            if (equipped) { stampSprite = kEquippedStamp; }
+            MovieRegion stamp;
+            if (CardRegion(view, shopBox, kCardStampRegion, open, stamp)) {
+                view.movies.DrawSpriteFitted(5, stampSprite, 0, stamp.x, icon.y + icon.height * 0.35f, stamp.width, 74);
+            }
+        }
+        const std::string requirement = view.movies.NamedString("IDS_SHOP_LEVEL") + " " +
+            std::to_string(item.data.requiredLevel);
+        view.movies.Text(requirement, actions.x + (actions.width - view.movies.TextWidth(requirement, 1, 0.8f)) * 0.5f,
+            actions.y + 4, 1, 0.8f);
+        const OriginalMenuEntry *previewEntry = OriginalMenuData("MDS_BUTTON_STORE_PREVIEW", 0);
+        if (previewEntry != nullptr && !owned) {
+            const unsigned sprite = previewEntry->sprites[0];
+            view.movies.DrawSpriteFitted(sprite >> 16, sprite & 255, 0, actions.x, actions.y,
+                kActionButtonWidth, actions.height);
+            PlateLabel(view, view.movies.NamedString(previewEntry->strings[0]), actions.x, actions.y,
+                kActionButtonWidth, actions.height);
+            if (view.Hit(actions.x, actions.y, kActionButtonWidth, actions.height)) { state.shopPreview = !state.shopPreview; }
+        }
+        unsigned action = kBuyButtonEntry;
+        if (owned && state.slot < 5) { action = kEquipButtonEntry; }
+        unsigned detailMastery = kMaxMasteryLevel;
+        if (weapon != nullptr) { detailMastery = weapon->data.GetMasteryLevel(profile.GetWeaponExperience(ref.object)); }
+        if (equipped && state.slot < 2 && detailMastery < kMaxMasteryLevel) { action = kUpgradeButtonEntry; }
+        if (StoreItemButton(view, action, actions.x + actions.width, actions.y, actions.height, true)) {
+            if (action == kUpgradeButtonEntry) {
+                state.masteryWeapon = ref.object;
+                state.shopDetailOpen = false;
+                state.Navigate(26);
+            } else {
+                purchaseIndex = state.selectedItem;
+                purchaseSlot = state.slot;
+            }
+        }
+        // Anything outside the expanded card folds it again, like the original.
+        if (view.Hit(0, 0, 1024, 768)) {
+            state.shopDetailOpen = false;
+            state.shopPreview = false;
+        }
     }
     if (purchaseIndex >= 0) {
         const StoreEntry &item = store[purchaseIndex];
@@ -1112,64 +1745,118 @@ void BeginPostGame(MenuState &state, const SurvivalGameContext &context, const s
     }
 }
 
-/** CMenuUpgradePopup shows changed store stats and the next critical-hit tier. */
+// GLU_MOVIE_UPGRADE_POPUP regions, in the order the movie declares them:
+// portrait, close, meter, CURRENT and NEXT headers, the two stat columns, the
+// weapon icon plate, the title bar, the buy tab and the weapon name strip.
+constexpr unsigned kUpgradePortraitRegion = 0;
+constexpr unsigned kUpgradeCloseRegion = 1;
+constexpr unsigned kUpgradeMeterRegion = 2;
+constexpr unsigned kUpgradeCurrentHeaderRegion = 3;
+constexpr unsigned kUpgradeNextHeaderRegion = 4;
+constexpr unsigned kUpgradeCurrentColumnRegion = 5;
+constexpr unsigned kUpgradeNextColumnRegion = 6;
+constexpr unsigned kUpgradeIconRegion = 7;
+constexpr unsigned kUpgradeTitleRegion = 8;
+constexpr unsigned kUpgradeBuyRegion = 9;
+constexpr unsigned kUpgradeNameRegion = 11;
+constexpr unsigned kUpgradeSettleTime = 750;
+// The player headshots the menus print next to a title.
+constexpr unsigned kBrotherPortrait = 161;
+// The meter fills over this long when the page opens, like the original.
+constexpr unsigned kMeterFillMs = 900;
+
+/** The upgrade popup is reached from the store as well as from the results,
+ * so closing it returns to whichever page pushed it. */
+void CloseMastery(MenuState &state) {
+    if (state.history.empty()) { state.page = 27; return; }
+    state.Back();
+}
+
+/** How far into GLU_MOVIE_WEAPON_UPGRADE_MASTERY the meter stands for this
+ * much experience. The movie's chapters are the three cells. */
+unsigned MasteryMeterTime(GameMenu &view, const WeaponEntry &weapon, unsigned experience) {
+    const unsigned meter = view.movies.Ordinal("GLU_MOVIE_WEAPON_UPGRADE_MASTERY");
+    CMovie *movie = view.movies.GetMovie(meter);
+    if (movie == nullptr) { return 0; }
+    const unsigned level = weapon.data.GetMasteryLevel(experience);
+    if (level >= kMaxMasteryLevel || movie->chapters.size() <= level) { return movie->duration; }
+    unsigned lower = 0;
+    if (level > 0) { lower = weapon.data.GetMasteryThreshold(level - 1); }
+    const unsigned upper = weapon.data.GetMasteryThreshold(level);
+    unsigned endTime = movie->duration;
+    if (movie->chapters.size() > level + 1) { endTime = movie->chapters[level + 1]; }
+    const unsigned startTime = movie->chapters[level];
+    return startTime + static_cast<unsigned>((static_cast<std::uint64_t>(experience - lower) *
+        (endTime - startTime - 1)) / std::max(1u, upper - lower));
+}
+
+/** CMenuUpgradePopup lists the stats this tier changes plus the critical-hit
+ * tier, with the real values in both columns. */
 bool DrawMastery(GameMenu &view, MenuState &state, CProfileManager &profile, CResTOCManager &toc,
     PackTables &tables, const std::vector<StoreEntry> &store, const std::vector<WeaponEntry> &weapons,
     const std::filesystem::path &savePath) {
     const WeaponEntry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
     const StoreEntry *item = FindWeaponStore(store, state.masteryWeapon);
-    if (weapon == nullptr || item == nullptr) { state.page = 27; return true; }
+    if (weapon == nullptr || item == nullptr) { CloseMastery(state); return true; }
+    const unsigned popup = view.movies.Ordinal("GLU_MOVIE_UPGRADE_POPUP");
+    MovieRegion portrait, close, meterArea, currentHeader, nextHeader, currentColumn, nextColumn;
+    MovieRegion iconArea, titleArea, buyArea, nameArea;
+    if (!RequireRegion(view, popup, kUpgradePortraitRegion, kUpgradeSettleTime, portrait, "portrait") ||
+        !RequireRegion(view, popup, kUpgradeCloseRegion, kUpgradeSettleTime, close, "close") ||
+        !RequireRegion(view, popup, kUpgradeMeterRegion, kUpgradeSettleTime, meterArea, "meter") ||
+        !RequireRegion(view, popup, kUpgradeCurrentHeaderRegion, kUpgradeSettleTime, currentHeader, "current header") ||
+        !RequireRegion(view, popup, kUpgradeNextHeaderRegion, kUpgradeSettleTime, nextHeader, "next header") ||
+        !RequireRegion(view, popup, kUpgradeCurrentColumnRegion, kUpgradeSettleTime, currentColumn, "current column") ||
+        !RequireRegion(view, popup, kUpgradeNextColumnRegion, kUpgradeSettleTime, nextColumn, "next column") ||
+        !RequireRegion(view, popup, kUpgradeIconRegion, kUpgradeSettleTime, iconArea, "icon") ||
+        !RequireRegion(view, popup, kUpgradeTitleRegion, kUpgradeSettleTime, titleArea, "title") ||
+        !RequireRegion(view, popup, kUpgradeBuyRegion, kUpgradeSettleTime, buyArea, "buy") ||
+        !RequireRegion(view, popup, kUpgradeNameRegion, kUpgradeSettleTime, nameArea, "name")) { return false; }
+
     const unsigned experience = profile.GetWeaponExperience(state.masteryWeapon);
     const unsigned level = weapon->data.GetMasteryLevel(experience);
-    const unsigned nextLevel = std::min(3u, level + 1);
+    const unsigned nextLevel = std::min(kMaxMasteryLevel, level + 1);
     view.movies.Rectangle(0, 56, 1024, 712, 0, 0, 0);
-    view.movies.Draw(138, 750);
-    view.CenterText("UPGRADE", 512, 177, 0, 1.9f);
-    view.Clip(115, 164, 67, 65);
-    view.movies.DrawSpriteFitted(19, 0, 0, 88, 156, 115, 144);
-    view.EndClip();
-    view.movies.DrawSpriteFitted(0, 99, 0, 842, 163, 61, 60);
-    if (view.Hit(836, 157, 74, 73)) { state.page = 27; }
-    unsigned starsTime = 0;
-    CMovie *stars = view.movies.GetMovie(139);
-    if (stars != nullptr) {
-        starsTime = stars->duration;
-        if (level < 3 && stars->chapters.size() > level) {
-            unsigned lower = 0;
-            if (level > 0) { lower = weapon->data.GetMasteryThreshold(level - 1); }
-            const unsigned upper = weapon->data.GetMasteryThreshold(level);
-            unsigned endTime = stars->duration;
-            if (stars->chapters.size() > level + 1) { endTime = stars->chapters[level + 1]; }
-            const unsigned startTime = stars->chapters[level];
-            starsTime = startTime + static_cast<unsigned>((static_cast<std::uint64_t>(experience - lower) *
-                (endTime - startTime - 1)) / std::max(1u, upper - lower));
-        }
-    }
-    // Movie 139 is positioned by its origin and has no user region to fit.
-    view.movies.Draw(139, starsTime, 113, 248);
-    view.CenterText(item->name, 242, 305, 1, 0.85f);
-    view.Icon(toc, tables, *item, 145, 354, 178);
-    view.CenterText("CURRENT", 518, 258, 0, 0.9f);
-    view.CenterText("NEXT", 778, 258, 0, 0.9f);
-    // Original :392886 expresses the next tier as integer percentage changes;
-    // stat 3 is walking speed, with 100 added before calculating its percentage.
+    view.movies.Draw(popup, kUpgradeSettleTime);
+    view.CenterText(view.movies.NamedString("IDS_UPGRADE_TITLE"), titleArea.x + titleArea.width * 0.5f,
+        titleArea.y + (titleArea.height - 34) * 0.5f, 0, 1.25f);
+    view.movies.DrawSpriteFitted(0, kBrotherPortrait + profile.playerBrother, 0,
+        portrait.x, portrait.y, portrait.width, portrait.height);
+    view.movies.DrawSpriteFitted(0, 99, 0, close.x, close.y, close.width, close.height);
+    if (view.Hit(close.x, close.y, close.width, close.height)) { CloseMastery(state); }
+
+    // The meter runs up to its real position when the page opens.
+    if (state.masteryOpened == 0) { state.masteryOpened = view.clock; }
+    const std::uint64_t shown = std::min<std::uint64_t>(view.clock - state.masteryOpened, kMeterFillMs);
+    const unsigned target = MasteryMeterTime(view, *weapon, experience);
+    const unsigned meterTime = static_cast<unsigned>(target * shown / kMeterFillMs);
+    const unsigned meter = view.movies.Ordinal("GLU_MOVIE_WEAPON_UPGRADE_MASTERY");
+    view.movies.Draw(meter, meterTime, meterArea.x + 6, meterArea.y + (meterArea.height - 42) * 0.5f);
+
+    view.CenterText(view.movies.NamedString("IDS_UPGRADE_CURRENT_LEVEL_TITLE"),
+        currentHeader.x + currentHeader.width * 0.5f, currentHeader.y + 6, 0, 0.95f);
+    constexpr const char *nextTitles[] = {"IDS_UPGRADE_NEXT_LEVEL_TITLE_BRONZE",
+        "IDS_UPGRADE_NEXT_LEVEL_TITLE_SILVER", "IDS_UPGRADE_NEXT_LEVEL_TITLE_GOLD"};
+    view.CenterText(view.movies.NamedString(nextTitles[std::min(2u, level)]),
+        nextHeader.x + nextHeader.width * 0.5f, nextHeader.y + 6, 0, 0.95f);
+    view.CenterText(item->name, nameArea.x + nameArea.width * 0.5f, nameArea.y + 4, 1, 0.9f);
+    view.Icon(toc, tables, *item, iconArea.x, iconArea.y, iconArea.width, iconArea.height);
+
+    // Every stat the record carries, with the real numbers in both columns.
+    // Stat 3 is a walking-speed percentage and keeps its sign.
     constexpr const char *statKeys[] = {"IDS_UPGRADE_POWER", "IDS_UPGRADE_DAMAGE", "IDS_UPGRADE_RPM", "IDS_UPGRADE_SPEED"};
     struct UpgradeRow { std::string title, current, next; };
     std::vector<UpgradeRow> rows;
     for (unsigned stat = 0; stat < 4; ++stat) {
         const auto &values = item->data.statGroups[stat];
         if (values.size() <= nextLevel) { continue; }
-        int currentValue = values[level], nextValue = values[nextLevel];
-        if (stat == 3) { currentValue += 100; nextValue += 100; }
-        if (currentValue == 0) { continue; }
-        const int percent = 100 * (nextValue - currentValue) / currentValue;
-        if (percent == 0) { continue; }
-        std::string next = std::to_string(percent) + "%";
-        if (percent > 0) { next = "+" + next; }
         std::string current = std::to_string(values[level]);
+        std::string next = std::to_string(values[nextLevel]);
         if (stat == 3) {
             if (values[level] >= 0) { current = "+" + current; }
+            if (values[nextLevel] >= 0) { next = "+" + next; }
             current += "%";
+            next += "%";
         }
         rows.push_back({view.movies.NamedString(statKeys[stat]), current, next});
     }
@@ -1177,31 +1864,36 @@ bool DrawMastery(GameMenu &view, MenuState &state, CProfileManager &profile, CRe
         "IDS_UPGRADE_CRITICAL_CHANCE_MED", "IDS_UPGRADE_CRITICAL_CHANCE_HIGH"};
     rows.push_back({view.movies.NamedString("IDS_UPGRADE_CRIT"), view.movies.NamedString(criticalKeys[level]),
         view.movies.NamedString(criticalKeys[nextLevel])});
-    // The original body has blue and green columns; preserve the movie border.
-    for (unsigned band = 0; band < 48; ++band) {
-        const float glow = 1.0f - std::abs(static_cast<float>(band) - 23.5f) / 24;
-        view.movies.Rectangle(390 + band * 5.0f, 297, 5, 234, 0, 0.035f + glow * 0.10f, 0.05f + glow * 0.15f);
-        view.movies.Rectangle(652 + band * 5.0f, 297, 5, 234, 0, 0.045f + glow * 0.16f, 0.015f);
-    }
     for (unsigned row = 0; row < rows.size(); ++row) {
-        const float y = 305 + (row + 1) * 205.0f / (rows.size() + 1);
-        view.movies.Text(rows[row].title, 401, y, 1, 0.78f);
-        view.movies.Text(rows[row].current, 620 - view.movies.TextWidth(rows[row].current, 1, 0.78f), y, 1, 0.78f);
-        view.movies.Text(rows[row].title, 665, y, 1, 0.78f);
-        view.movies.Text(rows[row].next, 887 - view.movies.TextWidth(rows[row].next, 1, 0.78f), y, 1, 0.78f);
+        const float y = currentColumn.y + (row + 1) * currentColumn.height / (rows.size() + 1) - 11;
+        view.movies.Text(rows[row].title, currentColumn.x + 10, y, 1, 0.78f);
+        view.movies.Text(rows[row].current,
+            currentColumn.x + currentColumn.width - 10 - view.movies.TextWidth(rows[row].current, 1, 0.78f), y, 1, 0.78f);
+        view.movies.Text(rows[row].title, nextColumn.x + 10, y, 1, 0.78f);
+        view.movies.Text(rows[row].next,
+            nextColumn.x + nextColumn.width - 10 - view.movies.TextWidth(rows[row].next, 1, 0.78f), y, 1, 0.78f);
     }
-    if (level < 3) {
+    if (level < kMaxMasteryLevel) {
         const unsigned threshold = weapon->data.GetMasteryThreshold(level);
-        if (GameHostSettings().debugMode) { view.CenterText(std::to_string(experience) + " / " + std::to_string(threshold) + " XP", 512, 610, 0, 0.72f); }
+        if (GameHostSettings().debugMode) {
+            view.CenterText(std::to_string(experience) + " / " + std::to_string(threshold) + " XP",
+                512, buyArea.y - 30, 0, 0.72f);
+        }
+        // Store stat column 7 is the Warbuck price of the next tier.
         const auto &prices = item->data.statGroups[7];
         if (prices.size() > nextLevel && prices[nextLevel] >= 0) {
             const unsigned price = static_cast<unsigned>(prices[nextLevel]);
-            if (view.Button(663, 547, 236, 45, "UPGRADE   W " + std::to_string(price), true)) {
+            const std::string label = view.movies.NamedString("IDS_UPGRADE_TITLE") + "   " + std::to_string(price);
+            PlateLabel(view, label, buyArea.x, buyArea.y, buyArea.width, buyArea.height);
+            view.movies.DrawSpriteFitted(kCurrencyCharacter, kWarbuckIcon, 0,
+                buyArea.x + buyArea.width - 34, buyArea.y + (buyArea.height - 26) * 0.5f, 26, 26);
+            if (view.Hit(buyArea.x, buyArea.y, buyArea.width, buyArea.height)) {
                 if (profile.warbucks >= price) {
                     profile.warbucks -= price;
                     profile.AddWeaponExperience(state.masteryWeapon, threshold - experience, weapon->data.GetMasteryLimit());
                     if (!profile.SaveToDisk(savePath)) { return false; }
                     state.message = "WEAPON UPGRADED";
+                    state.masteryOpened = view.clock;
                 } else { state.message = "NOT ENOUGH WARBUCKS"; }
             }
         }
@@ -1348,7 +2040,10 @@ bool DrawSocial(GameMenu &view, MenuState &state, const CProfileManager &profile
         return true;
     }
     if (bros) {
-        if (!view.DrawEquippedPlayer(toc, tables, profile, weapons, armors, 0, nullptr, true)) { return false; }
+        // TODO: drive this from GLU_MOVIE_OFFLINE_BROHOOD once that page is
+        // rebuilt from its own regions; these are the previous measurements.
+        const MovieRegion brosPanel{0, 0, 548, 152, 476, 565};
+        if (!view.DrawEquippedPlayer(toc, tables, profile, weapons, armors, 0, nullptr, &brosPanel)) { return false; }
         view.movies.Text("ON DUTY BRO", 34, 154, 0, 1.0f);
         view.movies.DrawFitted(73, 800, 11, 176, 565, 61);
         unsigned portrait = 0;
@@ -1459,6 +2154,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     GameMenu view;
     if (!view.Open(toc, tables)) { return -3; }
     view.animateNavigation = capturePath.empty();
+    view.scripted = testClicks != nullptr;
     CBGM music;
     if (!music.Play(0)) { return -3; }
     music.SetEnabled(profile.musicEnabled);
@@ -1479,6 +2175,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         if (testClicks != nullptr && testFrame < testClicks->size()) { testClock += (*testClicks)[testFrame].advanceMs; }
         std::uint64_t menuClock = ticks;
         if (testClicks != nullptr) { menuClock = testClock; }
+        view.clock = menuClock;
         music.Update();
         bool activate = false;
         const unsigned previousPage = state.page;
@@ -1549,7 +2246,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                     const DailyPrize &prize = daily.prizes[region.index - 9];
                     StoreEntry imageEntry;
                     imageEntry.data.assets[1] = prize.image;
-                    view.Icon(toc, tables, imageEntry, region.x, region.y, std::min(region.width, region.height));
+                    view.Icon(toc, tables, imageEntry, region.x, region.y, region.width, region.height);
                     unsigned quantity = prize.coins;
                     if (prize.warbucks != 0) { quantity = prize.warbucks; }
                     view.CenterText("X" + std::to_string(quantity), region.x + region.width * 0.5f, region.y + region.height - 19, 0, 0.9f);
@@ -1670,7 +2367,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                 const float x = 240 + (offset % 3) * 253.0f;
                 const float y = 220 + (offset / 3) * 122.0f;
                 if (view.Button(x, y, 239, 110, "", state.selectedItem == static_cast<int>(index))) { state.selectedItem = static_cast<int>(index); }
-                view.Icon(toc, tables, item, x + 10, y + 11);
+                view.Icon(toc, tables, item, x + 10, y + 11, 66, 66);
                 std::string name = item.name;
                 if (name.size() > 21) { name = name.substr(0, 19) + ".."; }
                 view.Text(x + 82, y + 20, name, 1.15f);
@@ -1872,7 +2569,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                     if (index >= offers.size()) { break; }
                     const StoreEntry &offer = store[offers[index]];
                     const float y = 330 + row * 71.0f;
-                    view.Icon(toc, tables, offer, 114, y);
+                    view.Icon(toc, tables, offer, 114, y, 66, 66);
                     view.Text(196, y + 17, offer.name, 1.9f);
                     if (view.Button(720, y + 8, 176, 47, "SELECT")) {
                         state.currencyItem = static_cast<int>(offers[index]); state.Navigate(18);
@@ -1927,7 +2624,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             state.selectedItem = -1;
             state.message.clear();
         }
-        if (state.page != 0 && state.page != 14 && state.page != 19 && state.page != 21 && state.page != 22 &&
+        // Trunk pages are reached from the navigation bar and carry no BACK.
+        if (state.page != 0 && state.page != 2 && state.page != 14 && state.page != 19 && state.page != 21 && state.page != 22 &&
             state.page != 23 && state.page != 24 && (state.page < 25 || state.page == 29) && !state.refinementRequired && !state.currencyPending && !state.inviteOpen && view.Button(20, 708, 145, 42, "BACK")) { state.Back(); }
         if (state.page == 1 && view.Button(780, 708, 210, 42, "GET CURRENCY")) { state.Navigate(17); }
 
@@ -1944,6 +2642,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             view.movies.Rectangle(2, 135, 620, 22, 0, 0, 0, 0.8f);
             view.movies.Text(debug, 7, 138, 0, 0.65f);
         }
+        // The pressed plate's burst plays above whatever the click opened.
+        view.DrawPress();
         ++testFrame;
         if (!capturePath.empty() && (testClicks == nullptr || testFrame > testClicks->size())) {
             if (glGetError() != 0 || !view.window.SaveFrame(capturePath)) { return -3; }
@@ -1974,15 +2674,17 @@ int RunGameMenuCheck(const std::string &bigDirectory) {
     profile.xplodium = 250; // Isolated test fixture, never the user's profile.
     const std::filesystem::path path = "out/menu-profile-check.dat";
     MenuState state;
-    state.shopColumn = 2;
+    // Two columns in, at the original 258 pixel column pitch.
+    state.shopScroll = 516;
     state.modeSelected = true;
     state.starPanX = -350;
-    // Observed menu coordinates: refine; shop; Mad Dogs; buy; free rifle; equip;
-    // weapon 2; owned Mad Dogs; equip; planets; Haven. Domain methods are not
-    // called by this driver, so button selection and ownership wiring are tested.
+    // Rebuilt store coordinates: refinery; refine; store; buy Mad Dogs into
+    // the first weapon slot; swap slots; buy the free ER97E Elite; planets;
+    // Haven. Domain methods are not called by this driver, so button placement
+    // and ownership wiring are what actually gets tested.
     const std::vector<MenuTestClick> clicks = {
-        {414, 98}, {429, 360}, {322, 98}, {228, 385},
-        {516, 688}, {516, 688}, {228, 385}, {946, 190}, {66, 688}, {66, 688}, {228, 385},
+        {414, 98}, {429, 360}, {322, 98},
+        {228, 582}, {946, 190}, {228, 380},
         {46, 98}, {779, 402}
     };
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
@@ -2035,22 +2737,28 @@ int RunGameMenuCheck(const std::string &bigDirectory) {
         context.result.kills, context.result.casualties.size(), earnedMastery, oreBefore);
     CProfileManager itemProfile;
     itemProfile.Reset(core, refinement);
-    itemProfile.coins = 300;
+    itemProfile.warbucks = 10;
     MenuState itemState;
     itemState.page = 2;
     itemState.slot = 5;
     itemState.shopCategory = 2;
-    const std::vector<MenuTestClick> itemClicks = {{228, 385}, {228, 385}, {-100, -100}};
+    // Speed Boost is the store's first power-up row: one Warbuck for five
+    // charges, so two purchases leave ten.
+    const std::vector<MenuTestClick> itemClicks = {{486, 582}, {486, 582}, {-100, -100}};
     const std::filesystem::path itemPath = "out/menu-powerup-profile-check.dat";
     if (ShowGameMenu(toc, tables, itemProfile, progress, refinement, store, weapons, armor,
         itemState, itemPath, "out/game-menu-items-check.png", &itemClicks) != -2) { return 1; }
-    GameObjectRef healthPack;
-    healthPack.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
-    healthPack.localIndex = 1;
-    if (itemProfile.coins != 0 || itemProfile.GetPowerupCount(healthPack) != 2) { return 1; }
+    GameObjectRef speedBoost;
+    speedBoost.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+    speedBoost.localIndex = 16;
+    if (itemProfile.warbucks != 8 || itemProfile.GetPowerupCount(speedBoost) != 10) {
+        std::printf("[menu-check] failed warbucks=%llu speed-boost=%u\n",
+            itemProfile.warbucks, itemProfile.GetPowerupCount(speedBoost));
+        return 1;
+    }
     restored.Reset(core, refinement);
-    if (!restored.LoadFromDisk(itemPath) || restored.GetPowerupCount(healthPack) != 2) { return 1; }
-    std::printf("[menu-check] consumable-bought-twice=2 coins=0 saved=2 failures=0\n");
+    if (!restored.LoadFromDisk(itemPath) || restored.GetPowerupCount(speedBoost) != 10) { return 1; }
+    std::printf("[menu-check] consumable-bought-twice=10 warbucks=8 saved=10 failures=0\n");
     CProfileManager previewProfile;
     previewProfile.Reset(core, refinement);
     const CProfileManager beforePreview = previewProfile;
@@ -2067,9 +2775,37 @@ int RunGameMenuCheck(const std::string &bigDirectory) {
         if (!SameObject(previewProfile.configuration.armor[slot], beforePreview.configuration.armor[slot])) { return 1; }
     }
     std::printf("[menu-check] shop-preview-without-purchase loadout-unchanged=1 failures=0\n");
+    // The expanded card carries the description, the damage/rate/speed column
+    // and the upgrade meter; open one and confirm the records behind it read.
+    // Put one gun on its first tier so the card badge and the meter have
+    // something real to draw.
+    GameObjectRef starterGun;
+    starterGun.packHash = core;
+    starterGun.localIndex = 0;
+    const WeaponEntry *starterWeapon = FindMasteryWeapon(weapons, starterGun);
+    if (starterWeapon == nullptr) { return 1; }
+    previewProfile.AddWeaponExperience(starterGun, starterWeapon->data.GetMasteryThreshold(0),
+        starterWeapon->data.GetMasteryLimit());
+    if (starterWeapon->data.GetMasteryLevel(previewProfile.GetWeaponExperience(starterGun)) != 1) { return 1; }
+    MenuState detailState;
+    detailState.page = 2;
+    detailState.shopScroll = 258;
+    const std::vector<MenuTestClick> detailClicks = {{100, 500}, {-100, -100, 400}, {-100, -100, 400}};
+    if (ShowGameMenu(toc, tables, previewProfile, progress, refinement, store, weapons, armor,
+        detailState, "out/menu-detail-check.dat", "out/game-menu-detail.png", &detailClicks) != -2 ||
+        !detailState.shopDetailOpen || detailState.selectedItem < 0) { return 1; }
+    const StoreEntry &detailItem = store[detailState.selectedItem];
+    const std::string detailText = ReadGameString(toc, detailItem.data.assets[3]);
+    if (detailText.empty() || detailItem.data.statGroups[1].empty() || detailItem.data.statGroups[2].empty()) {
+        std::printf("[menu-check] expanded card has no description or stats for %s\n", detailItem.name.c_str());
+        return 1;
+    }
+    std::printf("[menu-check] expanded-card item=%s description=%zu chars dmg=%d rpm=%d\n",
+        detailItem.name.c_str(), detailText.size(), detailItem.data.statGroups[1][0], detailItem.data.statGroups[2][0]);
     MenuState filterState;
     filterState.page = 2;
-    const std::vector<MenuTestClick> filterClicks = {{910, 740}, {800, 325}, {800, 375}, {-100, -100}};
+    // FILTER plate, then the PISTOL and RIFLE rows of the original sort list.
+    const std::vector<MenuTestClick> filterClicks = {{910, 740}, {900, 438}, {900, 489}, {-100, -100}};
     if (ShowGameMenu(toc, tables, previewProfile, progress, refinement, store, weapons, armor,
         filterState, "out/menu-filter-check.dat", "out/game-menu-filter-check.png", &filterClicks) != -2 ||
         filterState.shopFilter != 3 || !filterState.shopFilterOpen || previewProfile.coins != 0) { return 1; }

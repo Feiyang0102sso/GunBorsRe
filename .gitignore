@@ -71,6 +71,7 @@ flow scripts/
 saves/
 userdata/
 10-17-2011/
+big_360_out/
 
 # ============================================================
 #  Third-party binaries we DO commit

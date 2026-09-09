@@ -5,5 +5,6 @@
 #define GUN_BROS_RE_MOVIESTUDY_H
 #include <string>
 int RunMovieCheck(const std::string &bigDirectory);
-int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::string &screenshotPath, unsigned advanceMs, bool gallery = false);
+int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::string &screenshotPath, unsigned advanceMs,
+    bool gallery = false, bool regionOverlay = false);
 #endif

@@ -224,7 +224,11 @@ int RunProgressCheck(const std::string &bigDirectory) {
         const CStoreItem &item = entry.data;
         storeReport << entry.owner << " name=" << std::quoted(entry.name) << " type=" << unsigned(item.type)
             << " flags=" << unsigned(item.flags) << " level=" << item.requiredLevel
-            << " common=" << item.commonPrice << " rare=" << item.rarePrice << " refs=" << item.objects.size();
+            << " common=" << item.commonPrice << " rare=" << item.rarePrice
+            << " value8=" << item.value8 << " value32=" << unsigned(item.value32)
+            << " order=" << item.displayOrder << " value242=" << unsigned(item.value242)
+            << " single=" << unsigned(item.singlePurchase) << " value244=" << unsigned(item.value244)
+            << " refs=" << item.objects.size();
         for (const GameObjectTypeRef &ref : item.objects) {
             if (ref.object.IsNull()) { continue; }
             ++references;
@@ -237,6 +241,15 @@ int RunProgressCheck(const std::string &bigDirectory) {
         for (unsigned group = 0; group < item.statGroups.size(); ++group) {
             storeReport << " stat" << group << '=';
             for (std::int32_t value : item.statGroups[group]) { storeReport << value << ','; }
+        }
+        // Asset slots also carry the display strings; naming them needs the
+        // actual text, not a guess about which index holds the description.
+        for (unsigned asset = 0; asset < 6; ++asset) {
+            std::string text = ReadGameString(toc, item.assets[asset]);
+            for (char &letter : text) {
+                if (letter == '\n' || letter == '\r') { letter = ' '; }
+            }
+            storeReport << " asset" << asset << '=' << std::quoted(text);
         }
         storeReport << '\n';
     }
