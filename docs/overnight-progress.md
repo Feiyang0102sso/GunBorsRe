@@ -431,7 +431,7 @@
 - 原存档完整性基线实际包含 21 个源文件（其中检查器解释 20 份数据记录）；最终 SHA256 变化 0。`userdata/profile.dat` 和 `userdata/original-profile.dat` 均未被自动检查创建，首次正式游戏由用户开始。
 - 常规测试全部静音；声音数据解析通过，但未进行外放听感验收。图形、按钮输入和脚本检查不等同于操作系统鼠标或普通玩家难度体验。
 - 启动入口：`play-muted.cmd`／`play.cmd`／`play-original-save.cmd`／`research.cmd`；研究菜单 1–38 全部保留，正式入口 26，原存档研究入口 37。
-- 当前验收指南 `docs/acceptance.md`；未解／废案边界 `docs/unresolved-behavior.md`；原名对照 `docs/original-name-map.md`。`agent.md` 保留用户指定入口并指向统一约定 `AGENTS.md`。
+- 当前验收指南 `docs/acceptance.md`；未解／废案边界 `docs/unresolved-behavior.md`；原名对照 `docs/original-name-map.md`。当时`agent.md`作为入口指向`AGENTS.md`；后续按用户要求合并，现统一维护根目录`AGENTS.md`，不再保留第二份入口文件。
 - 四图 500 波覆盖来自已注明的阶段 16／19 独立版本，最终版本另有完整核心、六战役烟测及两图末波检查。没有把早期长跑冒称为最终二进制的四图完整长跑。
 
 ### 阶段 24：启动帮助出口

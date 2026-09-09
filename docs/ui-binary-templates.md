@@ -331,4 +331,4 @@ Movie 保存精灵与动画选择，不保存 PNG 像素。图片继续沿 `SPRI
 
 执行 `D:/Python312/python.exe src/tools/catalog_ui_movies.py`，退出码 0。175 个资源均完整消费至文件末尾，原名映射均指向结构可读的 Movie。该检查核对文件定位与序列化长度，不代表 010 Editor 模板已实际执行。
 
-`.bt` 的类型名称、字段排列依据原反编译，完整出处在模板头部。未确认字段保留 Raw 后缀和说明。010 Editor 的格式属性参考 [官方 Template Variables 文档](https://www.sweetscape.com/010editor/manual/TemplateVariables.htm)。
+`.bt` 的类型名称、字段排列依据原反编译，完整出处在模板头部。逐字段用途及消费路径已补入模板，研究边界见 [字段用途核对](entry-field-semantics.md)。未确认字段保留 Raw 后缀和说明。010 Editor 的格式属性参考 [官方 Template Variables 文档](https://www.sweetscape.com/010editor/manual/TemplateVariables.htm)。
