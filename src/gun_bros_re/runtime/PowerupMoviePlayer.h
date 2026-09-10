@@ -10,12 +10,13 @@
 class PowerupMoviePlayer {
 public:
     PowerupMoviePlayer(CResTOCManager &toc, PackTables &tables, CombatScene &scene);
-    bool Start(const PowerupEntry &entry);
+    bool Start(const PowerupEntry &entry, bool fromSelector = false);
     void Update(int deltaMs);
     bool Draw();
     void Reset();
     bool IsActive() const { return m_active; }
     unsigned GetElapsed() const { return m_elapsed; }
+    bool IsForegroundMovie() const { return m_movieActive && m_foregroundMovie; }
     unsigned movieCompletions = 0, splashCount = 0, effectCount = 0, failures = 0;
 private:
     bool ApplyActions();
@@ -32,6 +33,7 @@ private:
     int m_callbackMs = 0;
     std::uint8_t m_callbackEvent = 0;
     bool m_active = false, m_movieActive = false, m_loopMovie = false;
+    bool m_foregroundMovie = false;
     std::uint32_t m_random = 0xC0381125;
 };
 #endif

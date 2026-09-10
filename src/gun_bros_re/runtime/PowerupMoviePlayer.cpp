@@ -4,12 +4,13 @@
 #define NOMINMAX
 #include "runtime/PowerupMoviePlayer.h"
 #include "engine/CMatrix4d.h"
+#include "gun_bros/CLevel.h"
 #include <cstdio>
 
 PowerupMoviePlayer::PowerupMoviePlayer(CResTOCManager &toc, PackTables &tables, CombatScene &scene)
     : m_toc(toc), m_tables(tables), m_scene(scene) {}
 
-bool PowerupMoviePlayer::Start(const PowerupEntry &entry) {
+bool PowerupMoviePlayer::Start(const PowerupEntry &entry, bool fromSelector) {
     if (m_active) { return false; }
     if (!m_particles) {
         if (!m_program.Load(ASSET_ROOT "/src/gun_bros_re/shaders", "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return false; }
@@ -17,8 +18,9 @@ bool PowerupMoviePlayer::Start(const PowerupEntry &entry) {
     }
     Reset();
     m_script.Bind(entry.data);
+    m_script.SetLevelContext(m_scene.GetLevel());
     m_script.Equip();
-    m_script.Use();
+    m_script.Use(fromSelector);
     m_active = true;
     std::printf("[powerup-movie] start %s\n", entry.owner.c_str());
     if (!ApplyActions()) { Reset(); return false; }
@@ -40,6 +42,7 @@ bool PowerupMoviePlayer::StartMovie(const PowerupAction &action) {
     m_movieDuration = movie->duration;
     m_movieTime = 0;
     m_movieActive = true;
+    m_foregroundMovie = action.function == 15;
     m_loopMovie = action.function == 1 && action.arguments[1] == 1;
     std::printf("[powerup-movie] movie=%s:%u duration=%u loop=%d\n", m_toc.GetPack(packIndex)->GetShortName().c_str(),
         m_movieOrdinal, m_movieDuration, m_loopMovie);
@@ -58,6 +61,9 @@ bool PowerupMoviePlayer::ApplyActions() {
             m_callbackEvent = 2;
             if (action.function == 4) { m_callbackEvent = 1; }
             if (action.function == 13) { m_callbackEvent = 4; }
+        } else if (action.function == 14 || action.function == 26) {
+            // Selector-only input/mode controls are already inaccessible while
+            // its powerup owns presentation. Neither native emits an event.
         } else if (action.function == 3) {
             CombatHit hit;
             hit.owner = kPlayerCombatId;
@@ -156,6 +162,10 @@ bool PowerupMoviePlayer::Draw() {
 }
 
 void PowerupMoviePlayer::Reset() {
+    if (m_active && m_scene.GetLevel() != nullptr) {
+        // Cancel/restart must release the pause even without the script's exit.
+        m_scene.GetLevel()->FunctionResolver(65, nullptr, 0);
+    }
     m_active = false;
     m_movieActive = false;
     m_callbackMs = 0;

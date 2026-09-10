@@ -1,5 +1,7 @@
 # 2026-09-09 游戏验收
 
+2026-09-10 紧急购买文字对齐和三种空袭修复见[六条路径回归](airstrike-selector-fix-2026-09-10.md)：检查演出冻结、原警示图、单次伤害、恢复及取消。正式 Release 已更新。
+
 2026-09-10 暂停保留半音量BGM、结算原粒子闪光及页签直接切换见[暂停与结算修复](postgame-pause-fix-2026-09-10.md)。新增研究入口77 / `--postgame-presentation-check`。
 
 后续复核补齐Perfect Waves有限周期循环及敌人MoveSet帧筛选，修正普通僵尸在战斗和结算中的缩放；第77项扩展至30秒和两种出生路径，见[循环与缩放验证](postgame-loop-enemy-scale-2026-09-10.md)。

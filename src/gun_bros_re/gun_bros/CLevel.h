@@ -159,6 +159,7 @@ public:
     unsigned GetKillsInStatisticsGroup(unsigned group) const { return m_statisticsKills[group & 255]; }
     unsigned GetStat42Bits() const { return m_stat42Bits; }
     bool IsCleared() const { return m_cleared; }
+    bool IsPaused() const { return m_paused; }
     int GetObjectLayer() const { return m_objectLayer; }
     int GetPathLayer() const { return m_pathLayer; }
     float GetEnemyMultiplier(int enemy, int attribute) const;
@@ -227,6 +228,7 @@ private:
     bool m_dialogCloseRequested = false;
     GameObjectRef m_nextLevel;
     bool m_cleared = false;
+    bool m_paused = false;
     int m_stopwatchMs = 0;
     bool m_stopwatchRunning = false;
     bool m_brotherLabelVisible = false;

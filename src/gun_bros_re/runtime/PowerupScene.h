@@ -16,7 +16,7 @@ public:
     bool Select(unsigned index);
     bool SelectResource(const GameObjectRef &resource);
     void Cycle();
-    bool Use();
+    bool Use(bool fromSelector = false);
     void Update(int deltaMs);
     void Reset();
     bool DrawMovies();

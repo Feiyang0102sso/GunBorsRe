@@ -34,17 +34,19 @@ bool CPowerup::Query(std::uint8_t exportId, int argument) {
 
 void CPowerup::Equip() { m_interpreter.CallExportFunction(5); }
 
-void CPowerup::Use(bool secondSlot) {
+void CPowerup::Use(bool fromSelector) {
     m_done = false;
     m_timerMs = 0;
     std::uint8_t function = 6;
-    if (secondSlot) { function = 7; }
+    // CPowerup::Use :188704 selects export 7 for selector owner 2, not slot 2.
+    if (fromSelector) { function = 7; }
     m_interpreter.CallExportFunction(function);
 }
 
 void CPowerup::HandleEvent(std::uint8_t event) {
     m_interpreter.HandleEvent(14, event);
-    if (event == 4) { m_done = true; }
+    // The input-pad callback may enter damage/recovery states. Only Exit
+    // (native 0) ends the powerup, as in CPowerup::Exit :188138.
 }
 
 void CPowerup::Update(int deltaMs) {

@@ -4042,11 +4042,18 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (!powerupProbe.Use() || vitals.health != std::min(vitals.maximum, 9.0f) || powerupProbe.GetCount() != 0) { ++checkFailures; }
         checkFailures += powerupProbe.failures;
         std::printf("[powerup-play-check] healing/cancel/repeat consumed=%u failures=%u\n", powerupProbe.consumed, checkFailures);
-        for (unsigned airstrikeIndex : {0u, 10u, 11u}) {
+        unsigned airstrikeCase = 0;
+        for (unsigned airstrikeIndex : {0u, 10u, 11u, 0u, 10u, 11u}) {
+            const bool fromSelector = airstrikeCase++ >= 3;
             session.Restart(startX, startY, startFacing);
             WeaponEffects airstrikeEffects(toc, tables, program);
             CombatScene airstrikeScene(tables, program, enemies, player, vitals, airstrikeEffects, loaded.playerTemplate->gameScale);
             airstrikeScene.Reset();
+            // Exercise the same session update as gameplay: movie-only tests
+            // cannot detect actors continuing to move during an air strike.
+            SurvivalSession airstrikeSession(airstrikeScene, loaded.map, enemies);
+            if (!airstrikeSession.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
+            airstrikeSession.Restart(startX, startY, startFacing);
             CombatEnemy *target = airstrikeScene.Spawn(0, 700, 650);
             CombatEnemy *outside = airstrikeScene.Spawn(0, 4600, 650);
             if (target == nullptr || outside == nullptr) { return 1; }
@@ -4070,22 +4077,41 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             consumable.localIndex = static_cast<std::uint8_t>(airstrikeIndex);
             consumableProbe.AddPowerup(consumable, 2);
             PowerupScene airstrike(toc, tables, player, vitals, airstrikeScene, airstrikeEffects, consumableProbe);
-            if (!airstrike.Init() || !airstrike.Select(airstrikeIndex) || !airstrike.Use() || airstrike.Use() || airstrike.GetCount() != 1) { ++checkFailures; }
+            airstrikeSession.SetPowerups(&airstrike);
+            if (!airstrike.Init() || !airstrike.Select(airstrikeIndex) || !airstrike.Use(fromSelector) || airstrike.Use() || airstrike.GetCount() != 1) { ++checkFailures; }
             if (target->model.enemy.combat.hitCount != 0) { ++checkFailures; }
             // Paused presentation has no elapsed time and must not finish a movie.
             for (unsigned repeat = 0; repeat < 10; ++repeat) { airstrike.Update(0); }
             if (airstrike.GetMoviePlayer().GetElapsed() != 0) { ++checkFailures; }
             unsigned splashTime = 0;
+            unsigned movingFrames = 0;
+            unsigned warningFrames = 0;
+            const float frozenX = airstrikeScene.playerX;
+            const float frozenY = airstrikeScene.playerY;
+            const float frozenEnemyX = target->model.enemy.combat.x;
+            const float frozenEnemyY = target->model.enemy.combat.y;
+            const float frozenHealth = vitals.health;
             for (int elapsed = 0; elapsed < 12000 && airstrike.IsMovieActive(); elapsed += 16) {
-                airstrike.Update(16);
+                airstrikeSession.Update(16, 1, 0, true);
+                if (airstrike.GetMoviePlayer().IsForegroundMovie()) { ++warningFrames; }
+                if (airstrikeScene.playerX != frozenX || airstrikeScene.playerY != frozenY || airstrikeEffects.GetShotCount() != 0) { ++movingFrames; }
+                if (target->model.enemy.combat.x != frozenEnemyX || target->model.enemy.combat.y != frozenEnemyY ||
+                    vitals.health != frozenHealth || airstrikeScene.enemies.size() != 2) { ++movingFrames; }
                 if (airstrike.GetMoviePlayer().splashCount > 0 && splashTime == 0) { splashTime = elapsed + 16; }
                 if (elapsed == 992) {
                     glClearColor(0.04f, 0.05f, 0.07f, 1);
                     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                    if (!airstrike.DrawMovies() || !window.SaveFrame("out/airstrike-check-" + std::to_string(airstrikeIndex) + ".png")) { ++checkFailures; }
+                    std::string suffix = "-equipped";
+                    if (fromSelector) { suffix = "-selector"; }
+                    if (!airstrike.DrawMovies() || !window.SaveFrame("out/airstrike-check-" + std::to_string(airstrikeIndex) + suffix + ".png")) { ++checkFailures; }
                 }
             }
             float expectedDamage = 240;
+            if (movingFrames != 0) { ++checkFailures; }
+            if (fromSelector && warningFrames == 0) { ++checkFailures; }
+            if (airstrikeSession.GetLevel().IsPaused()) { ++checkFailures; }
+            std::printf("[airstrike-route-check] item=%u selector=%d warning-frames=%u\n", airstrikeIndex, fromSelector, warningFrames);
+            std::printf("[airstrike-freeze-check] item=%u moving-frames=%u failures=%u\n", airstrikeIndex, movingFrames, checkFailures);
             if (airstrikeIndex == 10) { expectedDamage = 500; }
             if (airstrikeIndex == 11) { expectedDamage = 1600; }
             if (airstrike.IsMovieActive() || airstrike.GetMoviePlayer().splashCount != 1 || splashTime < 1200 ||
@@ -4094,6 +4120,14 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             std::printf("[airstrike-check] item=%u time=%u movies=%u effects=%u damage=%.2f expected=%.2f outside-hits=%d stock=%u failures=%u\n",
                 airstrikeIndex, splashTime, airstrike.GetMoviePlayer().movieCompletions, airstrike.GetMoviePlayer().effectCount,
                 target->model.enemy.combat.totalDamage, expectedDamage, outside->model.enemy.combat.hitCount, airstrike.GetCount(), checkFailures);
+            // Release the original intro normally, then verify real input works
+            // again. A cleared pause flag alone does not prove gameplay resumed.
+            for (unsigned frame = 0; frame < 100; ++frame) { airstrikeSession.Update(16, 0, 0, false); }
+            const float resumedX = airstrikeScene.playerX;
+            airstrikeSession.Update(16, 1, 0, true);
+            if (airstrikeScene.playerX == resumedX) { ++checkFailures; }
+            std::printf("[airstrike-resume-check] item=%u selector=%d moved=%d failures=%u\n",
+                airstrikeIndex, fromSelector, airstrikeScene.playerX != resumedX, checkFailures);
             if (!airstrike.Use()) { ++checkFailures; }
             airstrike.Update(400);
             airstrike.Reset();
@@ -4817,7 +4851,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             pointerDown = true;
         }
         const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
-        const SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
+        SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
+        // Input-pad controls cannot interrupt the active powerup presentation.
+        if (powerups.IsMovieActive()) { action = SurvivalHudAction::None; }
         if (action == SurvivalHudAction::Exit) {
             // Surrender leaves a paused menu; the same BGM continues into results.
             music.SetPaused(false);
@@ -4846,7 +4882,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (action == SurvivalHudAction::EquipLeft) { leftPowerup = resource; itemChoice = false; }
             if (action == SurvivalHudAction::EquipRight) { rightPowerup = resource; itemChoice = false; }
             if (action == SurvivalHudAction::UseNow) {
-                if (powerups.SelectResource(resource) && powerups.Use()) { shopOpen = false; itemChoice = false; }
+                if (powerups.SelectResource(resource) && powerups.Use(true)) { shopOpen = false; itemChoice = false; }
             }
         }
         if (action == SurvivalHudAction::UseLeft && !paused && !shopOpen && !session.IsTransitioning()) {
@@ -4891,6 +4927,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             AppendSurvivalShortcut(inputs, controlKeys[step]);
         }
         for (KeyCode key : inputs) {
+            if (powerups.IsMovieActive()) { continue; }
             if (shopOpen) {
                 if (key == KeyCode::Space || key == KeyCode::Escape) {
                     if (survivalHud.BackFromSelectorPrompt()) { continue; }
@@ -4982,7 +5019,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         FollowPlayerCamera(loaded, width, height, camera);
         scene.SetViewCenter(camera.x + width / camera.zoom * 0.5f, camera.y + height / camera.zoom * 0.5f);
         float mouseX = 0, mouseY = 0;
-        if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead) {
+        if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead && !powerups.IsMovieActive()) {
             scene.facing = std::atan2(camera.y + mouseY / camera.zoom - scene.playerY,
                 camera.x + mouseX / camera.zoom - scene.playerX) * kRadiansToDegrees + 90;
         }
@@ -5020,6 +5057,11 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         const std::size_t shotsBeforeSwap = effects.GetShotCount();
         const bool checkSwapFiring = checkControls && (controlFrame == 2 || controlFrame == controlClickCount + 2);
         while (accumulator >= 16) {
+            if (powerups.IsMovieActive()) {
+                session.Update(16, 0, 0, false);
+                accumulator -= 16;
+                continue;
+            }
             if (!session.HasOriginalHud()) { survivalHud.Advance(16); }
             if (pendingWeapon < weapons.size() && !swapEventAccepted) {
                 SetPlayerInput(player, false, false);

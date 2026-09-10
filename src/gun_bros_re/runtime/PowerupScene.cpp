@@ -65,7 +65,7 @@ void PowerupScene::Cycle() {
     }
 }
 
-bool PowerupScene::Use() {
+bool PowerupScene::Use(bool fromSelector) {
     if (m_moviePlayer.IsActive()) { return false; }
     const PowerupEntry *entry = GetSelected();
     if (entry == nullptr || !IsSupported(*entry) || GetCount() == 0 || m_vitals.dead || !m_player.weapon) { return false; }
@@ -86,7 +86,7 @@ bool PowerupScene::Use() {
     const bool decrement = query.Query(3);
     const unsigned itemIndex = entry->resource.localIndex;
     if (itemIndex == 0 || itemIndex == 10 || itemIndex == 11) {
-        if (!m_moviePlayer.Start(*entry)) { ++failures; return false; }
+        if (!m_moviePlayer.Start(*entry, fromSelector)) { ++failures; return false; }
         if (decrement) {
             if (!m_profile.ConsumePowerup(entry->resource)) { m_moviePlayer.Reset(); ++failures; return false; }
             ++consumed;

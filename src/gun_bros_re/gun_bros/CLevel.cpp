@@ -140,6 +140,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     }
 
     m_interpreter.SetScript(levelTemplate.script, *this);
+    m_paused = false;
     m_interpreter.CallExportFunction(kLevelExportOnLevelStart);
 }
 
@@ -284,6 +285,9 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
     case 61: m_stopwatchRunning = true; return 0;
     case 62: m_stopwatchRunning = false; return 0;
     case 63: m_stopwatchRunning = first != 0; return 0;
+    // CLevel::FunctionResolver :118073 writes pause byte +275620.
+    case 64: m_paused = true; return 0;
+    case 65: m_paused = false; return 0;
     case 66: m_brotherLabelVisible = true; return 0;
     case 67: m_brotherLabelVisible = false; return 0;
     // :119883 uses this byte in the enemy-statistic key, independently of XP.

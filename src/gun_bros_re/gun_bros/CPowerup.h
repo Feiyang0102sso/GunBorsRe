@@ -42,7 +42,7 @@ public:
     /** Original exports: 0 equipable, 1 usable, 2 selector, 3 decrement, 4 default. */
     bool Query(std::uint8_t exportId, int argument = kScriptNoArgument);
     void Equip();
-    void Use(bool secondSlot = false);
+    void Use(bool fromSelector = false);
     void Update(int deltaMs);
     void HandleEvent(std::uint8_t event);
     void OnScriptStateEntered() override { m_timerMs = 0; }

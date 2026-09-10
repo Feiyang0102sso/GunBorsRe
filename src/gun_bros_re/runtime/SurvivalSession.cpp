@@ -482,6 +482,13 @@ void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
 
 void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     if (deltaMs <= 0) { return; }
+    // CLevel::Update :121255 advances the active powerup before its pause
+    // gate. Keep presentation time alive without advancing actors or spawns.
+    if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
+        m_powerups->Update(deltaMs);
+        return;
+    }
+    if (m_level.IsPaused()) { return; }
     m_map.GetCamera().Update(deltaMs);
     UpdateDialog(deltaMs);
     if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
@@ -578,6 +585,10 @@ void SurvivalSession::UpdateCamera(int deltaMs) {
 }
 
 void SurvivalSession::UpdateAfterDeath(int deltaMs) {
+    if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
+        m_powerups->Update(deltaMs);
+        return;
+    }
     if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
     // Finish existing attacks and camera effects without advancing new waves.
     m_map.GetCamera().Update(deltaMs);

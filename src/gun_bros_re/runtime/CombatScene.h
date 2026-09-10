@@ -84,6 +84,7 @@ public:
     float GetPlayerRadius() const { return m_playerRadius; }
     void SetPathLayer(int index) { m_pathLayer = index; }
     void SetLevel(CLevel *level) { m_level = level; }
+    CLevel *GetLevel() const { return m_level; }
     CLevel *GetScriptLevel() override { return m_level; }
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPlayerProgress(CPlayerProgress *progress);

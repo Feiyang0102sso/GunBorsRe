@@ -169,8 +169,9 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
     } content(*this, state, base);
     class Panel : public IMovieRegionCallback {
     public:
-        Panel(SurvivalHud &owner, const SurvivalHudState &value, unsigned movie, unsigned time, IMovieRegionCallback &items) :
-            hud(owner), state(value), layout(movie), layoutTime(time), content(items) {}
+        Panel(SurvivalHud &owner, const SurvivalHudState &value, unsigned movie, unsigned time,
+            unsigned panelTime, IMovieRegionCallback &items) :
+            hud(owner), state(value), layout(movie), layoutTime(time), menuTime(panelTime), content(items) {}
         bool DrawMovieRegion(const MovieRegion &area) override {
             if (area.index == 1) {
                 return hud.m_movies.Draw(layout, layoutTime, area.x + int(area.width) / 2,
@@ -179,15 +180,39 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
             if (area.index == 3) {
                 const auto coins = hud.SelectorCurrency("IDS_SHOP_COMMON", state.coins);
                 const auto bucks = hud.SelectorCurrency("IDS_SHOP_RARE", state.warbucks);
-                const float y = area.y + int(area.height) / 2 - int(hud.m_movies.TextHeight(0)) / 2;
-                hud.m_movies.Text(coins, area.x, y, 0, 1, 0, area.alpha);
                 // Native UTF-32 string at VA0x3C4A50 is "88", a measured currency gap.
-                hud.m_movies.Text(bucks, area.x + hud.m_movies.TextWidth(coins, 0) + hud.m_movies.TextWidth("88", 0), y, 0, 1, 0, area.alpha);
+                const float gap = hud.m_movies.TextWidth("88", 0);
+                const float coinsWidth = hud.m_movies.TextWidth(coins, 0);
+                const float totalWidth = coinsWidth + gap + hud.m_movies.TextWidth(bucks, 0);
+                // Windows overflow adaptation: keep long native-save balances
+                // inside the BIG currency slot and clear of the original button.
+                // Normal balances retain DrawPlayerCurrency's font and origin.
+                const unsigned menu = hud.m_movies.Ordinal("GLU_MOVIE_POWERUP_MENU_NEW");
+                MovieRegion cancel, button;
+                unsigned cancelIndex = 0;
+                if (state.itemChoice) { cancelIndex = 1; }
+                const auto *entry = OriginalMenuData("MDS_BUTTON_POWERUP_SELECTOR", cancelIndex);
+                if (entry == nullptr) { return false; }
+                const unsigned buttonMovie = hud.m_movies.Ordinal(entry->movies[0]);
+                unsigned start = 0, end = 0;
+                if (!hud.m_movies.Region(menu, 0, menuTime, cancel) ||
+                    !hud.m_movies.GetMovie(buttonMovie)->GetChapterRange(1, start, end) ||
+                    !hud.m_movies.Region(buttonMovie, 1, end, button)) { return false; }
+                float right = area.x + area.width;
+                if (cancel.y < area.y + area.height && cancel.y + cancel.height > area.y) {
+                    right = std::min(right, cancel.x + cancel.width / 2 - button.width / 2);
+                }
+                float scale = 1;
+                const float available = std::max(0.0f, right - area.x);
+                if (totalWidth + gap > available) { scale = available / (totalWidth + gap); }
+                const float y = area.y + area.height / 2 - hud.m_movies.TextHeight(0, scale) / 2;
+                hud.m_movies.Text(coins, area.x, y, 0, scale, 0, area.alpha);
+                hud.m_movies.Text(bucks, area.x + (coinsWidth + gap) * scale, y, 0, scale, 0, area.alpha);
             }
             return true;
         }
-        SurvivalHud &hud; const SurvivalHudState &state; unsigned layout, layoutTime; IMovieRegionCallback &content;
-    } panel(*this, state, layout, layoutTime, content);
+        SurvivalHud &hud; const SurvivalHudState &state; unsigned layout, layoutTime, menuTime; IMovieRegionCallback &content;
+    } panel(*this, state, layout, layoutTime, time, content);
     if (!m_movies.Draw(menu, time, 512, 384, 1024, 768, 0, 1, &panel)) { return false; }
     MovieRegion resume;
     if (!m_movies.Region(menu, 0, time, resume)) { return false; }
@@ -241,10 +266,11 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
                     const float height = lines.size() * hud.m_movies.TextHeight(5);
                     float lineY = y - height / 2;
                     for (const auto &line : lines) {
-                        float lineX = x - 50;
+                        // Bind :187108 sets CTextBox's center flag; paint
+                        // :104153 centers each line within the 100-unit box.
+                        const float lineX = x - line.width / 2;
                         for (const auto &run : line.runs) {
-                            hud.m_movies.Text(run.text, lineX, lineY, run.font, 1, 0, alpha);
-                            lineX += run.width;
+                            hud.m_movies.Text(run.text, lineX + run.x, lineY, run.font, 1, 0, alpha);
                         }
                         lineY += hud.m_movies.TextHeight(5);
                     }
