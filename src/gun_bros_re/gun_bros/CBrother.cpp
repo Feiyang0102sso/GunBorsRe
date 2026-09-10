@@ -234,6 +234,10 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         if (m_vitals != nullptr && argumentCount > 0) {
             m_vitals->health = m_vitals->maximum * std::clamp<int>(arguments[0], 0, 100) / 100.0f;
             m_vitals->dead = m_vitals->health <= 0;
+            if (!m_vitals->dead) {
+                m_vitals->deathAnimationComplete = false;
+                m_vitals->inputHidden = false;
+            }
             if (m_vitals->dead) { m_variables[0] = 0; m_variables[1] = 0; }
         }
         break;
@@ -280,6 +284,15 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
     }
     case 1:
         // The death export calls this when its animation has finished.
+        // FunctionResolver :138856 -> CLevel::OnPlayerKilled, not HP == 0.
+        if (m_vitals != nullptr && m_vitals->dead && !m_vitals->deathAnimationComplete) {
+            m_vitals->deathAnimationComplete = true;
+            std::printf("[death] animation complete human=%d\n", m_variables[2]);
+        }
+        break;
+    case 12:
+        // FunctionResolver :138980 -> CInputPad::Hide.
+        if (m_vitals != nullptr) { m_vitals->inputHidden = true; }
         break;
     case 15:
     case 18:
@@ -349,16 +362,27 @@ HitResult CBrother::ReceiveDamage(float damage) {
     if (m_vitals->invincible) { return HitResult::Hit; }
     m_vitals->health = std::max(0.0f, m_vitals->health - damage);
     if (m_vitals->health <= 0) {
-        SetInput(false, false);
-        m_vitals->dead = true;
-        for (bool &pending : m_grenadePending) { pending = false; }
-        for (bool &animating : m_grenadeAnimating) { animating = false; }
-        ++m_vitals->deaths;
-        m_interpreter.CallExportFunction(2);
+        StartDeath();
         return HitResult::Killed;
     }
     m_interpreter.HandleEvent(5, 4);
     return HitResult::Hit;
+}
+
+bool CBrother::StartDeath() {
+    if (m_vitals == nullptr || m_vitals->dead) { return false; }
+    SetInput(false, false);
+    m_vitals->health = 0;
+    m_vitals->dead = true;
+    m_vitals->deathAnimationComplete = false;
+    m_vitals->stunMs = 0;
+    m_weaponSwapRequested = false;
+    for (bool &pending : m_grenadePending) { pending = false; }
+    for (bool &animating : m_grenadeAnimating) { animating = false; }
+    ++m_vitals->deaths;
+    // HandleDamage :136779. BIG selects moves, timing and the completion native.
+    m_interpreter.CallExportFunction(2);
+    return true;
 }
 
 void CBrother::Stun(int durationMs) {

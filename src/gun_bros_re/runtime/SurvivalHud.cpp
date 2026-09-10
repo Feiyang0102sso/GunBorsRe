@@ -1002,6 +1002,7 @@ bool SurvivalHud::DrawOriginalPowerup(const SurvivalHudState &state, unsigned sl
 }
 
 bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
+    if (state.inputHidden) { return true; } // CBrother native 12 -> CInputPad::Hide.
     const float health = state.health / std::max(1.0f, state.maximumHealth);
     const float experience = float(state.experience) / std::max<std::uint64_t>(1, state.experienceDelta);
     if (!m_metersBound) {

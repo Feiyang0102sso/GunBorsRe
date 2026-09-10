@@ -19,7 +19,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
     SurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
     const MissionEntry *archiveMission = nullptr, bool performanceStudy = false, CWindow *sharedWindow = nullptr, bool feedbackStudy = false,
-    bool bossStudy = false);
+    bool bossStudy = false, bool deathStudy = false);
+/** Fatal-hit and SDL suicide regression on all four retail survival maps. */
+int RunPlayerDeathCheck(const std::string &bigDirectory);
 /** Four retail LEVEL scripts, their Boss camera and real grenade collisions. */
 int RunBossCheck(const std::string &bigDirectory);
 /** Real BIG scenery/player pixel checks above and below an obstacle. */

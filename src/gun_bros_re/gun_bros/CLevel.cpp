@@ -121,6 +121,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_bossIntroSerial = 0;
     m_respawnPathLayer = -1;
     m_objectTimeScale = 1;
+    m_worldTimeScale = 1;
     m_statisticsGroup = 0;
     for (unsigned &kills : m_statisticsKills) { kills = 0; }
     m_stat42Bits = 0;
@@ -208,6 +209,7 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
             if (path != nullptr) { path->SetNodeLocked(second, function == 17); }
         }
         return 0;
+    case 5: m_worldTimeScale = first / 256.0f; return 0; // FunctionResolver :117510.
     case 27: m_eventTimerMs = first * 1000 / 256; return 0;
     case 28:
     case 29:
@@ -342,6 +344,11 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
     }
     std::printf(" -- not implemented\n");
     return 0;
+}
+
+int CLevel::TransformWorldElapseMS(int deltaMs) const {
+    if (deltaMs <= 0) { return 0; }
+    return std::max(1, static_cast<int>(deltaMs * m_worldTimeScale));
 }
 
 void CLevel::Update(int deltaMs) {

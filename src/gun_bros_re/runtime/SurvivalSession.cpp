@@ -537,6 +537,7 @@ bool SurvivalSession::SkipToBoss() {
 
 void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     if (deltaMs <= 0) { return; }
+    if (IsDeathComplete()) { UpdateAfterDeath(deltaMs); return; }
     // CLevel::Update :121255 advances the active powerup before its pause
     // gate. Keep presentation time alive without advancing actors or spawns.
     if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
@@ -544,12 +545,13 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         return;
     }
     if (m_level.IsPaused()) { return; }
-    m_map.GetCamera().Update(deltaMs);
+    const int worldDeltaMs = m_level.TransformWorldElapseMS(deltaMs);
+    m_map.GetCamera().Update(worldDeltaMs);
     UpdateDialog(deltaMs);
     if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
     if (m_level.IsCleared()) {
-        m_scene.Update(deltaMs, 0, 0, false);
-        UpdateCamera(deltaMs);
+        m_scene.Update(worldDeltaMs, 0, 0, false);
+        UpdateCamera(worldDeltaMs);
         return;
     }
     if (m_originalHud != nullptr) {
@@ -570,14 +572,14 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     const float previousY = m_scene.playerY;
     if (!m_level.CanPlayerMove()) { moveX = 0; moveY = 0; }
     if (!m_level.CanPlayerShoot()) { fire = false; }
-    m_scene.Update(deltaMs, moveX, moveY, fire);
+    m_scene.Update(worldDeltaMs, moveX, moveY, fire);
     // CPlayer::Move checks triggers in every mode, including retail survival.
     UpdateMapInteractions(previousX, previousY);
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
-    if (m_props != nullptr) { m_props->Update(deltaMs); }
+    if (m_props != nullptr) { m_props->Update(worldDeltaMs); }
     if (m_pickups != nullptr) {
         for (const PickupSpawn &spawn : m_scene.pickupSpawns) { SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0); }
-        m_pickups->Update(deltaMs, m_scene, *m_effects);
+        m_pickups->Update(worldDeltaMs, m_scene, *m_effects);
         for (const PickupCollection &pickup : m_pickups->collections) {
             m_level.OnPickupCollected(pickup.objectId, pickup.resource);
         }
@@ -607,7 +609,7 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
             m_originalHud->BeginOriginalLevel(m_level.GetRealWave() + 1, m_horde, true);
         }
     }
-    UpdateCamera(deltaMs);
+    UpdateCamera(worldDeltaMs);
 }
 
 unsigned SurvivalSession::GetPowerupCount(unsigned localIndex) const {
@@ -640,6 +642,8 @@ void SurvivalSession::UpdateCamera(int deltaMs) {
 }
 
 void SurvivalSession::UpdateAfterDeath(int deltaMs) {
+    // HP zero starts the animation; native 1 ends normal level updates.
+    if (!IsDeathComplete()) { Update(deltaMs, 0, 0, false); return; }
     if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
         m_powerups->Update(deltaMs);
         return;

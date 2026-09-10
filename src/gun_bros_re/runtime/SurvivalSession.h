@@ -25,6 +25,11 @@ public:
     bool HasOriginalHud() const { return m_originalHud != nullptr; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
     void UpdateAfterDeath(int deltaMs);
+    /** Shared gameplay exit gate, also exercised by the fatal-hit regression. */
+    bool IsDeathComplete() const {
+        const PlayerVitals &vitals = m_scene.GetPlayerVitals();
+        return vitals.dead && vitals.deathAnimationComplete;
+    }
     /** Desktop cheat: drain the current wave through original Flow callbacks. */
     bool SkipToBoss();
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;

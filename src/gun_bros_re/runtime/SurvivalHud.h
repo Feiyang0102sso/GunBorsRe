@@ -31,6 +31,7 @@ struct SurvivalHudState {
     bool shopOpen = false, itemChoice = false, soundEnabled = true, musicEnabled = true;
     bool originalUi = false, dockedSticks = true;
     bool swapKeyDown = false;
+    bool inputHidden = false;
     PowerupStatus powerupStatus;
     std::uint64_t coins = 0, warbucks = 0;
     float moveX = 0, moveY = 0, aimX = 0, aimY = 0;

@@ -105,6 +105,8 @@ public:
     bool CanMove() const { return m_variables[1] != 0; }
     bool CanShoot() const { return m_variables[0] != 0; }
     HitResult ReceiveDamage(float damage);
+    /** Shared fatal transition; desktop suicide bypasses damage protection. */
+    bool StartDeath();
     void Stun(int durationMs);
     /** Original CBrother::OnWaveCleared (:135964), including script recovery. */
     void OnWaveCleared();

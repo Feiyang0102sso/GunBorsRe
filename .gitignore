@@ -7,6 +7,8 @@ bin/
 obj/
 build/
 out/
+# Test artifacts: recreated by each top-level test run.
+/tests/out/
 Debug/
 Release/
 x64/

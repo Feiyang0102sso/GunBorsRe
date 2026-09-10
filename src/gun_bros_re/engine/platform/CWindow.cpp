@@ -235,6 +235,9 @@ bool CWindow::PumpEvents() {
         if (event.type == SDL_EVENT_QUIT) {
             m_quitRequested = true;
         } else if (event.type == SDL_EVENT_KEY_DOWN) {
+            // Repeated suffix letters must not leak into E/Q/C gameplay keys.
+            if (m_cheatsEnabled && event.key.repeat && event.key.key >= SDLK_A && event.key.key <= SDLK_Z &&
+                m_cheatPrefix.size() >= 2 && m_cheatPrefix.compare(0, 2, "st") == 0) { continue; }
             if (m_cheatsEnabled && !event.key.repeat && event.key.key >= SDLK_A && event.key.key <= SDLK_Z) {
                 const auto now = SDL_GetTicks();
                 if (now - m_cheatKeyTime > 2500) { m_cheatPrefix.clear(); }
@@ -242,14 +245,16 @@ bool CWindow::PumpEvents() {
                 const char letter = static_cast<char>(event.key.key);
                 // Desktop Boss shortcut is six letters. A lone S still reaches
                 // movement; only an established ST prefix consumes its suffix.
+                // The same prefix also accepts the desktop suicide shortcut.
                 if (m_cheatPrefix.size() >= 2 && m_cheatPrefix.compare(0, 2, "st") == 0) {
                     m_cheatPrefix += letter;
-                    if (m_cheatPrefix == "stboss") {
+                    if (m_cheatPrefix == "stboss" || m_cheatPrefix == "stsuicide") {
                         m_cheatCodes.push_back(m_cheatPrefix);
                         m_cheatPrefix.clear();
                         continue;
                     }
-                    if (std::string("stboss").compare(0, m_cheatPrefix.size(), m_cheatPrefix) == 0) { continue; }
+                    if (std::string("stboss").compare(0, m_cheatPrefix.size(), m_cheatPrefix) == 0 ||
+                        std::string("stsuicide").compare(0, m_cheatPrefix.size(), m_cheatPrefix) == 0) { continue; }
                     m_cheatPrefix.clear();
                 }
                 if (m_cheatPrefix == "s" && letter == 't') { m_cheatPrefix = "st"; continue; }

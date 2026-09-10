@@ -150,6 +150,9 @@ public:
     bool IsBrotherLabelVisible() const { return m_brotherLabelVisible; }
     float GetBrotherLabelAlpha() const { return m_brotherLabelAlpha; }
     float GetObjectTimeScale() const { return m_objectTimeScale; }
+    /** Native 5 / UpdateNormal :121317, before native 58's selective scaling. */
+    int TransformWorldElapseMS(int deltaMs) const;
+    float GetWorldTimeScale() const { return m_worldTimeScale; }
     unsigned GetEnemyLimit() const { return m_enemyLimit; }
     int GetXplodiumMultiplierPercent() const { return m_xplodiumMultiplierPercent; }
     bool CanPlayerMove() const { return m_playerCanMove; }
@@ -241,6 +244,7 @@ private:
     unsigned m_bossIntroSerial = 0;
     int m_respawnPathLayer = -1;
     float m_objectTimeScale = 1;
+    float m_worldTimeScale = 1;
     std::uint8_t m_statisticsGroup = 0;
     unsigned m_statisticsKills[256] = {};
     unsigned m_stat42Bits = 0; // Original CPlayerStatistics record 42, native 82.

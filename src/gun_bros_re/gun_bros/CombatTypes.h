@@ -39,6 +39,9 @@ struct PlayerVitals {
     int stunMs = 0;
     bool invincible = true;
     bool dead = false;
+    // The original Flow native 1 reports death only after its mesh sequence.
+    bool deathAnimationComplete = false;
+    bool inputHidden = false;
     unsigned hits = 0;
     unsigned deaths = 0;
 
@@ -49,6 +52,8 @@ struct PlayerVitals {
         flash = 0;
         stunMs = 0;
         dead = false;
+        deathAnimationComplete = false;
+        inputHidden = false;
         hits = 0;
         deaths = 0;
     }

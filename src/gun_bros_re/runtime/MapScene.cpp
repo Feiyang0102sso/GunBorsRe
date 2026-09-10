@@ -3374,10 +3374,25 @@ int RunBossCheck(const std::string &bigDirectory) {
     return 0;
 }
 
+int RunPlayerDeathCheck(const std::string &bigDirectory) {
+    const char *packs[] = {"pack2", "pack7", "pack9", "pack12"};
+    const unsigned maps[] = {7, 6, 0, 0};
+    unsigned failures = 0;
+    for (unsigned index = 0; index < 4; ++index) {
+        if (RunSurvival(bigDirectory, packs[index], maps[index], 0, -1, "", 0,
+            false, false, false, 0, 0, nullptr, true, false, nullptr, false, nullptr, false, false, true) != 0) {
+            ++failures;
+        }
+    }
+    std::printf("[death-check] maps=4 failed-maps=%u\n", failures);
+    if (failures != 0) { return 1; }
+    return 0;
+}
+
 int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy, CWindow *sharedWindow, bool feedbackStudy, bool bossStudy) {
+    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy, CWindow *sharedWindow, bool feedbackStudy, bool bossStudy, bool deathStudy) {
     std::string capturePath = screenshotPath;
     unsigned checkFailures = 0;
     CResTOCManager toc;
@@ -3783,6 +3798,109 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     scene.SetProps(&props);
     session.Restart(startX, startY, startFacing);
     loading.Finish();
+
+    if (deathStudy) {
+        // Fixtures use original actors and resources. Only input and fixed time
+        // are supplied by this check; production exits through the same gate.
+        int width = 0, height = 0;
+        window.GetDrawableSize(width, height);
+        const auto captureDeath = [&](const std::string &suffix) {
+            loaded.players[0].x = scene.playerX;
+            loaded.players[0].y = scene.playerY;
+            loaded.players[0].facingDegrees = scene.facing;
+            const float zoom = GameViewCameraZoom(width, height);
+            float mvp[kMatrix4dElements];
+            Matrix4dOrthoTopLeft(width / zoom, height / zoom, kMapDepthRange, mvp);
+            Matrix4dTranslate(mvp, -scene.playerX + width / zoom / 2, -scene.playerY + height / zoom / 2);
+            glViewport(0, 0, width, height);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            BuildGeometry(loaded, batch, true, true, false);
+            batch.Draw(program, mvp);
+            DrawMapObjects(loaded, batch, program, mvp, true, &scene, &brotherModel, brother.y, width);
+            return window.SaveFrame("out/player-death-" + packShortName + "-" + suffix + ".png");
+        };
+        for (unsigned scenario = 0; scenario < 2; ++scenario) {
+            session.Restart(startX, startY, startFacing);
+            vitals.invincible = true;
+            brother.vitals.invincible = true;
+            // Finish the real intro so it cannot alter the scale under test.
+            for (int elapsed = 0; elapsed < 5000; elapsed += 16) { session.Update(16, 0, 0, false); }
+            if (scenario == 0) {
+                vitals.invincible = false;
+                CombatHit fatal;
+                fatal.ownerType = 1;
+                fatal.damage = 10000;
+                if (scene.ApplyHit(kPlayerCombatId, fatal) != HitResult::Killed) { ++checkFailures; }
+            } else {
+                // Includes an autorepeated last letter, which must not complete.
+                for (char letter : std::string("stsuicid")) {
+                    if (!PushBossCheckKey(window, letter)) { return 1; }
+                }
+                if (!PushBossCheckKey(window, 'e', true) || !window.TakeCheatCode().empty()) { ++checkFailures; }
+                if (!PushBossCheckKey(window, 'e') || window.TakeCheatCode() != "stsuicide" || !scene.Suicide()) { ++checkFailures; }
+                if (!window.TakeCheatCode().empty() || window.IsKeyDown(KeyCode::S) || window.IsKeyDown(KeyCode::E)) { ++checkFailures; }
+                for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+                    if (key == KeyCode::E || key == KeyCode::C) { ++checkFailures; }
+                }
+            }
+            if (!vitals.dead || vitals.deaths != 1 || session.IsDeathComplete() || !vitals.inputHidden ||
+                std::abs(session.GetLevel().GetWorldTimeScale() - 76 / 256.0f) > 0.0001f) { ++checkFailures; }
+            if (scene.Suicide() || vitals.deaths != 1) { ++checkFailures; }
+            auto &torso = player.weapon->brother.GetTorso();
+            const int startTime = torso.GetAnimation().GetTimeMs();
+            const int duration = torso.GetAnimation().GetRangeDurationMs();
+            const auto &move = torso.GetMoveSet()->GetMoves()[torso.GetMoveIndex()];
+            const float deathX = scene.playerX, deathY = scene.playerY;
+            if (duration <= 0 || player.weapon->brother.TorsoUsesWeapon()) { ++checkFailures; }
+            if (scenario == 1) {
+                // Native perturbation proves there is no fixed host death delay.
+                const std::int16_t scale = 128;
+                session.GetLevel().FunctionResolver(5, &scale, 1);
+            }
+            const int step = session.GetLevel().TransformWorldElapseMS(16);
+            const int moveStep = std::max(1, static_cast<int>(step * move.speed + 0.5f));
+            int elapsed = 0;
+            int animationElapsed = 0;
+            bool savedMiddle = false;
+            if (scenario == 0 && !captureDeath("start")) { ++checkFailures; }
+            while (!session.IsDeathComplete() && elapsed < 20000) {
+                session.Update(16, 1, 1, true);
+                // Other actors keep shooting during death. Inspect ownership,
+                // not the scene-wide shot counter (pack2's enemies fire here).
+                for (const auto &shot : effects.GetProjectileStates()) {
+                    if (shot.owner == kPlayerCombatId) { ++checkFailures; }
+                }
+                elapsed += 16;
+                animationElapsed += moveStep;
+                if (animationElapsed < duration && session.IsDeathComplete()) { ++checkFailures; }
+                if (!session.IsDeathComplete() && torso.GetAnimation().GetTimeMs() != startTime + animationElapsed) { ++checkFailures; }
+                if (!savedMiddle && animationElapsed >= duration / 2) {
+                    if (scenario == 0 && !captureDeath("middle")) { ++checkFailures; }
+                    savedMiddle = true;
+                }
+            }
+            if (!session.IsDeathComplete() || elapsed <= duration || !savedMiddle ||
+                scene.playerX != deathX || scene.playerY != deathY) { ++checkFailures; }
+            if (scenario == 0 && !captureDeath("complete")) { ++checkFailures; }
+            std::printf("[death-check] %s scenario=%u range-ms=%d speed=%.3f step=%d wall-ms=%d complete=%d failures=%u\n",
+                packShortName.c_str(), scenario, duration, move.speed, step, elapsed, session.IsDeathComplete(), checkFailures);
+        }
+        session.Restart(startX, startY, startFacing);
+        if (vitals.dead || vitals.deathAnimationComplete || vitals.inputHidden || session.GetLevel().GetWorldTimeScale() != 1) { ++checkFailures; }
+        brother.vitals.invincible = false;
+        CombatHit fatal;
+        fatal.ownerType = 1;
+        fatal.damage = 10000;
+        scene.ApplyHit(kBrotherCombatId, fatal);
+        for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+        if (!brother.vitals.deathAnimationComplete || session.IsDeathComplete() || session.GetLevel().GetWorldTimeScale() != 1) { ++checkFailures; }
+        brotherModel.weapon->brother.OnWaveCleared();
+        for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+        if (brother.vitals.dead || brother.vitals.deathAnimationComplete) { ++checkFailures; }
+        std::printf("[death-check] %s restart/brother failures=%u\n", packShortName.c_str(), checkFailures);
+        if (checkFailures != 0) { return 1; }
+        return 0;
+    }
     if (!loading.IsValid()) { return 1; }
     if (loading.Cancelled()) { return 0; }
     // CGunBros::OnLoaded :79321: battle music begins only after game binding.
@@ -5055,6 +5173,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         fatal.damage = 10000;
         scene.ApplyHit(kPlayerCombatId, fatal);
         if (!vitals.dead || vitals.health != 0 || vitals.deaths != 1) { ++checkFailures; }
+        if (session.IsDeathComplete()) {
+            std::printf("[death-check] FAIL: postgame opens on fatal hit before death animation\n");
+            return 1;
+        }
         session.Restart(startX, startY, startFacing);
         if (vitals.dead || vitals.health != vitals.maximum || session.GetLevel().GetWave() != static_cast<int>(startWave) ||
             scene.AliveCount() != initialActors || effects.GetBulletCount() != 0 ||
@@ -5354,6 +5476,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         state.powerupStatus.turret = player.weapon->brother.IsTurretActive();
         for (unsigned type = 0; type < 3; ++type) { state.powerupStatus.frenzyTypes[type] = player.weapon->brother.IsFrenzyType(type); }
         state.dead = vitals.dead;
+        state.inputHidden = vitals.inputHidden;
         state.cleared = session.GetLevel().IsCleared();
         state.transitioning = session.IsTransitioning();
         state.transitionTime = session.GetTransitionElapsed();
@@ -5410,6 +5533,12 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (cheat == "chc") { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
             if (cheat == "chi") { vitals.invincible = !vitals.invincible; }
             if (cheat == "chh" && !vitals.dead) { vitals.health = vitals.maximum; }
+            if (cheat == "stsuicide" && !powerups.IsMovieActive() && scene.Suicide()) {
+                paused = false;
+                shopOpen = false;
+                itemChoice = false;
+                std::printf("[death] suicide started\n");
+            }
             if (cheat == "stboss") {
                 if (session.SkipToBoss()) { paused = false; shopOpen = false; itemChoice = false; }
                 effects.SetPaused(paused || shopOpen);
@@ -5538,6 +5667,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         for (KeyCode key : inputs) {
             if (powerups.IsMovieActive()) { continue; }
+            // The original death script hides the input pad. Do not open an
+            // invisible pause menu while the formal death animation is running.
+            if (vitals.dead && gameContext != nullptr) { continue; }
             if (shopOpen) {
                 if (key == KeyCode::Space || key == KeyCode::Escape) {
                     if (survivalHud.BackFromSelectorPrompt()) { continue; }
@@ -5674,7 +5806,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 continue;
             }
             if (!session.HasOriginalHud()) { survivalHud.Advance(16); }
-            if (pendingWeapon < weapons.size() && !swapEventAccepted) {
+            if (!vitals.dead && pendingWeapon < weapons.size() && !swapEventAccepted) {
                 SetPlayerInput(player, false, false);
                 swapEventAccepted = player.weapon->brother.OnSwapGun();
             }
@@ -5707,8 +5839,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                     std::printf("[combat-swap-check] native-event=%u slot=%u torso-preserved=1\n", combatSwapEvents, equippedWeaponSlot);
                 }
             }
-            AdvanceProps(loaded.props, 16);
-            AdvanceTileLayers(loaded.map, 16);
+            const int worldDeltaMs = session.GetLevel().TransformWorldElapseMS(16);
+            AdvanceProps(loaded.props, worldDeltaMs);
+            AdvanceTileLayers(loaded.map, worldDeltaMs);
             accumulator -= 16;
         }
         if (checkSwapFiring) {
@@ -5716,16 +5849,16 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (shots == 0) { ++checkFailures; }
             std::printf("[combat-swap-check] fire-after-switch=%zu failures=%u\n", shots, checkFailures);
         }
-        if (session.GetLevel().GetWave() != lastSavedWave || (vitals.dead && !savedDeath) ||
+        if (session.GetLevel().GetWave() != lastSavedWave || (session.IsDeathComplete() && !savedDeath) ||
             session.GetLevel().GetTutorialStep() != lastSavedTutorialStep) {
-            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium, vitals.dead)) { return 1; }
+            if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium, session.IsDeathComplete())) { return 1; }
             lastSavedWave = session.GetLevel().GetWave();
-            savedDeath = vitals.dead;
+            savedDeath = session.IsDeathComplete();
             lastSavedTutorialStep = session.GetLevel().GetTutorialStep();
         }
         // Gameplay death opens the original postgame flow; research keeps its
         // death/restart controls so existing isolated checks remain available.
-        if (vitals.dead && gameContext != nullptr && !check && capturePath.empty()) { break; }
+        if (session.IsDeathComplete() && gameContext != nullptr && !check && capturePath.empty()) { break; }
         loaded.players[0].x = scene.playerX;
         loaded.players[0].y = scene.playerY;
         loaded.players[0].facingDegrees = scene.facing;

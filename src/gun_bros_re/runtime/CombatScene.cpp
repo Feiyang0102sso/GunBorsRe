@@ -804,9 +804,15 @@ std::vector<CombatScene::HealthBar> CombatScene::EnemyHealthBars(float viewportS
     return bars;
 }
 
+bool CombatScene::Suicide() {
+    m_player.weapon->brother.SetLevelContext(m_level);
+    return m_player.weapon->brother.StartDeath();
+}
+
 HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
     if (target == kBrotherCombatId && m_brotherModel != nullptr) {
         if (hit.ownerType != 1) { return HitResult::Ignored; }
+        m_brotherModel->weapon->brother.SetLevelContext(m_level);
         const float reduction = PlayerArmorMultiplier(*m_brotherModel, 0) - 1;
         float damage = hit.damage;
         if (hit.splash && hit.percentDamage) { damage *= m_brother->vitals.maximum * 0.01f; }
@@ -814,6 +820,7 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
     }
     if (target == kPlayerCombatId) {
         if (hit.ownerType != 1 || m_player.weapon == nullptr) { return HitResult::Ignored; }
+        m_player.weapon->brother.SetLevelContext(m_level);
         // CBrother::Damage (:136667): add slot percentages, then reduce the
         // incoming amount. Defence does not increase the player's max health.
         const float reduction = PlayerArmorMultiplier(m_player, 0) - 1.0f;

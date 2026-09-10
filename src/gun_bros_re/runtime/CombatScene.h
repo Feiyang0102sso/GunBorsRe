@@ -101,6 +101,8 @@ public:
     void SetLevel(CLevel *level) { m_level = level; }
     CLevel *GetLevel() const { return m_level; }
     PlayerVitals &GetPlayerVitals() { return m_vitals; }
+    /** Windows cheat enters the same BIG death export as a fatal hit. */
+    bool Suicide();
     PlayerVitals *GetBrotherVitals() {
         if (m_brother != nullptr) { return &m_brother->vitals; }
         return nullptr;
