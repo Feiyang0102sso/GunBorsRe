@@ -88,6 +88,8 @@ E 保留油桶调试功能。窗口标题显示分类、类内序号及武器名
 
 ## 代码边界
 
+2026-09-10追加：`WeaponEffects`已接入原 `CBullet` native12/13 的 Ribbon。默认步枪的橙黄色与Kraken导弹细尾迹均来自原脚本，并非给基础蓝色Sprite手动改色。激光按原零宽射线截断，近距离仍绘制两端；native18恢复射程语义。来源与七把相关武器/76模板回归见[本轮记录](weapon-effects-fix-2026-09-10.md)。LightningArc几何等剩余特效不据此视为完成。
+
 `gun_bros/CGun`、`CBullet`、`CBrother` 保留依据反编译还原的模板与脚本行为。
 `gun_bros/WeaponEffects` 是新增的游戏层整合适配类，接合弹体模拟、粒子发射与武器声音，原版没有这个同名类。
 原版 `src/gunbros/` 包含 `bullet.cpp`、`particleEffect.cpp`、`particleSystem.cpp`、`soundQueue.cpp`，

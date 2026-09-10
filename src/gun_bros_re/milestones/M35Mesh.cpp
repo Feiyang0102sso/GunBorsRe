@@ -27,6 +27,7 @@
  * own template and the player by a direct look-up.
  */
 
+#define NOMINMAX
 #include "milestones/M35Mesh.h"
 
 #include "runtime/PackTables.h"
@@ -34,6 +35,7 @@
 #include "runtime/ArmorCatalog.h"
 #include "runtime/WeaponCatalog.h"
 #include "runtime/StoreCatalog.h"
+#include "runtime/CombatGeometry.h"
 #include "gun_bros/WeaponEffects.h"
 #include "gun_bros/CParticleEffect.h"
 
@@ -1938,4 +1940,181 @@ int RunWeaponSurvey(const std::string &bigDirectory) {
     }
     std::printf("[weapons] %zu templates parsed\n", weapons.size());
     return 0;
+}
+
+/** A target beside the muzzle ray reproduces invisible wide-beam obstruction. */
+class WeaponRayCheckWorld : public IProjectileWorld {
+public:
+    unsigned beamContacts = 0;
+    float targetOffset = 50;
+    float targetDistance = 100;
+    CombatTrace Trace(const CombatHit &hit, float x, float y, float dx, float dy,
+        float radius, const std::vector<CombatId> &skip) override {
+        if ((hit.flags & 0x100) == 0 || !skip.empty()) { return {}; }
+        const float fraction = CombatGeometry::CircleFraction(x, y, dx, dy, x + targetOffset, y - targetDistance, 10 + radius);
+        if (fraction > 1) { return {}; }
+        ++beamContacts;
+        return {99, fraction};
+    }
+    HitResult ApplyHit(CombatId, const CombatHit &) override { return HitResult::Hit; }
+    void Splash(const CombatHit &, float, float, float, int) override {}
+    void SpawnFromProjectile(const GameObjectRef &, const CombatHit &) override {}
+    bool FindTarget(const CombatHit &, float, float &, float &) override { return false; }
+    bool Anchor(CombatId, int, int, float &, float &, float &, float &) override { return false; }
+};
+
+/** BIG scripts and the production projectile update, with no map or input noise. */
+int RunWeaponEffectsCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    std::vector<WeaponEntry> weapons;
+    PlayerTemplateData playerTemplate;
+    if (!LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
+    CWindow window;
+    if (!window.Open("Weapon effect verification", 800, 600)) { return 1; }
+    glViewport(0, 0, 800, 600);
+    glEnable(GL_BLEND);
+    CShaderProgram program;
+    if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
+    WeaponEffects effects(toc, tables, program);
+    WeaponRayCheckWorld rayWorld;
+    effects.SetCombatWorld(&rayWorld);
+    float identity[kMatrix4dElements], modelToScene[kMatrix4dElements], mvp[kMatrix4dElements];
+    Matrix4dIdentity(identity);
+    Matrix4dOrthoTopLeft(800, 600, 1000, mvp);
+    unsigned failures = 0;
+    for (std::size_t index = 0; index < weapons.size(); ++index) {
+        const auto &entry = weapons[index];
+        const bool kraken = entry.name.find("Kraken") != std::string::npos;
+        const bool rifle = entry.name == "ER97E Elite";
+        if (entry.category != 6 && !kraken && !rifle) { continue; }
+        effects.Clear();
+        rayWorld.beamContacts = 0;
+        rayWorld.targetOffset = 50;
+        rayWorld.targetDistance = 100;
+        PlayerModel player;
+        if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
+            !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
+            !CreatePlayerBuffers(player, program)) { return 1; }
+        BuildPlayerGameMatrix(identity, 400, 540,
+            PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
+        SetPlayerInput(player, false, true);
+        unsigned beamFrames = 0, missingFrames = 0;
+        unsigned ribbonFrames = 0;
+        bool sawBeam = false;
+        std::vector<GameObjectRef> seen;
+        for (int elapsed = 0; elapsed < 6000; elapsed += 16) {
+            AdvancePlayer(player, 16);
+            effects.Update(player, modelToScene, 0, 16);
+            if (effects.GetRibbonCount() > 0) { ++ribbonFrames; }
+            bool beam = false;
+            for (const auto &shot : effects.GetProjectileStates()) {
+                beam = beam || shot.beam;
+                bool known = false;
+                for (const auto &ref : seen) {
+                    if (ref.packHash == shot.resource.packHash && ref.localIndex == shot.resource.localIndex) { known = true; }
+                }
+                if (known) { continue; }
+                seen.push_back(shot.resource);
+                std::vector<std::uint8_t> payload;
+                if (!tables.ReadSectionResource(shot.resource.packHash, GameSection::Bullet, shot.resource.localIndex, payload)) { return 1; }
+                CBullet::Template data;
+                CArrayInputStream stream(payload);
+                if (!data.Init(stream)) { return 1; }
+                CBullet script;
+                script.Bind(data, false);
+                std::printf("[weapon-effects-check] %s bullet=%08x:%u flags=%x radius=%.2f template-animation=%u active-animation=%d lifetime=%d\n",
+                    entry.name.c_str(), shot.resource.packHash, shot.resource.localIndex, data.GetFlags(), data.GetRadius(),
+                    data.GetSpriteRef().animation, shot.animation, script.lifetimeMs);
+                if (rifle && shot.animation != data.GetSpriteRef().animation) {
+                    ++failures;
+                    std::printf("[weapon-effects-check] FAIL rifle lost authored sprite animation\n");
+                }
+                // Native 18 sets a beam's range; it must never become an expiry timer.
+                if (shot.beam && script.lifetimeMs < 1000000) {
+                    ++failures;
+                    std::printf("[weapon-effects-check] FAIL beam range became lifetime\n");
+                }
+                if (shot.beam) {
+                    const int lifetime = script.lifetimeMs;
+                    const std::int16_t range[] = {123};
+                    script.FunctionResolver(18, range, 1);
+                    if (script.maximumBeamLength != 123 || script.lifetimeMs != lifetime) { ++failures; }
+                }
+                if (script.ribbon.capacity != 0) {
+                    std::printf("[weapon-effects-check] ribbon points=%u width=%.1f interval=%u color=%u,%u,%u,%u\n",
+                        script.ribbon.capacity, script.ribbon.width, script.ribbon.intervalMs,
+                        script.ribbon.color[0], script.ribbon.color[1], script.ribbon.color[2], script.ribbon.color[3]);
+                }
+            }
+            if (beam) { sawBeam = true; ++beamFrames; }
+            else if (sawBeam && entry.name == "Infinity Laser") { ++missingFrames; }
+            if (elapsed == 992 || elapsed == 2992) {
+                glClearColor(0, 0, 0, 1);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                effects.Draw(mvp);
+                const std::string path = "out/weapon-effects-" + std::to_string(index) + "-" + std::to_string(elapsed + 16) + ".png";
+                if (!window.SaveFrame(path)) { return 1; }
+                if (rifle && elapsed == 992) {
+                    std::vector<unsigned char> pixels(800 * 350 * 4);
+                    glReadPixels(0, 250, 800, 350, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                    unsigned yellow = 0, blue = 0;
+                    for (std::size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
+                        const int red = pixels[pixel], green = pixels[pixel + 1], cyan = pixels[pixel + 2];
+                        if (red > cyan + 30 && green > cyan + 20) { ++yellow; }
+                        if (cyan > red + 30) { ++blue; }
+                    }
+                    if (yellow <= blue) { ++failures; }
+                    std::printf("[weapon-effects-check] rifle pixels yellow=%u blue=%u\n", yellow, blue);
+                }
+            }
+        }
+        if (!rifle && !sawBeam) { ++failures; }
+        if (missingFrames != 0) { ++failures; }
+        if (rayWorld.beamContacts != 0) { ++failures; }
+        if ((rifle || kraken) && ribbonFrames == 0) { ++failures; }
+        std::printf("[weapon-effects-check] off-axis-beam-contacts=%u\n", rayWorld.beamContacts);
+        std::printf("[weapon-effects-check] weapon=%s beam-frames=%u missing-held-frames=%u\n", entry.name.c_str(), beamFrames, missingFrames);
+        // A real point on the ray must still stop the beam at the target's edge.
+        rayWorld.targetOffset = 0;
+        unsigned clipped = 0;
+        for (unsigned tick = 0; tick < 250; ++tick) {
+            AdvancePlayer(player, 16);
+            effects.Update(player, modelToScene, 0, 16);
+            for (const auto &shot : effects.GetProjectileStates()) {
+                if (!shot.beam) { continue; }
+                if (std::abs(shot.length - 90) > 0.1f) { ++failures; }
+                ++clipped;
+            }
+        }
+        if (!rifle && clipped == 0) { ++failures; }
+        rayWorld.targetDistance = 11;
+        unsigned closeFrames = 0, invisibleFrames = 0;
+        for (unsigned tick = 0; tick < 250; ++tick) {
+            AdvancePlayer(player, 16);
+            effects.Update(player, modelToScene, 0, 16);
+            bool hasBeam = false;
+            for (const auto &shot : effects.GetProjectileStates()) { hasBeam = hasBeam || shot.beam; }
+            if (!hasBeam) { continue; }
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            effects.Draw(mvp);
+            ++closeFrames;
+            if (effects.GetDrawnBeamQuadCount() == 0) { ++invisibleFrames; }
+            if (closeFrames == 1 && !window.SaveFrame("out/weapon-effects-close-" + std::to_string(index) + ".png")) { return 1; }
+        }
+        if (invisibleFrames != 0) { ++failures; }
+        std::printf("[weapon-effects-check] close-beam-frames=%u invisible=%u\n", closeFrames, invisibleFrames);
+        SetPlayerInput(player, false, false);
+        for (unsigned tick = 0; tick < 625; ++tick) {
+            AdvancePlayer(player, 16);
+            effects.Update(player, modelToScene, 0, 16);
+        }
+        if (effects.GetBulletCount() != 0 || effects.GetRibbonCount() != 0) { ++failures; }
+        if (!GLCheckErrors("weapon effect regression")) { ++failures; }
+        std::printf("[weapon-effects-check] on-axis-clipped=%u ribbon-frames=%u release-bullets=%zu release-ribbons=%zu\n",
+            clipped, ribbonFrames, effects.GetBulletCount(), effects.GetRibbonCount());
+    }
+    std::printf("[weapon-effects-check] failures=%u\n", failures);
+    return failures == 0 ? 0 : 1;
 }

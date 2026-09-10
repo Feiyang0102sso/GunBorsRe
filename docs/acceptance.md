@@ -1,5 +1,7 @@
 # 2026-09-09 游戏验收
 
+2026-09-10 激光、默认步枪颜色、Kraken尾迹和筛选后切枪修复见[武器回归记录](weapon-effects-fix-2026-09-10.md)。新增研究入口75及Core中的 `--weapon-effects-check`；原入口73、74继续保留。
+
 最新暂停/商店推广弹窗/横扫/加载 CG 与替代 UI 清理见[本轮审计](ui-restoration-2026-09-09.md)。
 
 最新血条尺寸/显隐纠错及群杀音效合并、后端复用见[血条与音效复核](audio-health-fix-2026-09-09.md)。
@@ -18,7 +20,7 @@
 |---|---|
 | `play-muted.cmd` | 静音正式游戏，脚本自身会经过命令解释器；验收无控制台请直接启动 EXE |
 | `play.cmd` | 开声音正式游戏 |
-| `research.cmd` / `gun_bros_research.exe` | 永久研究菜单，保留 1–72 项，独立控制台程序 |
+| `research.cmd` / `gun_bros_research.exe` | 永久研究菜单，保留 1–75 项，独立控制台程序 |
 | 窗口系统菜单 → Research tools | 从游戏打开附属研究工具 |
 | `play-original-save.cmd` | 从原标准存档建立独立账户副本；不再优先导入 `.perfect` |
 

@@ -71,6 +71,8 @@ bool CBullet::Template::Init(CArrayInputStream &stream) {
 }
 
 void CBullet::Bind(const Template &data, bool alternate) {
+    maximumBeamLength = 3000; // CBullet::Bind :63673.
+    ribbon = {};
     m_trajectoryHeight = data.GetTrajectoryHeight();
     m_trajectoryDurationMs = data.GetTrajectoryDurationMs();
     m_trajectoryType = data.GetTrajectoryType();
@@ -212,7 +214,8 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         acceleration = static_cast<float>(arguments[0]);
         break;
     case 18:
-        lifetimeMs = ageMs + arguments[0];
+        // UpdateBeam :62074 uses mem+372 as ray length, never as a timer.
+        maximumBeamLength = arguments[0];
         break;
     case 19:
         collisionEnabled = true;
@@ -256,8 +259,22 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
     case 21:
         m_collisionHeightThreshold = arguments[0] / 256.0f;
         break;
-    case 16: case 12: case 13:
+    case 12:
+        // SetRibbonTrail :60520 creates at most one trail per projectile.
+        if (ribbon.capacity == 0 && arguments[0] > 0) {
+            ribbon.capacity = arguments[0];
+            ribbon.width = arguments[1];
+            ribbon.intervalMs = static_cast<std::uint16_t>(arguments[2]);
+        }
+        break;
+    case 13:
+        for (unsigned channel = 0; channel < ribbon.color.size(); ++channel) {
+            ribbon.color[channel] = static_cast<std::uint16_t>(arguments[channel]);
+        }
+        break;
+    case 16:
         // Combat, homing and ribbon geometry are outside this visual host.
+        // Ribbon natives now expose their original parameters to WeaponEffects.
         break;
     default:
         std::printf("[bullet] unsupported native %u\n", function);

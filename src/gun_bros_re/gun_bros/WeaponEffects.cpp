@@ -5,6 +5,7 @@
 #include "gun_bros/WeaponEffects.h"
 #include "engine/CAudioPlayer.h"
 #include "engine/CMatrix4d.h"
+#include "engine/CPNG.h"
 #include "gun_bros/CBullet.h"
 #include "gun_bros/CParticleEffect.h"
 #include "sprite_glu/CSpriteIterator.h"
@@ -17,7 +18,6 @@
 namespace {
 constexpr float kRadians = 3.14159265f / 180.0f;
 constexpr float kShotSpeed = 450.0f;
-constexpr float kMaximumBeamLength = 1400.0f;
 constexpr std::uint32_t kBeamFlag = 0x100;
 
 /** Project the same animated muzzle transform used to draw the weapon. */
@@ -113,7 +113,7 @@ struct Shot {
     float x = 0, y = 0, z = 0;
     float direction = 0;
     float speed = 0;
-    float length = kMaximumBeamLength;
+    float length = 0;
     bool beam = false;
 };
 
@@ -129,6 +129,16 @@ struct EffectInstance {
     float ageMs = 0;
     std::vector<float> nextSpawn;
     Shot *owner = nullptr;
+};
+
+/** CRibbonTrailEffect / TrailEffectHolder state; detached trails drain in place. */
+struct RibbonInstance {
+    Shot *owner = nullptr;
+    BulletRibbonSettings settings;
+    std::vector<CollisionPoint> points;
+    unsigned remainingMs = 0;
+    unsigned liveAmount = 0;
+    float x = 0, y = 0, z = 0;
 };
 
 struct Particle {
@@ -195,6 +205,7 @@ struct WeaponEffects::Impl {
     float viewLeft = 0, viewTop = 0, viewWidth = 0, viewHeight = 0;
     std::uint32_t randomState = 1;
     std::size_t shotsFired = 0;
+    std::size_t drawnBeamQuads = 0;
     std::size_t soundCues = 0;
     std::set<std::uint64_t> frameSounds;
     // Milliseconds of simulated combat, and when each move sound stops covering
@@ -213,6 +224,102 @@ struct WeaponEffects::Impl {
     std::vector<std::unique_ptr<Shot>> shots;
     std::vector<EffectInstance> activeEffects;
     std::vector<Particle> particles;
+    std::map<CombatId, RibbonInstance> ribbons;
+    std::map<std::uint64_t, std::unique_ptr<CTexture>> ribbonColors;
+
+    void BindRibbon(Shot &shot) {
+        if (shot.script.ribbon.capacity == 0) { return; }
+        auto &ribbon = ribbons[shot.id];
+        ribbon.owner = &shot;
+        ribbon.settings = shot.script.ribbon;
+    }
+
+    void AdvanceRibbons(int deltaMs) {
+        for (auto iterator = ribbons.begin(); iterator != ribbons.end();) {
+            auto &ribbon = iterator->second;
+            bool alive = false;
+            if (ribbon.owner != nullptr) {
+                ribbon.x = ribbon.owner->x; ribbon.y = ribbon.owner->y; ribbon.z = ribbon.owner->z;
+                alive = !ribbon.owner->script.removed;
+            }
+            // TrailEffectHolder::Update :294907: at most one sample per tick,
+            // including the strict boundary; intervening updates move the head.
+            if (ribbon.remainingMs >= static_cast<unsigned>(deltaMs)) {
+                ribbon.remainingMs -= deltaMs;
+                if (!ribbon.points.empty()) { ribbon.points.back() = {ribbon.x, ribbon.y}; }
+            } else {
+                ribbon.remainingMs = ribbon.settings.intervalMs;
+                if (alive) {
+                    if (ribbon.points.size() == ribbon.settings.capacity) { ribbon.points.erase(ribbon.points.begin()); }
+                    ribbon.points.push_back({ribbon.x, ribbon.y});
+                    ribbon.liveAmount = static_cast<unsigned>(ribbon.points.size());
+                } else if (!ribbon.points.empty()) { ribbon.points.erase(ribbon.points.begin()); }
+            }
+            if (!alive && ribbon.points.empty()) { iterator = ribbons.erase(iterator); }
+            else { ++iterator; }
+        }
+    }
+
+    const CTexture *RibbonColor(const BulletRibbonSettings &settings) {
+        const auto &color = settings.color;
+        const std::uint64_t key = (static_cast<std::uint64_t>(color[0]) << 48) |
+            (static_cast<std::uint64_t>(color[1]) << 32) |
+            (static_cast<std::uint64_t>(color[2]) << 16) | color[3];
+        auto &texture = ribbonColors[key];
+        if (!texture) {
+            PNGImage pixel;
+            pixel.width = 1; pixel.height = 1;
+            for (unsigned channel = 0; channel < 4; ++channel) {
+                pixel.pixels.push_back(static_cast<std::uint8_t>(std::min<unsigned>(255, color[channel])));
+            }
+            texture = std::make_unique<CTexture>();
+            if (!texture->Create(pixel)) { return nullptr; }
+        }
+        return texture.get();
+    }
+
+    void DrawRibbon(const RibbonInstance &ribbon, const EffectProjection &projection) {
+        const std::size_t count = ribbon.points.size();
+        if (count < 3) { return; } // CRibbonTrailEffect::Draw :243694.
+        const CTexture *color = RibbonColor(ribbon.settings);
+        if (color == nullptr) { return; }
+        float fade = 1;
+        if (ribbon.owner == nullptr || ribbon.owner->script.removed) {
+            fade = static_cast<float>(count) / ribbon.liveAmount;
+        }
+        const float opacity = fade;
+        std::vector<CollisionPoint> points = ribbon.points;
+        std::vector<CollisionPoint> normals;
+        for (std::size_t index = 0; index < count; ++index) {
+            projection.Position(points[index].x, points[index].y, ribbon.z);
+        }
+        for (std::size_t index = 0; index < count; ++index) {
+            std::size_t first = index;
+            std::size_t last = index + 1;
+            if (index > 0) { first = index - 1; last = index; }
+            const float dx = points[last].x - points[first].x;
+            const float dy = points[last].y - points[first].y;
+            const float length = std::hypot(dx, dy);
+            CollisionPoint normal;
+            if (length > 0) {
+                const float halfWidth = ribbon.settings.width * 0.5f * projection.scale;
+                normal = {-dy / length * halfWidth, dx / length * halfWidth};
+            }
+            normals.push_back(normal);
+        }
+        // CMeshLine::Update :243450 interpolates tail alpha 0 toward the
+        // authored head color. InsertVertex :242774/:242847 fades each side.
+        for (std::size_t index = 1; index < count; ++index) {
+            const auto &a = points[index - 1], &b = points[index];
+            const auto &na = normals[index - 1], &nb = normals[index];
+            const float alpha[] = {0, opacity * (index - 1) / count, 0, opacity * index / count};
+            for (int side = -1; side <= 1; side += 2) {
+                const float positions[] = {a.x + na.x * side, a.y + na.y * side, a.x, a.y,
+                    b.x + nb.x * side, b.y + nb.y * side, b.x, b.y};
+                batch.AddGradientQuad(*color, positions, alpha);
+            }
+        }
+    }
 
     Impl(CResTOCManager &manager, PackTables &resources, const CShaderProgram &shader)
         : toc(manager), tables(resources), program(shader) { batch.Create(program); }
@@ -398,6 +505,13 @@ struct WeaponEffects::Impl {
         activeEffects.push_back(effect);
     }
 
+    void DetachRibbon(Shot *owner) {
+        if (owner != nullptr) {
+            const auto found = ribbons.find(owner->id);
+            if (found != ribbons.end()) { found->second.owner = nullptr; }
+        }
+    }
+
     void StopTrail(Shot *owner) {
         if (owner == nullptr) { return; }
         std::size_t index = 0;
@@ -555,6 +669,15 @@ WeaponEffects::WeaponEffects(CResTOCManager &toc, PackTables &tables, const CSha
     : m_impl(new Impl(toc, tables, program)) {}
 WeaponEffects::~WeaponEffects() = default;
 
+std::vector<WeaponProjectileState> WeaponEffects::GetProjectileStates() const {
+    std::vector<WeaponProjectileState> result;
+    for (const auto &shot : m_impl->shots) {
+        result.push_back({shot->source.resource, shot->owner, shot->beam, shot->x, shot->y,
+            shot->direction, shot->length, shot->script.animation, shot->script.ageMs});
+    }
+    return result;
+}
+
 void WeaponEffects::SetCombatWorld(IProjectileWorld *world) { m_impl->world = world; }
 
 std::uint64_t WeaponEffects::StartPersistentEffect(const GameObjectRef &resource, float x, float y) {
@@ -698,6 +821,7 @@ void WeaponEffects::Clear() {
     m_impl->activeLoops.clear();
     m_impl->audioClockMs = 0;
     m_impl->shots.clear();
+    m_impl->ribbons.clear();
     m_impl->activeEffects.clear();
     m_impl->particles.clear();
     m_impl->audio.StopAll();
@@ -707,6 +831,8 @@ void WeaponEffects::Clear() {
 
 void WeaponEffects::SetPaused(bool paused) { m_impl->audio.SetPaused(paused); }
 std::size_t WeaponEffects::GetBulletCount() const { return m_impl->shots.size(); }
+std::size_t WeaponEffects::GetRibbonCount() const { return m_impl->ribbons.size(); }
+std::size_t WeaponEffects::GetDrawnBeamQuadCount() const { return m_impl->drawnBeamQuads; }
 std::size_t WeaponEffects::GetParticleCount() const { return m_impl->particles.size(); }
 std::size_t WeaponEffects::GetEffectCount() const { return m_impl->activeEffects.size(); }
 std::size_t WeaponEffects::GetTrailCount() const {
@@ -757,7 +883,6 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
         scene.PlayWav(sound.packHash, sound.localIndex, false, owner);
     }
     const float direction = facingDegrees - 90.0f;
-    const float beamLength = kMaximumBeamLength;
     // CLevel::UpdateNormal iterates a growing object list: bullets spawned
     // by a player are advanced before their first draw in the same tick.
     for (const GunCue &cue : player.ActiveWeapon().gun.TakeCues()) {
@@ -765,6 +890,7 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             if (scene.world != nullptr) { RemoveOldestProjectile(owner); }
             else if (!scene.shots.empty()) {
                 scene.StopTrail(scene.shots.front().get());
+                scene.DetachRibbon(scene.shots.front().get());
                 scene.shots.erase(scene.shots.begin());
             }
             continue;
@@ -800,7 +926,10 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             shot->direction = direction + scene.Random(cue.minimumAngle, cue.maximumAngle);
             shot->speed = kShotSpeed * cue.speed;
             shot->beam = (visual->data.GetFlags() & kBeamFlag) != 0;
+            if (m_impl->world != nullptr) { shot->script.SetLevelContext(m_impl->world->GetScriptLevel()); }
+            shot->script.Bind(visual->data, cue.alternate);
             if (shot->beam) {
+                const float beamLength = static_cast<float>(shot->script.maximumBeamLength);
                 const float dx = std::cos(shot->direction * kRadians) * beamLength;
                 const float dy = std::sin(shot->direction * kRadians) * beamLength;
                 const CCollisionData *walls = nullptr;
@@ -810,8 +939,6 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
                 }
                 shot->length = beamLength * SegmentFraction(x, y, dx, dy, walls);
             }
-            if (m_impl->world != nullptr) { shot->script.SetLevelContext(m_impl->world->GetScriptLevel()); }
-            shot->script.Bind(visual->data, cue.alternate);
             for (const GunCue &spawnCue : shot->script.TakeCues()) { scene.Cue(spawnCue, x, y, z, shot->direction, shot.get()); }
             scene.shots.push_back(std::move(shot));
             ++scene.shotsFired;
@@ -831,7 +958,6 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
     scene.playerY = modelToScene[7];
     EmitBrother(player, modelToScene, facingDegrees, kPlayerCombatId, collision);
     const float direction = facingDegrees - 90;
-    const float beamLength = kMaximumBeamLength;
     for (auto &shot : scene.shots) {
         int shotDeltaMs = deltaMs;
         if (shot->ownerType == 1 && scene.world != nullptr) {
@@ -845,6 +971,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         const CGameSpriteGluRef &sprite = shot->visual->data.GetSpriteRef();
         const int duration = scene.Animation(sprite.packHash, sprite.archetype, shot->script.animation).durationMs;
         shot->script.Update(shotDeltaMs, duration);
+        scene.BindRibbon(*shot);
         if (shot->script.removed) {
             for (const GunCue &cue : shot->script.TakeCues()) {
                 scene.Cue(cue, shot->x, shot->y, shot->z, shot->direction, shot.get());
@@ -875,6 +1002,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         float wallNormalX = 0, wallNormalY = 0;
         const float radians = shot->direction * kRadians;
         if (shot->beam) {
+            const float beamLength = static_cast<float>(shot->script.maximumBeamLength);
             if (shot->owner == kPlayerCombatId) {
                 if (!player.ActiveWeapon().gun.IsShooting()) { shot->script.removed = true; }
                 ProjectMuzzle(player, modelToScene, shot->source.hand, shot->source.node, shot->x, shot->y, shot->z);
@@ -923,8 +1051,11 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             // Sweep the full segment, so a fast projectile cannot jump over a
             // target. Penetrating projectiles continue through remaining actors.
             for (int contact = 0; contact < 64; ++contact) {
-                const CombatTrace trace = scene.world->Trace(hit, x, y, dx, dy,
-                    shot->visual->data.GetRadius(), skip);
+                // CBullet::UpdateBeam -> RayCastNearest uses a ray, not the
+                // bullet's large authored sprite/collision radius (up to 345).
+                float radius = shot->visual->data.GetRadius();
+                if (shot->beam) { radius = 0; }
+                const CombatTrace trace = scene.world->Trace(hit, x, y, dx, dy, radius, skip);
                 if (trace.target == 0) { break; }
                 hit.x = x + dx * trace.fraction;
                 hit.y = y + dy * trace.fraction;
@@ -978,10 +1109,12 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         }
         for (const GunCue &cue : shot->script.TakeCues()) { scene.Cue(cue, shot->x, shot->y, shot->z, shot->direction, shot.get()); }
     }
+    scene.AdvanceRibbons(deltaMs);
     std::size_t i = 0;
     while (i < scene.shots.size()) {
         if (scene.shots[i]->script.removed) {
             scene.StopTrail(scene.shots[i].get());
+            scene.DetachRibbon(scene.shots[i].get());
             scene.shots.erase(scene.shots.begin() + i);
         }
         else { ++i; }
@@ -995,6 +1128,14 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
     const EffectProjection projection(previewProjection);
     glDisable(GL_DEPTH_TEST);
     scene.batch.Begin();
+    scene.drawnBeamQuads = 0;
+    for (const auto &entry : scene.ribbons) {
+        const auto &ribbon = entry.second;
+        const bool behindPlayer = std::hypot(ribbon.x - scene.playerX, ribbon.y - scene.playerY) < 100 || ribbon.y + 10 < scene.playerY;
+        if (pass == WeaponDrawPass::BehindPlayer && !behindPlayer) { continue; }
+        if (pass == WeaponDrawPass::InFrontOfPlayer && behindPlayer) { continue; }
+        scene.DrawRibbon(ribbon, projection);
+    }
     for (auto &shot : scene.shots) {
         // CBullet::GetZOrder (:60280) puts a player's bullet behind its
         // shooter while within 100 world units. Otherwise use world Y + 10.
@@ -1004,6 +1145,8 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
         if (pass == WeaponDrawPass::BehindPlayer && !behindPlayer) { continue; }
         if (pass == WeaponDrawPass::InFrontOfPlayer && behindPlayer) { continue; }
         if (!shot->script.visible) { continue; }
+        std::size_t beforeQuads = 0;
+        if (shot->beam) { beforeQuads = scene.batch.GetQuadCount(); }
         const CGameSpriteGluRef &ref = shot->visual->data.GetSpriteRef();
         VisualAnimation &animation = scene.Animation(ref.packHash, ref.archetype, shot->script.animation);
         const float age = static_cast<float>(shot->script.animationAgeMs);
@@ -1041,12 +1184,20 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
                                     scale, scaleY, direction + 90, 1);
                 }
             }
-            if (caps && length > startHalf + endHalf) {
+            // CBullet::Draw :62998/:63026 always draws both caps. When the
+            // remaining body is non-positive, the end uses the source origin.
+            if (caps) {
                 const float startOffset = (startTop + startBottom) * scale * 0.5f;
                 const float endOffset = (endTop + endBottom) * scale * 0.5f;
                 scene.AddSprite(start, age, x + dx * startOffset, y + dy * startOffset,
                                 scale, scale, direction + 90, 1);
-                scene.AddSprite(end, age, endX + dx * endOffset, endY + dy * endOffset,
+                float endPivotX = endX + dx * endOffset;
+                float endPivotY = endY + dy * endOffset;
+                if (bodyLength <= 0) {
+                    endPivotX = x + dx * startOffset;
+                    endPivotY = y + dy * startOffset;
+                }
+                scene.AddSprite(end, age, endPivotX, endPivotY,
                                 scale, scale, direction + 90, 1);
             }
         } else if (!shot->beam) {
@@ -1066,6 +1217,7 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
             BuildPlayerGameMatrix(sceneMvp, x, y, meshScale, direction + 90, base);
             part.buffer.Draw(scene.program, base, part.texture);
         }
+        if (shot->beam) { scene.drawnBeamQuads += scene.batch.GetQuadCount() - beforeQuads; }
     }
     if (pass == WeaponDrawPass::BehindPlayer) {
         scene.batch.Upload();

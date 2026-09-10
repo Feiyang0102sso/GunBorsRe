@@ -15,6 +15,16 @@ struct WeaponCollision {
 
 enum class WeaponDrawPass { All, BehindPlayer, InFrontOfPlayer };
 
+/** Read-only projectile evidence for the permanent weapon research checks. */
+struct WeaponProjectileState {
+    GameObjectRef resource;
+    CombatId owner = 0;
+    bool beam = false;
+    float x = 0, y = 0, direction = 0, length = 0;
+    int animation = 0;
+    int ageMs = 0;
+};
+
 /** Game-layer adapter for CBullet and particle effects; not an original class.
  * Engine backends own only generic mesh/quad drawing and WAV playback.
  */
@@ -61,7 +71,10 @@ public:
     std::size_t GetParticleCount() const;
     std::size_t GetEffectCount() const;
     std::size_t GetTrailCount() const;
+    std::size_t GetRibbonCount() const;
+    std::size_t GetDrawnBeamQuadCount() const;
     std::size_t GetShotCount() const;
+    std::vector<WeaponProjectileState> GetProjectileStates() const;
     std::size_t GetSoundCueCount() const;
     /** Voices sounding right now. One WAV never occupies more than one. */
     unsigned GetVoiceCount() const;

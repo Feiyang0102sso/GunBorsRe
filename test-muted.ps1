@@ -52,6 +52,7 @@ function Add-Check {
 if ($Phase -eq 'Core') {
     Add-Check 'resources' @('--m1')
     Add-Check 'weapons' @('--weapon-check')
+    Add-Check 'weapon-effects' @('--weapon-effects-check')
     Add-Check 'armor-data' @('--armor-check')
     Add-Check 'enemies' @('--arena-check')
     Add-Check 'pickups' @('--pickup-check')

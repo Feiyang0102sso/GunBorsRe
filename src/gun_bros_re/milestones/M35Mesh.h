@@ -58,6 +58,7 @@ int RunMoveSetSurvey(const std::string &bigDirectory);
 int RunWeaponSurvey(const std::string &bigDirectory);
 /** Exercise every weapon through equip, movement, firing and release with real assets. */
 int RunWeaponCheck(const std::string &bigDirectory);
+int RunWeaponEffectsCheck(const std::string &bigDirectory);
 
 /**
  * M3.7: stand a whole player up -- torso, legs and a gun in his hand.

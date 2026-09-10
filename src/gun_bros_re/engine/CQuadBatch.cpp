@@ -237,6 +237,16 @@ void CQuadBatch::AddVertices(const CTexture &texture, BlendMode blend,
     group.vertices.push_back(bottomLeft);
 }
 
+void CQuadBatch::AddGradientQuad(const CTexture &color, const float *positions, const float *alpha) {
+    // The original ribbon mesh uses two strips with transparent outside edges.
+    const float uv = kTexCoordScale * 0.5f;
+    const Vertex a{positions[0], positions[1], uv, uv, alpha[0]};
+    const Vertex b{positions[2], positions[3], uv, uv, alpha[1]};
+    const Vertex c{positions[4], positions[5], uv, uv, alpha[2]};
+    const Vertex d{positions[6], positions[7], uv, uv, alpha[3]};
+    AddVertices(color, BlendMode::AlphaColorFade, a, b, c, d);
+}
+
 void CQuadBatch::Upload() {
     m_groupFirst.clear();
     m_groupCount.clear();
@@ -294,6 +304,8 @@ void CQuadBatch::Draw(const CShaderProgram &program, const float *mvp) const {
         ApplyBlendMode(m_groupBlend[i]);
         glUniform1i(program.GetUniformLocation("additiveOpaque"),
                     m_groupBlend[i] == BlendMode::AdditiveOpaque);
+        glUniform1i(program.GetUniformLocation("vertexColorFade"),
+                    m_groupBlend[i] == BlendMode::AlphaColorFade);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_groupTexture[i]);
@@ -301,6 +313,7 @@ void CQuadBatch::Draw(const CShaderProgram &program, const float *mvp) const {
     }
     glBindVertexArray(0);
     glUniform1i(program.GetUniformLocation("additiveOpaque"), 0);
+    glUniform1i(program.GetUniformLocation("vertexColorFade"), 0);
     // The following mesh/HUD pass expects ordinary straight-alpha blending.
     // Keep the last particle group from making dark panels additive.
     ApplyBlendMode(BlendMode::Alpha);

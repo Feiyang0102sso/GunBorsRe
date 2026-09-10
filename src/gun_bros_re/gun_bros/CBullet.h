@@ -43,6 +43,15 @@
 #include "gun_bros/CombatTypes.h"
 
 #include <cstdint>
+#include <array>
+
+/** CBullet native12/13: authored point count, width, sample time and RGBA. */
+struct BulletRibbonSettings {
+    unsigned capacity = 0;
+    float width = 0;
+    unsigned intervalMs = 0;
+    std::array<std::uint16_t, 4> color{};
+};
 
 // What a CGameAssetRef holds when it points at nothing.
 constexpr std::int32_t kNoAssetId = -1;
@@ -130,6 +139,8 @@ public:
     float acceleration = 0.0f;
     bool collisionEnabled = true;
     float seekRadius = 0;
+    int maximumBeamLength = 3000; // CBullet::Bind :63673; native18 overrides range.
+    BulletRibbonSettings ribbon;
     int zOrderGroup = 3;
 
 private:

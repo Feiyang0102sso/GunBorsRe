@@ -8,6 +8,8 @@ uniform sampler2D tex0;
 uniform vec4 meshOverlay;
 // PNGLoader supplies straight alpha. ONE/ONE effects need premultiplied RGB.
 uniform bool additiveOpaque;
+// CMeshLine ribbons interpolate transparent black to authored RGBA.
+uniform bool vertexColorFade;
 
 in vec4 texcoord0;
 in float opacity;
@@ -19,6 +21,9 @@ void main()
     fragColor = texture(tex0, texcoord0.xy);
     fragColor.rgb = mix(fragColor.rgb, meshOverlay.rgb, meshOverlay.a);
     fragColor.a *= opacity;
+    if (vertexColorFade) {
+        fragColor.rgb *= opacity;
+    }
     if (additiveOpaque) {
         fragColor.rgb *= fragColor.a;
     }

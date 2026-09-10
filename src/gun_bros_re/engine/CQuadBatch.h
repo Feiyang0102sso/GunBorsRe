@@ -45,6 +45,7 @@ enum class BlendMode {
     Alpha,           // GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA -- the default
     Additive,        // GL_SRC_ALPHA, GL_ONE -- glows and fire
     AdditiveOpaque,  // GL_ONE, GL_ONE
+    AlphaColorFade,  // Alpha blending with RGB and alpha fading together.
 };
 
 /** A rectangle on an atlas, in pixels. */
@@ -104,6 +105,9 @@ public:
 
     /** Push the accumulated geometry to the GPU. */
     void Upload();
+
+    /** Untextured effect geometry, using a constant-color texel and vertex alpha. */
+    void AddGradientQuad(const CTexture &color, const float *positions, const float *alpha);
 
     /**
      * Draw every group.

@@ -1579,7 +1579,8 @@ bool DrawStoreGunSwap(GameMenu &view, MenuState &state, const MovieRegion &paren
         delta = static_cast<unsigned>(view.clock - state.shopSwapLastTick);
     }
     state.shopSwapLastTick = view.clock;
-    const bool visible = state.shopFilter == 0;
+    // CMenuStore::RefreshCategoryContent :179165 tests category, not filter bits.
+    const bool visible = state.shopCategory == 0;
     if (visible && state.shopSwapPhase == 8) {
         state.shopSwapPhase = 0;
         state.shopSwapTime = showStart;
@@ -5121,6 +5122,12 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         probe.Begin(14); ++probe.clock;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.shopGunSlot != 1 - beforeSlot) { return 1; }
         swapState.shopFilter = 1;
+        // Filtering the GUNS list must preserve the equipped-player slot button.
+        if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.shopSwapPhase != 2) {
+            std::printf("[store-player-check] FAIL filtered GUNS hides swap button phase=%u\n", swapState.shopSwapPhase);
+            return 1;
+        }
+        swapState.shopCategory = 1;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.shopSwapPhase != 1) { return 1; }
         probe.Begin(14); probe.clock += showEnd - showStart;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.shopSwapPhase != 8) { return 1; }
@@ -5309,6 +5316,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
     MenuState nativeSwapState;
     nativeSwapState.page = 2;
     nativeSwapState.shopGunSlot = originalSlot;
+    nativeSwapState.shopFilter = kOwnedFilterBit;
     std::vector<MenuTestClick> nativeSwapActions{{-100, -100, 1}, {-100, -100, showDuration + 1},
         nativeSwapClick, {-100, -100, pressDuration + 1}};
     for (unsigned frame = 0; frame < 120; ++frame) { nativeSwapActions.push_back({-100, -100, 16}); }
@@ -5317,7 +5325,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
     CProfileManager swapReloaded;
     if (nativeSwapProfile.activeWeaponSlot != 1 - originalSlot || !LoadNativeProfile(toc, tables, swapReloaded,
         nativeSwapPath, nativeSwapPath / "absent-source") || swapReloaded.activeWeaponSlot != 1 - originalSlot) { return 1; }
-    std::printf("[store-card-check] native real-button authored-press player-Flow active-slot=%u saved-reload=1 failures=0\n", swapReloaded.activeWeaponSlot);
+    std::printf("[store-card-check] native real-button filtered-GUNS authored-press player-Flow active-slot=%u saved-reload=1 failures=0\n", swapReloaded.activeWeaponSlot);
     // Visual research fixture only: IMG_0800's silver/blue rifle may be the
     // catalog's Infinity Laser. Do not replace the real account's loadout or
     // treat this unconfirmed image match as a runtime weapon rule.
