@@ -188,7 +188,26 @@ bool SurvivalHud::FindActionRegion(const SurvivalHudState &state, SurvivalHudAct
 SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, float y, bool down) {
     m_mouseX = x;
     m_mouseY = y;
-    const bool clicked = down && !m_previousDown;
+    bool clicked = down && !m_previousDown;
+    if (state.shopOpen && !state.itemChoice && !m_selectorPromptRequested && !m_selectorPrompt.IsActive()) {
+        // Commit a list tap on release so dragging an icon cannot equip it.
+        if (clicked) {
+            m_selectorPressX = x;
+            m_selectorPressY = y;
+            m_selectorDragged = false;
+            m_selectorPressArmed = false;
+            for (const auto &hit : m_selectorHits) {
+                if (hit.area.Contains(x, y) && (hit.action == SurvivalHudAction::SelectItem || hit.action == SurvivalHudAction::BuyItem)) {
+                    m_selectorPressArmed = true;
+                    break;
+                }
+            }
+        }
+        if (m_previousDown && std::hypot(x - m_selectorPressX, y - m_selectorPressY) > 8) {
+            m_selectorDragged = true;
+        }
+        if (m_selectorPressArmed) { clicked = !down && m_previousDown && !m_selectorDragged; }
+    }
     m_previousDown = down;
     if (!clicked) { return SurvivalHudAction::None; }
     if (state.shopOpen) {
@@ -349,6 +368,28 @@ void SurvivalHud::Scroll(const SurvivalHudState &state, float amount) {
         return;
     }
 
+}
+
+void SurvivalHud::ScrollMenuInput(const SurvivalHudState &state, float wheel, float dragX, float dragY) {
+    if (state.shopOpen) {
+        Scroll(state, wheel);
+        if (state.itemChoice || m_selectorPromptRequested || m_selectorPrompt.IsActive() || dragX == 0) { return; }
+        const unsigned layout = m_movies.Ordinal("GLU_MOVIE_POWER_UP_LAYOUT");
+        unsigned start = 0, end = 0;
+        MovieRegion first, second;
+        if (!m_movies.GetMovie(layout)->GetChapterRange(1, start, end) ||
+            !m_movies.Region(layout, 2, start, first) || !m_movies.Region(layout, 3, start, second)) { return; }
+        const float spacing = std::abs(second.x + second.width / 2 - first.x - first.width / 2);
+        if (spacing <= 0) { return; }
+        // Drag input is in the same 1024-wide logical canvas as the BIG layout.
+        // Follow the pointer immediately, leaving fractional positions at rest.
+        m_selectorTarget = m_selectorPosition;
+        Scroll(state, dragX / spacing);
+        m_selectorPosition = m_selectorTarget;
+        return;
+    }
+    if (state.paused && std::abs(dragY) > 8) { wheel = dragY; }
+    Scroll(state, wheel);
 }
 
 void SurvivalHud::ResetNotices() {
@@ -996,7 +1037,9 @@ bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
         if (!m_movies.DrawSprite(1, 6 + slot, m_controlTime, x, y)) { return false; }
         const unsigned movie = m_movies.Ordinal(name);
         unsigned start = 0, end = 0;
-        if (!m_movies.GetMovie(movie)->GetChapterRange(2, start, end) ||
+        // CInputPad::Load :88166 starts chapter 0 and loops chapter 1.
+        // Chapter 2 is the hide/flash sequence, not a perpetual idle effect.
+        if (!m_movies.GetMovie(movie)->GetChapterRange(1, start, end) ||
             !DrawOriginalPowerup(state, slot, x, y, movie, start + m_controlTime % (end - start + 1))) { return false; }
         // Bind radius = sprite width * .42; ControlStick::Draw displacement *.35.
         const float travel = stickBounds.width * 0.42f * 0.35f;
@@ -1168,6 +1211,24 @@ int RunOriginalHudCheck(const std::string &bigDirectory) {
     }
     if (!mutated) { ++failures; }
     unsigned icons = 0;
+    // Stationary controls must not replay the press/fade chapter forever.
+    // Compare the real rendered buttons at several idle times.
+    unsigned idleChanges = 0;
+    state.leftPowerup = hud.m_powerups[5].resource;
+    state.rightPowerup = hud.m_powerups[13].resource;
+    state.leftCount = 84;
+    state.rightCount = 140;
+    for (unsigned time = 1000; time <= 2700; time += 37) {
+        hud.m_controlTime = time;
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!hud.DrawOriginalControls(state)) { ++failures; }
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, currentPixels.data());
+        if (time == 1000) { idlePixels = currentPixels; }
+        else if (currentPixels != idlePixels) { ++idleChanges; }
+    }
+    if (idleChanges != 0) { ++failures; }
+    std::printf("[powerup-idle-check] changed-frames=%u expected=0\n", idleChanges);
+    hud.m_controlTime = 0;
     for (const auto &powerup : hud.m_powerups) {
         state.leftPowerup = state.rightPowerup = powerup.resource;
         state.leftCount = 9;

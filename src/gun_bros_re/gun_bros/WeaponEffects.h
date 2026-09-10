@@ -73,6 +73,7 @@ public:
     std::size_t GetTrailCount() const;
     std::size_t GetRibbonCount() const;
     std::size_t GetDrawnBeamQuadCount() const;
+    std::size_t GetDrawnLightningQuadCount() const;
     std::size_t GetShotCount() const;
     std::vector<WeaponProjectileState> GetProjectileStates() const;
     std::size_t GetSoundCueCount() const;

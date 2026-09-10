@@ -155,6 +155,8 @@ public:
     bool CanPlayerMove() const { return m_playerCanMove; }
     bool CanPlayerShoot() const { return m_playerCanShoot; }
     unsigned GetBossIntroSerial() const { return m_bossIntroSerial; }
+    /** CEnemy::SetCameraTarget :68799 switches mode before setting world XY. */
+    void FocusCameraOnEnemy(float x, float y);
     int GetRespawnPathLayer() const { return m_respawnPathLayer; }
     unsigned GetKillsInStatisticsGroup(unsigned group) const { return m_statisticsKills[group & 255]; }
     unsigned GetStat42Bits() const { return m_stat42Bits; }

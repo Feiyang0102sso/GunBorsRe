@@ -62,6 +62,7 @@
 #include "engine/CShaderProgram.h"
 #include "engine/CTexture.h"
 #include "engine/platform/CWindow.h"
+#include <SDL3/SDL_events.h>
 #include "engine/platform/GLLoader.h"
 #include "gun_bros/CGameObjectPack.h"
 #include "gun_bros/CGameAssetRef.h"
@@ -87,6 +88,21 @@
 #include <vector>
 
 namespace {
+
+// Exercise the real SDL event queue and CWindow recognizer, including held S.
+bool PushBossCheckKey(CWindow &window, char letter, bool repeat = false, bool checkMovement = false) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.key = static_cast<SDL_Keycode>(letter);
+    event.key.down = true;
+    event.key.repeat = repeat;
+    if (!SDL_PushEvent(&event) || !window.PumpEvents()) { return false; }
+    if (checkMovement && !window.IsKeyDown(KeyCode::S)) { return false; }
+    event.type = SDL_EVENT_KEY_UP;
+    event.key.down = false;
+    event.key.repeat = false;
+    return SDL_PushEvent(&event) && window.PumpEvents();
+}
 
 const char *const kShaderDirectory = ASSET_ROOT "/src/gun_bros_re/shaders";
 
@@ -3134,10 +3150,26 @@ bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &p
     return profile.SaveToDisk(context->savePath);
 }
 
+int RunBossCheck(const std::string &bigDirectory) {
+    // Verified retail Mission -> LEVEL -> map fixtures; production selection
+    // still follows the resource references inside RunSurvival.
+    const char *packs[] = {"pack2", "pack7", "pack9", "pack12"};
+    const unsigned maps[] = {7, 6, 0, 0};
+    unsigned failures = 0;
+    for (unsigned index = 0; index < 4; ++index) {
+        const int result = RunSurvival(bigDirectory, packs[index], maps[index], 0, -1, "", 0,
+            false, false, false, 2, 0, nullptr, false, false, nullptr, false, nullptr, false, true);
+        if (result != 0) { ++failures; }
+    }
+    std::printf("[boss-check] maps=4 failed-maps=%u\n", failures);
+    if (failures > 0) { return 1; }
+    return 0;
+}
+
 int RunSurvival(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy, CWindow *sharedWindow, bool feedbackStudy) {
+    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy, const MissionEntry *archiveMission, bool performanceStudy, CWindow *sharedWindow, bool feedbackStudy, bool bossStudy) {
     std::string capturePath = screenshotPath;
     unsigned checkFailures = 0;
     CResTOCManager toc;
@@ -3169,7 +3201,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     CWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     window.SetEscapeCloses(false);
-    window.EnableCheats(gameContext != nullptr);
+    // Both the retail frontend and standalone survival research use shortcuts.
+    window.EnableCheats(true);
     CBGM ownedMusic;
     CBGM *activeMusic = &ownedMusic;
     if (gameContext != nullptr && gameContext->music != nullptr) { activeMusic = gameContext->music; }
@@ -3463,7 +3496,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     // The original seeds its one CRandGen from the clock (:370383), so a level
     // script's rolls differ every session. Real play does the same; research
     // runs keep the fixed default stream so their results stay comparable.
-    if (!check && capturePath.empty()) {
+    if (!check && !bossStudy && capturePath.empty()) {
         session.SetScriptRandomSeed(static_cast<std::uint32_t>(
             std::chrono::steady_clock::now().time_since_epoch().count()));
     }
@@ -3491,6 +3524,254 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     music.SetPaused(false);
     music.SetVolume(1.0f);
     if (!music.NextTrack()) { return 1; }
+    if (bossStudy) {
+        // Test fixtures only. Retail resources and Flow still choose the Boss,
+        // spawn node, armor transitions, damage and subsequent ordinary wave.
+        vitals.invincible = true;
+        // Placed map mechanisms (Haven's two turrets) participate in LEVEL
+        // counts. The production shortcut now owns preservation and draining.
+        if (!PushBossCheckKey(window, 's', false, true)) { return 1; }
+        for (char letter : std::string("wasdchi")) {
+            if (!PushBossCheckKey(window, letter)) { return 1; }
+        }
+        if (window.TakeCheatCode() != "chi") { ++checkFailures; }
+        for (char letter : std::string("stbos")) {
+            if (!PushBossCheckKey(window, letter)) { return 1; }
+        }
+        if (!PushBossCheckKey(window, 's', true) || !window.TakeCheatCode().empty()) { ++checkFailures; }
+        if (!PushBossCheckKey(window, 's')) { return 1; }
+        const std::string bossCode = window.TakeCheatCode();
+        if (bossCode != "stboss" || !window.TakeCheatCode().empty() || window.IsKeyDown(KeyCode::S)) { ++checkFailures; }
+        std::printf("[stboss-input-check] code=%s repeats-ignored=1 released-s=%d failures=%u\n",
+            bossCode.c_str(), !window.IsKeyDown(KeyCode::S), checkFailures);
+        if (bossCode != "stboss" || !session.SkipToBoss()) { return 1; }
+        const unsigned introBeforeRepeat = session.GetLevel().GetBossIntroSerial();
+        if (session.SkipToBoss() || session.GetLevel().GetBossIntroSerial() != introBeforeRepeat) { ++checkFailures; }
+        CombatEnemy *boss = nullptr;
+        for (auto &actor : scene.enemies) {
+            if (actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { boss = actor.get(); }
+        }
+        if (session.GetLevel().GetBossIntroSerial() != 1 || boss == nullptr) {
+            std::printf("[boss-check] %s missing scripted boss state=%d\n", packShortName.c_str(), session.GetLevel().GetStateId());
+            return 1;
+        }
+        const CombatId bossId = boss->model.enemy.combat.id;
+        CCamera &camera = loaded.map.GetCamera();
+        // Compare the real camera with the original target operation at the
+        // same authored bounds. This also permits legitimate edge clamping.
+        CCamera expected = camera;
+        expected.SetTarget(boss->model.enemy.combat.x, boss->model.enemy.combat.y);
+        expected.SetCameraMode(2);
+        CCamera actual = camera;
+        const MapRectangle bounds = loaded.map.GetVisibleBounds();
+        actual.Update(1000);
+        expected.Update(1000);
+        actual.UpdatePosition(scene.playerX, scene.playerY, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
+        expected.UpdatePosition(scene.playerX, scene.playerY, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
+        const float targetError = std::hypot(actual.GetX() - expected.GetX(), actual.GetY() - expected.GetY());
+        if (camera.GetMode() != 2 || targetError > 0.01f) { ++checkFailures; }
+        std::printf("[boss-check] %s camera-error=%.3f boss=%s\n", packShortName.c_str(), targetError, boss->data->owner.c_str());
+        int introElapsed = 0;
+        while (introElapsed < 60000 && (!session.GetLevel().CanPlayerMove() ||
+            !session.GetLevel().CanPlayerShoot() || camera.GetMode() != 0)) {
+            session.Update(16, 0, 0, false);
+            introElapsed += 16;
+        }
+        boss = scene.Find(bossId);
+        if (boss == nullptr) { return 1; }
+        if (!session.GetLevel().CanPlayerMove() || !session.GetLevel().CanPlayerShoot() || camera.GetMode() != 0) { ++checkFailures; }
+        std::printf("[boss-check] intro-ms=%d state=%u mode=%u move=%d shoot=%d\n", introElapsed,
+            boss->model.enemy.GetStateId(), camera.GetMode(), session.GetLevel().CanPlayerMove(), session.GetLevel().CanPlayerShoot());
+
+        GameObjectRef grenade;
+        grenade.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+        const unsigned grenadeOrdinals[] = {90, 93, 94};
+        std::array<CBullet::Template, 3> grenadeTemplates;
+        for (unsigned index = 0; index < 3; ++index) {
+            std::vector<std::uint8_t> bytes;
+            if (!tables.ReadSectionResource(grenade.packHash, GameSection::Bullet, grenadeOrdinals[index], bytes)) { return 1; }
+            CArrayInputStream input(bytes);
+            if (!grenadeTemplates[index].Init(input)) { return 1; }
+        }
+        CEnemy &enemy = boss->model.enemy;
+        const unsigned initialParts = enemy.GetPartCount();
+        const float initialHealth = enemy.combat.health;
+        CombatHit hit;
+        hit.owner = kPlayerCombatId;
+        hit.ownerType = 0;
+        hit.damage = grenadeTemplates[0].GetBaseDamage();
+        hit.flags = grenadeTemplates[0].GetFlags();
+        hit.x = enemy.combat.x;
+        hit.y = enemy.combat.y;
+        const unsigned contactState = enemy.GetStateId();
+        // Exercise repeated direct contacts through the real world dispatcher.
+        for (int contact = 0; contact < 5; ++contact) { scene.ApplyHit(bossId, hit); }
+        if (enemy.GetPartCount() != initialParts || enemy.combat.health != initialHealth || enemy.GetStateId() != contactState) { ++checkFailures; }
+        std::printf("[boss-check] direct contacts=5 parts=%u expected=%u hp=%.1f\n", enemy.GetPartCount(), initialParts, enemy.combat.health);
+        // Restart this fixture after the deliberate failing contact probe so
+        // independent explosion assertions stay meaningful on the old code.
+        const EnemyTemplateData *bossData = boss->data;
+        std::size_t bossEntry = static_cast<std::size_t>(bossData - enemies.data());
+        WeaponEffects blastEffects(toc, tables, program);
+        CombatScene blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
+        blastScene.SetLevel(&session.GetLevel());
+        for (unsigned kind = 0; kind < 3; ++kind) {
+            blastScene.Reset();
+            vitals.invincible = true;
+            CombatEnemy *target = blastScene.Spawn(bossEntry, 600, 450);
+            if (target == nullptr) { return 1; }
+            CEnemy &blastEnemy = target->model.enemy;
+            // Each authored intro emits LEVEL event 11 when its animation
+            // completes. Wait for that cue instead of assuming a duration.
+            bool introComplete = false;
+            for (int elapsed = 0; elapsed < 60000 && !introComplete; elapsed += 16) {
+                blastEnemy.Update(16);
+                for (const EnemyAction &action : blastEnemy.combat.actions) {
+                    if (action.kind == EnemyAction::Kind::LevelEvent && action.slot == 11) { introComplete = true; }
+                }
+                blastEnemy.combat.actions.clear();
+            }
+            if (!introComplete) { ++checkFailures; }
+            const unsigned readyState = blastEnemy.GetStateId();
+            const float health = blastEnemy.combat.health;
+            const unsigned parts = blastEnemy.GetPartCount();
+            grenade.localIndex = static_cast<std::uint8_t>(grenadeOrdinals[kind]);
+            // A real stationary grenade overlaps the Boss throughout its fuse:
+            // this catches repeated direct collisions before the splash cue.
+            unsigned throws = 1;
+            if (kind == 0) { throws = 3; }
+            for (unsigned number = 0; number < throws; ++number) {
+                blastEnemy.combat.x = 600;
+                blastEnemy.combat.y = 450;
+                if (blastEffects.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
+                float matrix[16];
+                blastScene.PlayerMatrix(matrix);
+                for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
+                    blastEnemy.combat.x = 600;
+                    blastEnemy.combat.y = 450;
+                    blastEnemy.combat.behaviour = 7;
+                    blastEnemy.combat.targetAlive = false;
+                    blastEffects.Update(player, matrix, 0, 16);
+                    blastEnemy.Update(16);
+                }
+                unsigned expectedParts = parts;
+                // The ice handler calls internal 7 after applying stun: it
+                // also removes one part. The earlier research missed this call.
+                if (kind == 2) { expectedParts = parts - 1; }
+                if (kind == 0) {
+                    expectedParts = parts - number - 1;
+                    if (parts == 7) {
+                        const unsigned strippedParts[] = {5, 3, 2};
+                        expectedParts = strippedParts[number];
+                    }
+                }
+                if (blastEnemy.GetPartCount() != expectedParts || blastEnemy.combat.health != health) { ++checkFailures; }
+                std::printf("[boss-check] grenade=%u throw=%u parts=%u expected=%u hp=%.1f expected-hp=%.1f state=%u\n",
+                    grenade.localIndex, number + 1, blastEnemy.GetPartCount(), expectedParts, blastEnemy.combat.health, health, blastEnemy.GetStateId());
+            }
+            if (kind == 0) {
+                // The hit animation's parent uses 2x for attribute 0; ordinary
+                // behavior uses 4x. Let Flow return before probing that branch.
+                for (int elapsed = 0; elapsed < 60000 && blastEnemy.GetStateId() != readyState; elapsed += 16) {
+                    blastEnemy.Update(16);
+                }
+                hit.flags = 1;
+                hit.damage = 1;
+                blastScene.ApplyHit(blastEnemy.combat.id, hit);
+                if (std::abs(health - blastEnemy.combat.health - 4) > 0.01f) { ++checkFailures; }
+                std::printf("[boss-check] stripped-bullet-damage=%.1f expected=4\n", health - blastEnemy.combat.health);
+            }
+        }
+        // Fixture Bosses changed the shared camera; restore normal gameplay
+        // before exercising the real LEVEL death callback and wave transition.
+        camera.SetCameraMode(0);
+        vitals.invincible = true;
+        enemy.Damage(enemy.combat.health);
+        for (int elapsed = 0; elapsed < 12000; elapsed += 16) { session.Update(16, 0, 0, false); }
+        if (session.GetLevel().HasLargeEnemyHealthBars() || !session.GetLevel().CanPlayerMove() ||
+            !session.GetLevel().CanPlayerShoot() || session.GetLevel().GetBossIntroSerial() != 1 || session.GetLevel().GetWave() < 1) { ++checkFailures; }
+        std::printf("[boss-check] %s return-wave=%d state=%d failures=%u\n",
+            packShortName.c_str(), session.GetLevel().GetWave(), session.GetLevel().GetStateId(), checkFailures);
+        // Mid-revolution, revolution end and final supported wave use their
+        // own original spawn quotas; no caller kills enemies between requests.
+        for (int wave : {24, 49, 249, 450, 499}) {
+            session.SetStartWave(wave);
+            session.Restart(startX, startY, startFacing);
+            vitals.invincible = false;
+            if (!session.SkipToBoss() || vitals.invincible || session.GetLevel().GetWave() != wave ||
+                session.GetLevel().GetBossIntroSerial() != 1) { ++checkFailures; }
+            // Compare authored health tiers and REV multipliers at the actual
+            // production shortcut, including the first wave of REV10.
+            for (const auto &actor : scene.enemies) {
+                if (actor->mapPlaced || !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+                const auto &combat = actor->model.enemy.combat;
+                float baseHealth = 100;
+                const int realWave = wave % 50;
+                if (realWave >= 10) { baseHealth = 300; }
+                if (realWave >= 20) { baseHealth = 600; }
+                if (realWave >= 30) { baseHealth = 900; }
+                if (realWave >= 40) { baseHealth = 1500; }
+                const float multiplier = session.GetLevel().GetEnemyMultiplier(combat.templateRef, 1);
+                float revolutionMultiplier = float(wave / 50 + 1);
+                // Haven LEVEL adds two to each REV's health factor.
+                if (packShortName == "pack9") { revolutionMultiplier += 2; }
+                const float expectedHealth = baseHealth * revolutionMultiplier;
+                if (std::abs(combat.health - expectedHealth) > 0.01f) { ++checkFailures; }
+                std::printf("[boss-health-check] %s wave=%d hp=%.1f multiplier=%.2f expected=%.1f failures=%u\n",
+                    packShortName.c_str(), wave, combat.health, multiplier, expectedHealth, checkFailures);
+            }
+            std::printf("[stboss-wave-check] %s requested=%d actual=%d failures=%u\n",
+                packShortName.c_str(), wave, session.GetLevel().GetWave(), checkFailures);
+            if (wave == 450 || wave == 499) {
+                blastScene.Reset();
+                CombatEnemy *target = blastScene.Spawn(bossEntry, 600, 450);
+                if (target == nullptr) { return 1; }
+                CEnemy &blastEnemy = target->model.enemy;
+                bool ready = false;
+                for (int time = 0; time < 60000 && !ready; time += 16) {
+                    blastEnemy.Update(16);
+                    for (const auto &action : blastEnemy.combat.actions) {
+                        if (action.kind == EnemyAction::Kind::LevelEvent && action.slot == 11) { ready = true; }
+                    }
+                    blastEnemy.combat.actions.clear();
+                }
+                if (!ready) { ++checkFailures; }
+                const auto readyState = blastEnemy.GetStateId();
+                const float health = blastEnemy.combat.health;
+                grenade.localIndex = 90;
+                for (unsigned number = 0; number < 4; ++number) {
+                    for (int time = 0; time < 60000 && blastEnemy.GetStateId() != readyState; time += 16) {
+                        blastEnemy.Update(16);
+                    }
+                    const float before = blastEnemy.combat.health;
+                    blastEffects.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0);
+                    float matrix[16];
+                    blastScene.PlayerMatrix(matrix);
+                    for (int time = 0; time < 4000; time += 16) {
+                        blastEnemy.combat.x = 600; blastEnemy.combat.y = 450;
+                        blastEnemy.combat.behaviour = 7;
+                        blastEnemy.combat.targetAlive = false;
+                        blastEffects.Update(player, matrix, 0, 16);
+                        blastEnemy.Update(16);
+                    }
+                    float expectedDamage = 0;
+                    // Ordinary grenades use internal 5, not the 4x gun branch.
+                    // pack5 Boss @0xACD explicitly sets HP to 1 * REV before
+                    // ApplyCollision, so its fourth frag is an authored kill.
+                    if (number == 3) {
+                        expectedDamage = 100 * PlayerArmorMultiplier(player, 1);
+                        if (packShortName == "pack12") { expectedDamage = before; }
+                    }
+                    if (std::abs(before - blastEnemy.combat.health - expectedDamage) > 0.01f) { ++checkFailures; }
+                    std::printf("[boss-rev10-grenade-check] %s wave=%d throw=%u initial=%.1f hp=%.1f damage=%.1f expected=%.1f armor-attack=%.2f failures=%u\n",
+                        packShortName.c_str(), wave, number + 1, health, blastEnemy.combat.health,
+                        before - blastEnemy.combat.health, expectedDamage, PlayerArmorMultiplier(player, 1), checkFailures);
+                }
+            }
+        }
+        if (checkFailures > 0) { return 1; }
+        return 0;
+    }
     if (feedbackStudy) {
         // Real BIG instances and the same clocks as RunSurvival; no source save.
         vitals.invincible = true;
@@ -4091,12 +4372,15 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             const float frozenEnemyX = target->model.enemy.combat.x;
             const float frozenEnemyY = target->model.enemy.combat.y;
             const float frozenHealth = vitals.health;
+            // Haven's LEVEL also creates two map turrets. Freeze preserves
+            // the starting count; it does not imply only our two probes exist.
+            const std::size_t frozenEnemyCount = airstrikeScene.enemies.size();
             for (int elapsed = 0; elapsed < 12000 && airstrike.IsMovieActive(); elapsed += 16) {
                 airstrikeSession.Update(16, 1, 0, true);
                 if (airstrike.GetMoviePlayer().IsForegroundMovie()) { ++warningFrames; }
                 if (airstrikeScene.playerX != frozenX || airstrikeScene.playerY != frozenY || airstrikeEffects.GetShotCount() != 0) { ++movingFrames; }
                 if (target->model.enemy.combat.x != frozenEnemyX || target->model.enemy.combat.y != frozenEnemyY ||
-                    vitals.health != frozenHealth || airstrikeScene.enemies.size() != 2) { ++movingFrames; }
+                    vitals.health != frozenHealth || airstrikeScene.enemies.size() != frozenEnemyCount) { ++movingFrames; }
                 if (airstrike.GetMoviePlayer().splashCount > 0 && splashTime == 0) { splashTime = elapsed + 16; }
                 if (elapsed == 992) {
                     glClearColor(0.04f, 0.05f, 0.07f, 1);
@@ -4286,11 +4570,35 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (player.weapon->brother.IsFrenzy() || player.weapon->brother.IsFrenzyType(0) ||
             player.powerups.legacyFrenzyMultiplier[0] != 1) { ++checkFailures; }
         std::printf("[tantrum-check] duration=21000 duplicate-blocked=1 equipment-preserved=1 stop-all-boosts=1 failures=%u\n", checkFailures);
+        GameObjectRef equippedLeft = consumable;
+        GameObjectRef equippedRight = consumable;
+        equippedLeft.localIndex = 14;
+        equippedRight.localIndex = 5;
+        if (!powerupProbe.Equip(0, equippedLeft) || !powerupProbe.Equip(1, equippedRight)) { ++checkFailures; }
         if (!consumableProbe.SaveToDisk("out/powerup-profile-check.dat")) { ++checkFailures; }
         CProfileManager restoredConsumables;
         restoredConsumables.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), consumableRefinement);
         if (!restoredConsumables.LoadFromDisk("out/powerup-profile-check.dat") ||
-            restoredConsumables.GetPowerupCount(consumable) != 1) { ++checkFailures; }
+            restoredConsumables.GetPowerupCount(consumable) != 1 ||
+            restoredConsumables.configuration.powerups != consumableProbe.configuration.powerups) { ++checkFailures; }
+        // Exercise Equip -> original DataStore write -> fresh battle host;
+        // use an isolated copy, never the user's active profile or saves/.
+        const auto equipDirectory = std::filesystem::path("out/powerup-equip-check") / std::to_string(window.GetTicksMs());
+        CProfileManager equipProfile;
+        if (!LoadNativeProfile(toc, tables, equipProfile, equipDirectory, "saves")) { return 1; }
+        PowerupScene equipHost(toc, tables, player, vitals, scene, effects, equipProfile);
+        if (!equipHost.Init() || !equipHost.Equip(0, equippedLeft) || !equipHost.Equip(1, equippedRight) ||
+            !equipProfile.SaveToDisk(equipDirectory)) { ++checkFailures; }
+        CProfileManager reloadProfile;
+        if (!LoadNativeProfile(toc, tables, reloadProfile, equipDirectory)) { return 1; }
+        PowerupScene reloadHost(toc, tables, player, vitals, scene, effects, reloadProfile);
+        if (!reloadHost.Init()) { return 1; }
+        const GameObjectRef reloadLeft = reloadHost.GetEquipped(0);
+        const GameObjectRef reloadRight = reloadHost.GetEquipped(1);
+        if (reloadLeft.packHash != equippedLeft.packHash || reloadLeft.localIndex != equippedLeft.localIndex ||
+            reloadRight.packHash != equippedRight.packHash || reloadRight.localIndex != equippedRight.localIndex) { ++checkFailures; }
+        std::printf("[powerup-equip-check] left=%u right=%u native-reload=1 host-reload=1 failures=%u\n",
+            reloadLeft.localIndex, reloadRight.localIndex, checkFailures);
         std::printf("[powerup-play-check] shield/defense/priority/expiry/weapon-swap/save failures=%u\n", checkFailures);
         session.Restart(startX, startY, startFacing);
         {
@@ -4681,11 +4989,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     bool paused = false;
     int lastSavedTutorialStep = session.GetLevel().GetTutorialStep();
     bool shopOpen = false, itemChoice = false;
-    GameObjectRef leftPowerup, rightPowerup;
-    leftPowerup.packHash = CStringToKey("pack5");
-    leftPowerup.localIndex = 5;
-    rightPowerup.packHash = leftPowerup.packHash;
-    rightPowerup.localIndex = 13;
+    GameObjectRef leftPowerup = powerups.GetEquipped(0);
+    GameObjectRef rightPowerup = powerups.GetEquipped(1);
     const bool checkControls = gameContext != nullptr && gameContext->checkControls;
     unsigned controlFrame = 0;
     // The keyboard fixture needs owned charges; selector purchases/equipping
@@ -4813,6 +5118,12 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (cheat == "chc") { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
             if (cheat == "chi") { vitals.invincible = !vitals.invincible; }
             if (cheat == "chh" && !vitals.dead) { vitals.health = vitals.maximum; }
+            if (cheat == "stboss") {
+                if (session.SkipToBoss()) { paused = false; shopOpen = false; itemChoice = false; }
+                effects.SetPaused(paused || shopOpen);
+                accumulator = 0;
+                previous = window.GetTicksMs();
+            }
             if (gameContext != nullptr) {
                 if (cheat == "chm") { gameContext->profile.coins += 5000; gameContext->profile.warbucks += 500; }
                 if (cheat == "cht") { ++gameContext->profile.dailyDayOffset; }
@@ -4831,9 +5142,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         float menuScroll = window.TakeWheelDelta();
         int menuDragX = 0, menuDragY = 0;
         window.TakeDragDelta(menuDragX, menuDragY);
-        if (shopOpen && std::abs(menuDragX) > 8) { menuScroll = static_cast<float>(menuDragX); }
-        if (paused && std::abs(menuDragY) > 8) { menuScroll = static_cast<float>(menuDragY); }
-        survivalHud.Scroll(inputState, menuScroll);
+        survivalHud.ScrollMenuInput(inputState, menuScroll,
+            float(menuDragX) * 1024 / inputWidth, float(menuDragY) * 768 / inputHeight);
         bool pointerDown = window.IsLeftMouseDown();
         if (checkControls && controlFrame < controlClickCount) {
             // Bind and finish authored menu entrance before querying its live hitbox.
@@ -4879,8 +5189,16 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         if (shopItem != nullptr && itemChoice && (action == SurvivalHudAction::EquipLeft || action == SurvivalHudAction::EquipRight || action == SurvivalHudAction::UseNow)) {
             const GameObjectRef &resource = shopItem->data.objects.front().object;
-            if (action == SurvivalHudAction::EquipLeft) { leftPowerup = resource; itemChoice = false; }
-            if (action == SurvivalHudAction::EquipRight) { rightPowerup = resource; itemChoice = false; }
+            if (action == SurvivalHudAction::EquipLeft || action == SurvivalHudAction::EquipRight) {
+                unsigned slot = 0;
+                if (action == SurvivalHudAction::EquipRight) { slot = 1; }
+                if (powerups.Equip(slot, resource)) {
+                    leftPowerup = powerups.GetEquipped(0);
+                    rightPowerup = powerups.GetEquipped(1);
+                    itemChoice = false;
+                    if (gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
+                }
+            }
             if (action == SurvivalHudAction::UseNow) {
                 if (powerups.SelectResource(resource) && powerups.Use(true)) { shopOpen = false; itemChoice = false; }
             }

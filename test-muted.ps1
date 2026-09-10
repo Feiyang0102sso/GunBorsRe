@@ -57,6 +57,7 @@ if ($Phase -eq 'Core') {
     Add-Check 'postgame-presentation' @('--postgame-presentation-check')
     Add-Check 'armor-data' @('--armor-check')
     Add-Check 'enemies' @('--arena-check')
+    Add-Check 'boss' @('--boss-check')
     Add-Check 'pickups' @('--pickup-check')
     Add-Check 'props' @('--prop-check') 1
     Add-Check 'powerups' @('--powerup-check')

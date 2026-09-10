@@ -509,6 +509,7 @@ bool ApplyArchive(CProfileManager &profile, NativeProfileArchive archive) {
         if (!CheckRef(archive, candidate.configuration.armor[slot], 2)) { return false; }
     }
     candidate.activeWeaponSlot = equipment[64];
+    candidate.configuration.powerups = {equipment[116], equipment[117]};
     candidate.playerBrother = equipment[65];
     if (candidate.activeWeaponSlot > 1 || candidate.playerBrother > 1) {
         std::printf("[native-profile] unsupported player selection slot=%u brother=%u\n", candidate.activeWeaponSlot, candidate.playerBrother);
@@ -756,6 +757,9 @@ bool SaveNativeProfile(const CProfileManager &profile, const std::filesystem::pa
         if (!WriteMemoryRef(archive, equipment, 32 + slot * 8, profile.configuration.armor[slot])) { return false; }
     }
     equipment[64] = static_cast<std::uint8_t>(profile.activeWeaponSlot);
+    // CPowerUpSelector::OptionEquip :184626 writes configuration mem+128/129.
+    equipment[116] = profile.configuration.powerups[0];
+    equipment[117] = profile.configuration.powerups[1];
     equipment[65] = static_cast<std::uint8_t>(profile.playerBrother);
     auto &purchases = archive.records[2].payload;
     for (const auto &item : profile.inventory) {
@@ -892,6 +896,7 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
     changed.experience += 10;
     changed.playerBrother = 1 - changed.playerBrother;
     changed.activeWeaponSlot = 1;
+    changed.configuration.powerups = {13, 5};
     changed.tutorialSeen[0] = 1 - changed.tutorialSeen[0];
     changed.dailyLastCommit += 1;
     changed.statistics[2] += 17;
@@ -919,8 +924,15 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
         changed.dailyLastCommit != profile.dailyLastCommit + 1 || changed.statistics[2] != profile.statistics[2] + 17 ||
         changed.clearedWaves[0] != 10 || changed.perfectedWaves[0].count() != 1 || !changed.perfectedWaves[0].test(5) ||
         changed.powerups[0].count != 7 || changed.weaponMastery[0].experience != profile.weaponMastery[0].experience + 99) { return 1; }
+    if (changed.configuration.powerups != std::array<std::uint8_t, 2>{13, 5} ||
+        changed.nativeArchive->records[1].payload[116] != 13 ||
+        changed.nativeArchive->records[1].payload[117] != 5) {
+        std::printf("[powerup-equipment-check] native slot save/reload failed\n");
+        return 1;
+    }
     // Uninterpreted configuration tail and unrelated clients remain original.
     for (unsigned offset = 84; offset < nativeEquipment.size(); ++offset) {
+        if (offset == 116 || offset == 117) { continue; }
         if (changed.nativeArchive->records[1].payload[offset] != nativeEquipment[offset]) { return 1; }
     }
     for (unsigned index : {4u, 5u, 6u, 11u, 12u, 14u, 16u, 17u, 18u}) {

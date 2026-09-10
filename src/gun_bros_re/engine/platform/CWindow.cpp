@@ -240,6 +240,19 @@ bool CWindow::PumpEvents() {
                 if (now - m_cheatKeyTime > 2500) { m_cheatPrefix.clear(); }
                 m_cheatKeyTime = now;
                 const char letter = static_cast<char>(event.key.key);
+                // Desktop Boss shortcut is six letters. A lone S still reaches
+                // movement; only an established ST prefix consumes its suffix.
+                if (m_cheatPrefix.size() >= 2 && m_cheatPrefix.compare(0, 2, "st") == 0) {
+                    m_cheatPrefix += letter;
+                    if (m_cheatPrefix == "stboss") {
+                        m_cheatCodes.push_back(m_cheatPrefix);
+                        m_cheatPrefix.clear();
+                        continue;
+                    }
+                    if (std::string("stboss").compare(0, m_cheatPrefix.size(), m_cheatPrefix) == 0) { continue; }
+                    m_cheatPrefix.clear();
+                }
+                if (m_cheatPrefix == "s" && letter == 't') { m_cheatPrefix = "st"; continue; }
                 if (m_cheatPrefix == "ch") {
                     if (std::strchr("mtdchiw", letter) != nullptr) {
                         m_cheatCodes.push_back(m_cheatPrefix + letter);
@@ -251,6 +264,7 @@ bool CWindow::PumpEvents() {
                 if (m_cheatPrefix == "c" && letter == 'h') { m_cheatPrefix = "ch"; continue; }
                 if (letter == 'c') { m_cheatPrefix = "c"; continue; }
                 m_cheatPrefix.clear();
+                if (letter == 's') { m_cheatPrefix = "s"; }
             }
             if (event.key.key == SDLK_ESCAPE && m_escapeCloses) {
                 m_quitRequested = true;
@@ -281,6 +295,7 @@ bool CWindow::PumpEvents() {
         } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
             m_wheelDelta += event.wheel.y;
         } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+            m_cheatPrefix.clear();
             for (int i = 0; i < static_cast<int>(KeyCode::Count); ++i) {
                 m_keyDown[i] = false;
             }

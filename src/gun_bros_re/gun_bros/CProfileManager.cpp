@@ -12,7 +12,7 @@
 #include <algorithm>
 
 namespace {
-constexpr unsigned kProfileVersion = 11;
+constexpr unsigned kProfileVersion = 12;
 constexpr unsigned kMaximumInventoryRecords = 1024;
 
 void WriteRef(std::ostream &stream, const GameObjectRef &ref) {
@@ -298,6 +298,14 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
             candidate.purchasedPackages.push_back(ref);
         }
     }
+    candidate.configuration.powerups.fill(255);
+    if (version >= 12) {
+        for (auto &powerup : candidate.configuration.powerups) {
+            unsigned ordinal = 0;
+            if (!(stream >> ordinal) || ordinal > 255) { return false; }
+            powerup = static_cast<std::uint8_t>(ordinal);
+        }
+    }
     if (!(stream >> end) || end != "END") { return false; }
     for (const GameObjectRef &ref : candidate.configuration.guns) {
         if (!candidate.Owns(6, ref)) { return false; }
@@ -353,6 +361,8 @@ bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
     for (const auto &entry : weaponMastery) { WriteRef(stream, entry.resource); stream << entry.experience << '\n'; }
     stream << purchasedPackages.size() << '\n';
     for (const auto &ref : purchasedPackages) { WriteRef(stream, ref); }
+    // Archived host profiles retain the same selection as native DataStore 1001.
+    for (const auto powerup : configuration.powerups) { stream << unsigned(powerup) << ' '; }
     stream << "\nEND\n";
     stream.close();
     if (stream.fail()) { return false; }

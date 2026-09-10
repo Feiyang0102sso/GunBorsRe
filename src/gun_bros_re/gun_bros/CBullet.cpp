@@ -73,6 +73,7 @@ bool CBullet::Template::Init(CArrayInputStream &stream) {
 void CBullet::Bind(const Template &data, bool alternate) {
     maximumBeamLength = 3000; // CBullet::Bind :63673.
     ribbon = {};
+    lightning = {};
     m_trajectoryHeight = data.GetTrajectoryHeight();
     m_trajectoryDurationMs = data.GetTrajectoryDurationMs();
     m_trajectoryType = data.GetTrajectoryType();
@@ -225,6 +226,13 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         break;
     case 15:
         // TODO: CLightningArc geometry; the original beam sprite is drawn now.
+        // Restored: SetLightning :60480 scales native arguments before Init.
+        lightning.displacement = arguments[0] * 0.005f;
+        lightning.halfWidth = arguments[1] * 0.5f;
+        lightning.length = arguments[2];
+        lightning.pointCount = static_cast<std::uint16_t>(arguments[3]);
+        lightning.frameCount = static_cast<std::uint16_t>(arguments[4]);
+        ++lightning.revision;
         break;
     case 0: case 7: case 23:
         cue.kind = GunCue::Kind::Splash;
@@ -275,6 +283,8 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
     case 16:
         // Combat, homing and ribbon geometry are outside this visual host.
         // Ribbon natives now expose their original parameters to WeaponEffects.
+        // Correction: iOS FunctionResolver :61101 has no case 16; it returns 0.
+        // Retain the original white arc color rather than invent a color native.
         break;
     default:
         std::printf("[bullet] unsupported native %u\n", function);

@@ -41,6 +41,7 @@
 #include "gun_bros/CGameAssetRef.h"  // CGameSpriteGluRef
 #include "gun_bros/CGun.h"
 #include "gun_bros/CombatTypes.h"
+#include "gun_bros/CLightningArc.h"
 
 #include <cstdint>
 #include <array>
@@ -141,6 +142,7 @@ public:
     float seekRadius = 0;
     int maximumBeamLength = 3000; // CBullet::Bind :63673; native18 overrides range.
     BulletRibbonSettings ribbon;
+    BulletLightningSettings lightning;
     int zOrderGroup = 3;
 
 private:

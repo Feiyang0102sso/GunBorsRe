@@ -9,6 +9,8 @@
 struct CPlayerConfiguration {
     std::array<GameObjectRef, 2> guns;
     std::array<GameObjectRef, 4> armor;
+    // Original mem+128/129, DataStore 1001 payload+116/117: POWERUP ordinals.
+    std::array<std::uint8_t, 2> powerups{255, 255};
 
     /** IsGunEquipped :170480 searches both slots, independently of active gun. */
     int IsGunEquipped(const GameObjectRef &object) const {
@@ -27,6 +29,7 @@ struct CPlayerConfiguration {
     }
 
     void SetDefaults(std::uint32_t corePackHash) {
+        powerups.fill(255); // CPlayerConfiguration constructor :171487.
         for (GameObjectRef &gun : guns) {
             gun.packHash = corePackHash;
             gun.localIndex = 0;

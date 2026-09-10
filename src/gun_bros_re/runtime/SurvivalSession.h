@@ -25,6 +25,8 @@ public:
     bool HasOriginalHud() const { return m_originalHud != nullptr; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
     void UpdateAfterDeath(int deltaMs);
+    /** Desktop cheat: drain the current wave through original Flow callbacks. */
+    bool SkipToBoss();
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const override;
     void StartObjectLayer(int layer) override;

@@ -24,6 +24,7 @@ struct CombatEnemy {
     int brotherContactTimer = 0;
     int corpseMs = 0;
     int objectId = -1;
+    bool mapPlaced = false; // Map mechanisms are not dynamic wave enemies.
     bool deathReported = false;
     int navigationTimer = 0;
 };
@@ -85,6 +86,11 @@ public:
     void SetPathLayer(int index) { m_pathLayer = index; }
     void SetLevel(CLevel *level) { m_level = level; }
     CLevel *GetLevel() const { return m_level; }
+    PlayerVitals &GetPlayerVitals() { return m_vitals; }
+    PlayerVitals *GetBrotherVitals() {
+        if (m_brother != nullptr) { return &m_brother->vitals; }
+        return nullptr;
+    }
     CLevel *GetScriptLevel() override { return m_level; }
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPlayerProgress(CPlayerProgress *progress);

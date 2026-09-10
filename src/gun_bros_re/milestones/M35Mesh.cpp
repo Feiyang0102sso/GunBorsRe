@@ -1945,9 +1945,11 @@ int RunWeaponSurvey(const std::string &bigDirectory) {
 /** A target beside the muzzle ray reproduces invisible wide-beam obstruction. */
 class WeaponRayCheckWorld : public IProjectileWorld {
 public:
+    bool moveAnchor = false;
     unsigned beamContacts = 0;
     float targetOffset = 50;
     float targetDistance = 100;
+    std::vector<float> splashDamage;
     CombatTrace Trace(const CombatHit &hit, float x, float y, float dx, float dy,
         float radius, const std::vector<CombatId> &skip) override {
         if ((hit.flags & 0x100) == 0 || !skip.empty()) { return {}; }
@@ -1957,10 +1959,14 @@ public:
         return {99, fraction};
     }
     HitResult ApplyHit(CombatId, const CombatHit &) override { return HitResult::Hit; }
-    void Splash(const CombatHit &, float, float, float, int) override {}
+    void Splash(const CombatHit &hit, float, float, float, int) override { splashDamage.push_back(hit.damage); }
     void SpawnFromProjectile(const GameObjectRef &, const CombatHit &) override {}
     bool FindTarget(const CombatHit &, float, float &, float &) override { return false; }
-    bool Anchor(CombatId, int, int, float &, float &, float &, float &) override { return false; }
+    bool Anchor(CombatId, int, int, float &x, float &y, float &z, float &direction) override {
+        if (!moveAnchor) { return false; }
+        x = 300; y = 400; z = 0; direction = 73;
+        return true;
+    }
 };
 
 /** BIG scripts and the production projectile update, with no map or input noise. */
@@ -1993,10 +1999,12 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         rayWorld.beamContacts = 0;
         rayWorld.targetOffset = 50;
         rayWorld.targetDistance = 100;
+        rayWorld.splashDamage.clear();
         PlayerModel player;
         if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
             !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
             !CreatePlayerBuffers(player, program)) { return 1; }
+        if (kraken) { player.weapon->gun.SetMasteryExperience(entry.data.GetMasteryThreshold(2)); }
         BuildPlayerGameMatrix(identity, 400, 540,
             PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
         SetPlayerInput(player, false, true);
@@ -2074,6 +2082,18 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         if (missingFrames != 0) { ++failures; }
         if (rayWorld.beamContacts != 0) { ++failures; }
         if ((rifle || kraken) && ribbonFrames == 0) { ++failures; }
+        if (kraken) {
+            float maximumDamage = 0;
+            for (float damage : rayWorld.splashDamage) {
+                maximumDamage = std::max(maximumDamage, damage);
+                // BIG pack5 BULLET86/124 native0(5,75); source :61169 does
+                // not apply the gun's mastery or critical multiplier again.
+                if (std::abs(damage - 5) > 0.001f) { ++failures; }
+            }
+            if (rayWorld.splashDamage.empty() || player.weapon->gun.GetMasteryDamageMultiplier(0) <= 1) { ++failures; }
+            std::printf("[splash-mastery-check] %s mastery=%u explosions=%zu maximum=%.2f expected=5 failures=%u\n",
+                entry.name.c_str(), player.weapon->gun.GetMasteryLevel(), rayWorld.splashDamage.size(), maximumDamage, failures);
+        }
         std::printf("[weapon-effects-check] off-axis-beam-contacts=%u\n", rayWorld.beamContacts);
         std::printf("[weapon-effects-check] weapon=%s beam-frames=%u missing-held-frames=%u\n", entry.name.c_str(), beamFrames, missingFrames);
         // A real point on the ray must still stop the beam at the target's edge.
@@ -2114,6 +2134,53 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         if (!GLCheckErrors("weapon effect regression")) { ++failures; }
         std::printf("[weapon-effects-check] on-axis-clipped=%u ribbon-frames=%u release-bullets=%zu release-ribbons=%zu\n",
             clipped, ribbonFrames, effects.GetBulletCount(), effects.GetRibbonCount());
+    }
+    // Mechanical Boss Flow pack6 ENEMY8 references pack1 BULLET16 and
+    // pack5 BULLET104. Exercise those real visuals independently of aiming.
+    PlayerModel probe;
+    if (!BuildPlayerBody(tables, playerTemplate.moveSet, probe) ||
+        !EquipPlayerWeapon(tables, playerTemplate.script, weapons.front().data, weapons.front().owner, probe) ||
+        !CreatePlayerBuffers(probe, program)) { return 1; }
+    for (const auto &sample : std::array<std::pair<const char *, unsigned>, 4>{{{"pack1", 0}, {"pack1", 13}, {"pack1", 16}, {"pack5", 104}}}) {
+        effects.Clear();
+        effects.SetCombatWorld(nullptr);
+        GameObjectRef ref;
+        ref.packHash = toc.GetPack(toc.GetPackIndexFromName(sample.first))->GetPackHash();
+        ref.localIndex = static_cast<std::uint8_t>(sample.second);
+        std::vector<std::uint8_t> payload;
+        if (!tables.ReadSectionResource(ref.packHash, GameSection::Bullet, ref.localIndex, payload)) { return 1; }
+        CBullet::Template data;
+        CArrayInputStream input(payload);
+        if (!data.Init(input)) { return 1; }
+        const auto &sprite = data.GetSpriteRef();
+        std::printf("[boss-beam-check] flags=%x scale=%.3f sprite=%08x:%u/%u/%u\n", data.GetFlags(),
+            data.GetSpriteScale(), sprite.packHash, sprite.archetype, sprite.action, sprite.animation);
+        effects.SpawnProjectile(ref, 50, 300, 0, 0, 0, 999, 1);
+        for (int time = 0; time < 1000; time += 16) { effects.Update(probe, identity, 0, 16); }
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        effects.Draw(mvp);
+        for (const auto &shot : effects.GetProjectileStates()) {
+            std::printf("[boss-beam-check] %s:%u beam=%d animation=%d length=%.1f quads=%zu arc-quads=%zu\n",
+                sample.first, sample.second, shot.beam, shot.animation, shot.length,
+                effects.GetDrawnBeamQuadCount(), effects.GetDrawnLightningQuadCount());
+        }
+        if (sample.second == 104 && effects.GetDrawnLightningQuadCount() != 56) { ++failures; }
+        window.SaveFrame("out/boss-beam-" + std::string(sample.first) + "-" + std::to_string(sample.second) + ".png");
+    }
+    effects.Clear();
+    rayWorld.moveAnchor = true;
+    effects.SetCombatWorld(&rayWorld);
+    GameObjectRef bossBeam;
+    bossBeam.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
+    bossBeam.localIndex = 104;
+    effects.SpawnProjectile(bossBeam, 50, 300, 0, 0, 350, 999, 1);
+    effects.Update(probe, identity, 0, 16);
+    const auto anchored = effects.GetProjectileStates();
+    if (anchored.size() != 1 || anchored[0].x != 50 || anchored[0].y != 300 || anchored[0].direction != 0) { ++failures; }
+    if (!anchored.empty()) {
+        std::printf("[boss-beam-anchor-check] position=%.1f,%.1f direction=%.1f expected=50,300/0\n",
+            anchored[0].x, anchored[0].y, anchored[0].direction);
     }
     std::printf("[weapon-effects-check] failures=%u\n", failures);
     return failures == 0 ? 0 : 1;

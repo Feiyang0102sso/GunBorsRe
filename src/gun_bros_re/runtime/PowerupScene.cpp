@@ -13,6 +13,42 @@ PowerupScene::PowerupScene(CResTOCManager &toc, PackTables &tables, PlayerModel 
 
 bool PowerupScene::Init() { return LoadPowerupCatalog(m_toc, m_tables, m_catalog); }
 
+GameObjectRef PowerupScene::GetEquipped(unsigned slot) {
+    if (slot >= 2) { return {}; }
+    const auto ordinal = m_profile.configuration.powerups[slot];
+    // Bind :187378 searches the selector catalog by its stored ordinal.
+    for (const auto &entry : m_catalog) {
+        if (entry.resource.localIndex == ordinal && IsSupported(entry)) { return entry.resource; }
+    }
+    if (ordinal != 255) {
+        std::printf("[powerup] unresolved equipped slot=%u ordinal=%u\n", slot, ordinal);
+        return {};
+    }
+    for (const auto &entry : m_catalog) {
+        CPowerup query;
+        query.Bind(entry.data);
+        if (IsSupported(entry) && query.Query(4, slot)) {
+            m_profile.configuration.powerups[slot] = entry.resource.localIndex;
+            return entry.resource;
+        }
+    }
+    return {};
+}
+
+bool PowerupScene::Equip(unsigned slot, const GameObjectRef &resource) {
+    if (slot >= 2) { return false; }
+    for (const auto &entry : m_catalog) {
+        if (entry.resource.packHash != resource.packHash || entry.resource.localIndex != resource.localIndex) { continue; }
+        CPowerup query;
+        query.Bind(entry.data);
+        if (!IsSupported(entry) || !query.Query(0)) { return false; }
+        m_profile.configuration.powerups[slot] = resource.localIndex;
+        std::printf("[powerup] equipped slot=%u resource=%08x:%u\n", slot, resource.packHash, resource.localIndex);
+        return true;
+    }
+    return false;
+}
+
 bool PowerupScene::IsSupported(const PowerupEntry &entry) const {
     // Expose only completed hosts. Legacy Tantrum and movie/auto-fire/turret
     // templates stay available in the full research catalogue.

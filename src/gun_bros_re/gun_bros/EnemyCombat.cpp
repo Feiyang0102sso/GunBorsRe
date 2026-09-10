@@ -115,6 +115,12 @@ HitResult CEnemy::ReceiveHit(const CombatHit &hit) {
     combat.variables[19] = 0;
     // Scripts can reject frontal hits or modify the damage multiplier before
     // native 13 commits the collision. A direct health subtraction skips this.
+    // HandleCollision :71526-71534 returns before the hit event for a grenade
+    // (IsGrenade :60370, collision flag bit 4). Its later OnSplashDamage :67945
+    // still triggers the event. Otherwise each fuse contact can strip armor.
+    if (!hit.splash && (hit.flags & (1u << 4)) != 0) {
+        return combat.collisionResult;
+    }
     TriggerEvent(2);
     return combat.collisionResult;
 }
@@ -625,9 +631,19 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         combat.deferredMechanisms |= 2;
         return true;
     case 59:
-    case 68:
         // Boss entry presentation and camera targeting are outside this pass.
+        // Camera targeting is now implemented below; native 59's stored
+        // parameters still need a verified consumer before reproducing them.
         combat.deferredMechanisms |= 1;
+        return true;
+    case 68:
+        // SetCameraTarget :68799 runs synchronously inside the spawn Flow;
+        // queueing this after LEVEL's next camera call would change its order.
+        if (GetLevelContext() != nullptr) {
+            GetLevelContext()->FocusCameraOnEnemy(combat.x, combat.y);
+        } else {
+            combat.deferredMechanisms |= 1;
+        }
         return true;
     case 62:
         // SpawnItem is the original kill reward, deliberately excluded.

@@ -168,6 +168,7 @@
     <ClCompile Include="src\gun_bros_re\gun_bros\CBrother.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CGun.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CBullet.cpp" />
+    <ClCompile Include="src\gun_bros_re\gun_bros\CLightningArc.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CArmor.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CCamera.cpp" />
     <ClCompile Include="src\gun_bros_re\gun_bros\CLevel.cpp" />
@@ -246,6 +247,7 @@
     <ClInclude Include="src\gun_bros_re\runtime\WeaponCatalog.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\WeaponEffects.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CBullet.h" />
+    <ClInclude Include="src\gun_bros_re\gun_bros\CLightningArc.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CArmor.h" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CCamera.h" />
     <ClInclude Include="src\gun_bros_re\sprite_glu\CSpriteGlu.h" />

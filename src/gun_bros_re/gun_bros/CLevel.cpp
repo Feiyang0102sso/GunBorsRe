@@ -10,6 +10,12 @@
 #include <cstdio>
 #include <algorithm>
 
+void CLevel::FocusCameraOnEnemy(float x, float y) {
+    if (m_map == nullptr) { return; }
+    m_map->GetCamera().SetCameraMode(2);
+    m_map->GetCamera().SetTarget(x, y);
+}
+
 bool CLevel::SetIndicator(int objectId, unsigned type, std::uint64_t targetKey) {
     if (type >= 7 || m_indicators.size() >= 30 || m_world == nullptr) { return false; }
     CLevelIndicator indicator;

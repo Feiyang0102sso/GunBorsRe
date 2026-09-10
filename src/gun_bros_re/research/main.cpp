@@ -104,6 +104,7 @@ void PrintUsage() {
         "  --dialog-check            original BIG dialog playback and completion\n"
         "  --dual-weapon-check       both equipped stamps, distinct slots, save reload\n"
         "  --combat-feedback-check   spire, authored health bars, hits and silent audio burst checks\n"
+        "  --boss-check              four retail Boss cameras, grenade armor and wave return\n"
         "  --performance-check       record 1200 real gameplay frames to CSV\n"
         "  --pickup-check            pickup templates and collection scripts\n"
         "  --pickup-render-check     all pickup sprites and animation frames\n"
@@ -253,6 +254,7 @@ int PromptForHarness() {
         " 73  promotions -- original Invite and Free Warbucks popups\n"
         " 74  loading and wipe -- original CG, STR and menu sweep\n"
         " 72  combat feedback -- spire, authored health bars, hits and audio bursts\n"
+        " 78  Boss restoration -- four maps, camera and grenade armor\n"
         " 77  postgame presentation -- authored icon animations and instant tabs\n"
         " 76  audio transitions -- store swap and continuous scene music\n"
         " 75  weapon effects -- laser, Kraken and authored projectile visuals\n"
@@ -269,7 +271,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 77) {
+    if (choice < 1 || choice > 78) {
         return 26;
     }
     return choice;
@@ -312,6 +314,7 @@ int main(int argc, char **argv) {
     bool checkSceneTransition = false;
     bool checkDualWeapon = false;
     bool checkCombatFeedback = false;
+    bool checkBoss = false;
     bool checkDialog = false;
     int modeArgumentCount = 0;
     bool researchMenu = false;
@@ -555,6 +558,8 @@ int main(int argc, char **argv) {
             checkSceneTransition = true;
         } else if (std::strcmp(argument, "--dual-weapon-check") == 0) {
             checkDualWeapon = true;
+        } else if (std::strcmp(argument, "--boss-check") == 0) {
+            checkBoss = true;
         } else if (std::strcmp(argument, "--combat-feedback-check") == 0) {
             checkCombatFeedback = true;
         } else if (std::strcmp(argument, "--dialog-check") == 0) {
@@ -677,6 +682,7 @@ int main(int argc, char **argv) {
     if (checkPromotion) { return RunPromotionCheck(bigDirectory); }
     if (checkSceneTransition) { return RunSceneTransitionCheck(bigDirectory); }
     if (checkDualWeapon) { return RunDualWeaponCheck(bigDirectory); }
+    if (checkBoss) { return RunBossCheck(bigDirectory); }
     if (checkCombatFeedback) { return RunSurvival(bigDirectory, "pack7", 6, 0, -1, "", 0, false, false, false, 2, 0, nullptr, false, false, nullptr, false, nullptr, true); }
     if (checkDialog) { return RunOriginalDialogCheck(bigDirectory); }
     if (checkHud) { return RunSurvivalHudCheck(bigDirectory); }
@@ -708,6 +714,7 @@ int main(int argc, char **argv) {
         if (choice == 69) { return RunSceneTransitionCheck(bigDirectory); }
         if (choice == 70) { return RunOriginalDialogCheck(bigDirectory); }
         if (choice == 71) { return RunDualWeaponCheck(bigDirectory); }
+        if (choice == 78) { return RunBossCheck(bigDirectory); }
         if (choice == 77) { return RunPostGamePresentationCheck(bigDirectory); }
         if (choice == 76) { return RunAudioTransitionsCheck(bigDirectory); }
         if (choice == 75) { return RunWeaponEffectsCheck(bigDirectory); }

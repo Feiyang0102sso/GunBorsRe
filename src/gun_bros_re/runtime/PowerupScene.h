@@ -15,6 +15,9 @@ public:
     bool Init();
     bool Select(unsigned index);
     bool SelectResource(const GameObjectRef &resource);
+    /** Resolve saved ordinals, or original export 4 for unselected slots. */
+    GameObjectRef GetEquipped(unsigned slot);
+    bool Equip(unsigned slot, const GameObjectRef &resource);
     void Cycle();
     bool Use(bool fromSelector = false);
     void Update(int deltaMs);

@@ -10,9 +10,13 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <chrono>
 
 // CBrother constructor :139098; CPlayer::Move uses the full radius for triggers.
 constexpr float kBrotherTriggerRadius = 22.0f;
+// Host cheat bounds, not resource timings. Normal gameplay never uses these.
+constexpr int kBossSkipStepMs = 16;
+constexpr int kBossSkipLimitMs = 600000;
 
 SurvivalSession::SurvivalSession(CombatScene &scene, CMap &map,
     const std::vector<EnemyTemplateData> &catalog) : m_scene(scene), m_map(map), m_catalog(catalog) {
@@ -219,6 +223,7 @@ bool SurvivalSession::SpawnMapObject(const PlacedObject &object, int objectId) {
         CombatEnemy *actor = m_scene.Spawn(index, object.x, object.y);
         if (actor == nullptr) { return false; }
         actor->objectId = objectId;
+        actor->mapPlaced = true;
         m_level.SetIndicator(objectId, 0, actor->model.enemy.combat.id);
         actor->model.enemy.combat.facing = static_cast<float>(object.facing);
         std::printf("[survival] placed enemy id=%d tag=%u item=%u path=%u facing=%d\n",
@@ -478,6 +483,56 @@ void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
         if (group >= 0 && nearest <= 1) { m_level.OnTrigger(group); }
         break;
     }
+}
+
+bool SurvivalSession::SkipToBoss() {
+    PlayerVitals &player = m_scene.GetPlayerVitals();
+    if (m_archive || m_horde || m_level.GetTutorialStep() >= 0 || player.dead ||
+        m_level.IsCleared() || m_level.IsPaused() ||
+        (m_powerups != nullptr && m_powerups->IsMovieActive())) {
+        std::printf("[stboss] unavailable in current mode or presentation\n");
+        return false;
+    }
+    if (m_level.HasLargeEnemyHealthBars()) {
+        std::printf("[stboss] boss already active\n");
+        return false;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    const unsigned introSerial = m_level.GetBossIntroSerial();
+    const bool playerInvincible = player.invincible;
+    PlayerVitals *brother = m_scene.GetBrotherVitals();
+    bool brotherInvincible = false;
+    if (brother != nullptr) { brotherInvincible = brother->invincible; brother->invincible = true; }
+    player.invincible = true;
+    // The original LEVEL consumes this flag in its next Boss probability roll.
+    // Remaining spawns must still die: resetting the spawner strands kill quotas.
+    *m_level.VariableResolver(5) = 1;
+    if (m_effects != nullptr) { m_effects->SetPaused(true); }
+    int elapsed = 0;
+    unsigned defeated = 0;
+    while (elapsed < kBossSkipLimitMs && m_level.GetBossIntroSerial() == introSerial && !m_level.IsCleared()) {
+        for (auto &actor : m_scene.enemies) {
+            CEnemy &enemy = actor->model.enemy;
+            if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
+                enemy.Damage(enemy.combat.health);
+                ++defeated;
+            }
+        }
+        // Retire skipped projectiles/audio before each tick. The last tick's
+        // real Boss spawn cues survive, so its authored entrance plays normally.
+        if (m_effects != nullptr) { m_effects->Clear(); }
+        Update(kBossSkipStepMs, 0, 0, false);
+        elapsed += kBossSkipStepMs;
+    }
+    player.invincible = playerInvincible;
+    if (brother != nullptr) { brother->invincible = brotherInvincible; }
+    if (m_effects != nullptr) { m_effects->SetPaused(false); }
+    *m_level.VariableResolver(5) = 0;
+    const bool success = m_level.GetBossIntroSerial() != introSerial;
+    const auto wallMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
+    std::printf("[stboss] started=%d defeated=%u simulated-ms=%d wall-ms=%lld wave=%d state=%d\n",
+        success, defeated, elapsed, static_cast<long long>(wallMs), m_level.GetWave(), m_level.GetStateId());
+    return success;
 }
 
 void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {

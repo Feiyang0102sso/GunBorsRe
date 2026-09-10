@@ -108,6 +108,7 @@ struct Shot {
     bool pendingHit = false;
     std::map<CombatId, int> hitUntil;
     CBullet script;
+    CLightningArc lightning;
     BulletVisual *visual = nullptr;
     GunCue source;
     float x = 0, y = 0, z = 0;
@@ -115,6 +116,8 @@ struct Shot {
     float speed = 0;
     float length = 0;
     bool beam = false;
+    // CEnemy::FireBullet passes no anchor callback; only gun beams follow a muzzle.
+    bool followsMuzzle = false;
 };
 
 struct EffectInstance {
@@ -208,6 +211,7 @@ struct WeaponEffects::Impl {
     std::uint32_t randomState = 1;
     std::size_t shotsFired = 0;
     std::size_t drawnBeamQuads = 0;
+    std::size_t drawnLightningQuads = 0;
     std::size_t soundCues = 0;
     std::set<std::uint64_t> frameSounds;
     // Milliseconds of simulated combat, and when each move sound stops covering
@@ -278,6 +282,41 @@ struct WeaponEffects::Impl {
             if (!texture->Create(pixel)) { return nullptr; }
         }
         return texture.get();
+    }
+
+    void DrawLightning(const Shot &shot, const EffectProjection &projection) {
+        if (!shot.lightning.IsReady() || shot.script.removed || shot.length <= 0) { return; }
+        BulletRibbonSettings white;
+        white.color = {255, 255, 255, 255}; // CLightningArc constructor :243194.
+        const CTexture *texture = RibbonColor(white);
+        if (texture == nullptr) { return; }
+        const float arcLength = std::floor(shot.lightning.GetLength());
+        const unsigned count = static_cast<unsigned>(shot.length / arcLength) + 1;
+        const float alongScale = shot.length / (count * arcLength);
+        const float acrossScale = shot.visual->data.GetSpriteScale();
+        const float dx = std::cos(shot.direction * kRadians);
+        const float dy = std::sin(shot.direction * kRadians);
+        // CBullet::Draw :63049: repeat arcs, fit their total length to the ray,
+        // and shift each segment's interpolation by one animation frame.
+        for (unsigned segment = 0; segment < count; ++segment) {
+            auto vertices = shot.lightning.Interpolate(segment);
+            for (auto &vertex : vertices) {
+                const float across = vertex.x * acrossScale;
+                const float along = (segment * arcLength + vertex.y) * alongScale;
+                vertex.x = shot.x - dy * across + dx * along;
+                vertex.y = shot.y + dx * across + dy * along;
+                projection.Position(vertex.x, vertex.y, shot.z);
+            }
+            for (unsigned index = 2; index < vertices.size(); index += 2) {
+                const float positions[] = {vertices[index - 2].x, vertices[index - 2].y,
+                    vertices[index - 1].x, vertices[index - 1].y,
+                    vertices[index].x, vertices[index].y,
+                    vertices[index + 1].x, vertices[index + 1].y};
+                const float alpha[] = {1, 1, 1, 1};
+                batch.AddGradientQuad(*texture, positions, alpha);
+                ++drawnLightningQuads;
+            }
+        }
     }
 
     void DrawRibbon(const RibbonInstance &ribbon, const EffectProjection &projection) {
@@ -539,7 +578,9 @@ struct WeaponEffects::Impl {
             hit.direction = direction;
             // Original splash natives use their authored damage and owner
             // armor/level multiplier, independently of the bullet's base damage.
-            hit.damage = cue.damage * owner->masteryDamageMultiplier * world->GetDamageMultiplier(owner->owner, owner->damageMultiplier);
+            // CBullet::FunctionResolver :61169/:61242/:61379 uses native
+            // arguments directly; Configure's mastery roll scales direct hits.
+            hit.damage = cue.damage * world->GetDamageMultiplier(owner->owner, owner->damageMultiplier);
             hit.percentDamage = cue.percentDamage;
             hit.spawnObjectId = cue.spawnObjectId;
             hit.forceSpawn = cue.forceSpawn;
@@ -856,6 +897,7 @@ void WeaponEffects::SetPaused(bool paused) { m_impl->audio.SetPaused(paused); }
 std::size_t WeaponEffects::GetBulletCount() const { return m_impl->shots.size(); }
 std::size_t WeaponEffects::GetRibbonCount() const { return m_impl->ribbons.size(); }
 std::size_t WeaponEffects::GetDrawnBeamQuadCount() const { return m_impl->drawnBeamQuads; }
+std::size_t WeaponEffects::GetDrawnLightningQuadCount() const { return m_impl->drawnLightningQuads; }
 std::size_t WeaponEffects::GetParticleCount() const { return m_impl->particles.size(); }
 std::size_t WeaponEffects::GetEffectCount() const { return m_impl->activeEffects.size(); }
 std::size_t WeaponEffects::GetTrailCount() const {
@@ -936,6 +978,7 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             shot->id = scene.nextProjectile++;
             shot->owner = owner;
             shot->weapon = player.gunResource;
+            shot->followsMuzzle = true;
             shot->weaponMasteryLimit = player.ActiveWeapon().data.GetMasteryLimit();
             float masteryRoll = 1;
             if (player.ActiveWeapon().gun.GetMasteryLevel() > 0) { masteryRoll = scene.Random(0, 1); }
@@ -994,6 +1037,9 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         const CGameSpriteGluRef &sprite = shot->visual->data.GetSpriteRef();
         const int duration = scene.Animation(sprite.packHash, sprite.archetype, shot->script.animation).durationMs;
         shot->script.Update(shotDeltaMs, duration);
+        if (shot->beam && !shot->script.removed) {
+            shot->lightning.Update(shot->script.lightning, shotDeltaMs, scene.randomState);
+        }
         scene.BindRibbon(*shot);
         if (shot->script.removed) {
             for (const GunCue &cue : shot->script.TakeCues()) {
@@ -1026,11 +1072,11 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         const float radians = shot->direction * kRadians;
         if (shot->beam) {
             const float beamLength = static_cast<float>(shot->script.maximumBeamLength);
-            if (shot->owner == kPlayerCombatId) {
+            if (shot->followsMuzzle && shot->owner == kPlayerCombatId) {
                 if (!player.ActiveWeapon().gun.IsShooting()) { shot->script.removed = true; }
                 ProjectMuzzle(player, modelToScene, shot->source.hand, shot->source.node, shot->x, shot->y, shot->z);
                 shot->direction = direction;
-            } else if (scene.world != nullptr && !scene.world->Anchor(shot->owner, shot->part,
+            } else if (shot->followsMuzzle && scene.world != nullptr && !scene.world->Anchor(shot->owner, shot->part,
                 shot->source.node, shot->x, shot->y, shot->z, shot->direction)) {
                 shot->script.removed = true;
             }
@@ -1152,6 +1198,7 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
     glDisable(GL_DEPTH_TEST);
     scene.batch.Begin();
     scene.drawnBeamQuads = 0;
+    scene.drawnLightningQuads = 0;
     for (const auto &entry : scene.ribbons) {
         const auto &ribbon = entry.second;
         const bool behindPlayer = std::hypot(ribbon.x - scene.playerX, ribbon.y - scene.playerY) < 100 || ribbon.y + 10 < scene.playerY;
@@ -1232,6 +1279,7 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
             const float alpha = 1 - 0.75f * fraction;
             scene.AddSprite(animation, age, x, y, shadowScale, shadowScale, angle, alpha);
         }
+        scene.DrawLightning(*shot, projection);
         if (shot->visual->mesh) {
             PlayerPart &part = *shot->visual->mesh;
             float base[kMatrix4dElements];

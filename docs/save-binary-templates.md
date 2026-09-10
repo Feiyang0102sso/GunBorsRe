@@ -69,7 +69,8 @@ CRC范围是整个文件去掉最后4字节，含owner与随机填充。算法�
 
 - **1000货币不是32位高位垃圾。** 原`AddCommonCurrency :193424`有64位累加，`BeginRefinement :178519`对64位原料扣除。用户模板仍保留low/high拆分观察，但通用模板按u64表示，避免低32位符号扩展。
 - **1000好友经验窗口。** `UpdateFriendXPBonusTimer :194707`按网络秒比较86400；`AddBonusExperienceFromFriend :194264`根据PLAYERPROGRESSION限制奖励累计量。原代码194718把时间差写回时间字段，该可疑行为保留记录，不能在研究时悄悄改成当前时间。
-- **1001当前枪槽。** 原mem+76由`CBrother::Bind :135820/:135847`选择第一或第二个CGun并OnEquip，含义为0/1槽号；不是资源ordinal。mem+96..129仍有未确定用途的配置值，注释保留清零/FF初始化证据。
+- **1001当前枪槽。** 原mem+76由`CBrother::Bind :135820/:135847`选择第一或第二个CGun并OnEquip，含义为0/1槽号；不是资源ordinal。mem+96..127仍有未确定用途的配置值，注释保留清零初始化证据。
+- **1001左右道具。** 2026-09-10 追踪确认 mem+128/129（payload+116/117）为左右 powerup ordinal。`CPowerUpSelector::OptionEquip :184626` 写入；`Bind :187378` 在 FF 时按 `CPowerup::IsButtonDefault :188759`（export4）选择原默认道具。NativeProfile 已接入读写及重载回归，模板保留旧观察并追加纠正。
 - **1003进度和完美波分开。** `GetWaveProgress :192480`返回record+6；`AddWaves :192853`只提升进度。`WasWavePerfected :192507`读`bits[index>>3] & (1<<(index&7))`；4096是位图容量，不等于正式玩法轮数。maxPerfectWaveIndex初始0，因此0不独立证明第一波完美；位图才是每波证据。
 - **1006不是完整好友列表。** `ProcessPlayerXPFromFriend :199823`写clientId，199825写赠送XP，199826按20槽回绕，199831限制有效条数。`CreatePlayerXPBonusString :200139`按好友ID累加用于展示。单独选中好友凭据另存ACTIVE_CRED_FILENAME，不嵌入1006。
 - **1007教程枚举。** `SetTutorialHasSeen :210736`对索引15直接返回，索引14处理WeaponTeaserPrize。22个字节的槽名没有全部恢复，不把顺序对应成任意22段文字。

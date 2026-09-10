@@ -413,6 +413,29 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
         std::printf("\n");
     }
     hud.AdvanceMenu(2000);
+    const float beforeDrag = hud.m_selectorPosition;
+    hud.ScrollMenuInput(state, 0, -12, 0);
+    hud.AdvanceMenu(2000);
+    const float dragged = hud.m_selectorPosition - beforeDrag;
+    if (dragged <= 0 || dragged >= 1) { ++failures; }
+    std::printf("[selector-drag-check] pixels=12 items=%.3f expected=(0,1)\n", dragged);
+    if (!hud.DrawOriginalSelector(state)) { ++failures; }
+    // Drag across an actual item, release, and wait: no click or snap-to-end.
+    for (const auto &hit : hud.m_selectorHits) {
+        if (hit.action != SurvivalHudAction::SelectItem && hit.action != SurvivalHudAction::BuyItem) { continue; }
+        const float x = hit.area.x + hit.area.width / 2, y = hit.area.y + hit.area.height / 2;
+        hud.Pointer(state, x, y, false);
+        if (hud.Pointer(state, x, y, true) != SurvivalHudAction::None) { ++failures; }
+        hud.ScrollMenuInput(state, 0, -24, 0);
+        if (hud.Pointer(state, x - 24, y, true) != SurvivalHudAction::None ||
+            hud.Pointer(state, x - 24, y, false) != SurvivalHudAction::None) { ++failures; }
+        const float stopped = hud.m_selectorPosition;
+        hud.AdvanceMenu(2000);
+        if (std::abs(hud.m_selectorPosition - stopped) > 0.001f) { ++failures; }
+        std::printf("[selector-drag-check] release-no-click=1 stopped=%.3f after-wait=%.3f failures=%u\n",
+            stopped, hud.m_selectorPosition, failures);
+        break;
+    }
     for (unsigned index = 0; index < hud.m_selectorEntries.size(); ++index) {
         state.itemChoice = false;
         hud.m_selectorPosition = float(index);
@@ -427,7 +450,8 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
             if (hit.storeIndex != static_cast<int>(storeIndex) || hit.action != SurvivalHudAction::BuyItem) { continue; }
             const float x = hit.area.x + hit.area.width / 2, y = hit.area.y + hit.area.height / 2;
             hud.Pointer(state, x, y, false);
-            const auto action = hud.Pointer(state, x, y, true);
+            if (hud.Pointer(state, x, y, true) != SurvivalHudAction::None) { ++failures; }
+            const auto action = hud.Pointer(state, x, y, false);
             if (action != SurvivalHudAction::BuyItem || hud.SelectedItem() != &hud.m_store[storeIndex]) { ++failures; break; }
             const auto result = profile.AcquireItem(hud.SelectedItem()->data, progress.GetLevel());
             if (result == PurchaseResult::Unsupported && !IsPlayablePowerup(hud.SelectedItem()->data.objects.front().object)) {
@@ -446,7 +470,8 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
             if (hit.storeIndex != static_cast<int>(storeIndex) || hit.action != SurvivalHudAction::SelectItem) { continue; }
             const float x = hit.area.x + hit.area.width / 2, y = hit.area.y + hit.area.height / 2;
             hud.Pointer(state, x, y, false);
-            if (hud.Pointer(state, x, y, true) != SurvivalHudAction::SelectItem) { ++failures; break; }
+            if (hud.Pointer(state, x, y, true) != SurvivalHudAction::None ||
+                hud.Pointer(state, x, y, false) != SurvivalHudAction::SelectItem) { ++failures; break; }
             ++iconHits;
             state.itemChoice = true;
             if (!hud.DrawOriginalSelector(state)) { ++failures; break; }

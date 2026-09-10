@@ -18,5 +18,8 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
     SurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
-    const MissionEntry *archiveMission = nullptr, bool performanceStudy = false, CWindow *sharedWindow = nullptr, bool feedbackStudy = false);
+    const MissionEntry *archiveMission = nullptr, bool performanceStudy = false, CWindow *sharedWindow = nullptr, bool feedbackStudy = false,
+    bool bossStudy = false);
+/** Four retail LEVEL scripts, their Boss camera and real grenade collisions. */
+int RunBossCheck(const std::string &bigDirectory);
 #endif

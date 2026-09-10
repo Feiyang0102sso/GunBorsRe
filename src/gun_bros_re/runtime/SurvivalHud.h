@@ -67,6 +67,7 @@ public:
     SurvivalHudAction Pointer(const SurvivalHudState &state, float x, float y, bool down);
     bool CapturesPointer(const SurvivalHudState &state, float x, float y) const;
     void Scroll(const SurvivalHudState &state, float amount);
+    void ScrollMenuInput(const SurvivalHudState &state, float wheel, float dragX, float dragY);
     void AdvanceMenu(unsigned deltaMs);
     bool BackFromHelp();
     bool BackFromSelectorPrompt();
@@ -102,6 +103,8 @@ private:
     unsigned m_selectorTime = 0, m_selectorChoiceTime = 0;
     float m_selectorPosition = 0, m_selectorTarget = 0;
     bool m_selectorBound = false, m_selectorChoice = false;
+    float m_selectorPressX = 0, m_selectorPressY = 0;
+    bool m_selectorDragged = false, m_selectorPressArmed = false;
     std::vector<Button> OriginalControlButtons(const SurvivalHudState &state) const;
     SurvivalHudAction OriginalPausePointer(const SurvivalHudState &state, float x, float y);
     std::string PauseText(const SurvivalHudState &state, unsigned index, unsigned slot);
