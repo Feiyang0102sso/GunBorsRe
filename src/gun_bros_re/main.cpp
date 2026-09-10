@@ -58,6 +58,9 @@ int RunApplication(int argc, char **argv, const wchar_t *arguments) {
     }
     if (research || unknown) { return LaunchResearchTools(arguments, research); }
     if (!GameHostSettings().Load(std::filesystem::path(ASSET_ROOT) / "gunbros.cfg")) { return 1; }
+    // The original dial is 0..10 and a voice plays at dial x 0.1;
+    // CAudioPlayer::SetEffectsGain documents the chain.
+    CAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
     // One native surface survives video, loading, menu and gameplay.
     CWindow window;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }

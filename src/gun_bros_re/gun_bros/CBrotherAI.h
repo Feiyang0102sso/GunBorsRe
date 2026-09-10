@@ -22,7 +22,8 @@ public:
  */
 class CBrotherAI {
 public:
-    void Reset(float startX, float startY);
+    /** startFacing is the map PLAYER object's spawn angle, as the player uses. */
+    void Reset(float startX, float startY, float startFacing);
     void SetForce(float x, float y, int durationMs);
     void SetShootingAllowed(bool allowed) { m_shootingAllowed = allowed; }
     void Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,

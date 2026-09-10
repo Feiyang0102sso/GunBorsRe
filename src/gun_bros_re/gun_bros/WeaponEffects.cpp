@@ -191,10 +191,18 @@ struct WeaponEffects::Impl {
     CQuadBatch batch;
     CAudioPlayer audio;
     std::uint64_t loopSound = 0;
+    bool hasViewBounds = false;
+    float viewLeft = 0, viewTop = 0, viewWidth = 0, viewHeight = 0;
     std::uint32_t randomState = 1;
     std::size_t shotsFired = 0;
     std::size_t soundCues = 0;
     std::set<std::uint64_t> frameSounds;
+    // Milliseconds of simulated combat, and when each move sound stops covering
+    // repeats of itself.
+    int audioClockMs = 0;
+    std::map<std::uint64_t, int> moveSoundBusyMs;
+    // The loop each owner currently has running, so it is not re-armed.
+    std::map<CombatId, std::uint64_t> activeLoops;
     std::map<std::uint64_t, CGameAssetRef> soundReferences;
     std::uint64_t nextEffectHandle = 1;
     float playerX = 0, playerY = 0;
@@ -212,6 +220,23 @@ struct WeaponEffects::Impl {
     float Random(float minimum, float maximum) {
         randomState = randomState * 1664525u + 1013904223u;
         return minimum + (maximum - minimum) * static_cast<float>(randomState >> 8) / 16777215.0f;
+    }
+
+    /**
+     * CBullet::CanBeCulled :60583, as the original writes it.
+     *
+     * The camera rectangle is compared against the projectile's own bounds one
+     * axis at a time, and only on the axis it is travelling along: a bullet is
+     * culled once it has left the view moving away from it. A bullet still
+     * approaching the view, or one crossing it sideways, is kept.
+     */
+    bool PastViewBounds(float x, float y, float radius, float velocityX, float velocityY) const {
+        if (!hasViewBounds) { return false; }
+        if (velocityX < 0 && x + radius < viewLeft) { return true; }
+        if (velocityX > 0 && x - radius > viewLeft + viewWidth) { return true; }
+        if (velocityY < 0 && y + radius < viewTop) { return true; }
+        if (velocityY > 0 && y - radius > viewTop + viewHeight) { return true; }
+        return false;
     }
 
     VisualAnimation &Animation(std::uint32_t packHash, int archetype, int animation) {
@@ -274,6 +299,7 @@ struct WeaponEffects::Impl {
     void PlaySound(const GunCue &cue, CombatId actor = kPlayerCombatId) {
         if (cue.kind == GunCue::Kind::StopSound) {
             audio.StopOwner(actor);
+            activeLoops.erase(actor);
             if (actor == kPlayerCombatId) { loopSound = 0; }
             return;
         }
@@ -297,14 +323,26 @@ struct WeaponEffects::Impl {
         PlayWav(wav.packHash, wav.assetId, cue.kind == GunCue::Kind::LoopSound, actor);
     }
 
-    void PlayWav(std::uint32_t packHash, int ordinal, bool loop = false, CombatId actor = kPlayerCombatId) {
+    void PlayWav(std::uint32_t packHash, int ordinal, bool loop = false, CombatId actor = kPlayerCombatId,
+                 bool moveSound = false) {
         CGameAssetRef wav;
         wav.packHash = packHash;
         wav.assetId = ordinal;
         const std::uint64_t key = (static_cast<std::uint64_t>(wav.packHash) << 32) | wav.assetId;
         // User-verified simultaneous-death behaviour. Coalesce by resolved WAV,
-        // not enemy ID; no invented cooldown or suppression in following ticks.
+        // not enemy ID.
         if (!loop && frameSounds.find(key) != frameSounds.end()) { return; }
+        // Host audio adaptation, not original behaviour: the original starts a
+        // separate voice per actor (CMoveSetMeshController::Update :134066 ->
+        // CSoundQueue::PlaySound :102896 -> CMediaPlayer::PlayInternal :363259
+        // allocates a new sound event every call), so a group death is many
+        // copies of one WAV on top of each other and reads as a single hit. One
+        // voice per WAV cannot get louder, so a kill streak spread over a few
+        // ticks would instead retrigger it over and over. Move-frame sounds --
+        // the death and animation cues -- therefore wait out the copy already
+        // playing. Gun cues keep the per-tick rule so rapid fire stays rapid.
+        const auto busy = moveSoundBusyMs.find(key);
+        if (moveSound && !loop && busy != moveSoundBusyMs.end() && busy->second > audioClockMs) { return; }
         if (!audio.HasSound(key)) {
             std::vector<std::uint8_t> payload;
             if (!tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, payload)) {
@@ -314,12 +352,28 @@ struct WeaponEffects::Impl {
             if (!audio.Load(key, payload)) { return; }
         }
         if (loop) {
+            // Re-arming a loop that is already running restarts its attack
+            // every tick, which is what turns a machine's running sound into
+            // a buzz. Leave the copy that is already playing alone.
+            const auto running = activeLoops.find(actor);
+            if (running != activeLoops.end() && running->second == key) { return; }
             audio.StopOwner(actor);
+            activeLoops[actor] = key;
             if (actor == kPlayerCombatId) { loopSound = key; }
+        } else if (!moveSound) {
+            // Host audio adaptation: one voice per WAV. The original layers
+            // copies (PlayInternal :363259 builds a new sound event per call)
+            // and absorbs them in its own per-event gain (:303199), which this
+            // host has no data for -- layering here just makes one effect
+            // louder the faster it repeats, which is exactly how a turret ends
+            // up drowning out everything else. Retrigger instead of stacking:
+            // the rate is unchanged, the level stays where the WAV put it.
+            audio.Stop(key);
         }
         if (audio.Play(key, loop, actor)) {
             ++soundCues;
             if (!loop) { frameSounds.insert(key); }
+            if (moveSound && !loop) { moveSoundBusyMs[key] = audioClockMs + audio.GetDurationMs(key); }
         }
     }
 
@@ -528,6 +582,16 @@ void WeaponEffects::AdvanceAmbientEffects(int deltaMs) {
 
 void WeaponEffects::BeginAudioFrame() { m_impl->frameSounds.clear(); }
 
+unsigned WeaponEffects::GetVoiceCount() const { return m_impl->audio.GetVoiceCount(); }
+
+void WeaponEffects::SetViewBounds(float centerX, float centerY, float width, float height) {
+    m_impl->hasViewBounds = width > 0 && height > 0;
+    m_impl->viewLeft = centerX - width * 0.5f;
+    m_impl->viewTop = centerY - height * 0.5f;
+    m_impl->viewWidth = width;
+    m_impl->viewHeight = height;
+}
+
 CombatId WeaponEffects::SpawnProjectile(const GameObjectRef &resource, float x, float y,
     float z, float direction, float speed, CombatId owner, int ownerType, int part, int node) {
     Impl &scene = *m_impl;
@@ -582,6 +646,9 @@ bool WeaponEffects::RemoveOldestProjectile(CombatId owner) {
 
 void WeaponEffects::RetireOwner(CombatId owner) {
     m_impl->audio.StopOwner(owner);
+    // The id can come back on a new actor; do not let a stale entry keep its
+    // loop silent.
+    m_impl->activeLoops.erase(owner);
     for (auto &shot : m_impl->shots) {
         if (shot->owner == owner && shot->beam) {
             shot->script.removed = true;
@@ -594,7 +661,7 @@ void WeaponEffects::RetireOwner(CombatId owner) {
 }
 
 void WeaponEffects::PlayMoveSound(const GameObjectRef &sound) {
-    m_impl->PlayWav(sound.packHash, sound.localIndex);
+    m_impl->PlayWav(sound.packHash, sound.localIndex, false, kPlayerCombatId, true);
 }
 
 void WeaponEffects::Emit(const GunCue &cue, float x, float y, float z, float direction,
@@ -627,6 +694,9 @@ void WeaponEffects::Emit(const GunCue &cue, float x, float y, float z, float dir
 }
 
 void WeaponEffects::Clear() {
+    m_impl->moveSoundBusyMs.clear();
+    m_impl->activeLoops.clear();
+    m_impl->audioClockMs = 0;
     m_impl->shots.clear();
     m_impl->activeEffects.clear();
     m_impl->particles.clear();
@@ -752,6 +822,9 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
 void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float facingDegrees,
     int deltaMs, const WeaponCollision *collision) {
     Impl &scene = *m_impl;
+    // Combat time, for the move-sound window in PlayWav. Advanced before the
+    // early exit so a scene without a player still ages its cues.
+    if (deltaMs > 0) { scene.audioClockMs += deltaMs; }
     if (!player.weapon || deltaMs <= 0) { return; }
     if (scene.world == nullptr) { BeginAudioFrame(); }
     scene.playerX = modelToScene[3];
@@ -820,6 +893,15 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             const float fraction = SegmentFraction(shot->x, shot->y, dx, dy, shotCollision, &wallNormalX, &wallNormalY);
             shot->x += dx * fraction; shot->y += dy * fraction;
             hitWall = fraction < 1.0f;
+            // CBullet::Update :63537 culls a moved projectile as soon as
+            // CanBeCulled agrees, and CBullet::Remove(this, 1) :60862 retires
+            // it with no hit event and no wall event. Template flag 0x10 keeps
+            // a projectile alive off screen; beams are never culled.
+            if ((shot->script.flags & 0x10) == 0 &&
+                scene.PastViewBounds(shot->x, shot->y, shot->visual->data.GetRadius(), dx, dy)) {
+                shot->script.removed = true;
+                hitWall = false;
+            }
         }
         // CEnemy::HandleCollision :71435 leaves an unhandled event pending in
         // the enemy, but single-player bullets keep moving/testing collisions.

@@ -90,6 +90,18 @@ public:
      * The template and map must outlive the level.
      */
     void Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *world = nullptr, int startWave = 0);
+
+    /**
+     * Seed the stream CGame natives 1 and 2 draw from for this level's script.
+     *
+     * The original singleton CRandGen is seeded from the clock in its
+     * constructor (:370383), so a level script that rolls for a spawn -- the
+     * pack12 script picks one of four babes and one of four nodes with
+     * CGame.random(0, 99) -- gets a different answer every session. This port
+     * gives each script host its own stream, so without a seed every session
+     * replays the same rolls. Research checks keep the fixed default.
+     */
+    void SetScriptRandomSeed(std::uint32_t seed) { SetRandomSeed(seed); }
     void SetWave(int wave);
     void EnableTutorial(bool enabled) { m_tutorialEnabled = enabled; }
     int GetTutorialStep() const { return m_tutorialStep; }

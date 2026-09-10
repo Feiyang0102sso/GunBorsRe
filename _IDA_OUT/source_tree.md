@@ -1,530 +1,482 @@
-# 原始源码树还原与重写优先级
+# 原工程游戏相关文件与类名
 
-2026-09-08 更新入口：当前已贯通四星球生存、盔甲、成长、商店、炼化和本地存档；下面 09-07 表格保留为历史基线。最新范围见 [验收指南](../docs/acceptance.md)、[阶段记录](../docs/overnight-progress.md)、[原名对照](../docs/original-name-map.md)。
+本清单重新核对 [iOS 主程序](../gunbros) 与 [反编译源码](gunbros_3.6.0_IOS.c)，替换旧版文件名推导、重写优先级及完成度记录。
 
-## 当前重写进度（2026-09-07）
+## 范围与读法
 
-本文件下方的 P0–P3 是原工程的重写优先级，**不是完成度**。当前按可运行结果区分：
+- 保留游戏逻辑、菜单、资源、脚本、存档、成长、商店、好友与联机，以及支撑游戏运行的 Glu 自研图形、音频、数学、文件和平台适配代码。原版存在的任务/战役类也保留；出现于本表不表示正式流程会执行。
+- 排除广告、推广、遥测、第三方库及通用服务 SDK。游戏侧的购买、好友、奖励接入仍保留；`tools/` 中仅列经核对直接承担商品在线覆盖的实现。
+- 文件路径来自 ARMv7 的 `LC_SYMTAB → N_SO`，并用 `N_FUN` 确定函数归属；目录与文件记录合并后规范化 `../`。原工程根为 `/Users/noah.ruffell/Documents/Projects/GunBros1/`，下表目录均相对此根。
+- **类名列表示该编译单元实际发出的成员函数归属**，包括结构体、嵌套类型及附带的非模板内联/析构函数；不等于这些类都在对应 `.cpp` 中声明。类名链接指向相同 ARMv7 地址的反编译函数；`仅符号` 表示源码没有该地址的独立函数体。
+- 符号不能恢复全部头文件、纯数据结构或已优化掉的类；不由参数类型或文件名补造类。通用容器模板实例不展开。仅有静态函数的部分作用域无法据符号区分 class/namespace，单独注明。
+- 为控制表宽，`platform::` 统一缩写 `com::glu::platform::`，其余大小写、拼写及嵌套层级保持符号原名。
 
-| 状态 | 已落地内容／后续工作 |
+共 **342 个文件**：游戏 `src/` 219 个，自研运行基础层 `platform/shared/` 122 个，商品覆盖 `tools/` 1 个。
+
+## `src/`
+
+| 文件名 | 类名／类型作用域 |
 |---|---|
-| 已完成基础能力 | BIG 资源读取、地图／精灵／模型展示、脚本解释器、模型动画和玩家／敌人拼装（M0–M3.8） |
-| 已有可操作闭环 | GameView 移动、地图碰撞、相机、装备切换及鼠标开火（M4.1）；角色动作手感仍需校准 |
-| 本轮新增 | 菜单 16 Arena：全 ENEMY 目录、独立多实例、选敌／通用行为、双方弹体伤害、受击／死亡、玩家生命、红绿血条和调试操作 |
-| 已验证范围 | 78 个敌人条目（76 有脚本、2 无脚本）；73 把可开火武器实伤害通过，另外 3 个武器纯展示条目单列 |
-| 后续战斗工作 | Boss 特殊机制、手雷眩晕、击杀奖励；真实关卡的路径／导航、刷怪器与波次整合，特殊弹体表现继续还原 |
-| 后续外围系统 | 正式菜单流程、玩家成长／进度存档等；原版运营、联网及 iOS 绑定仍按下方 P3 排除 |
-
-敌人现在已超出“把动作拼起来”的阶段，但缺脚本废案不会自动补成有效敌人，
-全目录通用运行通过也不等于所有 Boss 和关卡机制完成。
-操作和验收边界见 [Arena 使用说明](../docs/arena.md)，总里程碑见 [PLAN.md](../PLAN.md)。
-
-从 `gunbros` (ARMv7 slice) 的 `LC_SYMTAB` 中提取。二进制未剥离符号，且保留了 stab 调试条目：
-`N_SO` (0x64) 给出源文件路径，`N_OSO` (0x66) 给出它编译成的 `.o` / `.a` 归属。
-
-- 工程根：`/Users/noah.ruffell/Documents/Projects/GunBros1/`
-- 编译单元：**540**（工程内）+ 141（外部 SDK 源码）
-- 只含 `.cpp` / `.mm` / `.m` / `.c`；头文件 `.h` / `.inl` 不进符号表
-- 命名映射：`bullet.cpp` → `CBullet`，小写驼峰文件名 → `C` + 首字母大写
-
----
-
-## 一、原工程布局
-
-按**代码所有权**分三块，不是按文件类型。每个可复用模块自带 `src/`，全工程共 18 个 `src/`。
-
-```
-GunBros1/
-├── src/                  游戏本体      GunBros 团队自己写的
-├── platform/shared/      引擎          引擎组维护，多个游戏共用
-└── tools/                服务 / SDK    第三方原样解压 + Glu 服务组
-```
-
-目录名里的版本号（`TapjoyConnect_v8.1.10`、`PlayHaven_v1.10.4`）说明第三方包整目录替换升级，所以不能塞进自己的 `src/`。
-
-**重写时不必沿用这个结构**——它的复杂度来自多团队协作和第三方包管理，单人重写一个游戏时这些约束都不成立。一个 `src/` 底下按职责分即可。
-
----
-
-## 二、分级图例
-
-| 级别 | 含义 | 数量 |
-|---|---|---:|
-| **P0** | 核心。必须理解并重写，游戏的本体 | ~95 |
-| **P1** | 需要，但实现可整体替换（现代库 / SDL3 / GL 3.3） | ~75 |
-| **P2** | 需要，但可以推后。不影响"先跑起来" | ~80 |
-| **P3** | **完全忽略**。运营、变现、联网、iOS 绑定 | ~430 |
-
-**680 个文件里，真正要动脑子的约 250 个。**
-
----
-
-## 三、引擎层 `platform/shared/`（130）
-
-| 模块 | 数量 | 级别 | 说明 |
-|---|---:|:---:|---|
-| `components/src/` | 26 | **P0** | `CBigFileReader` 在这里。流、哈希、内存池、字符串、`CTypedVariableTable` |
-| `systems/src/` | 20 | **P0** | 资源管理器、`CResourceBigFile`、注册表、事件系统 |
-| `core/src/` | 7 | **P0** | `CClass`、`CVector`、`CLinkList`、`CStringToKey`、`CRandGen` |
-| `math/src/` | 7 | **P0** | `CMatrix4d`、`CVector3d`、`CMathFixed`、`SinLUT` |
-| `graphics/src/` | 28 | **P1** | 照着读懂设计，换 GL 3.3 Core 重写 |
-| `graphics/2d/src/` | 3 | **P1** | 2D 批处理 |
-| `framework/src/` | 2 | **P1** | `CApp` / `CCore` 生命周期，换 SDL3 |
-| `adpcm/src/` | 2 | **P1** | 若 `.big` 里有 ADPCM 音频则需要，否则删 |
-| `ljpeg/src/` | 25 | **P3** | 内嵌 libjpeg，换系统库 |
-| `lpng/src/` | 11 | **P3** | 内嵌 libpng，换系统库 |
-| `zlib/src/` | 6 | **P3** | 内嵌 zlib（只有 inflate），换系统库 |
-| `cocoa/src/` | 26 | **P3** | iOS 平台绑定，换 SDL3 |
-| `network/src/` | 3 | **P3** | HTTP |
-| `arm/src/` | 1 | **P3** | `smult16` 定点乘法汇编，用普通 C |
-
-**引擎层真正要重写的是前 8 行，约 95 个文件。** 后 6 行 72 个直接删。
-
----
-
-## 四、游戏层 `src/`（219）
-
-### P0 — 核心（按重写顺序排列）
-
-**资源与容器**（第一个里程碑，扒清楚这些就能读 `.big`）
-```
-resTOCManager.cpp  resPackTOC.cpp  resourceLoader.cpp  gameAssetRef.cpp
-gameObjectPack.cpp  serializer.cpp  simpleStream.cpp  imagePool.cpp  requirement.cpp
-```
-
-**主循环与框架**
-```
-engine.cpp  game.cpp  gameFlow.cpp  gameObject.cpp  gunbros.cpp
-camera.cpp  renderQueue.cpp  timerQueue.cpp  utility.cpp  scalarFloat.cpp
-CGameApp.cpp  CResBank.cpp  CFontMgr.cpp  drawSurface.cpp  CUtility.cpp
-```
-
-**关卡与地图**
-```
-level.cpp  map.cpp  levelObject.cpp  levelObjectPool.cpp  levelTag.cpp
-layerTile.cpp  layerCollision.cpp  layerObject.cpp  layerCamera.cpp
-layerPathLink.cpp  layerPathMesh.cpp
-collision.cpp  collisionData.cpp  linkPathFinder.cpp  meshPathFinder.cpp
-```
-
-**战斗实体**
-```
-brother.cpp  brotherAI.cpp  player.cpp  playerConfiguration.cpp
-enemy.cpp  enemySpawner.cpp  flock.cpp
-bullet.cpp  gun.cpp  armor.cpp  powerup.cpp  pickup.cpp  prop.cpp  planet.cpp
-targetingController.cpp  stunController.cpp
-```
-
-**动画与特效**
-```
-moveSet.cpp  moveSetAnimController.cpp  interpolator.cpp  effectLayer.cpp
-particle.cpp  particleEffect.cpp  particleEffectPlayer.cpp
-particleEmitter.cpp  particleSystem.cpp
-```
-
-**输入**
-```
-input.cpp  inputPad.cpp  controlStick.cpp
-```
-
-### P1 — 需要但实现可换（~20）
-
-```
-mesh.cpp  meshAnimationController.cpp  meshCamera.cpp        3D 顶点动画，非骨骼
-moveSetMesh.cpp  moveSetMeshController.cpp                   模型动作绑定
-glTools.cpp  platform.cpp  debug.cpp                         平台/调试
-textBox.cpp  Label.cpp                                       文本渲染
-bgm.cpp  soundQueue.cpp  soundEffectLoop.cpp                 音频
-gluMovie.cpp  layerMovie.cpp  (src/gluMovie/ 11 个)          UI 动画系统
-(src/gluScript/ 11 个)                                       脚本解释器
-(src/spriteGlu3/ 3 个)                                       精灵系统
-```
-
-> `gluScript` / `gluMovie` / `spriteGlu3` 是三个独立子系统，先跳过——地图和角色能画出来之后再回头啃。
-
-### P2 — 推后（~80）
-
-**菜单系统（40 个）** — 占游戏层近 1/5，但对"跑起来"零贡献
-```
-menu.cpp menuAction.cpp menuList.cpp menuStack.cpp menuSystem.cpp menuOption.cpp
-menuOptionGroup.cpp menuDataProvider.cpp menuNavigationBar.cpp menuSplash.cpp
-menuStore.cpp menuMissions.cpp menuChallenges.cpp menuFriends.cpp menuPostGame.cpp
-menuMesh*.cpp menuMovie*.cpp ...（其余同名前缀）
-mainScreen.cpp  dialogPopup.cpp  movieOverlay.cpp  levelIndicator.cpp
-```
-
-**任务与进度**
-```
-mission.cpp  missionObjective.cpp  missionObjectivePrompt.cpp
-missionObjectiveStatus.cpp  missionWaveStatus.cpp  missionHighScore.cpp
-progression.cpp  playerProgress.cpp  playerStatistics.cpp  profileManager.cpp
-challengeManager.cpp  challengeProgressData.cpp  challengeInfoOverlay.cpp
-```
-
-**经济与奖励**
-```
-storeItem.cpp  storeAggregator.cpp  storeSpinMgr.cpp
-prize.cpp  prizeManager.cpp  dailyBonusTracking.cpp  refinementManager.cpp
-weaponMastery.cpp  powerUpSelector.cpp  CAchievementsMgr.cpp
-KillTracker.cpp  inputPadMeter.cpp  tutorialManager.cpp  CSaveGameMgr.cpp
-COptionsMgr.cpp  CGameProfiler.cpp
-```
-
-### P3 — 完全忽略（~50）
-
-联网多人、社交、广告、内购、推送、遥测，以及全部 `.mm` / `.m`：
-```
-CMultiplayerMgr.cpp  mpMatch.cpp  remotePlayer.cpp  networkObject.cpp
-packetBuffer.cpp  NetworkParams.cpp  (src/NGClient/ 2)
-friendsManager.cpp  friendData.cpp  friendPowerManager.cpp
-CGKFriendRequestComposeViewController.*  MessageComposerViewController.*
-AdColonyInterface.cpp  FeaturedAppMgr.cpp  offerManager.cpp
-CPackageOfferMgr.cpp  StoreAutoPreview.cpp  StoreItemOverride.cpp
-propertiesOverride.cpp  contentTracker.cpp  CEventLog.*
-purchases.cpp  PurchaseManager.mm  (src/purchase/ 4)
-pushNotificationManager.cpp  LocalNotificationMgr.*
-cocoa/TapjoyInterface.mm  cocoa/TapjoyManager.mm
-(src/cocoa/ 4)  (src/adManager/ 2)  (src/PlayHaven/ 2)  (src/platformLocal/ 3)
-```
-
----
-
-## 五、`tools/` 与外部 SDK — 整体忽略（281）
-
-跨游戏复用，但复用的是**运营和变现基础设施**，不是引擎能力。和引擎平级，各自被游戏层调用。
-
-| 模块 | 数量 | 是什么 |
-|---|---:|---|
-| `tools/gServe/` | 67 | Glu 账号后端（NGS）：登录、好友、锦标赛、Facebook、GameCenter、推送 |
-| `tools/TapjoyConnect_v8.1.10/` | 33 | 广告变现 |
-| `tools/PlayHaven_v1.10.4/` | 22 | 广告变现 |
-| `tools/MessagingQueue/` | 10 | 推送消息 |
-| `tools/glu_games_network/` | 7 | 社区界面（那批散 PNG 图标的消费者） |
-| `tools/AdColony/` | 1 | 视频广告 |
-| 外部 SDK 源码 | 141 | AdMarvel 79 / AdColony 49 / Millennial 22 / AdMob 35 / Flurry 13 |
-
-**这 281 个文件一行都不用看。**
-
----
-
-## 六、建议的里程碑
-
-1. **读得到资源** — `resTOCManager` + `resPackTOC` + `CBigFileReader` + `CResourceBigFile`，
-   目标：打开 `packTOC_xga.dat` → 加载 `pack0_core_xga.big` → 解出一张 PNG 显示在窗口里。
-   这条链走通，容器格式、寻址、zlib 解压四块地基全部验证过。
-2. **画得出地图** — `map` + `layerTile` + `level` + 图块集，得到一张静态大图。
-3. **动得起来** — `brother` + `input` + `camera` + `moveSet`，角色能跑。
-4. **打得起来** — `bullet` + `enemy` + `collision` + `particle`。
-5. 之后再考虑菜单、进度、3D 模型。
-
----
-
-## 七、完整文件清单
-
-按原始目录分组，见下。
-
-### `platform/shared/adpcm/src/`  (2)
-
-```
-CADPCMInputStream.cpp adpcm.cpp
-```
-
-### `platform/shared/arm/src/`  (1)
-
-```
-ARM_math.cpp
-```
-
-### `platform/shared/cocoa/src/`  (26)
-
-```
-ASIHTTPRequest.m CApplet_mm.mm CCore_Cocoa.cpp CCore_Cocoa_mm.mm CDebug_Cocoa_mm.mm CFileMgr_Cocoa.cpp CFileMgr_Cocoa_mm.mm CFile_Cocoa.cpp CGraphicsAbstractionManager_Cocoa.cpp CGraphics_OGLES2_Cocoa.cpp CGraphics_OGLES_Cocoa.cpp CGraphics_OGLES_Cocoa_mm.mm CGraphics_OGLES_EAGL.cpp CGraphics_OGLES_EAGL_mm.mm CGyroscope_Cocoa_mm.mm CLicenseMgr_Cocoa.cpp CMediaPlayer_Cocoa.cpp CMoviePlayer_Cocoa_mm.mm CPushNotification_Cocoa_mm.mm CRenderSurface_OGLES_Window_Cocoa.cpp CSocket_Cocoa.cpp CStdUtil_Cocoa.cpp NPMalloc.cpp NPMem.cpp NSHTTPCookieAdditions.m main_mm.mm
-```
-
-### `platform/shared/components/src/`  (26)
-
-```
-CAggregateResource.cpp CArrayInputStream.cpp CArrayOutputStream.cpp CBigFileReader.cpp CBinary.cpp CColor.cpp CCrc32.cpp CExecutable.cpp CFileInputStream.cpp CFileOutputStream.cpp CFileUtil.cpp CHash.cpp CInputStream.cpp CKeysetResource.cpp CMedia.cpp CMediaPlayer.cpp CMoviePlayer.cpp COutputStream.cpp CPool.cpp CProperties.cpp CStrChar.cpp CStrWChar.cpp CStrWCharBuffer.cpp CTypedVariableTable.cpp CVorbis.cpp CZipInputStream.cpp
-```
-
-### `platform/shared/core/src/`  (7)
-
-```
-CGenUtil.cpp CLinkList.cpp CRandGen.cpp CStringToKey.cpp CSystemEventQueue.cpp CUtf.cpp bvsprintf.cpp
-```
-
-### `platform/shared/framework/src/`  (2)
-
-```
-CApp.cpp CAppExecutor.cpp
-```
-
-### `platform/shared/graphics/2d/src/`  (3)
-
-```
-CFont.cpp CGraphics2d_OGLES.cpp CTextParser.cpp
-```
-
-### `platform/shared/graphics/src/`  (28)
-
-```
-CBlit.cpp CBlitUtil.cpp CDIB.cpp CDisplayProgram.cpp CDisplayProgram_OGLES.cpp CGraphics.cpp CGraphicsAbstractionManager.cpp CGraphics_OGLES.cpp CGraphics_OGLES2.cpp CIndexBuffer.cpp CPNG.cpp CRasterizerState.cpp CRasterizerState_OGLES.cpp CRenderSurface.cpp CRenderSurfaceBuffer.cpp CRenderSurface_OGLES2_Texture_FBO.cpp CRenderSurface_OGLES_Targetable.cpp CRenderSurface_OGLES_Texture.cpp CRenderSurface_OGLES_Texture_FBO.cpp CRenderSurface_SW.cpp CShader.cpp CShaderProgram.cpp CShaderProgram_OGLES.cpp CShaderProgram_OGLES2.cpp CShader_OGLES.cpp CShader_OGLES2.cpp CVertex.cpp CVertexBuffer.cpp
-```
-
-### `platform/shared/ljpeg/src/`  (25)
-
-```
-jcomapi.c jdapimin.c jdapistd.c jdcoefct.c jdcolor.c jddctmgr.c jdhuff.c jdinput.c jdmainct.c jdmarker.c jdmaster.c jdmerge.c jdphuff.c jdpostct.c jdsample.c jerror.c jidctflt.c jidctfst.c jidctint.c jidctred.c jmemmgr.c jmemnobs.c jquant1.c jquant2.c jutils.c
-```
-
-### `platform/shared/lpng/src/`  (11)
-
-```
-png.c pngerror.c pngget.c pngmem.c pngread.c pngrio.c pngrtran.c pngrutil.c pngset.c pngstrlen.c pngtrans.c
-```
-
-### `platform/shared/math/src/`  (7)
-
-```
-CMath.cpp CMathFixed.cpp CMatrix2d.cpp CMatrix2dx.cpp CMatrix4d.cpp CMatrix4dh.cpp CVector3d.cpp
-```
-
-### `platform/shared/network/src/`  (3)
-
-```
-CHttpDataChunk.cpp CHttpTransport.cpp CWUtil.cpp
-```
-
-### `platform/shared/systems/src/`  (20)
-
-```
-CEvent.cpp CEventListener.cpp CExecutableRegistry.cpp CMessage.cpp CRegistry.cpp CRegistryElement.cpp CResource.cpp CResourceBigFile.cpp CResourceBinary.cpp CResourceDIB.cpp CResourceFactory.cpp CResourceFont.cpp CResourceKeyset.cpp CResourceManager.cpp CResourceMedia.cpp CResourcePalette.cpp CResourceRenderSurface.cpp CResourceShader.cpp CResourceShaderProgram.cpp CResourceStrWChar.cpp
-```
-
-### `platform/shared/zlib/src/`  (6)
-
-```
-adler32.c crc32.c inffast.c inflate.c inftrees.c zutil.c
-```
-
-### `src/`  (8)
-
-```
-CFontMgr.cpp CGameApp.cpp CGameProfiler.cpp COptionsMgr.cpp CResBank.cpp CSaveGameMgr.cpp CUtility.cpp drawSurface.cpp
-```
-
-### `src/NGClient/`  (2)
-
-```
-CFunctor.cpp CGunBrosFactory.cpp
-```
-
-### `src/PlayHaven/`  (2)
-
-```
-PHInterface.mm PHMgr.mm
-```
-
-### `src/adManager/`  (2)
-
-```
-AdMgr.mm AdMgrInterface.mm
-```
-
-### `src/cocoa/`  (4)
-
-```
-AppDelegate_mm.mm AppViewController.mm AppView_mm.mm AppleInterface.mm
-```
-
-### `src/gluMovie/`  (11)
-
-```
-embededMovie.cpp movie.cpp movieChapter.cpp movieEmptyRegion.cpp movieFill.cpp movieObject.cpp movieRegion.cpp movieSoundSet.cpp movieSprite.cpp movieText.cpp movieTiledSprite.cpp
-```
-
-### `src/gluScript/`  (11)
-
-```
-script.cpp scriptCode.cpp scriptCondition.cpp scriptEvent.cpp scriptFunction.cpp scriptInterpreter.cpp scriptResolver.cpp scriptResult.cpp scriptReturn.cpp scriptState.cpp scriptVariable.cpp
-```
-
-### `src/gunbros/`  (181)
-
-```
-AdColonyInterface.cpp CAchievementsMgr.cpp CEventLog.cpp CEventLog.mm CGKFriendRequestComposeViewController.cpp CGKFriendRequestComposeViewController.mm CMultiplayerMgr.cpp CPackageOfferMgr.cpp FeaturedAppMgr.cpp KillTracker.cpp Label.cpp LocalNotificationMgr.cpp LocalNotificationMgr.mm MessageComposerViewController.cpp MessageComposerViewController.mm NetworkParams.cpp PurchaseManager.mm StoreAutoPreview.cpp StoreItemOverride.cpp armor.cpp bgm.cpp brother.cpp brotherAI.cpp bullet.cpp camera.cpp challengeInfoOverlay.cpp challengeManager.cpp challengeProgressData.cpp collision.cpp collisionData.cpp contentTracker.cpp controlStick.cpp dailyBonusTracking.cpp debug.cpp dialogPopup.cpp effectLayer.cpp enemy.cpp enemySpawner.cpp engine.cpp flock.cpp friendData.cpp friendPowerManager.cpp friendsManager.cpp game.cpp gameAssetRef.cpp gameFlow.cpp gameObject.cpp gameObjectPack.cpp glTools.cpp gluMovie.cpp gun.cpp gunbros.cpp imagePool.cpp input.cpp inputPad.cpp inputPadMeter.cpp interpolator.cpp layerCamera.cpp layerCollision.cpp layerMovie.cpp layerObject.cpp layerPathLink.cpp layerPathMesh.cpp layerTile.cpp level.cpp levelIndicator.cpp levelObject.cpp levelObjectPool.cpp levelTag.cpp linkPathFinder.cpp mainScreen.cpp map.cpp menu.cpp menuAction.cpp menuChallengeOption.cpp menuChallenges.cpp menuDataProvider.cpp menuFriendOption.cpp menuFriendOptionGroup.cpp menuFriendPowerOption.cpp menuFriends.cpp menuGameResources.cpp menuGreeting.cpp menuIconOption.cpp menuIncentives.cpp menuInviteFriends.cpp menuList.cpp menuListOption.cpp menuLotteryPopup.cpp menuLotterySelection.cpp menuMesh.cpp menuMeshEnemy.cpp menuMeshOption.cpp menuMeshPlayer.cpp menuMidPopup.cpp menuMissionInfo.cpp menuMissionOption.cpp menuMissions.cpp menuMovieButton.cpp menuMovieControl.cpp menuMovieMultiplayerOverlay.cpp menuMovieQueuedOverlay.cpp menuMovieScrollBar.cpp menuNavigationBar.cpp menuOption.cpp menuOptionGroup.cpp menuPlayerSelect.cpp menuPopupPrompt.cpp menuPostGame.cpp menuPostGameOption.cpp menuSplash.cpp menuStack.cpp menuStore.cpp menuStoreOption.cpp menuStoreOptionGroup.cpp menuSystem.cpp menuTapjoyOption.cpp menuUpgradePopup.cpp mesh.cpp meshAnimationController.cpp meshCamera.cpp meshPathFinder.cpp mission.cpp missionHighScore.cpp missionObjective.cpp missionObjectivePrompt.cpp missionObjectiveStatus.cpp missionWaveStatus.cpp moveSet.cpp moveSetAnimController.cpp moveSetMesh.cpp moveSetMeshController.cpp movieOverlay.cpp mpMatch.cpp networkObject.cpp offerManager.cpp packetBuffer.cpp particle.cpp particleEffect.cpp particleEffectPlayer.cpp particleEmitter.cpp particleSystem.cpp pickup.cpp planet.cpp platform.cpp player.cpp playerConfiguration.cpp playerProgress.cpp playerStatistics.cpp powerUpSelector.cpp powerup.cpp prize.cpp prizeManager.cpp profileManager.cpp progression.cpp prop.cpp propertiesOverride.cpp purchases.cpp pushNotificationManager.cpp refinementManager.cpp remotePlayer.cpp renderQueue.cpp requirement.cpp resPackTOC.cpp resTOCManager.cpp resourceLoader.cpp scalarFloat.cpp serializer.cpp simpleStream.cpp soundEffectLoop.cpp soundQueue.cpp storeAggregator.cpp storeItem.cpp storeSpinMgr.cpp stunController.cpp targetingController.cpp textBox.cpp timerQueue.cpp tutorialManager.cpp utility.cpp weaponMastery.cpp
-```
-
-### `src/gunbros/cocoa/`  (2)
-
-```
-TapjoyInterface.mm TapjoyManager.mm
-```
-
-### `src/platformLocal/`  (3)
-
-```
-CBitmapFont.cpp CDrawUtil.cpp CResourceManager_v1.cpp
-```
-
-### `src/purchase/`  (4)
-
-```
-IAPInterface.mm PurchaseHandler.mm PurchaseHandlerDelegate.mm PurchaseObserver.mm
-```
-
-### `src/spriteGlu3/`  (3)
-
-```
-spriteGlu.cpp spriteIterator.cpp spritePlayer.cpp
-```
-
-### `tools/AdColony/`  (1)
-
-```
-AdColony_Facade.mm
-```
-
-### `tools/MessagingQueue/src/`  (8)
-
-```
-CNetAnalytics.cpp CNetMessageQueue.cpp CNetMessageServer.cpp CObjectMap.cpp CObjectMapArray.cpp CObjectMapObject.cpp CWStringBuffer.cpp JSONParser.cpp
-```
-
-### `tools/MessagingQueue/src/cocoa/`  (2)
-
-```
-CNetworkAvailability.mm CPlatformUtil.mm
-```
-
-### `tools/PlayHaven_v1.10.4/Cache/`  (3)
-
-```
-PHUrlPrefetchOperation.m SDCachedURLResponse.m SDURLCache.m
-```
-
-### `tools/PlayHaven_v1.10.4/src/`  (19)
-
-```
-NSObject+QueryComponents.m PHAPIRequest.m PHConstants.m PHContent.m PHContentView.m PHNetworkUtil.m PHNotificationBadgeRenderer.m PHNotificationRenderer.m PHNotificationView.m PHPublisherContentRequest.m PHPublisherIAPTrackingRequest.m PHPublisherMetadataRequest.m PHPublisherOpenRequest.m PHPublisherSubcontentRequest.m PHPurchase.m PHReward.m PHStringUtil.m PHURLLoader.m UIDevice+HardwareString.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/`  (1)
-
-```
-TapjoyConnect.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCAds/`  (2)
-
-```
-TJCAdRequestHandler.m TJCAdView.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCCore/Utilities/`  (5)
-
-```
-TBXML.m TJCHardwareUtil.m TJCLog.m TJCNetReachability.m TJCUtil.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCCore/Views/`  (5)
-
-```
-TJCCallsWrapper.m TJCLoadingView.m TJCUINavigationBarView.m TJCUIWebPageView.m TJCViewCommons.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCCore/WebFetcher/`  (2)
-
-```
-TJCCoreFetcher.m TJCCoreFetcherHandler.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCExtensions/`  (1)
-
-```
-OpenUDID.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCFeaturedApp/`  (6)
-
-```
-TJCFeaturedAppDBManager.m TJCFeaturedAppManager.m TJCFeaturedAppModel.m TJCFeaturedAppRequestHandler.m TJCFeaturedAppView.m TJCFeaturedAppViewHandler.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCOffers/`  (2)
-
-```
-TJCOffersViewHandler.m TJCOffersWebView.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCUserAccount/`  (3)
-
-```
-TJCUserAccountManager.m TJCUserAccountModel.m TJCUserAccountRequestHandler.m
-```
-
-### `tools/TapjoyConnect_v8.1.10/Components/TJCVideoAds/`  (6)
-
-```
-TJCVideoLayer.m TJCVideoManager.m TJCVideoObject.m TJCVideoRequestHandler.m TJCVideoView.m TJCVideoViewHandler.m
-```
-
-### `tools/gServe/src/`  (28)
-
-```
-CGluSocialInterface.cpp CGluSocialManager.cpp CNGS.cpp CNGSAccountManager.cpp CNGSAttribute.cpp CNGSAttributeManager.cpp CNGSConst.cpp CNGSContentManager.cpp CNGSFactory.cpp CNGSFromServerMessageQ.cpp CNGSHeader.cpp CNGSLocalUser.cpp CNGSPushNotificationDetails.cpp CNGSRemoteUser.cpp CNGSRemoteUserList.cpp CNGSSKUBonus.cpp CNGSServerObject.cpp CNGSServerRequest.cpp CNGSSession.cpp CNGSSessionConfig.cpp CNGSSocialInterface.cpp CNGSSocialMessage.cpp CNGSTournament.cpp CNGSUIManager.cpp CNGSURLMgr.cpp CNGSUser.cpp CNGSUserCredentials.cpp CNGSUtil.cpp
-```
-
-### `tools/gServe/src/friends/`  (1)
-
-```
-CNGSFriendsManager.cpp
-```
-
-### `tools/gServe/src/gServe_platform/`  (3)
-
-```
-CFileUtil_gServe.cpp CHttpTransport_gServe.cpp CNetMessageQueue_gServe.cpp
-```
-
-### `tools/gServe/src/gServe_public/`  (1)
-
-```
-CNotificationHandler.cpp
-```
-
-### `tools/gServe/src/iphone/`  (18)
-
-```
-BundleInterface.mm CAskHowToProceedViewDialog.mm CErrorViewDialog.mm CFacebookInterface.mm CFacebookManager.mm CFacebookMessage.mm CGameCenterInterface.mm CGameCenterManager.mm CGenericButtonViewDialog.mm CGenericTextEntryViewDialog.mm CIdentityConfirmationViewDialog.mm CLoginViewDialog.mm CNGSView.mm CNGS_Platform.mm CNetworkUtil.mm CRegisterUserViewDialog.mm CUtil.mm Reachability.mm
-```
-
-### `tools/gServe/src/iphone/FBConnect/`  (4)
-
-```
-FBDialog.m FBLoginDialog.m FBRequest.m Facebook.m
-```
-
-### `tools/gServe/src/iphone/FBConnect/JSON/`  (6)
-
-```
-NSObject+SBJSON.m NSString+SBJSON.m SBJSON.m SBJsonBase.m SBJsonParser.m SBJsonWriter.m
-```
-
-### `tools/gServe/src/offers/`  (5)
-
-```
-CNGSDataIncentive.cpp CNGSDataOffer.cpp CNGSFriendInviteeList.cpp CNGSOfferManager.cpp CNGSOfferRequest.cpp
-```
-
-### `tools/gServe/src/storeOveride/`  (1)
-
-```
-CNGSJSONData.cpp
-```
-
-### `tools/glu_games_network/code/cocoa/src/`  (7)
-
-```
-CGluGamesNetwork.mm GGNWebViewController.m GluGamesNetworkController.mm GluVerticalCell.m GluVerticalTabBarController.m SubNavController.m TabViewController.m
-```
+| `CFontMgr.cpp` | [CFontMgr](gunbros_3.6.0_IOS.c#L56656) |
+| `CGameApp.cpp` | [CGameApp](gunbros_3.6.0_IOS.c#L52346)；[CNetMessageEnvelope](gunbros_3.6.0_IOS.c#L55562)；[CNetMessageQueue](gunbros_3.6.0_IOS.c#L55973)；[CSimpleStream](gunbros_3.6.0_IOS.c#L55787)；[platform::components::CAppProperties](gunbros_3.6.0_IOS.c#L55762)；[platform::components::CHash](gunbros_3.6.0_IOS.c#L54864)；[platform::components::CTypedVariableTable](gunbros_3.6.0_IOS.c#L55641)；[platform::components::ICLicenseMgr](gunbros_3.6.0_IOS.c#L55371)；[platform::components::ICMediaPlayer](gunbros_3.6.0_IOS.c#L55404)；[platform::components::ICMoviePlayer](gunbros_3.6.0_IOS.c#L55437)；[platform::framework::CApp](gunbros_3.6.0_IOS.c#L54846)；[platform::framework::CAppExecutor](gunbros_3.6.0_IOS.c#L53415)；[platform::framework::CAppFactory](gunbros_3.6.0_IOS.c#L54834)；[platform::graphics::CRenderSurfaceBuffer](gunbros_3.6.0_IOS.c#L55622)；[platform::graphics::ICShaderProgram::ParameterTable](gunbros_3.6.0_IOS.c#L55726)；[platform::systems::CEventPool](gunbros_3.6.0_IOS.c#L56316)；[platform::systems::CMessage](gunbros_3.6.0_IOS.c#L56250)；[platform::systems::CMessagePool](gunbros_3.6.0_IOS.c#L56147)；[platform::systems::CRegistry](gunbros_3.6.0_IOS.c#L54907)；[platform::systems::CRegistry::Accelerator](gunbros_3.6.0_IOS.c#L54881)；[platform::systems::CRegistryAccelerateHandleQuery](gunbros_3.6.0_IOS.c#L55157)；[platform::systems::CRegistryElement](gunbros_3.6.0_IOS.c#L55140)；[platform::systems::CResourceManager_v1::CConsecutiveResourceIdItr](gunbros_3.6.0_IOS.c#L54920) |
+| `CGameProfiler.cpp` | 未确认类名；仅 N_SO 文件记录；未找到具名 N_FUN，类名未知。 |
+| `COptionsMgr.cpp` | [COptionsMgr](gunbros_3.6.0_IOS.c#L51313)；[platform::components::CStrChar](gunbros_3.6.0_IOS.c#L51496)；[platform::components::Color_Palette](gunbros_3.6.0_IOS.c#L51544)；[platform::components::ICFileMgr](gunbros_3.6.0_IOS.c#L51513)；[platform::core::CClass](gunbros_3.6.0_IOS.c#L51481)；[platform::systems::CEventListener](gunbros_3.6.0_IOS.c#L51563) |
+| `CResBank.cpp` | [platform::components::CKeysetResource](gunbros_3.6.0_IOS.c#L51252)；[platform::components::CSingleton](gunbros_3.6.0_IOS.c#L51288)；[platform::components::CStrWChar](gunbros_3.6.0_IOS.c#L51271)；仅观察到所列基础类析构符号；不能据文件名补写 CResBank。 |
+| `CSaveGameMgr.cpp` | [CSaveGameMgr](gunbros_3.6.0_IOS.c#L56428) |
+| `CUtility.cpp` | [CAppVersion](gunbros_3.6.0_IOS.c#L51612)；[CUtility](gunbros_3.6.0_IOS.c#L51594)；[platform::components::CAppProperties](gunbros_3.6.0_IOS.c#L52225)；[platform::core::ICStdUtil](gunbros_3.6.0_IOS.c#L52306) |
+| `drawSurface.cpp` | [platform::graphics::CBlitUtil](gunbros_3.6.0_IOS.c#L111899)；主实现为自由函数 drawSurface；CBlitUtil 为附带析构符号。 |
+
+## `src/NGClient/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CFunctor.cpp` | [FriendDataFunctor](gunbros_3.6.0_IOS.c#L195399)；[ProfileManagerFunctor](gunbros_3.6.0_IOS.c#L195370) |
+| `CGunBrosFactory.cpp` | [CGunBrosFactory](gunbros_3.6.0_IOS.c#L204664) |
+
+## `src/cocoa/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `AppDelegate_mm.mm` | [AppDelegate](gunbros_3.6.0_IOS.c#L111958) |
+| `AppViewController.mm` | [AppViewController](gunbros_3.6.0_IOS.c#L222150) |
+| `AppView_mm.mm` | [AppView](gunbros_3.6.0_IOS.c#L113604) |
+| `AppleInterface.mm` | [AppleInterface](gunbros_3.6.0_IOS.c#L113342)；[Hardware](gunbros_3.6.0_IOS.c#L113366) |
+
+## `src/gluMovie/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `embededMovie.cpp` | [CEmbededMovie](gunbros_3.6.0_IOS.c#L108010)；[CMovieObject](gunbros_3.6.0_IOS.c#L108220) |
+| `movie.cpp` | [CMovie](gunbros_3.6.0_IOS.c#L108257) |
+| `movieChapter.cpp` | [CMovieChapter](gunbros_3.6.0_IOS.c#L109532)；`CMovieObject`（仅符号 `0x00083E3C`） |
+| `movieEmptyRegion.cpp` | [CMovieEmptyRegion](gunbros_3.6.0_IOS.c#L182312) |
+| `movieFill.cpp` | [CMovieFill](gunbros_3.6.0_IOS.c#L139821) |
+| `movieObject.cpp` | [CMovieObject](gunbros_3.6.0_IOS.c#L109633) |
+| `movieRegion.cpp` | [CMovieRegion](gunbros_3.6.0_IOS.c#L109751) |
+| `movieSoundSet.cpp` | [CMovieSoundSet](gunbros_3.6.0_IOS.c#L110138) |
+| `movieSprite.cpp` | [CMovieSprite](gunbros_3.6.0_IOS.c#L110238) |
+| `movieText.cpp` | [CMovieText](gunbros_3.6.0_IOS.c#L111015) |
+| `movieTiledSprite.cpp` | [CMovieTiledSprite](gunbros_3.6.0_IOS.c#L111098) |
+
+## `src/gluScript/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `script.cpp` | [CScript](gunbros_3.6.0_IOS.c#L105985)；[CScriptState](gunbros_3.6.0_IOS.c#L106704) |
+| `scriptCode.cpp` | [CScriptCode](gunbros_3.6.0_IOS.c#L106762) |
+| `scriptCondition.cpp` | [CScriptCondition](gunbros_3.6.0_IOS.c#L106933) |
+| `scriptEvent.cpp` | [CScriptEvent](gunbros_3.6.0_IOS.c#L107073) |
+| `scriptFunction.cpp` | [CScriptFunction](gunbros_3.6.0_IOS.c#L107110) |
+| `scriptInterpreter.cpp` | [CScriptInterpreter](gunbros_3.6.0_IOS.c#L107176) |
+| `scriptResolver.cpp` | [ScriptResolver](gunbros_3.6.0_IOS.c#L107580)（静态函数作用域，class/namespace 未确认） |
+| `scriptResult.cpp` | [CScriptResult](gunbros_3.6.0_IOS.c#L107686) |
+| `scriptReturn.cpp` | [CScriptReturn](gunbros_3.6.0_IOS.c#L107706) |
+| `scriptState.cpp` | [CScriptState](gunbros_3.6.0_IOS.c#L107728) |
+| `scriptVariable.cpp` | [CScriptVariable](gunbros_3.6.0_IOS.c#L107914) |
+
+## `src/gunbros/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CAchievementsMgr.cpp` | [CAchievementsMgr](gunbros_3.6.0_IOS.c#L223702) |
+| `CGKFriendRequestComposeViewController.cpp` | 未确认类名；函数入口 [CGKFriendRequestComposeViewController.cpp（静态初始化）](gunbros_3.6.0_IOS.c#L244445)；仅静态初始化函数。 |
+| `CGKFriendRequestComposeViewController.mm` | [CGKFriendRequestComposeViewController](gunbros_3.6.0_IOS.c#L244541)；[FriendRequestComposeViewController](gunbros_3.6.0_IOS.c#L244457) |
+| `CMultiplayerMgr.cpp` | [CMultiplayerMgr](gunbros_3.6.0_IOS.c#L228322) |
+| `CPackageOfferMgr.cpp` | [CPackageOfferMgr](gunbros_3.6.0_IOS.c#L396292) |
+| `KillTracker.cpp` | [CKillTracker](gunbros_3.6.0_IOS.c#L224791) |
+| `Label.cpp` | [CLabel](gunbros_3.6.0_IOS.c#L414010) |
+| `LocalNotificationMgr.cpp` | [CLocalNotificationMgr](gunbros_3.6.0_IOS.c#L232571)；[InactivityInfo](gunbros_3.6.0_IOS.c#L232559)；含回归奖励发放逻辑，因此保留。 |
+| `LocalNotificationMgr.mm` | [CLocalNotificationMgr](gunbros_3.6.0_IOS.c#L231745)；与上一文件共同实现 CLocalNotificationMgr。 |
+| `MessageComposerViewController.cpp` | 未确认类名；函数入口 [MessageComposerViewController.cpp（静态初始化）](gunbros_3.6.0_IOS.c#L244436)；仅静态初始化函数。 |
+| `MessageComposerViewController.mm` | [CMessageComposerViewController](gunbros_3.6.0_IOS.c#L244307)；[MessageComposerViewController](gunbros_3.6.0_IOS.c#L244020) |
+| `NetworkParams.cpp` | 未确认类名；函数入口 [NETPARAMS](gunbros_3.6.0_IOS.c#L249362)；全局 NETPARAMS() 返回 gParams；不能据文件名补写类。 |
+| `PurchaseManager.mm` | [CInAppPurchasableProduct](gunbros_3.6.0_IOS.c#L211825)；[SPurchaseManager](gunbros_3.6.0_IOS.c#L211772) |
+| `StoreAutoPreview.cpp` | [CStoreAutoPreview](gunbros_3.6.0_IOS.c#L297561) |
+| `StoreItemOverride.cpp` | [CStoreItemOverride](gunbros_3.6.0_IOS.c#L232736) |
+| `armor.cpp` | [CArmor](gunbros_3.6.0_IOS.c#L176460)；[CArmor::Template](gunbros_3.6.0_IOS.c#L176438) |
+| `bgm.cpp` | [CBGM](gunbros_3.6.0_IOS.c#L59493) |
+| `brother.cpp` | [CBrother](gunbros_3.6.0_IOS.c#L134119)；[CBrother::CGrenadeHolder](gunbros_3.6.0_IOS.c#L139120)；[CBrother::Template](gunbros_3.6.0_IOS.c#L134571)；[CGun](gunbros_3.6.0_IOS.c#L139377) |
+| `brotherAI.cpp` | [CBrotherAI](gunbros_3.6.0_IOS.c#L139396) |
+| `bullet.cpp` | [AnchorBulletHit](gunbros_3.6.0_IOS.c#L60242)；[CBrother](gunbros_3.6.0_IOS.c#L64190)；[CBrother::PacketSeekingWeapon](gunbros_3.6.0_IOS.c#L64069)；[CBullet](gunbros_3.6.0_IOS.c#L60254)；[CBullet::Template](gunbros_3.6.0_IOS.c#L60448)；[CLightningArc](gunbros_3.6.0_IOS.c#L64242)；[EffectContainer](gunbros_3.6.0_IOS.c#L64420)；`IDrawable`（仅符号 `0x00035364`）；[ILevelObject](gunbros_3.6.0_IOS.c#L63843)；[ScriptStorage](gunbros_3.6.0_IOS.c#L64146)；[platform::graphics::CGraphics](gunbros_3.6.0_IOS.c#L64117) |
+| `camera.cpp` | [CCamera](gunbros_3.6.0_IOS.c#L64447) |
+| `challengeInfoOverlay.cpp` | [CChallengeInfoOverlay](gunbros_3.6.0_IOS.c#L297137) |
+| `challengeManager.cpp` | [CChallengeManager](gunbros_3.6.0_IOS.c#L238134)；[CChallengeManager::Template](gunbros_3.6.0_IOS.c#L239005) |
+| `challengeProgressData.cpp` | [CChallengeProgressData](gunbros_3.6.0_IOS.c#L297764) |
+| `collision.cpp` | [Collision](gunbros_3.6.0_IOS.c#L65444)（静态函数作用域，class/namespace 未确认） |
+| `collisionData.cpp` | [CCollisionData](gunbros_3.6.0_IOS.c#L142446) |
+| `contentTracker.cpp` | [CContentTracker](gunbros_3.6.0_IOS.c#L224886)；[CContentTracker::UserData](gunbros_3.6.0_IOS.c#L224990)；[CContentTracker::UserData::PerPackData](gunbros_3.6.0_IOS.c#L225374)；[CContentTracker::UserData::PerPackData::PerObjectTypeData](gunbros_3.6.0_IOS.c#L225025) |
+| `controlStick.cpp` | [ControlStick](gunbros_3.6.0_IOS.c#L248851) |
+| `dailyBonusTracking.cpp` | [CDailyBonusTracking](gunbros_3.6.0_IOS.c#L208796)；[CDailyBonusTracking::Template](gunbros_3.6.0_IOS.c#L209142) |
+| `debug.cpp` | 未确认类名；仅 N_SO 文件记录；未找到具名 N_FUN，类名未知。 |
+| `dialogPopup.cpp` | [CDialogPopup](gunbros_3.6.0_IOS.c#L183433) |
+| `effectLayer.cpp` | [CEffectLayer](gunbros_3.6.0_IOS.c#L66452)；[CEffectLayer::ParticleEffect](gunbros_3.6.0_IOS.c#L67116)；[CEffectLayer::TextEffect](gunbros_3.6.0_IOS.c#L67080) |
+| `enemy.cpp` | [CActor](gunbros_3.6.0_IOS.c#L73602)；[CCollisionData](gunbros_3.6.0_IOS.c#L73774)；[CEnemy](gunbros_3.6.0_IOS.c#L67206)；[CEnemy::CollisionInformation](gunbros_3.6.0_IOS.c#L73614)；[CEnemy::Template](gunbros_3.6.0_IOS.c#L67174)；[CMoveSetMesh](gunbros_3.6.0_IOS.c#L73908)；[TargetNode](gunbros_3.6.0_IOS.c#L73703)；[vec2](gunbros_3.6.0_IOS.c#L73989) |
+| `enemySpawner.cpp` | [CEnemySpawner](gunbros_3.6.0_IOS.c#L146035)；[CNetworkEnemySpawner](gunbros_3.6.0_IOS.c#L147304)；[COffscreenSpawnLocationFilter](gunbros_3.6.0_IOS.c#L147156)；[IEnemySpawner](gunbros_3.6.0_IOS.c#L146632)；[IEnemySpawnerScriptInterface](gunbros_3.6.0_IOS.c#L146152)；[SpawnPacket](gunbros_3.6.0_IOS.c#L147125) |
+| `engine.cpp` | [Engine](gunbros_3.6.0_IOS.c#L133971)（静态函数作用域，class/namespace 未确认） |
+| `flock.cpp` | [CFlock](gunbros_3.6.0_IOS.c#L170242) |
+| `friendData.cpp` | [CFriendData](gunbros_3.6.0_IOS.c#L204978) |
+| `friendPowerManager.cpp` | [CFriendPowerManager](gunbros_3.6.0_IOS.c#L234020) |
+| `friendsManager.cpp` | [CAutoBroNotifyFunctor](gunbros_3.6.0_IOS.c#L201010)；[CFriendDataManager](gunbros_3.6.0_IOS.c#L198759)；[CFriendsManagerNotifyFunctor](gunbros_3.6.0_IOS.c#L200968) |
+| `game.cpp` | [CArmor](gunbros_3.6.0_IOS.c#L76895)；[CBrother](gunbros_3.6.0_IOS.c#L77099)；[CGame](gunbros_3.6.0_IOS.c#L74326)；[CGun](gunbros_3.6.0_IOS.c#L76907)；[CInputPad](gunbros_3.6.0_IOS.c#L77173)；[CInputPad::PeripheralHUD](gunbros_3.6.0_IOS.c#L76998)；[CParticlePool](gunbros_3.6.0_IOS.c#L77050)；[INetworkObject](gunbros_3.6.0_IOS.c#L76920)；[ITransition](gunbros_3.6.0_IOS.c#L76901)；[platform::core::ICStdUtil](gunbros_3.6.0_IOS.c#L77042) |
+| `gameAssetRef.cpp` | [CGameAssetRef](gunbros_3.6.0_IOS.c#L191877)；[CGameSpriteGluRef](gunbros_3.6.0_IOS.c#L191859) |
+| `gameFlow.cpp` | [CGameFlow](gunbros_3.6.0_IOS.c#L77286) |
+| `gameObject.cpp` | [IGameObject::GameObjectRef](gunbros_3.6.0_IOS.c#L191893)；[IGameObject::GameObjectTypeRef](gunbros_3.6.0_IOS.c#L191914)；观察到 IGameObject 的嵌套引用类型。 |
+| `gameObjectPack.cpp` | [CArmor::Template](gunbros_3.6.0_IOS.c#L130503)；[CBullet::Template](gunbros_3.6.0_IOS.c#L130542)；[CGameObjectPack](gunbros_3.6.0_IOS.c#L129033)；[CGun::Template](gunbros_3.6.0_IOS.c#L130667)；[CPlatform::Template](gunbros_3.6.0_IOS.c#L130145)；[CProp::Template](gunbros_3.6.0_IOS.c#L130689)；[SoundEffect](gunbros_3.6.0_IOS.c#L130176)；[TileSet](gunbros_3.6.0_IOS.c#L130243)；[Tutorial](gunbros_3.6.0_IOS.c#L130212) |
+| `glTools.cpp` | [CLightningArc](gunbros_3.6.0_IOS.c#L242730)；[CMeshLine](gunbros_3.6.0_IOS.c#L242742)；[CMeshLine::CVertexBuffer](gunbros_3.6.0_IOS.c#L242714)；[CRibbonTrailEffect](gunbros_3.6.0_IOS.c#L242724) |
+| `gluMovie.cpp` | [CMenu](gunbros_3.6.0_IOS.c#L77489)；实际符号归属 CMenu；不能补写 CGluMovie。 |
+| `gun.cpp` | [CDummyTarget](gunbros_3.6.0_IOS.c#L128956)；[CGun](gunbros_3.6.0_IOS.c#L127880)；[CGun::BulletSource](gunbros_3.6.0_IOS.c#L128950)；[CGun::Template](gunbros_3.6.0_IOS.c#L127712) |
+| `gunbros.cpp` | [CGameFlow](gunbros_3.6.0_IOS.c#L85398)；[CGunBros](gunbros_3.6.0_IOS.c#L77538)；[CPlayerProgress](gunbros_3.6.0_IOS.c#L84833)；[CSaveRestoreInterface](gunbros_3.6.0_IOS.c#L80913) |
+| `imagePool.cpp` | [CImagePool](gunbros_3.6.0_IOS.c#L85420) |
+| `input.cpp` | [CInput](gunbros_3.6.0_IOS.c#L85779) |
+| `inputPad.cpp` | [CInputPad](gunbros_3.6.0_IOS.c#L86290)；[CInputPad::Base](gunbros_3.6.0_IOS.c#L87488)；[CInputPad::ChallengeInfoOverlay](gunbros_3.6.0_IOS.c#L89408)；[CInputPad::IComponent](gunbros_3.6.0_IOS.c#L91400)；[CInputPad::PeripheralHUD](gunbros_3.6.0_IOS.c#L86297)；[CInputPad::PowerUpSelector](gunbros_3.6.0_IOS.c#L89357) |
+| `inputPadMeter.cpp` | [CInputPadMeter](gunbros_3.6.0_IOS.c#L130721) |
+| `interpolator.cpp` | [CInterpolator](gunbros_3.6.0_IOS.c#L91559) |
+| `layerCamera.cpp` | [CLayerCamera](gunbros_3.6.0_IOS.c#L127663) |
+| `layerCollision.cpp` | [CLayerCollision](gunbros_3.6.0_IOS.c#L125241) |
+| `layerMovie.cpp` | [CLayerMovie](gunbros_3.6.0_IOS.c#L126049) |
+| `layerObject.cpp` | [CLayerObject](gunbros_3.6.0_IOS.c#L126133) |
+| `layerPathLink.cpp` | [CLayerPathLink](gunbros_3.6.0_IOS.c#L166451)；[DistanceList](gunbros_3.6.0_IOS.c#L167261) |
+| `layerPathMesh.cpp` | [CLayerPathMesh](gunbros_3.6.0_IOS.c#L167381) |
+| `layerTile.cpp` | [CLayerTile](gunbros_3.6.0_IOS.c#L126759) |
+| `level.cpp` | [CBrother](gunbros_3.6.0_IOS.c#L122775)；[CLevel](gunbros_3.6.0_IOS.c#L114212)；[CLevel::Template](gunbros_3.6.0_IOS.c#L114770)；[CLevelObjectPool](gunbros_3.6.0_IOS.c#L122616)；[CProp](gunbros_3.6.0_IOS.c#L122601)；[CStatisticEnemy](gunbros_3.6.0_IOS.c#L122531)；[StatisticPacket](gunbros_3.6.0_IOS.c#L122468) |
+| `levelIndicator.cpp` | [CLevelIndicator](gunbros_3.6.0_IOS.c#L191302) |
+| `levelObject.cpp` | [AnchorPosition](gunbros_3.6.0_IOS.c#L294504)；[AnchorTransform](gunbros_3.6.0_IOS.c#L294520)；[CRibbonTrailEffect](gunbros_3.6.0_IOS.c#L295349)；[EffectContainer](gunbros_3.6.0_IOS.c#L294598)；[EffectContainerPair](gunbros_3.6.0_IOS.c#L294579)；[EffectHolder](gunbros_3.6.0_IOS.c#L294533)；[ParticleEffectHolder](gunbros_3.6.0_IOS.c#L294557)；[TrailEffectHolder](gunbros_3.6.0_IOS.c#L294563)；含锚点、效果持有者等多个类型；不能补写 CLevelObject。 |
+| `levelObjectPool.cpp` | [CLevelObjectPool](gunbros_3.6.0_IOS.c#L145287)；[CParticleEffectProp](gunbros_3.6.0_IOS.c#L145792)；[CPickup](gunbros_3.6.0_IOS.c#L145875) |
+| `levelTag.cpp` | [CLevelTag](gunbros_3.6.0_IOS.c#L183175) |
+| `linkPathFinder.cpp` | [CLinkPathFinder](gunbros_3.6.0_IOS.c#L168567) |
+| `mainScreen.cpp` | [MainScreen](gunbros_3.6.0_IOS.c#L91786)（静态函数作用域，class/namespace 未确认） |
+| `map.cpp` | [CMap](gunbros_3.6.0_IOS.c#L91816)；[CParticlePool](gunbros_3.6.0_IOS.c#L92882)；[CParticleSystem](gunbros_3.6.0_IOS.c#L92860)；[IGameObject](gunbros_3.6.0_IOS.c#L92759)；[ILayerPath](gunbros_3.6.0_IOS.c#L92845)；[IMapLayer](gunbros_3.6.0_IOS.c#L92753) |
+| `menu.cpp` | [CMenu](gunbros_3.6.0_IOS.c#L92948) |
+| `menuAction.cpp` | [CMenuAction](gunbros_3.6.0_IOS.c#L92977) |
+| `menuChallengeOption.cpp` | [CMenuChallengeOption](gunbros_3.6.0_IOS.c#L237340) |
+| `menuChallenges.cpp` | [CMenuChallenges](gunbros_3.6.0_IOS.c#L235043) |
+| `menuDataProvider.cpp` | [CMenuDataProvider](gunbros_3.6.0_IOS.c#L148357) |
+| `menuFriendOption.cpp` | [CMenuFriendOption](gunbros_3.6.0_IOS.c#L197766) |
+| `menuFriendOptionGroup.cpp` | [CMenuFriendOptionGroup](gunbros_3.6.0_IOS.c#L233415) |
+| `menuFriendPowerOption.cpp` | [CMenuFriendPowerOption](gunbros_3.6.0_IOS.c#L234640) |
+| `menuFriends.cpp` | [CMenuFriends](gunbros_3.6.0_IOS.c#L195456) |
+| `menuGameResources.cpp` | [CMenuGameResources](gunbros_3.6.0_IOS.c#L171917)；[CMenuGameResources::CResourceMeter](gunbros_3.6.0_IOS.c#L172390)；[CMenuGameResources::CTransferEffect](gunbros_3.6.0_IOS.c#L173545) |
+| `menuGreeting.cpp` | [CMenuGreeting](gunbros_3.6.0_IOS.c#L207809) |
+| `menuIconOption.cpp` | [CMenuIconOption](gunbros_3.6.0_IOS.c#L175548) |
+| `menuInviteFriends.cpp` | [CMenuInviteFriends](gunbros_3.6.0_IOS.c#L247680) |
+| `menuList.cpp` | [CMenuList](gunbros_3.6.0_IOS.c#L140118) |
+| `menuListOption.cpp` | [CMenuListOption](gunbros_3.6.0_IOS.c#L143983)；[CMenuOption](gunbros_3.6.0_IOS.c#L144348) |
+| `menuLotteryPopup.cpp` | [CMenuLotteryPopup](gunbros_3.6.0_IOS.c#L396390) |
+| `menuLotterySelection.cpp` | [CMenuLotterySelection](gunbros_3.6.0_IOS.c#L414118) |
+| `menuMesh.cpp` | [CMenuMesh](gunbros_3.6.0_IOS.c#L168773) |
+| `menuMeshEnemy.cpp` | [CMenuMeshEnemy](gunbros_3.6.0_IOS.c#L169021) |
+| `menuMeshOption.cpp` | [CMenuMeshOption](gunbros_3.6.0_IOS.c#L176083) |
+| `menuMeshPlayer.cpp` | [CMenuMeshPlayer](gunbros_3.6.0_IOS.c#L169198) |
+| `menuMidPopup.cpp` | [CMenuMidPopup](gunbros_3.6.0_IOS.c#L392429) |
+| `menuMissionInfo.cpp` | [CMenuMissionInfo](gunbros_3.6.0_IOS.c#L188880) |
+| `menuMissionOption.cpp` | [CMenuMissionOption](gunbros_3.6.0_IOS.c#L189803) |
+| `menuMissions.cpp` | [CMenuMission](gunbros_3.6.0_IOS.c#L161015) |
+| `menuMovieButton.cpp` | [CMenuMovieButton](gunbros_3.6.0_IOS.c#L144360) |
+| `menuMovieControl.cpp` | [CMenuMovieControl](gunbros_3.6.0_IOS.c#L140724) |
+| `menuMovieMultiplayerOverlay.cpp` | [CMenuMovieMultiplayerOverlay](gunbros_3.6.0_IOS.c#L250020) |
+| `menuMovieQueuedOverlay.cpp` | [CMenuMovieQueuedOverlay](gunbros_3.6.0_IOS.c#L242299) |
+| `menuMovieScrollBar.cpp` | [CMenuMovieScrollBar](gunbros_3.6.0_IOS.c#L221427) |
+| `menuNavigationBar.cpp` | [CMenuNavigationBar](gunbros_3.6.0_IOS.c#L143030) |
+| `menuOption.cpp` | [CMenuOption](gunbros_3.6.0_IOS.c#L169732) |
+| `menuOptionGroup.cpp` | [CMenuOptionGroup](gunbros_3.6.0_IOS.c#L174820) |
+| `menuPlayerSelect.cpp` | [CMenuPlayerSelect](gunbros_3.6.0_IOS.c#L194860) |
+| `menuPopupPrompt.cpp` | [CMenuPopupPrompt](gunbros_3.6.0_IOS.c#L206290) |
+| `menuPostGame.cpp` | [CMenuPostGame](gunbros_3.6.0_IOS.c#L164541) |
+| `menuPostGameOption.cpp` | [CMenuPostGameOption](gunbros_3.6.0_IOS.c#L249708) |
+| `menuSplash.cpp` | [CMenuSplash](gunbros_3.6.0_IOS.c#L160301) |
+| `menuStack.cpp` | [CMenuStack](gunbros_3.6.0_IOS.c#L147562) |
+| `menuStore.cpp` | [CMenuStore](gunbros_3.6.0_IOS.c#L178697) |
+| `menuStoreOption.cpp` | [CMenuStoreOption](gunbros_3.6.0_IOS.c#L180478) |
+| `menuStoreOptionGroup.cpp` | [CMenuStoreOptionGroup](gunbros_3.6.0_IOS.c#L233898) |
+| `menuSystem.cpp` | [CMenuSystem](gunbros_3.6.0_IOS.c#L96038) |
+| `menuUpgradePopup.cpp` | [CMenuUpgradePopup](gunbros_3.6.0_IOS.c#L392452)；[ItemUpgradeInfo](gunbros_3.6.0_IOS.c#L394280) |
+| `mesh.cpp` | [CMesh](gunbros_3.6.0_IOS.c#L97705)；[CMesh::Frame](gunbros_3.6.0_IOS.c#L98687) |
+| `meshAnimationController.cpp` | [CMeshAnimationController](gunbros_3.6.0_IOS.c#L98708) |
+| `meshCamera.cpp` | [CMeshCamera](gunbros_3.6.0_IOS.c#L98863) |
+| `meshPathFinder.cpp` | [CMeshPathFinder](gunbros_3.6.0_IOS.c#L168383) |
+| `mission.cpp` | [CMissionScriptContext](gunbros_3.6.0_IOS.c#L164513)；[Mission](gunbros_3.6.0_IOS.c#L163769) |
+| `missionHighScore.cpp` | [CMissionHighScore](gunbros_3.6.0_IOS.c#L233284) |
+| `missionObjective.cpp` | [MissionObjective](gunbros_3.6.0_IOS.c#L175980) |
+| `missionObjectivePrompt.cpp` | [CMissionObjectivePrompt](gunbros_3.6.0_IOS.c#L139695) |
+| `missionObjectiveStatus.cpp` | [CMissionObjectiveStatus](gunbros_3.6.0_IOS.c#L193175) |
+| `missionWaveStatus.cpp` | [CMissionWaveStatus](gunbros_3.6.0_IOS.c#L192413)；[MissionWaveInfo](gunbros_3.6.0_IOS.c#L192822) |
+| `moveSet.cpp` | [CMoveSet](gunbros_3.6.0_IOS.c#L99445) |
+| `moveSetAnimController.cpp` | [CMoveSetAnimController](gunbros_3.6.0_IOS.c#L154783) |
+| `moveSetMesh.cpp` | [CMoveSetMesh](gunbros_3.6.0_IOS.c#L122930) |
+| `moveSetMeshController.cpp` | [CMoveSetMeshController](gunbros_3.6.0_IOS.c#L134034) |
+| `movieOverlay.cpp` | [CMovieOverlay](gunbros_3.6.0_IOS.c#L182991) |
+| `mpMatch.cpp` | [CMPMatch](gunbros_3.6.0_IOS.c#L395618)；[CMPMatch::Template](gunbros_3.6.0_IOS.c#L395646) |
+| `networkObject.cpp` | [INetworkObject](gunbros_3.6.0_IOS.c#L231721) |
+| `packetBuffer.cpp` | [PacketBuffer](gunbros_3.6.0_IOS.c#L249368) |
+| `particle.cpp` | [CParticle](gunbros_3.6.0_IOS.c#L133114) |
+| `particleEffect.cpp` | [CParticleEffect](gunbros_3.6.0_IOS.c#L130974)；[CParticleEmitter](gunbros_3.6.0_IOS.c#L131182) |
+| `particleEffectPlayer.cpp` | [CParticleEffectPlayer](gunbros_3.6.0_IOS.c#L131269) |
+| `particleEmitter.cpp` | [CParticleEmitter](gunbros_3.6.0_IOS.c#L131811)；[CParticleSpawnPatternCircle](gunbros_3.6.0_IOS.c#L132157)；[CParticleSpawnPatternLine](gunbros_3.6.0_IOS.c#L132036)；[CParticleSpawnPatternRect](gunbros_3.6.0_IOS.c#L132092)；[CParticleSpawnVelocityLinear](gunbros_3.6.0_IOS.c#L132287)；[CParticleSpawnVelocityRadial](gunbros_3.6.0_IOS.c#L132229)；[ParticleInterpolator](gunbros_3.6.0_IOS.c#L132332) |
+| `particleSystem.cpp` | [CParticleSystem](gunbros_3.6.0_IOS.c#L133841) |
+| `pickup.cpp` | [CPickup](gunbros_3.6.0_IOS.c#L99655)；[CPickup::Template](gunbros_3.6.0_IOS.c#L99591) |
+| `planet.cpp` | [Planet](gunbros_3.6.0_IOS.c#L169908) |
+| `platform.cpp` | [CPlatform](gunbros_3.6.0_IOS.c#L154460) |
+| `player.cpp` | [CBrother](gunbros_3.6.0_IOS.c#L101592)；[CBrother::PacketRespawn](gunbros_3.6.0_IOS.c#L101569)；[CPlayer](gunbros_3.6.0_IOS.c#L100166) |
+| `playerConfiguration.cpp` | [CPlayerConfiguration](gunbros_3.6.0_IOS.c#L170474) |
+| `playerProgress.cpp` | [CPlayerProgress](gunbros_3.6.0_IOS.c#L193289)；[CPlayerProgress::ProgressData](gunbros_3.6.0_IOS.c#L193380)；[CPlayerProgress::Template](gunbros_3.6.0_IOS.c#L193209) |
+| `playerStatistics.cpp` | [CPlayerStatistics](gunbros_3.6.0_IOS.c#L220165) |
+| `powerUpSelector.cpp` | [CPowerUpSelector](gunbros_3.6.0_IOS.c#L183797)；[CPowerup](gunbros_3.6.0_IOS.c#L187928) |
+| `powerup.cpp` | [CPowerup](gunbros_3.6.0_IOS.c#L187973)；[CPowerup::Template](gunbros_3.6.0_IOS.c#L187947) |
+| `prize.cpp` | [CPrize](gunbros_3.6.0_IOS.c#L204703) |
+| `prizeManager.cpp` | [CPrizeManager](gunbros_3.6.0_IOS.c#L209697) |
+| `profileManager.cpp` | [CProfileManager](gunbros_3.6.0_IOS.c#L201063)；[platform::framework::CCore](gunbros_3.6.0_IOS.c#L204249) |
+| `progression.cpp` | [Progression](gunbros_3.6.0_IOS.c#L164519) |
+| `prop.cpp` | [CMoveSet](gunbros_3.6.0_IOS.c#L125069)；[CProp](gunbros_3.6.0_IOS.c#L123363)；[CProp::Template](gunbros_3.6.0_IOS.c#L123346) |
+| `propertiesOverride.cpp` | [CPropertiesOverride](gunbros_3.6.0_IOS.c#L392251) |
+| `purchases.cpp` | [CPurchases](gunbros_3.6.0_IOS.c#L183747) |
+| `refinementManager.cpp` | [CRefinementManager](gunbros_3.6.0_IOS.c#L176716)；[CRefinementManager::CRefinementSlot](gunbros_3.6.0_IOS.c#L178471)；[CRefinementManager::Template](gunbros_3.6.0_IOS.c#L177773) |
+| `remotePlayer.cpp` | [CRemotePlayer](gunbros_3.6.0_IOS.c#L229552) |
+| `renderQueue.cpp` | [CRenderQueue](gunbros_3.6.0_IOS.c#L145064) |
+| `requirement.cpp` | [RequirementList](gunbros_3.6.0_IOS.c#L191696) |
+| `resPackTOC.cpp` | [CResPackTOC](gunbros_3.6.0_IOS.c#L132351) |
+| `resTOCManager.cpp` | [CResTOCManager](gunbros_3.6.0_IOS.c#L132617) |
+| `resourceLoader.cpp` | [CResourceLoader](gunbros_3.6.0_IOS.c#L101917) |
+| `scalarFloat.cpp` | 未确认类名；仅 N_SO 文件记录；未找到具名 N_FUN，不能补写 CScalarFloat。 |
+| `serializer.cpp` | [Deserializer](gunbros_3.6.0_IOS.c#L249630)；[Serializer](gunbros_3.6.0_IOS.c#L249605) |
+| `simpleStream.cpp` | [CSimpleStream](gunbros_3.6.0_IOS.c#L102716) |
+| `soundEffectLoop.cpp` | [CSoundEffectLoop](gunbros_3.6.0_IOS.c#L142289) |
+| `soundQueue.cpp` | [CSoundQueue](gunbros_3.6.0_IOS.c#L102742) |
+| `storeAggregator.cpp` | [CStoreAggregator](gunbros_3.6.0_IOS.c#L154835)；[platform::components::CStrWCharBuffer](gunbros_3.6.0_IOS.c#L159425) |
+| `storeItem.cpp` | [CStoreItem](gunbros_3.6.0_IOS.c#L159542) |
+| `storeSpinMgr.cpp` | [CStoreSpinMgr](gunbros_3.6.0_IOS.c#L399703) |
+| `stunController.cpp` | [CStunController](gunbros_3.6.0_IOS.c#L394408) |
+| `targetingController.cpp` | [CTargetingController](gunbros_3.6.0_IOS.c#L223153) |
+| `textBox.cpp` | [CTextBox](gunbros_3.6.0_IOS.c#L103058) |
+| `timerQueue.cpp` | [CTimerQueue](gunbros_3.6.0_IOS.c#L104366) |
+| `tutorialManager.cpp` | [CTutorialManager](gunbros_3.6.0_IOS.c#L210464) |
+| `utility.cpp` | [Utility](gunbros_3.6.0_IOS.c#L104376)（静态函数作用域，class/namespace 未确认） |
+| `weaponMastery.cpp` | [CWeaponMastery](gunbros_3.6.0_IOS.c#L192201) |
+
+## `src/platformLocal/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CBitmapFont.cpp` | [platform::graphics::CBitmapFont](gunbros_3.6.0_IOS.c#L394506) |
+| `CDrawUtil.cpp` | [CDrawUtil](gunbros_3.6.0_IOS.c#L381872) |
+| `CResourceManager_v1.cpp` | [platform::components::CIdToObjectRouter](gunbros_3.6.0_IOS.c#L331184)；[platform::systems::CResourceFactory](gunbros_3.6.0_IOS.c#L331294)；[platform::systems::CResourceManagerLegacy](gunbros_3.6.0_IOS.c#L331144)；[platform::systems::CResourceManager_v1](gunbros_3.6.0_IOS.c#L329732) |
+
+## `src/purchase/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `IAPInterface.mm` | [SIAPInterface](gunbros_3.6.0_IOS.c#L210897) |
+| `PurchaseHandler.mm` | [PurchaseHandler](gunbros_3.6.0_IOS.c#L211034) |
+| `PurchaseHandlerDelegate.mm` | [PurchaseHandlerDelegate](gunbros_3.6.0_IOS.c#L211452) |
+| `PurchaseObserver.mm` | [PurchaseObserver](gunbros_3.6.0_IOS.c#L211549) |
+
+## `src/spriteGlu3/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `spriteGlu.cpp` | [CSpriteGlu](gunbros_3.6.0_IOS.c#L56870)；[TexturePack](gunbros_3.6.0_IOS.c#L57993) |
+| `spriteIterator.cpp` | [CSpriteIterator](gunbros_3.6.0_IOS.c#L58022) |
+| `spritePlayer.cpp` | [CSpritePlayer](gunbros_3.6.0_IOS.c#L58340) |
+
+## `platform/shared/adpcm/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CADPCMInputStream.cpp` | [platform::adpcm::CADPCMInputStream](gunbros_3.6.0_IOS.c#L300082) |
+| `adpcm.cpp` | 未确认类名；函数入口 [adpcm_decoder](gunbros_3.6.0_IOS.c#L299971) |
+
+## `platform/shared/arm/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `ARM_math.cpp` | 未确认类名；函数入口 [platform::arm::smult16](gunbros_3.6.0_IOS.c#L300406) |
+
+## `platform/shared/cocoa/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CApplet_mm.mm` | [CApplet](gunbros_3.6.0_IOS.c#L300412) |
+| `CCore_Cocoa.cpp` | [CCore_Cocoa](gunbros_3.6.0_IOS.c#L351806)；[platform::framework::ICCore](gunbros_3.6.0_IOS.c#L351794) |
+| `CCore_Cocoa_mm.mm` | [CCore_Cocoa](gunbros_3.6.0_IOS.c#L300628) |
+| `CDebug_Cocoa_mm.mm` | [platform::core::ICDebug](gunbros_3.6.0_IOS.c#L301050) |
+| `CFileMgr_Cocoa.cpp` | [CFileMgr_Cocoa](gunbros_3.6.0_IOS.c#L301334)；[platform::components::ICFileMgr](gunbros_3.6.0_IOS.c#L301322) |
+| `CFileMgr_Cocoa_mm.mm` | [CFileMgr_Cocoa](gunbros_3.6.0_IOS.c#L301167) |
+| `CFile_Cocoa.cpp` | [CFile_Cocoa](gunbros_3.6.0_IOS.c#L301059) |
+| `CGraphicsAbstractionManager_Cocoa.cpp` | [platform::graphics::CVertexBuffer](gunbros_3.6.0_IOS.c#L302317)；[platform::graphics::ICBuffer](gunbros_3.6.0_IOS.c#L302300)；[platform::graphics::ICDisplayProgram](gunbros_3.6.0_IOS.c#L301806)；[platform::graphics::ICGraphicsAbstractionManager](gunbros_3.6.0_IOS.c#L301891)；[platform::graphics::ICIndexBuffer](gunbros_3.6.0_IOS.c#L301978)；[platform::graphics::ICRasterizerState](gunbros_3.6.0_IOS.c#L302164)；[platform::graphics::ICRenderSurface](gunbros_3.6.0_IOS.c#L302089)；[platform::graphics::ICShader](gunbros_3.6.0_IOS.c#L302056)；[platform::graphics::ICShaderProgram](gunbros_3.6.0_IOS.c#L302014)；[platform::graphics::ICVertexBuffer](gunbros_3.6.0_IOS.c#L301945) |
+| `CGraphics_OGLES2_Cocoa.cpp` | [CGraphics_OGLES2_Cocoa](gunbros_3.6.0_IOS.c#L381982)；[platform::graphics::CGraphics_OGLES](gunbros_3.6.0_IOS.c#L382256)；[platform::systems::CEvent](gunbros_3.6.0_IOS.c#L382346) |
+| `CGraphics_OGLES_Cocoa.cpp` | [CGraphics_OGLES_Cocoa](gunbros_3.6.0_IOS.c#L382381) |
+| `CGraphics_OGLES_Cocoa_mm.mm` | 未确认类名；函数入口 [CGraphics_OGLES_Cocoa_GetEAGLVersion](gunbros_3.6.0_IOS.c#L382671) |
+| `CGraphics_OGLES_EAGL.cpp` | [CGraphics_OGLES_EAGL](gunbros_3.6.0_IOS.c#L301721) |
+| `CGraphics_OGLES_EAGL_mm.mm` | 未确认类名；函数入口 [CGraphics_OGLES_EAGL_CreateContext](gunbros_3.6.0_IOS.c#L301650) |
+| `CGyroscope_Cocoa_mm.mm` | [CGyroscope_Cocoa](gunbros_3.6.0_IOS.c#L302359) |
+| `CLicenseMgr_Cocoa.cpp` | [CLicenseMgr_Cocoa](gunbros_3.6.0_IOS.c#L302545)；[platform::components::ICLicenseMgr](gunbros_3.6.0_IOS.c#L302524) |
+| `CMediaPlayer_Cocoa.cpp` | [BackgroundTrackMgr](gunbros_3.6.0_IOS.c#L304621)；[CALPoolObject](gunbros_3.6.0_IOS.c#L304335)；[CMediaPlayer_Cocoa](gunbros_3.6.0_IOS.c#L302659)；[CSoundEvent_Cocoa](gunbros_3.6.0_IOS.c#L302606)；[CVibrationEvent_Cocoa](gunbros_3.6.0_IOS.c#L302620)；[platform::components::CSoundEvent](gunbros_3.6.0_IOS.c#L304561)；[platform::components::CVibrationEvent](gunbros_3.6.0_IOS.c#L304409)；[platform::components::ICMediaPlayer](gunbros_3.6.0_IOS.c#L304549) |
+| `CMoviePlayer_Cocoa_mm.mm` | [CMovieEvent_Cocoa](gunbros_3.6.0_IOS.c#L305003)；[CMoviePlayer_Cocoa](gunbros_3.6.0_IOS.c#L305015)；[GluMovieController](gunbros_3.6.0_IOS.c#L304935)；[OverlayView](gunbros_3.6.0_IOS.c#L305027)；[platform::components::CMovieEvent](gunbros_3.6.0_IOS.c#L304919)；[platform::components::ICMoviePlayer](gunbros_3.6.0_IOS.c#L305666) |
+| `CRenderSurface_OGLES_Window_Cocoa.cpp` | [CRenderSurface_OGLES_Window_Cocoa](gunbros_3.6.0_IOS.c#L306138)；[platform::graphics::CRenderSurface_OGLES_Texture](gunbros_3.6.0_IOS.c#L306717)；`platform::graphics::CRenderSurface_OGLES_Texture_FBO`（仅符号 `0x0021B9C4`）；`platform::graphics::CRenderSurface_SW`（仅符号 `0x0021B9B8`）；[platform::graphics::ICRenderSurface](gunbros_3.6.0_IOS.c#L306711) |
+| `CSocket_Cocoa.cpp` | [CSocket_Cocoa](gunbros_3.6.0_IOS.c#L306736)；[platform::network::ICSocket](gunbros_3.6.0_IOS.c#L306724) |
+| `CStdUtil_Cocoa.cpp` | [CStdUtil_Cocoa](gunbros_3.6.0_IOS.c#L307452) |
+| `NPMalloc.cpp` | 未确认类名；函数入口 [np_malloc](gunbros_3.6.0_IOS.c#L307595) |
+| `NPMem.cpp` | 未确认类名；函数入口 [np_memset](gunbros_3.6.0_IOS.c#L307613) |
+| `main_mm.mm` | 未确认类名；函数入口 [main](gunbros_3.6.0_IOS.c#L307580) |
+
+## `platform/shared/components/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CAggregateResource.cpp` | [platform::components::CAggregateResource](gunbros_3.6.0_IOS.c#L355548) |
+| `CArrayInputStream.cpp` | [platform::components::CArrayInputStream](gunbros_3.6.0_IOS.c#L355858) |
+| `CArrayOutputStream.cpp` | [platform::components::CArrayOutputStream](gunbros_3.6.0_IOS.c#L356049) |
+| `CBigFileReader.cpp` | [platform::components::CBigFileReader](gunbros_3.6.0_IOS.c#L356201) |
+| `CBinary.cpp` | [platform::components::CBinary](gunbros_3.6.0_IOS.c#L356953) |
+| `CColor.cpp` | [platform::components::CColor](gunbros_3.6.0_IOS.c#L357300)；[platform::components::Color_ARGB_fixed](gunbros_3.6.0_IOS.c#L357058)；[platform::components::Color_Palette](gunbros_3.6.0_IOS.c#L357672) |
+| `CCrc32.cpp` | [platform::components::CCrc32](gunbros_3.6.0_IOS.c#L357828) |
+| `CExecutable.cpp` | [platform::components::CExecutable](gunbros_3.6.0_IOS.c#L357939) |
+| `CFileInputStream.cpp` | [platform::components::CFileInputStream](gunbros_3.6.0_IOS.c#L357989) |
+| `CFileOutputStream.cpp` | [platform::components::CFileOutputStream](gunbros_3.6.0_IOS.c#L358300) |
+| `CFileUtil.cpp` | [platform::components::CFileUtil](gunbros_3.6.0_IOS.c#L358433) |
+| `CHash.cpp` | [platform::components::CHash](gunbros_3.6.0_IOS.c#L359126) |
+| `CInputStream.cpp` | [platform::components::CInputStream](gunbros_3.6.0_IOS.c#L359309) |
+| `CKeysetResource.cpp` | [platform::components::CKeysetResource](gunbros_3.6.0_IOS.c#L359730) |
+| `CMedia.cpp` | [platform::components::CMedia](gunbros_3.6.0_IOS.c#L359843) |
+| `CMediaPlayer.cpp` | [platform::components::CMediaEvent](gunbros_3.6.0_IOS.c#L360112)；[platform::components::CMediaPlayer](gunbros_3.6.0_IOS.c#L360558)；[platform::components::CMediaPlayer3d](gunbros_3.6.0_IOS.c#L361225)；[platform::components::CSoundEvent](gunbros_3.6.0_IOS.c#L360119)；[platform::components::CSoundEvent3d](gunbros_3.6.0_IOS.c#L360375)；[platform::components::CSoundEventPCM](gunbros_3.6.0_IOS.c#L360214)；[platform::components::CSoundEventStreamingADPCM](gunbros_3.6.0_IOS.c#L361451)；[platform::components::CVibrationEvent](gunbros_3.6.0_IOS.c#L363342) |
+| `CMoviePlayer.cpp` | [platform::components::CMovieEvent](gunbros_3.6.0_IOS.c#L363675)；[platform::components::CMoviePlayer](gunbros_3.6.0_IOS.c#L363824) |
+| `COutputStream.cpp` | [platform::components::COutputStream](gunbros_3.6.0_IOS.c#L364305) |
+| `CPool.cpp` | [platform::components::CPool](gunbros_3.6.0_IOS.c#L364487) |
+| `CProperties.cpp` | [platform::components::CProperties](gunbros_3.6.0_IOS.c#L364725) |
+| `CStrChar.cpp` | [platform::components::CStrChar](gunbros_3.6.0_IOS.c#L365524) |
+| `CStrWChar.cpp` | [platform::components::CStrWChar](gunbros_3.6.0_IOS.c#L365890) |
+| `CStrWCharBuffer.cpp` | [platform::components::CStrWCharBuffer](gunbros_3.6.0_IOS.c#L366528) |
+| `CTypedVariableTable.cpp` | [platform::components::CTypedVariableTable](gunbros_3.6.0_IOS.c#L366658)；[platform::components::CTypedVariableTable::Entry](gunbros_3.6.0_IOS.c#L368072)；[platform::components::CTypedVariableTable::Stack](gunbros_3.6.0_IOS.c#L368150) |
+| `CVorbis.cpp` | 未确认类名；函数入口 [platform::components::DecodeVorbisBitstream](gunbros_3.6.0_IOS.c#L368303) |
+| `CZipInputStream.cpp` | [platform::components::CZipInputStream](gunbros_3.6.0_IOS.c#L368318) |
+
+## `platform/shared/core/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CGenUtil.cpp` | [platform::core::CGenUtil](gunbros_3.6.0_IOS.c#L369793) |
+| `CLinkList.cpp` | [platform::core::CLinkList](gunbros_3.6.0_IOS.c#L369926)；[platform::core::CLinkListNode](gunbros_3.6.0_IOS.c#L369887) |
+| `CRandGen.cpp` | [platform::core::CRandGen](gunbros_3.6.0_IOS.c#L370208) |
+| `CStringToKey.cpp` | 未确认类名；函数入口 [platform::core::CStringToKey](gunbros_3.6.0_IOS.c#L370405) |
+| `CSystemEventQueue.cpp` | [platform::core::CSystemEventQueue](gunbros_3.6.0_IOS.c#L370521) |
+| `CUtf.cpp` | [platform::core::CUtf](gunbros_3.6.0_IOS.c#L370654) |
+| `bvsprintf.cpp` | 未确认类名；函数入口 [bvsprintf_s](gunbros_3.6.0_IOS.c#L368708) |
+
+## `platform/shared/framework/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CApp.cpp` | [platform::framework::CApp](gunbros_3.6.0_IOS.c#L374779)；[platform::framework::CAppConfig](gunbros_3.6.0_IOS.c#L375159) |
+| `CAppExecutor.cpp` | [platform::framework::CAppExecutor](gunbros_3.6.0_IOS.c#L307674) |
+
+## `platform/shared/graphics/2d/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CFont.cpp` | [platform::graphics::CFont](gunbros_3.6.0_IOS.c#L351738)；[platform::graphics::ICFont](gunbros_3.6.0_IOS.c#L351777) |
+| `CGraphics2d_OGLES.cpp` | [platform::graphics::CGraphics2d_OGLES](gunbros_3.6.0_IOS.c#L375719)；[platform::graphics::CGraphics2d_OGLES::Matrix](gunbros_3.6.0_IOS.c#L381755)；[platform::graphics::ICGraphics2d](gunbros_3.6.0_IOS.c#L381738) |
+| `CTextParser.cpp` | 未确认类名；仅 N_SO 文件记录；未找到具名 N_FUN，类名未知。 |
+
+## `platform/shared/graphics/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CBlit.cpp` | [platform::graphics::CBlit](gunbros_3.6.0_IOS.c#L331365) |
+| `CBlitUtil.cpp` | [platform::graphics::CBlitUtil](gunbros_3.6.0_IOS.c#L336166) |
+| `CDIB.cpp` | [platform::graphics::CDIB](gunbros_3.6.0_IOS.c#L336372) |
+| `CDisplayProgram.cpp` | [platform::graphics::CDisplayProgram](gunbros_3.6.0_IOS.c#L336998)；[platform::graphics::CDisplayProgram::Instruction::Opcode](gunbros_3.6.0_IOS.c#L338816)；[platform::graphics::ICDisplayProgram](gunbros_3.6.0_IOS.c#L339841)；[platform::graphics::ICDisplayProgram::Mode](gunbros_3.6.0_IOS.c#L336690) |
+| `CDisplayProgram_OGLES.cpp` | [platform::graphics::CDisplayProgram_OGLES](gunbros_3.6.0_IOS.c#L336568) |
+| `CGraphics.cpp` | [platform::graphics::CGraphics](gunbros_3.6.0_IOS.c#L339875)；[platform::graphics::ICGraphics](gunbros_3.6.0_IOS.c#L340776)；[platform::graphics::ICGraphicsAbstract](gunbros_3.6.0_IOS.c#L340759)；[platform::graphics::ICGraphicsResource](gunbros_3.6.0_IOS.c#L339860) |
+| `CGraphicsAbstractionManager.cpp` | [platform::graphics::CGraphicsAbstractionManager](gunbros_3.6.0_IOS.c#L340882)；[platform::graphics::ICGraphics](gunbros_3.6.0_IOS.c#L340818)；[platform::graphics::ICGraphics2d](gunbros_3.6.0_IOS.c#L341016)；[platform::graphics::ICGraphicsAbstractionManager](gunbros_3.6.0_IOS.c#L340847) |
+| `CGraphics_OGLES.cpp` | [platform::graphics::CGraphics_OGLES](gunbros_3.6.0_IOS.c#L382906) |
+| `CGraphics_OGLES2.cpp` | [platform::graphics::CGraphics_OGLES2](gunbros_3.6.0_IOS.c#L388194) |
+| `CIndexBuffer.cpp` | [platform::graphics::CIndexBuffer](gunbros_3.6.0_IOS.c#L341063) |
+| `CPNG.cpp` | [platform::graphics::CPNG](gunbros_3.6.0_IOS.c#L341313) |
+| `CRasterizerState.cpp` | [platform::graphics::CRasterizerState_v1](gunbros_3.6.0_IOS.c#L342526)；[platform::graphics::ICRasterizerState](gunbros_3.6.0_IOS.c#L342881) |
+| `CRasterizerState_OGLES.cpp` | [platform::graphics::CRasterizerState_v1_OGLES](gunbros_3.6.0_IOS.c#L341376) |
+| `CRenderSurface.cpp` | [platform::graphics::CRenderSurface](gunbros_3.6.0_IOS.c#L345817)；[platform::graphics::ICRenderSurface](gunbros_3.6.0_IOS.c#L346800) |
+| `CRenderSurfaceBuffer.cpp` | [platform::graphics::CRSBFrag](gunbros_3.6.0_IOS.c#L350121)；[platform::graphics::CRenderSurfaceBuffer](gunbros_3.6.0_IOS.c#L346819)；[platform::graphics::CRenderSurfaceBufferMipmap](gunbros_3.6.0_IOS.c#L346977) |
+| `CRenderSurface_OGLES2_Texture_FBO.cpp` | [platform::graphics::CRenderSurface_OGLES2_Texture_FBO](gunbros_3.6.0_IOS.c#L390004) |
+| `CRenderSurface_OGLES_Targetable.cpp` | [platform::graphics::CRenderSurface_OGLES_Targetable](gunbros_3.6.0_IOS.c#L342953) |
+| `CRenderSurface_OGLES_Texture.cpp` | [platform::graphics::CRenderSurface_OGLES](gunbros_3.6.0_IOS.c#L345354)；[platform::graphics::CRenderSurface_OGLES_Texture](gunbros_3.6.0_IOS.c#L343585)；[platform::graphics::CRenderSurface_SW](gunbros_3.6.0_IOS.c#L345347) |
+| `CRenderSurface_OGLES_Texture_FBO.cpp` | [platform::graphics::CRenderSurface](gunbros_3.6.0_IOS.c#L343559)；[platform::graphics::CRenderSurface_OGLES_Texture_FBO](gunbros_3.6.0_IOS.c#L343265) |
+| `CRenderSurface_SW.cpp` | [platform::graphics::CRenderSurface_SW](gunbros_3.6.0_IOS.c#L345373) |
+| `CShader.cpp` | [platform::graphics::CShader](gunbros_3.6.0_IOS.c#L350320)；[platform::graphics::ICShader](gunbros_3.6.0_IOS.c#L350542) |
+| `CShaderProgram.cpp` | [platform::graphics::CShaderProgram](gunbros_3.6.0_IOS.c#L391161)；[platform::graphics::ICShaderProgram](gunbros_3.6.0_IOS.c#L392232) |
+| `CShaderProgram_OGLES.cpp` | [platform::graphics::CShaderProgram_OGLES](gunbros_3.6.0_IOS.c#L350559) |
+| `CShaderProgram_OGLES2.cpp` | [platform::graphics::CShaderProgram_OGLES2](gunbros_3.6.0_IOS.c#L390348) |
+| `CShader_OGLES.cpp` | [platform::graphics::CShader_OGLES](gunbros_3.6.0_IOS.c#L350237) |
+| `CShader_OGLES2.cpp` | [platform::graphics::CShader_OGLES2](gunbros_3.6.0_IOS.c#L390157) |
+| `CVertex.cpp` | [platform::graphics::CVertex::Attribute::Id](gunbros_3.6.0_IOS.c#L350969) |
+| `CVertexBuffer.cpp` | [platform::graphics::CVertex::Decl](gunbros_3.6.0_IOS.c#L351650)；[platform::graphics::CVertexBuffer](gunbros_3.6.0_IOS.c#L351168) |
+
+## `platform/shared/math/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CMath.cpp` | 未确认类名；仅 N_SO 文件记录；未找到具名 N_FUN，类名未知。 |
+| `CMathFixed.cpp` | [platform::math::CMathFixed](gunbros_3.6.0_IOS.c#L370850) |
+| `CMatrix2d.cpp` | [platform::math::CMatrix2d](gunbros_3.6.0_IOS.c#L370882) |
+| `CMatrix2dx.cpp` | [platform::math::CMatrix2dx](gunbros_3.6.0_IOS.c#L370891) |
+| `CMatrix4d.cpp` | [platform::math::CMatrix4d](gunbros_3.6.0_IOS.c#L370900) |
+| `CMatrix4dh.cpp` | [platform::math::CMatrix4dh](gunbros_3.6.0_IOS.c#L371334) |
+| `CVector3d.cpp` | [platform::math::CVector3d](gunbros_3.6.0_IOS.c#L371823) |
+
+## `platform/shared/network/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CHttpDataChunk.cpp` | [platform::network::CHttpDataChunk](gunbros_3.6.0_IOS.c#L325670) |
+| `CHttpTransport.cpp` | [platform::network::CHttpTransport](gunbros_3.6.0_IOS.c#L325720)；[platform::network::HttpRequestInfo](gunbros_3.6.0_IOS.c#L327230) |
+| `CWUtil.cpp` | [platform::network::CWUtil](gunbros_3.6.0_IOS.c#L327246) |
+
+## `platform/shared/systems/src/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CEvent.cpp` | [platform::systems::CEvent](gunbros_3.6.0_IOS.c#L371851) |
+| `CEventListener.cpp` | [platform::systems::CEventListener](gunbros_3.6.0_IOS.c#L372016)；[platform::systems::CSystem](gunbros_3.6.0_IOS.c#L372238) |
+| `CExecutableRegistry.cpp` | [platform::systems::CExecutableRegistry](gunbros_3.6.0_IOS.c#L372253) |
+| `CMessage.cpp` | [platform::systems::CMessage](gunbros_3.6.0_IOS.c#L372343) |
+| `CRegistry.cpp` | [platform::systems::CRegistry](gunbros_3.6.0_IOS.c#L372410) |
+| `CRegistryElement.cpp` | [platform::systems::CRegistryElement](gunbros_3.6.0_IOS.c#L372675) |
+| `CResource.cpp` | [platform::systems::CResource](gunbros_3.6.0_IOS.c#L372714) |
+| `CResourceBigFile.cpp` | [platform::systems::CResourceBigFile](gunbros_3.6.0_IOS.c#L372780) |
+| `CResourceBinary.cpp` | [platform::systems::CResourceBinary](gunbros_3.6.0_IOS.c#L372918) |
+| `CResourceDIB.cpp` | [platform::systems::CResourceDIB](gunbros_3.6.0_IOS.c#L373053) |
+| `CResourceFactory.cpp` | [platform::systems::CResourceFactory](gunbros_3.6.0_IOS.c#L373180) |
+| `CResourceFont.cpp` | [platform::systems::CResourceFont](gunbros_3.6.0_IOS.c#L373518) |
+| `CResourceKeyset.cpp` | [platform::systems::CResourceKeyset](gunbros_3.6.0_IOS.c#L373651) |
+| `CResourceManager.cpp` | [platform::systems::CResourceManagerLegacy](gunbros_3.6.0_IOS.c#L375298)；[platform::systems::ICResourceManager](gunbros_3.6.0_IOS.c#L375393) |
+| `CResourceMedia.cpp` | [platform::systems::CResourceMedia](gunbros_3.6.0_IOS.c#L373786) |
+| `CResourcePalette.cpp` | [platform::systems::CResourcePalette](gunbros_3.6.0_IOS.c#L373922) |
+| `CResourceRenderSurface.cpp` | [platform::systems::CResourceRenderSurface](gunbros_3.6.0_IOS.c#L374057) |
+| `CResourceShader.cpp` | [platform::systems::CResourceShader](gunbros_3.6.0_IOS.c#L374300) |
+| `CResourceShaderProgram.cpp` | [platform::systems::CResourceShaderProgram](gunbros_3.6.0_IOS.c#L374455) |
+| `CResourceStrWChar.cpp` | [platform::systems::CResourceStrWChar](gunbros_3.6.0_IOS.c#L374645) |
+
+## `tools/gServe/src/storeOveride/`
+
+| 文件名 | 类名／类型作用域 |
+|---|---|
+| `CNGSJSONData.cpp` | [CNGSJSONData](gunbros_3.6.0_IOS.c#L295420)；[CNGSJSONDataRequestFunctor](gunbros_3.6.0_IOS.c#L295399) |
+
+## 核对边界
+
+`N_SO` 恢复的是编译单元，不是原始头文件树。表中链接行号仅属于当前反编译 `.c`，不是原工程 `.cpp/.mm` 行号。无独立函数体的条目保留未知，不能据此断言没有类或属于废案。
+
+广告排除范围包括 `src/PlayHaven/`、`src/adManager/`、AdColony、Tapjoy、FeaturedApp 接入；`CEventLog.cpp/.mm` 为遥测。第三方 JPEG、PNG、zlib、ASIHTTPRequest 等实现不列出，Glu 自己的资源/解码接口仍保留。
+
+容易混淆的边界已经核对消费代码：
+
+- `menuIncentives.cpp` 的 [Init](gunbros_3.6.0_IOS.c#L293181) 绑定 AdColony/Tapjoy 广告奖励；`offerManager.cpp` 的 [推广状态](gunbros_3.6.0_IOS.c#L222321) 混有邀友计数，本次按推广模块排除。
+- `pushNotificationManager.cpp` 的 [Register](gunbros_3.6.0_IOS.c#L216490) 为推送接入，排除；`LocalNotificationMgr.cpp` 的 [HandleInactivityBonus](gunbros_3.6.0_IOS.c#L232623) 直接发放回归奖励，保留。
+- `CPackageOfferMgr.cpp` 的 [AddItem](gunbros_3.6.0_IOS.c#L396370) 保存礼包购买条目，保留；`CNGSJSONData.cpp` 被 [CStoreItemOverride](gunbros_3.6.0_IOS.c#L232981) 消费，作为商品覆盖实现保留。Glu 的通用账户、跨 SKU 奖励协议、消息和服务 SDK 不展开，不将其误称为第三方广告。
+
+核对统计：554 个文件—类型关联可定位反编译函数体；4 个关联仅有主程序函数符号。重复出现的类保留在每个实际编译单元下。
+
+交叉检查：按上述范围筛选后，ARMv6 与 ARMv7 的 N_SO 文件集合均为 342 个且完全一致；文件行无重复，全部表内函数链接已按地址和函数签名核对。
+
+输入 SHA-256（用于识别本表对应的二进制与反编译版本）：
+
+- `gunbros`：`987d78475fc2261c066884f91dccde18a4c3d2f5d8fe403e701f84687178a6cd`
+- `_IDA_OUT/gunbros_3.6.0_IOS.c`：`f4876601b73ad8a41506544939174d2de0b585d64e1894cba37e352f7c5560f1`

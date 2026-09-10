@@ -305,7 +305,7 @@ void CombatScene::Reset() {
     }
     m_playerForceMs = 0;
     if (m_brotherModel != nullptr) {
-        m_brother->Reset(playerX, playerY);
+        m_brother->Reset(playerX, playerY, facing);
         if (EquipPlayerWeapon(m_tables, m_brotherModel->weapon->playerScript,
             m_brotherModel->weapon->data, "brother reset", *m_brotherModel)) {
             CreatePlayerBuffers(*m_brotherModel, m_program);
@@ -463,7 +463,7 @@ bool CombatScene::SwapBrotherWeapon() {
     return true;
 }
 
-void CombatScene::ResetBrotherPosition(float x, float y) {
+void CombatScene::ResetBrotherPosition(float x, float y, float facingDegrees) {
     if (m_brother == nullptr) { return; }
     // The host used to reset both actors onto the same point. Pick an open
     // nearby position through the actual collision path, including on restart.
@@ -474,11 +474,11 @@ void CombatScene::ResetBrotherPosition(float x, float y) {
         const float targetX = x + direction[0] * distance;
         const float targetY = y + direction[1] * distance;
         if (!CanWalkTo(x, y, targetX, targetY)) { continue; }
-        m_brother->Reset(targetX, targetY);
+        m_brother->Reset(targetX, targetY, facingDegrees);
         return;
     }
     // Extremely tight authored spawn areas still have a deterministic fallback.
-    m_brother->Reset(x, y);
+    m_brother->Reset(x, y, facingDegrees);
 }
 
 void CombatScene::BrotherMatrix(float *matrix) const {

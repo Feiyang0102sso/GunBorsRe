@@ -22,15 +22,26 @@ bool HostSettings::Load(const std::filesystem::path &path) {
         std::istringstream fields(line);
         std::string name;
         int value = 0;
-        if (!(fields >> name >> value) || (value != 0 && value != 1)) {
+        if (!(fields >> name >> value)) {
+            std::printf("[config] not a setting: %s\n", line.c_str());
+            return false;
+        }
+        // EffectsVolume runs 0..10; every other setting is a flag.
+        const bool ranged = name == "EffectsVolume";
+        if (!ranged && value != 0 && value != 1) {
             std::printf("[config] invalid boolean: %s\n", line.c_str());
+            return false;
+        }
+        if (ranged && (value < 0 || value > 10)) {
+            std::printf("[config] %s must be 0..10\n", name.c_str());
             return false;
         }
         if (name == "IsConnected") { isConnected = value == 1; }
         else if (name == "DebugMode") { debugMode = value == 1; }
+        else if (name == "EffectsVolume") { effectsVolume = value; }
         else { std::printf("[config] unknown setting: %s\n", name.c_str()); }
     }
-    std::printf("[config] connected=%d debug=%d\n", isConnected, debugMode);
+    std::printf("[config] connected=%d debug=%d effects-volume=%d\n", isConnected, debugMode, effectsVolume);
     return !input.bad();
 }
 

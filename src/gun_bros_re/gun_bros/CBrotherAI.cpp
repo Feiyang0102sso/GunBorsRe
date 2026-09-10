@@ -26,12 +26,13 @@ int CBrotherAI::Random(int minimum, int maximum) {
     return distribution(m_random);
 }
 
-void CBrotherAI::Reset(float startX, float startY) {
+void CBrotherAI::Reset(float startX, float startY, float startFacing) {
     x = startX;
     y = startY;
     previousX = x;
     previousY = y;
-    facing = 0;
+    // CBrother::Spawn :135887 gives both brothers the map's spawn angle.
+    facing = startFacing;
     vitals.Reset();
     m_target = 0;
     m_findDelay = 0;

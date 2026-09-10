@@ -2386,6 +2386,10 @@ void LoadPlacedPlayers(CResTOCManager &tocManager, const CShaderProgram &program
             PlacedPlayer placed;
             placed.x = static_cast<float>(objects[i].x);
             placed.y = static_cast<float>(objects[i].y);
+            // CBrother::Spawn :135887 stores the PLAYER object's extra uint16 in
+            // the angle member +1984. Maps without that field leave the original
+            // reading uninitialised memory; this port keeps 0.
+            placed.facingDegrees = static_cast<float>(objects[i].playerSpawnFacing);
             placed.model.reset(new PlayerModel());
             if (!BuildPlayerBody(tables, loaded.playerTemplate->moveSet,
                                  *placed.model) ||
@@ -2397,9 +2401,10 @@ void LoadPlacedPlayers(CResTOCManager &tocManager, const CShaderProgram &program
 
             SelectPlayerMoveSlot(*placed.model, 0, false);
             PosePlayer(*placed.model);
-            std::printf("[m3] %s at %d %d -- scale %.0f\n",
+            std::printf("[m3] %s at %d %d -- scale %.0f facing %.0f authored=%d\n",
                         loaded.playerTemplate->owner.c_str(), objects[i].x,
-                        objects[i].y, loaded.playerTemplate->gameScale);
+                        objects[i].y, loaded.playerTemplate->gameScale,
+                        placed.facingDegrees, objects[i].hasPlayerSpawnFacing);
             loaded.players.push_back(std::move(placed));
         }
     }
@@ -3448,11 +3453,21 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     session.SetOriginalHud(&survivalHud);
     const float startX = loaded.players[0].x;
     const float startY = loaded.players[0].y;
+    // The map PLAYER object's spawn angle; CBrother::Spawn :135887 writes the
+    // same value to both brothers.
+    const float startFacing = loaded.players[0].facingDegrees;
     session.SetStartWave(static_cast<int>(startWave));
+    // The original seeds its one CRandGen from the clock (:370383), so a level
+    // script's rolls differ every session. Real play does the same; research
+    // runs keep the fixed default stream so their results stay comparable.
+    if (!check && capturePath.empty()) {
+        session.SetScriptRandomSeed(static_cast<std::uint32_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    }
     const bool tutorial = gameContext != nullptr && gameContext->tutorial;
     session.GetLevel().EnableTutorial(tutorial);
     scene.SetMap(loaded.map, loaded.collisionScene, loaded.weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
-    session.Restart(startX, startY);
+    session.Restart(startX, startY, startFacing);
     std::uint64_t accountedXplodium = 0;
     int lastSavedWave = session.GetLevel().GetWave();
     bool savedDeath = false;
@@ -3465,7 +3480,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     MapPropWorld props(loaded, scene, session.GetLevel(), effects);
     session.SetProps(&props);
     scene.SetProps(&props);
-    session.Restart(startX, startY);
+    session.Restart(startX, startY, startFacing);
     loading.Finish();
     if (!loading.IsValid()) { return 1; }
     if (loading.Cancelled()) { return 0; }
@@ -3473,7 +3488,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         // Real BIG instances and the same clocks as RunSurvival; no source save.
         vitals.invincible = true;
         session.SetOriginalHud(&survivalHud);
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
         survivalHud.OnOriginalWaveClear(session.GetLevel().GetWave(), true, 100, false);
         const float beforeX = scene.playerX;
@@ -3599,6 +3614,32 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (damage <= 0) { ++checkFailures; }
             std::printf("[feedback-piercing] bullet=%08x:%u front-pending=%d back-damage=%.2f failures=%u\n",
                 round.packHash, round.localIndex, front->model.enemy.combat.collisionPending, damage, checkFailures);
+
+            // CBullet::CanBeCulled :60583 retires a projectile that has left
+            // the camera rectangle travelling away from it, and keeps one that
+            // is still heading towards it. Same real BULLET template, same
+            // update path; only the camera rectangle is supplied here.
+            WeaponEffects cullEffects(toc, tables, program);
+            CombatScene cullScene(tables, program, enemies, player, vitals, cullEffects, loaded.playerTemplate->gameScale);
+            cullScene.Reset();
+            cullScene.SetViewCenter(600, 450);
+            cullScene.SetViewSize(200, 200);  // y in [350, 550]
+            float cullMatrix[16];
+            cullScene.PlayerMatrix(cullMatrix);
+            // Both start just below the view. One travels away from it, one
+            // towards it; the outbound one is the only one culled at once.
+            if (cullEffects.SpawnProjectile(round, 600, 560, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            if (cullEffects.SpawnProjectile(round, 600, 560, 0, -90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            // 160ms: the outbound one is well clear of the near edge and gone,
+            // the inbound one has entered the view and is still travelling.
+            for (unsigned tick = 0; tick < 10; ++tick) { cullEffects.Update(player, cullMatrix, 0, 16); }
+            const std::size_t afterOutbound = cullEffects.GetBulletCount();
+            // Out the far side, well before the 3000ms expiry could retire it.
+            for (unsigned tick = 0; tick < 30; ++tick) { cullEffects.Update(player, cullMatrix, 0, 16); }
+            const std::size_t afterCrossing = cullEffects.GetBulletCount();
+            if (afterOutbound != 1 || afterCrossing != 0) { ++checkFailures; }
+            std::printf("[feedback-cull] leaving-culled inbound-alive=%zu after-far-edge=%zu age=640ms failures=%u\n",
+                afterOutbound, afterCrossing, checkFailures);
         }
         // Regression: the native bar size reads LEVEL variable 4, not the
         // revolution index. Exercise actual BIG enemies and the production draw data.
@@ -3665,6 +3706,14 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         // same CombatScene/WeaponEffects path used by ordinary combat.
         CAudioPlayer backendAudio;
         std::vector<std::uint64_t> deathWavs;
+        // A real SOUNDEFFECT reference, for the one-voice-per-WAV check below.
+        GameObjectRef effectSound;
+        // Effects headroom: the configured 0..10 dial reaches the mix as
+        // dial x 0.1, the same scale the original's voices use.
+        const float configuredGain = GameHostSettings().effectsVolume * 0.1f;
+        if (std::abs(CAudioPlayer::GetEffectsGain() - configuredGain) > 0.001f) { ++checkFailures; }
+        std::printf("[audio-health-check] effects-dial=%d gain=%.2f music-gain=0.30 failures=%u\n",
+            GameHostSettings().effectsVolume, CAudioPlayer::GetEffectsGain(), checkFailures);
         for (unsigned kinds = 1; kinds <= 2; ++kinds) {
             std::vector<GameObjectRef> batchDeathSounds;
             WeaponEffects deathEffects(toc, tables, program);
@@ -3706,6 +3755,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                             const auto key = (std::uint64_t(wav.packHash) << 32) | wav.assetId;
                             if (!backendAudio.Load(key, bytes)) { ++checkFailures; continue; }
                             deathWavs.push_back(key);
+                            effectSound = action.resource;
                             std::printf("[audio-health-check] death-wav=%08x:%d enemy=%s\n", wav.packHash, wav.assetId, enemies[index].owner.c_str());
                         }
                     }
@@ -3719,9 +3769,65 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             // Repeat the actual authored sound across a production tick
             // boundary. Do not assume a random death move always cues at t=0.
             deathScene.Update(16, 0, 0, false);
+            const auto beforeRepeat = deathEffects.GetSoundCueCount();
             for (const auto &sound : batchDeathSounds) { deathEffects.PlayMoveSound(sound); }
-            if (deathEffects.GetSoundCueCount() != sounds + kinds) { ++checkFailures; }
-            std::printf("[audio-health-check] next-tick kinds=%u new-sounds=%zu failures=%u\n", kinds, deathEffects.GetSoundCueCount() - sounds, checkFailures);
+            // Host audio adaptation: the copy already playing still covers it.
+            if (deathEffects.GetSoundCueCount() != beforeRepeat) { ++checkFailures; }
+            std::printf("[audio-health-check] next-tick kinds=%u new-sounds=%zu failures=%u\n",
+                kinds, deathEffects.GetSoundCueCount() - beforeRepeat, checkFailures);
+            // ... and is audible again once that copy has finished. Its own
+            // scene has no actors, so nothing else can cue a sound meanwhile.
+            WeaponEffects windowEffects(toc, tables, program);
+            CombatScene windowScene(tables, program, enemies, player, vitals, windowEffects, loaded.playerTemplate->gameScale);
+            windowScene.Reset();
+            const GameObjectRef &repeated = batchDeathSounds.front();
+            windowEffects.PlayMoveSound(repeated);
+            const auto opened = windowEffects.GetSoundCueCount();
+            windowScene.Update(16, 0, 0, false);
+            windowEffects.PlayMoveSound(repeated);
+            const auto covered = windowEffects.GetSoundCueCount();
+            for (unsigned tick = 0; tick < 250; ++tick) { windowScene.Update(16, 0, 0, false); }
+            windowEffects.PlayMoveSound(repeated);
+            const auto reopened = windowEffects.GetSoundCueCount();
+            if (opened != 1 || covered != 1 || reopened != 2) { ++checkFailures; }
+            std::printf("[audio-health-check] move-window wav=%08x:%u first=%zu covered=%zu after-4s=%zu failures=%u\n",
+                repeated.packHash, repeated.localIndex, opened, covered, reopened, checkFailures);
+            // Gun-style cues keep their rate but never stack: every repeat
+            // restarts the one voice that WAV is allowed, so a fast weapon
+            // stays at the level its WAV was authored at.
+            if (effectSound.IsNull()) {
+                // Any real SOUNDEFFECT entry will do; take the first that
+                // resolves to a WAV rather than inventing a resource.
+                const auto corePack = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
+                const unsigned soundCount = tables.GetObjectPack(toc.GetCorePackIndex()).GetObjectCount(GameSection::SoundEffect);
+                for (unsigned index = 0; index < soundCount && effectSound.IsNull(); ++index) {
+                    std::vector<std::uint8_t> bytes;
+                    if (!tables.ReadSectionResource(corePack, GameSection::SoundEffect, index, bytes)) { continue; }
+                    CArrayInputStream input(bytes);
+                    CGameAssetRef wav;
+                    wav.Init(input);
+                    if (input.Overran() || wav.assetId < 0) { continue; }
+                    if (!tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, bytes)) { continue; }
+                    effectSound.packHash = corePack;
+                    effectSound.localIndex = static_cast<std::uint8_t>(index);
+                }
+            }
+            if (!effectSound.IsNull()) {
+                GunCue sound;
+                sound.kind = GunCue::Kind::Sound;
+                sound.resource = effectSound;
+                const auto before = windowEffects.GetSoundCueCount();
+                unsigned peakVoices = 0;
+                for (unsigned tick = 0; tick < 5; ++tick) {
+                    windowEffects.Emit(sound, 600, 450, 0, 0, kPlayerCombatId);
+                    peakVoices = std::max(peakVoices, windowEffects.GetVoiceCount());
+                    windowScene.Update(16, 0, 0, false);
+                }
+                const auto retriggers = windowEffects.GetSoundCueCount() - before;
+                if (retriggers != 5 || peakVoices > 1) { ++checkFailures; }
+                std::printf("[audio-health-check] one-voice sound=%08x:%u retriggers=%zu peak-voices=%u failures=%u\n",
+                    effectSound.packHash, effectSound.localIndex, retriggers, peakVoices, checkFailures);
+            }
         }
         if (deathWavs.size() != 2 || deathWavs[0] == deathWavs[1]) { ++checkFailures; }
         else { checkFailures += backendAudio.CheckSilentPlayback(deathWavs[0], deathWavs[1]); }
@@ -3729,7 +3835,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         std::printf("[feedback-hit] simultaneous-templates=%u failures=%u\n", simultaneousHits, checkFailures);
         std::printf("[feedback-check] failures=%u\n", checkFailures);
         // Capture through the production map/HUD draw, centred on the spire.
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
         for (const PlacedProp &prop : loaded.props) {
             if (!prop.active || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
@@ -3765,7 +3871,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     }
     if (check) { checkFailures += session.CheckLevelSounds(); }
     if (check) { checkFailures += props.CheckEntryRoutes(); }
-    if (check) { checkFailures += session.CheckTriggerRoutes(startX, startY); }
+    if (check) { checkFailures += session.CheckTriggerRoutes(startX, startY, startFacing); }
     if (check) {
         // Inspect the actual placed resources, after LEVEL messages and Bind.
         for (const PlacedProp &prop : loaded.props) {
@@ -3896,7 +4002,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         GameObjectRef consumable;
         consumable.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
         for (unsigned index = 13; index <= 15; ++index) {
-            session.Restart(startX, startY);
+            session.Restart(startX, startY, startFacing);
             consumable.localIndex = static_cast<std::uint8_t>(index);
             consumableProbe.AddPowerup(consumable, 2);
             powerupProbe.Select(index);
@@ -3920,7 +4026,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             }
             if (consumableProbe.GetPowerupCount(consumable) != 1 || effects.GetShotCount() != before + 1) { ++checkFailures; }
         }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         consumable.localIndex = 1;
         consumableProbe.AddPowerup(consumable, 1);
         powerupProbe.Select(1);
@@ -3930,7 +4036,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         checkFailures += powerupProbe.failures;
         std::printf("[powerup-play-check] healing/cancel/repeat consumed=%u failures=%u\n", powerupProbe.consumed, checkFailures);
         for (unsigned airstrikeIndex : {0u, 10u, 11u}) {
-            session.Restart(startX, startY);
+            session.Restart(startX, startY, startFacing);
             WeaponEffects airstrikeEffects(toc, tables, program);
             CombatScene airstrikeScene(tables, program, enemies, player, vitals, airstrikeEffects, loaded.playerTemplate->gameScale);
             airstrikeScene.Reset();
@@ -3988,7 +4094,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (airstrike.GetMoviePlayer().splashCount != 1 || airstrike.IsMovieActive() || airstrike.GetCount() != 0) { ++checkFailures; }
             checkFailures += airstrike.failures + airstrike.GetMoviePlayer().failures;
         }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         consumable.localIndex = 5;
         consumableProbe.AddPowerup(consumable, 2);
         powerupProbe.Select(5);
@@ -4003,7 +4109,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (player.weapon->brother.IsShield()) { ++checkFailures; }
         player.weapon->brother.ReceiveDamage(1);
         if (std::abs(vitals.health - (shieldHealth - 1)) > 0.001f) { ++checkFailures; }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         {
             // Auto Aim: a real stationary enemy, ordinary rifle and actual
             // projectiles. No caller-supplied aim or automatic pilot firing.
@@ -4054,7 +4160,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             std::printf("[autoaim-play-check] shots=%zu hits=%d hold/release/swap/90sec/expiry failures=%u\n",
                 releasedShots, target->model.enemy.combat.hitCount, checkFailures);
         }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         {
             WeaponEffects turretEffects(toc, tables, program);
             CombatScene turretScene(tables, program, enemies, player, vitals, turretEffects, loaded.playerTemplate->gameScale);
@@ -4109,7 +4215,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 firstActiveMs, stoppedMs, peakTurrets, turretEffects.GetShotCount(),
                 target->model.enemy.combat.hitCount, turretPowerup.GetCount(), checkFailures);
         }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         const unsigned boosts[] = {18, 17, 16};
         for (unsigned type = 0; type < 3; ++type) {
             consumable.localIndex = static_cast<std::uint8_t>(boosts[type]);
@@ -4145,7 +4251,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (!restoredConsumables.LoadFromDisk("out/powerup-profile-check.dat") ||
             restoredConsumables.GetPowerupCount(consumable) != 1) { ++checkFailures; }
         std::printf("[powerup-play-check] shield/defense/priority/expiry/weapon-swap/save failures=%u\n", checkFailures);
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         {
             // Isolate impact contracts from steering: a stationary original
             // enemy receives real CBullet -> CombatScene -> script splash hits.
@@ -4243,12 +4349,12 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 std::printf("[powerup-attribute-check] combinations=228 timing/movement/animation/expiry failures=%u\n", checkFailures);
             }
         }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         CombatHit forceProbe;
         const float originalMaximum = vitals.maximum;
         const float originalBrotherMaximum = brother.vitals.maximum;
         for (float maximum : {20.0f, 100.0f, 205.0f}) {
-            session.Restart(startX, startY);
+            session.Restart(startX, startY, startFacing);
             vitals.maximum = maximum;
             vitals.health = maximum;
             vitals.invincible = false;
@@ -4275,7 +4381,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         vitals.maximum = originalMaximum;
         brother.vitals.maximum = originalBrotherMaximum;
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         forceProbe.ownerType = 1;
         forceProbe.x = startX - 40;
         forceProbe.y = startY;
@@ -4285,7 +4391,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (std::hypot(scene.playerX - startX, scene.playerY - startY) > 4) { ++checkFailures; }
         std::printf("[survival-check] map force gradual displacement=%.2f failures=%u\n",
             std::hypot(scene.playerX - startX, scene.playerY - startY), checkFailures);
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         const std::size_t initialActors = scene.AliveCount();
         if (gameContext == nullptr) {
             vitals.health = vitals.maximum * 0.5f;
@@ -4308,7 +4414,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         fatal.damage = 10000;
         scene.ApplyHit(kPlayerCombatId, fatal);
         if (!vitals.dead || vitals.health != 0 || vitals.deaths != 1) { ++checkFailures; }
-        session.Restart(startX, startY);
+        session.Restart(startX, startY, startFacing);
         if (vitals.dead || vitals.health != vitals.maximum || session.GetLevel().GetWave() != static_cast<int>(startWave) ||
             scene.AliveCount() != initialActors || effects.GetBulletCount() != 0 ||
             PlayerArmorMultiplier(player, 0) != armorBefore || scene.playerX != startX || scene.playerY != startY) { ++checkFailures; }
@@ -4326,7 +4432,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 !brotherModel.weapon->brother.CanMove() || !brotherModel.weapon->brother.CanShoot()) { ++checkFailures; }
             std::printf("[brother-check] death-state=%d revived-state=%d health=%.1f failures=%u\n",
                 deadState, brotherModel.weapon->brother.GetStateId(), brother.vitals.health, checkFailures);
-            session.Restart(startX, startY);
+            session.Restart(startX, startY, startFacing);
             brother.vitals.invincible = true;
         }
         // This harness uses real projectiles and enemy death scripts, with
@@ -4382,8 +4488,16 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         std::printf("[prop-check] actual-hits=%u failures=%u\n", props.GetHitCount(), props.GetFailures());
         std::printf("[survival-check] wave=%d kills=%u alive=%d spawned=%u invalid=%u failures=%u\n",
             session.GetLevel().GetWave(), session.GetKills(), session.CountEnemies(), scene.spawned, scene.invalidSpawns, checkFailures);
-        std::printf("[survival-check] shots=%zu player=%.1f,%.1f stun=%d brother=%d\n",
-            effects.GetShotCount(), scene.playerX, scene.playerY, vitals.stunMs, player.weapon->brother.GetStateId());
+        // CEnemySpawner::GetSpawnPointOffScreen keeps rule-driven spawns out of
+        // the camera rectangle; on-screen ones would be the "in your face" case.
+        if (session.GetOnScreenSpawns() != 0) { ++checkFailures; }
+        std::printf("[survival-check] closest-spawn=%.1f on-screen-spawns=%u failures=%u\n",
+            session.GetClosestSpawnDistance(), session.GetOnScreenSpawns(), checkFailures);
+        // Sound cues are the audible one-shots after per-tick coalescing; they
+        // are what a spread-out kill streak turns into.
+        std::printf("[survival-check] shots=%zu sounds=%zu player=%.1f,%.1f stun=%d brother=%d\n",
+            effects.GetShotCount(), effects.GetSoundCueCount(), scene.playerX, scene.playerY,
+            vitals.stunMs, player.weapon->brother.GetStateId());
         for (const auto &actor : scene.enemies) {
             const EnemyCombat &enemy = actor->model.enemy.combat;
             if (!enemy.dead) {
@@ -4799,7 +4913,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 pendingWeapon = weapons.size();
                 swapEventAccepted = false;
                 if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
-                session.Restart(startX, startY);
+                session.Restart(startX, startY, startFacing);
                 if (gameContext != nullptr) { gameContext->accountedKills = 0; gameContext->accountedWeaponExperience.clear(); }
                 if (!session.HasOriginalHud()) { survivalHud.ResetNotices(); }
                 savedDeath = false;
@@ -4950,13 +5064,18 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         pickups.Draw(mvp, kLevelCameraScale);
         effects.Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::BehindPlayer);
         DrawModels(loaded, program, mvp);
+        // The AI brother is a 3D model like the player and the enemies: with no
+        // depth test his torso, legs and gun paint over each other in submission
+        // order and the model's dark inside covers its front -- the black
+        // speckles. DrawModels already cleared depth and drew the player, so this
+        // shares the same depth buffer.
+        glEnable(GL_DEPTH_TEST);
         if (withBrother) {
             float world[kMatrix4dElements], modelMvp[kMatrix4dElements];
             scene.BrotherMatrix(world);
             Matrix4dMultiply(mvp, world, modelMvp);
             DrawPlayer(brotherModel, program, modelMvp);
         }
-        glEnable(GL_DEPTH_TEST);
         for (auto &actor : scene.enemies) {
             float world[kMatrix4dElements], modelMvp[kMatrix4dElements];
             scene.EnemyMatrix(*actor, world);
@@ -5071,7 +5190,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 damage.damage = 1;
                 scene.ApplyHit(kPlayerCombatId, damage);
                 if (scene.GetKillStreak() != 0 || scene.GetScore() != points) { ++checkFailures; }
-                session.Restart(startX, startY);
+                session.Restart(startX, startY, startFacing);
                 if (scene.GetScore() != 0 || scene.GetKillStreak() != 0 || session.GetKills() != 0 ||
                     session.GetLevel().GetStopwatchTime() != 0 || session.GetLevel().GetObjectTimeScale() != 1) { ++checkFailures; }
                 std::printf("[horde-check] points=%u saved=1 damage-resets-streak=1 restart=1 failures=%u\n", points, checkFailures);

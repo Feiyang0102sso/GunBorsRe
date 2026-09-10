@@ -23,6 +23,13 @@ bool CLevel::SetIndicator(int objectId, unsigned type, std::uint64_t targetKey) 
     if (targetKey == 0) { found = m_world->GetObjectPosition(objectId, indicator.x, indicator.y); }
     else { found = m_world->GetIndicatorTarget(targetKey, indicator.x, indicator.y); }
     if (!found) { return false; }
+    // Native 49 :117927 looks the object up by ILevelObject::GetID -- the
+    // object's index in its layer. A script that never assigns its own
+    // variable asks for index 0, so log what each marker actually bound to.
+    if (type != 0) {
+        std::printf("[indicator] object=%d type=%u target=%llu at %.0f,%.0f\n",
+            objectId, type, static_cast<unsigned long long>(targetKey), indicator.x, indicator.y);
+    }
     m_indicators.push_back(indicator);
     return true;
 }

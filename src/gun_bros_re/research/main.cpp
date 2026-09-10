@@ -278,6 +278,9 @@ std::unique_ptr<ISurvivalInputDriver> MakeResearchPilot(CombatScene &scene, cons
 int main(int argc, char **argv) {
     SetSurvivalInputFactory(MakeResearchPilot);
     if (!GameHostSettings().Load(std::filesystem::path(ASSET_ROOT) / "gunbros.cfg")) { return 1; }
+    // The original dial is 0..10 and a voice plays at dial x 0.1;
+    // CAudioPlayer::SetEffectsGain documents the chain.
+    CAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
     bool checkDailyBonus = false;
     bool checkUpgradePopup = false;
     bool checkNativeProfile = false;

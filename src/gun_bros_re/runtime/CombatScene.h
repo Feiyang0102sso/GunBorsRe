@@ -61,7 +61,8 @@ public:
     void SetBrotherWeapons(const CScript &script, const CGun::Template &pistol, const CGun::Template &rifle);
     bool SwapBrotherWeapon();
     unsigned GetBrotherWeaponSlot() const { return m_brotherWeaponSlot; }
-    void ResetBrotherPosition(float x, float y);
+    /** facingDegrees comes from the map PLAYER object, as the player's does. */
+    void ResetBrotherPosition(float x, float y, float facingDegrees);
     void BrotherMatrix(float *matrix) const;
     CombatId FindBrotherTarget(float x, float y, float radius) override;
     bool GetBrotherTarget(CombatId id, float &x, float &y) override;
@@ -116,6 +117,8 @@ public:
     const std::vector<WeaponCombatProgress> &GetWeaponProgress() const { return m_weaponProgress; }
     const std::vector<EnemyCasualty> &GetCasualties() const { return m_casualties; }
     void SetViewCenter(float x, float y) { m_viewCenterX = x; m_viewCenterY = y; m_hasViewCenter = true; }
+    /** The camera rectangle projectile culling tests against; see CBullet::CanBeCulled :60583. */
+    void SetViewSize(float width, float height) { m_effects.SetViewBounds(GetViewCenterX(), GetViewCenterY(), width, height); }
     float GetViewCenterX() const { if (m_hasViewCenter) { return m_viewCenterX; } return playerX; }
     float GetViewCenterY() const { if (m_hasViewCenter) { return m_viewCenterY; } return playerY; }
     void Splash(const CombatHit &hit, float radius, float coneDegrees,

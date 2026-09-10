@@ -23,6 +23,20 @@ public:
     static void SetMuted(bool muted);
     static bool IsMuted();
     static void SetEffectsEnabled(bool enabled);
+    /**
+     * Gain every new effects player starts at, 0..1.
+     *
+     * The original mixes one sound effect voice at
+     * playerVolume x eventVolume x 0.001 (CSoundEvent_Cocoa::SetVolume
+     * :303199), where CMediaPlayer::SetVolume :361532 clamps playerVolume to
+     * ten and CSoundEventPCM's constructor :363616 leaves eventVolume at a
+     * hundred -- so the scale is playerVolume/10, the same 0..10 dial the
+     * music bus uses through CBGM::SetVolume :59971 (x0.3). Music is set from
+     * the original value; this host has not recovered the effects one, so it
+     * is a configurable setting rather than a guess baked into the mix.
+     */
+    static void SetEffectsGain(float gain);
+    static float GetEffectsGain();
     /** Music bypasses the effects switch, and has its own original 0.3 gain. */
     void SetMusicChannel(bool music);
     void SetVolume(float volume);
@@ -30,6 +44,10 @@ public:
     /** Decode and cache a RIFF/WAVE resource under a caller-owned key. */
     bool Load(std::uint64_t key, const std::vector<std::uint8_t> &wavBytes);
     bool HasSound(std::uint64_t key) const;
+    /** How many voices are sounding right now; research evidence for mixing. */
+    unsigned GetVoiceCount() const;
+    /** Decoded length of a cached sound, 0 when it is not loaded. */
+    unsigned GetDurationMs(std::uint64_t key) const;
     /** Research-only: exercise real SDL streams at zero gain, even with --mute. */
     unsigned CheckSilentPlayback(std::uint64_t first, std::uint64_t second);
     /** Cache decoded signed little-endian 16-bit PCM from the media decoder. */

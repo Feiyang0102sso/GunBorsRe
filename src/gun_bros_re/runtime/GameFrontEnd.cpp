@@ -3221,6 +3221,28 @@ bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, con
     return foundGraphic && foundTouch;
 }
 
+/** Which navigation branch a host page sits in, named by that branch's own page.
+ *
+ * CMenuSystem::SetBranch :96614 leaves through its first test when the branch
+ * asked for is the one already shown, and PushMenu/SetMenu :96666/:96700 route
+ * every in-branch menu through that same early exit -- only the other path
+ * restarts the WIPE movie with CMovie::SetTime(..., 0). So the sweep belongs to
+ * navigation between branches. Menus inside one branch never play it: the store
+ * category buttons carry action 64, which DoAction :93478 hands to the store
+ * menu's own handler :95106 without going near SetBranch, and a planet click
+ * pushes the REV list into the branch it is already in.
+ *
+ * The groups below are the ones the header already lights up as one option.
+ */
+unsigned MenuBranchPage(unsigned page) {
+    if (page == 1 || page == 17 || page == 18) { return 2; }
+    if (page == 16 || page == 19 || page == 21 || page == 22 || page == 23) { return 0; }
+    if (page == 8 || page == 9 || page == 11) { return 6; }
+    if (page == 13) { return 5; }
+    if (page == 29) { return 4; }
+    return page;
+}
+
 /** CMenuNavigationBar :143357 binds Header0..16 and InfoCluster0..3.
  * NAVBAR_MAIN is extracted from native statics; all art/layout/timing is BIG. */
 int GameMenu::Header(const CProfileManager &profile, const CPlayerProgress &progress, unsigned currentPage) {
@@ -3257,11 +3279,7 @@ int GameMenu::Header(const CProfileManager &profile, const CPlayerProgress &prog
         if (visible) { originalHeaderTime = idleStart; }
         originalHeaderButtonTime = idleStart;
     }
-    unsigned activePage = currentPage;
-    if (currentPage == 1 || currentPage == 17 || currentPage == 18) { activePage = 2; }
-    if (currentPage == 16 || currentPage == 19 || currentPage == 21 || currentPage == 22 || currentPage == 23) { activePage = 0; }
-    if (currentPage == 8 || currentPage == 9 || currentPage == 11) { activePage = 6; }
-    if (currentPage == 13) { activePage = 5; }
+    const unsigned activePage = MenuBranchPage(currentPage);
     // Host page routing only; order and branch IDs are original NAVBAR_MAIN.
     constexpr unsigned branchPages[] = {0, 0, 2, 4, 5, 3, 6, 7};
     int choice = -1;
@@ -4889,7 +4907,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         // The pressed plate's burst plays above whatever the click opened.
         view.DrawPress();
         if (view.animateNavigation) {
-            const bool changed = state.page != previousPage || state.shopCategory != previousCategory;
+            // Only navigation between branches sweeps; see MenuBranchPage.
+            const bool changed = MenuBranchPage(state.page) != MenuBranchPage(previousPage);
             const bool popup = state.page == 26 || previousPage == 26;
             // Deterministic reproduction of first-use resource work during a frame.
             if (testClicks && testFrame < testClicks->size()) { testClock += (*testClicks)[testFrame].renderDelayMs; }
@@ -7316,12 +7335,18 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
         if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
             "out/ui-restoration-loading-profile", capture, &clicks, true, &window, true, &trace) != -2) { return 1; }
         const unsigned expectedPage[] = {6, 0, 2, 2, 2};
-        if (state.page != expectedPage[index] || (index >= 2 && state.shopCategory != index - 1) ||
-            !trace.active || trace.time != duration / 2 || trace.starts != 1) { ++failures; }
-        std::printf("[loading-wipe-check] cold-load=%u midpoint-active=%d time=%u starts=%u\n",
-            target.renderDelayMs, trace.active, trace.time, trace.starts);
-        std::printf("[loading-wipe-check] real-shell target=%u page=%u category=%u blocked-store-click=1 failures=%u\n",
-            index, state.page, state.shopCategory, failures);
+        // Targets 0 and 1 leave the STORE branch and sweep, which also swallows
+        // the store click that follows. The categories are menus inside that
+        // branch, so they change with no sweep and nothing to swallow.
+        const bool branchChange = index < 2;
+        bool wrong = state.page != expectedPage[index] || (index >= 2 && state.shopCategory != index - 1);
+        if (branchChange && (!trace.active || trace.time != duration / 2 || trace.starts != 1)) { wrong = true; }
+        if (!branchChange && (trace.active || trace.starts != 0)) { wrong = true; }
+        if (wrong) { ++failures; }
+        std::printf("[loading-wipe-check] cold-load=%u midpoint-active=%d time=%u starts=%u expected-sweep=%d\n",
+            target.renderDelayMs, trace.active, trace.time, trace.starts, branchChange);
+        std::printf("[loading-wipe-check] real-shell target=%u page=%u category=%u blocked-store-click=%d failures=%u\n",
+            index, state.page, state.shopCategory, branchChange, failures);
     }
     // Actual planet click -> authored reticle exit -> REV page, with cold work.
     MenuState revolution;
@@ -7335,17 +7360,18 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
     MovieRegion planet;
     if (!movies.Region(mapId, 1, mapEnd, planet)) { return 1; }
     MenuTestClick planetClick{planet.x + planet.width / 2, planet.y + planet.height / 2, 1};
+    // No trailing store click: the REV list opens inside the PLAY branch with no
+    // sweep to swallow it, so such a click would simply leave for the store.
     const std::vector<MenuTestClick> revolutionClicks = {{-100, -100, 1}, {-100, -100, headerEnd + 1},
         {-100, -100, headerEnd + 1}, {-100, -100, headerEnd + 1}, planetClick,
-        {-100, -100, exitEnd + 1, duration * 2},
-        {storeTab.x + storeTab.width / 2, storeTab.y + storeTab.height / 2, duration / 2}};
+        {-100, -100, exitEnd + 1, duration * 2}, {-100, -100, duration / 2}};
     MenuTransitionTrace revolutionTrace;
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, revolution,
         "out/ui-restoration-loading-profile", "out/ui-wipe-revolution.png", &revolutionClicks,
         true, &window, true, &revolutionTrace) != -2) { return 1; }
-    if (revolution.page != 21 || !revolutionTrace.active || revolutionTrace.time != duration / 2) { ++failures; }
-    std::printf("[loading-wipe-check] planet-to-REV page=%u active=%d time=%u failures=%u\n",
-        revolution.page, revolutionTrace.active, revolutionTrace.time, failures);
+    if (revolution.page != 21 || revolutionTrace.active || revolutionTrace.starts != 0) { ++failures; }
+    std::printf("[loading-wipe-check] planet-to-REV page=%u active=%d starts=%u expected-sweep=0 failures=%u\n",
+        revolution.page, revolutionTrace.active, revolutionTrace.starts, failures);
     // Startup has the original launch image and animated core 0:124 only.
     {
         LoadingScreen startup(window, movies, tables, &profile, false, true);

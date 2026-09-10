@@ -36,6 +36,13 @@ bool CEnemySpawner::Spawn(int resource, int layer, int node, int objectId) {
     if (!m_world->SpawnEnemy(enemy, layer, node, objectId)) {
         return false;
     }
+    // Script-tracked spawns are the ones a level later addresses by object id
+    // -- the pack12 babe among them. Worth seeing which template and node the
+    // script rolled.
+    if (objectId >= 0) {
+        std::printf("[spawner] tracked spawn resource=%d object=%08x:%u layer=%d node=%d id=%d\n",
+            resource, enemy.packHash, enemy.localIndex, layer, node, objectId);
+    }
     ++m_spawnCount;
     return true;
 }

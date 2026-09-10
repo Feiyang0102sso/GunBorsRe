@@ -56,7 +56,16 @@ struct PlacedObject {
     // CEnemy::Spawn :73292 consumes the authored path and initial facing.
     std::uint8_t pathLayer = 255;
     std::int16_t facing = 0;
-    std::uint16_t playerConfiguration = 0;
+    // The PLAYER extra uint16. InitializeObjects :126603 stores it in the
+    // object layer's member +76; at level start :120846/:121005 hand
+    // {+76,+80,+84} to CBrother::Spawn :135887, which keeps it in the same
+    // member +1984 that SetAngle writes -- the spawn facing, in degrees.
+    // Checked against 20 original maps: mostly 180, one 0, the rest omit the
+    // whole extra field (see below).
+    std::uint16_t playerSpawnFacing = 0;
+    // With hasExtra 0 the original never writes member +76, so its spawn angle
+    // is uninitialised memory. This port keeps 0 instead.
+    bool hasPlayerSpawnFacing = false;
     std::uint8_t platformPath = 255;
 };
 

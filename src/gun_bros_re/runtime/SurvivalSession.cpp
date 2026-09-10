@@ -72,19 +72,31 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
     return false;
 }
 
-void SurvivalSession::Restart(float x, float y) {
+void SurvivalSession::Restart(float x, float y, float facingDegrees) {
     m_scene.Reset();
     if (m_powerups != nullptr) { m_powerups->Reset(); }
     if (m_pickups != nullptr) { m_pickups->Reset(); }
     if (m_props != nullptr) { m_props->Reset(); }
     m_scene.playerX = x;
     m_scene.playerY = y;
-    m_scene.ResetBrotherPosition(x, y);
+    // CBrother::Spawn :135887 writes one spawn angle to the player and the
+    // AI brother alike.
+    m_scene.facing = facingDegrees;
+    m_scene.ResetBrotherPosition(x, y, facingDegrees);
     m_spawnSerial = 0;
     m_kills = 0;
+    m_closestSpawnDistance = -1;
+    m_onScreenSpawns = 0;
     m_transitionMs = 1200; // Desktop intro duration; original completion event retained.
     m_transitionDuration = 1200;
     if (m_horde) { m_transitionMs = 0; } // BOKOR owns its five-second intro timer.
+    // Seed before Bind: export 0 already rolls for the pack12 babe. The
+    // original's clock-seeded stream keeps running across level starts, so
+    // each restart moves this seed on rather than repeating the same rolls.
+    if (m_hasScriptRandomSeed) {
+        m_scriptRandomSeed = m_scriptRandomSeed * 1664525u + 1013904223u;
+        m_level.SetScriptRandomSeed(m_scriptRandomSeed);
+    }
     m_level.Bind(m_template, m_map, this, m_startWave);
     m_bossIntroSerial = m_level.GetBossIntroSerial();
     if (m_bossIntroSerial > 0) { m_transitionMs = 2000; m_transitionDuration = 2000; }
@@ -102,6 +114,61 @@ void SurvivalSession::Restart(float x, float y) {
     }
 }
 
+/**
+ * Where a rule-driven spawn appears.
+ *
+ * CEnemySpawner::GetSpawnPoint :146098 picks between two rules. With an
+ * explicit node list (DisableAllNodes + EnableNode) it is
+ * GetSpawnPointSpecific :146576: one of the listed nodes, uniformly at random,
+ * with no other test. Otherwise it is GetSpawnPointOffScreen :146112, which
+ * hands CLayerPathLink::GetSpawnLocation :166819 the player's position
+ * (GetSpawnSource :147224) and an offscreen filter built from the camera
+ * rectangle grown by ten units on each side (SetupSpawnFilter :147283).
+ *
+ * GetSpawnLocation walks every node, drops the locked ones and the ones the
+ * filter rejects for being on screen, and feeds the rest to a DistanceList
+ * :167261 that keeps the five nearest to the player. One of those five is then
+ * chosen at random -- so enemies arrive from just outside the view, never in
+ * the player's face, and never from the far side of the map.
+ *
+ * No node qualifying is an ordinary outcome: the original spawns nothing that
+ * tick and the rule tries again on the next one.
+ */
+int SurvivalSession::ChooseSpawnNode(const ILayerPath &path) {
+    const auto &nodes = path.GetNodes();
+    const CEnemySpawner &spawner = m_level.GetSpawner();
+    if (!spawner.AllNodesEnabled()) {
+        const auto &enabled = spawner.GetEnabledNodes();
+        if (enabled.empty()) { return -1; }
+        const int pick = m_level.RandomInteger(0, static_cast<std::int16_t>(enabled.size() - 1));
+        return enabled[pick];
+    }
+    const float left = m_cameraLeft - 10;
+    const float top = m_cameraTop - 10;
+    const float right = left + m_cameraWidth + 20;
+    const float bottom = top + m_cameraHeight + 20;
+    // {node index, squared distance to the player}, nearest first.
+    std::vector<std::pair<int, float>> nearest;
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        const ILayerPath::Node &node = nodes[index];
+        if (node.locked) { continue; }
+        const bool onScreen = m_cameraWidth > 0 && m_cameraHeight > 0 &&
+            node.x >= left && node.x <= right && node.y >= top && node.y <= bottom;
+        if (onScreen) { continue; }
+        const float dx = m_scene.playerX - node.x;
+        const float dy = m_scene.playerY - node.y;
+        const float distance = dx * dx + dy * dy;
+        std::size_t position = 0;
+        while (position < nearest.size() && nearest[position].second <= distance) { ++position; }
+        if (position >= 5) { continue; }
+        nearest.insert(nearest.begin() + position, {static_cast<int>(index), distance});
+        if (nearest.size() > 5) { nearest.pop_back(); }
+    }
+    if (nearest.empty()) { return -1; }
+    const int pick = m_level.RandomInteger(0, static_cast<std::int16_t>(nearest.size() - 1));
+    return nearest[pick].first;
+}
+
 bool SurvivalSession::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int nodeIndex, int objectId) {
     std::size_t entryIndex = 0;
     while (entryIndex < m_catalog.size()) {
@@ -112,23 +179,18 @@ bool SurvivalSession::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int
     CLayerPathLink *path = m_map.GetPathLinkLayer(layerIndex);
     if (path == nullptr || path->GetNodes().empty()) { return false; }
     const auto &nodes = path->GetNodes();
-    if (nodeIndex < 0) {
-        // Cycle through authored spawn nodes; exact original free-node scoring
-        // is still being researched. Never invent positions beyond the map.
-        const auto &enabled = m_level.GetSpawner().GetEnabledNodes();
-        for (unsigned attempt = 0; attempt < nodes.size(); ++attempt) {
-            const unsigned candidate = (m_spawnSerial + attempt) % nodes.size();
-            if (nodes[candidate].locked) { continue; }
-            if (!m_level.GetSpawner().AllNodesEnabled() &&
-                std::find(enabled.begin(), enabled.end(), static_cast<int>(candidate)) == enabled.end()) { continue; }
-            nodeIndex = static_cast<int>(candidate);
-            m_spawnSerial = candidate + 1;
-            break;
-        }
-    }
+    if (nodeIndex < 0) { nodeIndex = ChooseSpawnNode(*path); }
     if (nodeIndex < 0 || nodeIndex >= static_cast<int>(nodes.size())) { return false; }
     CombatEnemy *actor = m_scene.Spawn(entryIndex, nodes[nodeIndex].x, nodes[nodeIndex].y);
     if (actor == nullptr) { return false; }
+    if (objectId < 0) {
+        const float distance = std::hypot(m_scene.playerX - nodes[nodeIndex].x, m_scene.playerY - nodes[nodeIndex].y);
+        if (m_closestSpawnDistance < 0 || distance < m_closestSpawnDistance) { m_closestSpawnDistance = distance; }
+        if (m_cameraWidth > 0 && nodes[nodeIndex].x >= m_cameraLeft && nodes[nodeIndex].y >= m_cameraTop &&
+            nodes[nodeIndex].x <= m_cameraLeft + m_cameraWidth && nodes[nodeIndex].y <= m_cameraTop + m_cameraHeight) {
+            ++m_onScreenSpawns;
+        }
+    }
     actor->objectId = objectId;
     // CLevel::AddObject :116890 attaches the enemy direction marker.
     m_level.SetIndicator(objectId, 0, actor->model.enemy.combat.id);
@@ -232,7 +294,7 @@ unsigned SurvivalSession::CheckLevelSounds() {
     return failures;
 }
 
-unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY) {
+unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY, float startFacing) {
     unsigned failures = 0, tested = 0;
     for (unsigned layerIndex = 0; layerIndex < m_map.GetCollisionLayerCount(); ++layerIndex) {
         const auto &layer = m_map.GetCollisionLayer(layerIndex);
@@ -248,7 +310,7 @@ unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY) {
             if (length == 0) { continue; }
             const float nx = -(b.y - a.y) / length, ny = (b.x - a.x) / length;
             for (int side : {-1, 1}) {
-                Restart(startX, startY);
+                Restart(startX, startY, startFacing);
                 // Let the original intro complete before supplying movement.
                 for (unsigned tick = 0; tick < 250; ++tick) { Update(16, 0, 0, false); }
                 m_scene.playerX = (a.x + b.x) * 0.5f + nx * 45 * side;
@@ -268,7 +330,7 @@ unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY) {
         }
         if (groups.size() != expected.size()) { ++failures; }
     }
-    Restart(startX, startY);
+    Restart(startX, startY, startFacing);
     std::printf("[map-trigger-check] groups=%u failures=%u\n", tested, failures);
     return failures;
 }
@@ -499,6 +561,13 @@ void SurvivalSession::UpdateCamera(int deltaMs) {
     m_scene.SetViewCenter(m_map.GetCamera().GetX(), m_map.GetCamera().GetY());
     const float width = m_viewWidth * scale;
     const float height = m_viewHeight * scale;
+    // The same rectangle CCamera::GetBounds hands CBullet::CanBeCulled :60583
+    // and the offscreen spawn filter (SetupSpawnFilter :147283).
+    m_scene.SetViewSize(width, height);
+    m_cameraLeft = m_map.GetCamera().GetX() - width * 0.5f;
+    m_cameraTop = m_map.GetCamera().GetY() - height * 0.5f;
+    m_cameraWidth = width;
+    m_cameraHeight = height;
     // Same camera-scaled 25/25/100 margins as CLevelIndicator::Init :191653.
     const float viewportFactor = std::min(m_viewWidth / 480.0f, m_viewHeight / 320.0f);
     const float margin = 25 * viewportFactor * scale;

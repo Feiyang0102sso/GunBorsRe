@@ -16,6 +16,7 @@ namespace {
 constexpr std::size_t kMaximumPlayingSounds = 32;
 bool g_muted = false;
 bool g_effectsEnabled = true;
+float g_effectsGain = 0.3f;
 
 struct DecodedSound {
     SDL_AudioSpec specification;
@@ -39,7 +40,7 @@ struct CAudioPlayer::Impl {
     SDL_AudioDeviceID device = 0;
     bool paused = false;
     std::uint64_t pauseStartMs = 0;
-    float volume = 1;
+    float volume = g_effectsGain;
     bool musicChannel = false;
     bool silentDeviceValidation = false;
     unsigned devicesOpened = 0;
@@ -97,6 +98,14 @@ bool CAudioPlayer::IsMuted() {
 }
 
 void CAudioPlayer::SetEffectsEnabled(bool enabled) { g_effectsEnabled = enabled; }
+
+void CAudioPlayer::SetEffectsGain(float gain) {
+    if (gain < 0) { gain = 0; }
+    if (gain > 1) { gain = 1; }
+    g_effectsGain = gain;
+}
+
+float CAudioPlayer::GetEffectsGain() { return g_effectsGain; }
 void CAudioPlayer::SetMusicChannel(bool music) { m_impl->musicChannel = music; }
 void CAudioPlayer::SetVolume(float volume) {
     if (volume < 0) { volume = 0; }
@@ -240,6 +249,20 @@ void CAudioPlayer::StopAll() {
 
 bool CAudioPlayer::HasSound(std::uint64_t key) const {
     return m_impl->sounds.find(key) != m_impl->sounds.end();
+}
+
+unsigned CAudioPlayer::GetVoiceCount() const {
+    return static_cast<unsigned>(m_impl->playing.size());
+}
+
+unsigned CAudioPlayer::GetDurationMs(std::uint64_t key) const {
+    const auto found = m_impl->sounds.find(key);
+    if (found == m_impl->sounds.end()) { return 0; }
+    const DecodedSound &sound = found->second;
+    const std::uint32_t bytesPerFrame = SDL_AUDIO_FRAMESIZE(sound.specification);
+    if (bytesPerFrame == 0 || sound.specification.freq <= 0) { return 0; }
+    const std::uint64_t frameCount = sound.samples.size() / bytesPerFrame;
+    return static_cast<unsigned>(frameCount * 1000u / static_cast<std::uint64_t>(sound.specification.freq));
 }
 
 bool CAudioPlayer::LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &samples, unsigned sampleRate, unsigned channels) {

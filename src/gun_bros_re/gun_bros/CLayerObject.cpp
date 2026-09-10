@@ -20,7 +20,10 @@ namespace {
 void ReadObjectExtra(CArrayInputStream &stream, PlacedObject &object) {
     const std::uint8_t objectType = object.objectType;
     if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Player)) {
-        object.playerConfiguration = stream.ReadUInt16();
+        // :126603. The runtime buffer is 12 bytes; the disk holds this one
+        // uint16 only, and it is the spawn angle in degrees.
+        object.playerSpawnFacing = stream.ReadUInt16();
+        object.hasPlayerSpawnFacing = true;
     } else if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Enemy)) {
         object.pathLayer = stream.ReadUInt8();
         object.facing = stream.ReadInt16();

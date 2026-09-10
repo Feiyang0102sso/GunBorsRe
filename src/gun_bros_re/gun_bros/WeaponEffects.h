@@ -35,6 +35,13 @@ public:
               WeaponDrawPass pass = WeaponDrawPass::All);
     void Clear();
     void SetCombatWorld(IProjectileWorld *world);
+    /**
+     * The camera rectangle CBullet::CanBeCulled :60583 tests against.
+     *
+     * Without one no projectile is culled, which is what the standalone
+     * research scenes and the arena had before.
+     */
+    void SetViewBounds(float centerX, float centerY, float width, float height);
     /** Enemy/manual projectile speed is in world units per second. */
     CombatId SpawnProjectile(const GameObjectRef &resource, float x, float y, float z,
         float direction, float speed, CombatId owner, int ownerType, int part = 0, int node = 0);
@@ -56,6 +63,8 @@ public:
     std::size_t GetTrailCount() const;
     std::size_t GetShotCount() const;
     std::size_t GetSoundCueCount() const;
+    /** Voices sounding right now. One WAV never occupies more than one. */
+    unsigned GetVoiceCount() const;
 private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;

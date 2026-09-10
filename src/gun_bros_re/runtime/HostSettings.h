@@ -7,6 +7,9 @@
 struct HostSettings {
     bool isConnected = false;
     bool debugMode = false;
+    /** Sound effect loudness on the original's own 0..10 media-player dial;
+     *  see CAudioPlayer::SetEffectsGain for where that scale comes from. */
+    int effectsVolume = 3;
     bool Load(const std::filesystem::path &path);
 };
 
