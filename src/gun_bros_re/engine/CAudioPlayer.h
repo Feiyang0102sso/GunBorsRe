@@ -10,6 +10,14 @@
 #include <memory>
 #include <vector>
 
+/** Read-only evidence for audio lifecycle and queue regression checks. */
+struct AudioPlaybackState {
+    unsigned voices = 0, devicesOpened = 0, streamsCreated = 0;
+    std::int64_t queuedBytes = 0;
+    bool paused = false;
+    float volume = 0;
+};
+
 /** Plays overlapping one-shot WAV sounds and caches their decoded samples. */
 class CAudioPlayer {
 public:
@@ -50,6 +58,9 @@ public:
     unsigned GetDurationMs(std::uint64_t key) const;
     /** Research-only: exercise real SDL streams at zero gain, even with --mute. */
     unsigned CheckSilentPlayback(std::uint64_t first, std::uint64_t second);
+    /** Isolated regression players only; force zero gain for all future plays. */
+    void EnableSilentValidation();
+    AudioPlaybackState GetPlaybackState() const;
     /** Cache decoded signed little-endian 16-bit PCM from the media decoder. */
     bool LoadPcm(std::uint64_t key, const std::vector<std::uint8_t> &samples, unsigned sampleRate, unsigned channels);
 

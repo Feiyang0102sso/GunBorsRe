@@ -5,6 +5,7 @@
 #define GUN_BROS_RE_GAMEFRONTEND_H
 #include <string>
 int RunProfilePlayCheck(const std::string &bigDirectory);
+int RunAudioTransitionsCheck(const std::string &bigDirectory);
 int RunTutorialPlayCheck(const std::string &bigDirectory);
 int RunGameMenuCheck(const std::string &bigDirectory);
 int RunPackagePurchaseCheck(const std::string &bigDirectory);

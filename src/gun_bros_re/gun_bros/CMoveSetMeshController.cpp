@@ -87,6 +87,13 @@ void CMoveSetMeshController::Update(std::int32_t deltaMs) {
 
     const std::int32_t previousMs = m_animation.GetTimeMs();
     m_animation.Update(step);
+    CollectSounds(previousMs);
+}
+
+void CMoveSetMeshController::CollectSounds(std::int32_t previousMs) {
+    m_sounds.clear();
+    if (m_moveSet == nullptr || m_moveIndex == kNoMoveIndex) { return; }
+    const MeshMove &move = m_moveSet->GetMoves()[m_moveIndex];
 
     // TODO: the original also asks CMoveSetMesh::GetSound whether a sound
     // frame falls in the window this update just crossed, and queues it.

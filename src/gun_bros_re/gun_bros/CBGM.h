@@ -8,6 +8,11 @@
 
 class CBGM {
 public:
+    int GetTrack() const { return m_track; }
+    /** Playback starts across instances, for scene handoff regression evidence. */
+    static unsigned GetPlaybackStarts();
+    void EnableSilentValidation() { m_audio.EnableSilentValidation(); }
+    AudioPlaybackState GetPlaybackState() const { return m_audio.GetPlaybackState(); }
     bool Play(unsigned track, bool loop = true);
     bool NextTrack();
     void Update();
@@ -18,5 +23,6 @@ public:
 private:
     CAudioPlayer m_audio;
     int m_track = -1;
+    bool m_enabled = true;
 };
 #endif

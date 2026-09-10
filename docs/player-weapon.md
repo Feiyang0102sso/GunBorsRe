@@ -119,6 +119,6 @@ E 保留油桶调试功能。窗口标题显示分类、类内序号及武器名
 - 原武器分类现由对应STORE条目取得，删除pack5 ordinal56分类特判，以及58/63的unused判定。没有STORE引用只说明当前目录未出售，不能直接定性为废案；以上历史分类描述据此更正。
 - 商店模型使用CBrother::SpawnForUI export9、UpdateUI及BIG PLAYER/GUN动作覆盖。CMesh按原IsFrameUsedInMoves保留帧，包围盒来自原首个保留帧；DrawUI按当前躯干Z范围和原区域高度计算比例，整页投影不再用区域裁切武器。
 - CMenuMeshPlayer action92只发OnSwapGun；原PLAYER Flow控制收枪和native3切槽。两枪资源保持存活，同一兄弟解释器不重建；切槽时保留旧躯干动作，下一序列才读取新枪覆盖。双向三次交换、实际原装备、活动槽保存重载均已验证。
-- UpdateUI直接将动作速度乘毫秒后截断，区别于普通MoveSet控制器的四舍五入；原腿部仍同步前一时刻躯干相位。UI动作帧音效尚未完整接入声音队列。
+- UpdateUI直接将动作速度乘毫秒后截断，区别于普通MoveSet控制器的四舍五入；原腿部仍同步前一时刻躯干相位。UI动作帧音效在本段原记录时尚未接入；2026-09-10已恢复躯干/腿部原WAV采集及菜单播放，两位兄弟双向切枪和零音量真实SDL验证通过，见[音频交接记录](audio-transitions-fix-2026-09-10.md)。
 - 已移除小视口裁切和经验比例，不代表所有姿态已解释。实际原存档大枪仍存在遮脸观感，尚无依据支持额外旋转或缩小，继续保留原数值核对。
 - 地图主体迁移runtime/MapScene、敌人模型迁移runtime/EnemyModel，milestones保留薄研究入口；正式GUI不依赖研究程序和自动驾驶器。现有播放器、装备、武器研究入口永久保留。

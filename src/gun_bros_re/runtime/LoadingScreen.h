@@ -6,13 +6,14 @@
 #include "runtime/PackTables.h"
 #include "runtime/StartupSequence.h"
 #include "engine/platform/CWindow.h"
+#include "gun_bros/CBGM.h"
 #include <thread>
 #include <chrono>
 
 class LoadingScreen : public IPackLoadProgress {
 public:
-    LoadingScreen(CWindow &window, MovieRenderer &movies, PackTables &tables, const CProfileManager *profile = nullptr, bool enteringGame = false, bool startup = false)
-        : m_window(window), m_tables(tables), m_movies(movies), m_startup(startup) {
+    LoadingScreen(CWindow &window, MovieRenderer &movies, PackTables &tables, const CProfileManager *profile = nullptr, bool enteringGame = false, bool startup = false, CBGM *music = nullptr)
+        : m_window(window), m_tables(tables), m_movies(movies), m_startup(startup), m_music(music) {
         m_start = window.GetTicksMs();
         if (startup) {
             m_valid = LoadStartupSplash(m_title);
@@ -68,6 +69,8 @@ private:
         }
     }
     bool Draw(unsigned elapsed, bool playChapter = false, const std::string &capturePath = {}) {
+        // Loading still services the existing track; it never selects a new one.
+        if (m_music != nullptr) { m_music->Update(); }
         int width = 0, height = 0;
         m_window.GetDrawableSize(width, height);
         glViewport(0, 0, width, height);
@@ -97,5 +100,6 @@ private:
     bool m_cancelled = false;
     bool m_valid = false;
     bool m_finished = false, m_animateExit = false;
+    CBGM *m_music = nullptr;
 };
 #endif

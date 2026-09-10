@@ -3170,12 +3170,17 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     window.SetEscapeCloses(false);
     window.EnableCheats(gameContext != nullptr);
+    CBGM ownedMusic;
+    CBGM *activeMusic = &ownedMusic;
+    if (gameContext != nullptr && gameContext->music != nullptr) { activeMusic = gameContext->music; }
+    CBGM &music = *activeMusic;
+    if (gameContext != nullptr) { music.SetEnabled(gameContext->profile.musicEnabled); }
     MovieRenderer loadingMovies;
     CResPackTOC *loadingCore = toc.GetPack(toc.GetCorePackIndex());
     if (!loadingMovies.Init(*loadingCore, *loadingCore)) { return 1; }
     const CProfileManager *loadingProfile = nullptr;
     if (gameContext != nullptr) { loadingProfile = &gameContext->profile; }
-    LoadingScreen loading(window, loadingMovies, tables, loadingProfile, true);
+    LoadingScreen loading(window, loadingMovies, tables, loadingProfile, true, false, &music);
     if (!loading.IsValid()) { return 1; }
     if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
@@ -3347,8 +3352,6 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         vitals.invincible = false;
     }
     CombatScene scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
-    CBGM music;
-    if (!music.NextTrack()) { return 1; }
     if (gameContext != nullptr) {
         music.SetEnabled(gameContext->profile.musicEnabled);
         CAudioPlayer::SetEffectsEnabled(gameContext->profile.soundEnabled);
@@ -3484,6 +3487,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     loading.Finish();
     if (!loading.IsValid()) { return 1; }
     if (loading.Cancelled()) { return 0; }
+    // CGunBros::OnLoaded :79321: battle music begins only after game binding.
+    music.SetPaused(false);
+    if (!music.NextTrack()) { return 1; }
     if (feedbackStudy) {
         // Real BIG instances and the same clocks as RunSurvival; no source save.
         vitals.invincible = true;
@@ -4811,7 +4817,11 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
         const SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
-        if (action == SurvivalHudAction::Exit) { break; }
+        if (action == SurvivalHudAction::Exit) {
+            // Surrender leaves a paused menu; the same BGM continues into results.
+            music.SetPaused(false);
+            break;
+        }
         if (action == SurvivalHudAction::OpenShop) { shopOpen = true; itemChoice = false; accumulator = 0; }
         if (action == SurvivalHudAction::CloseShop) { shopOpen = false; itemChoice = false; }
         if (action == SurvivalHudAction::CancelItem) { itemChoice = false; }

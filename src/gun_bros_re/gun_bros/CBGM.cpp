@@ -8,7 +8,10 @@
 namespace {
 constexpr const char *kTracks[] = {"game_0.mp3", "1.mp3", "2.mp3", "3.mp3", "4.mp3", "5.mp3", "6.mp3"};
 unsigned g_lastBattleTrack = 0;
+unsigned g_playbackStarts = 0;
 }
+
+unsigned CBGM::GetPlaybackStarts() { return g_playbackStarts; }
 
 const char *CBGM::TrackName(unsigned track) {
     if (track >= 7) { return nullptr; }
@@ -18,13 +21,18 @@ const char *CBGM::TrackName(unsigned track) {
 bool CBGM::Play(unsigned track, bool loop) {
     if (track >= 7) { return false; }
     if (m_track == static_cast<int>(track)) { return true; }
-    MediaAudio decoded;
-    if (!DecodeMediaAudio(std::filesystem::path(ASSET_ROOT) / "mp3" / kTracks[track], decoded)) { return false; }
+    // Decode while the previous track is still queued; reuse PCM on revisits.
+    if (!m_audio.HasSound(track)) {
+        MediaAudio decoded;
+        if (!DecodeMediaAudio(std::filesystem::path(ASSET_ROOT) / "mp3" / kTracks[track], decoded) ||
+            !m_audio.LoadPcm(track, decoded.samples, decoded.sampleRate, decoded.channels)) { return false; }
+    }
     Stop();
     m_audio.SetMusicChannel(true);
-    m_audio.SetVolume(0.3f);
-    if (!m_audio.LoadPcm(track, decoded.samples, decoded.sampleRate, decoded.channels) || !m_audio.Play(track, loop)) { return false; }
+    SetEnabled(m_enabled);
+    if (!m_audio.Play(track, loop)) { return false; }
     m_track = static_cast<int>(track);
+    ++g_playbackStarts;
     std::printf("[bgm] track=%u file=%s loop=%d muted=%d\n", track, kTracks[track], loop, CAudioPlayer::IsMuted());
     return true;
 }
@@ -37,6 +45,7 @@ bool CBGM::NextTrack() {
 
 void CBGM::Update() { m_audio.Update(); }
 void CBGM::SetEnabled(bool enabled) {
+    m_enabled = enabled;
     float volume = 0;
     if (enabled) { volume = 0.3f; }
     m_audio.SetVolume(volume);

@@ -181,6 +181,7 @@ struct MenuState {
     int currencyOffer = -1;
     std::uint64_t currencyReadyAt = 0;
     SurvivalResult result;
+    bool postGameMusic = false;
     GameObjectRef masteryWeapon;
     bool refinementRequired = false;
     unsigned refineryTab = 0, casualtyPage = 0;
@@ -312,7 +313,7 @@ public:
     /** Temporarily route this frame's click exclusively to a modal panel. */
     bool ExchangeClick(bool enabled) { const bool previous = clicked; clicked = enabled; return previous; }
     std::pair<float, float> Cursor() const { return {mouseX, mouseY}; }
-    bool Open(CResTOCManager &toc, PackTables &tables, const CProfileManager *profile = nullptr, bool startup = false) {
+    bool Open(CResTOCManager &toc, PackTables &tables, const CProfileManager *profile = nullptr, bool startup = false, CBGM *music = nullptr) {
         resourceToc = &toc;
         resourceTables = &tables;
         if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return false; }
@@ -328,7 +329,7 @@ public:
         const auto *belt = movies.GetMovie(movies.Ordinal("GLU_MOVIE_STORE_SCROLL"));
         unsigned beltEnd = 0;
         if (!belt || !belt->GetChapterRange(1, storeRestTime, beltEnd)) { return false; }
-        LoadingScreen loading(window, movies, tables, profile, false, startup);
+        LoadingScreen loading(window, movies, tables, profile, false, startup, music);
         if (!loading.IsValid()) { return false; }
         for (unsigned index = 0; index < 7; ++index) {
             const OriginalMenuEntry *entry = OriginalMenuData("MDS_BUTTON_TRUNK", index);
@@ -843,6 +844,9 @@ public:
     bool animateNavigation = true;
     bool inputEnabled = true;
     bool verifyPlayerProjection = false;
+    std::size_t PreviewSoundCount() const { return previewSoundCount; }
+    void EnableSilentPreviewAudio() { previewAudio.EnableSilentValidation(); }
+    AudioPlaybackState PreviewAudioState() const { return previewAudio.GetPlaybackState(); }
     PlayerModel *GetPlayerPreview() const { return equippedPreview.get(); }
     unsigned GetPlayerPreviewSlot() const { return previewGunSlot; }
     bool TakePlayerPreviewSlotChange() {
@@ -854,6 +858,9 @@ public:
     void AdvancePlayerPreview(int deltaMs) {
         CBrother &brother = equippedPreview->weapon->brother;
         brother.UpdateUI(deltaMs);
+        previewAudio.Update();
+        PlayPreviewSounds(brother.GetTorso().TakeSounds());
+        PlayPreviewSounds(brother.GetLegs().TakeSounds());
         if (brother.TakeWeaponSwap() && previewSwapPending) {
             previewGunSlot = 1 - previewGunSlot;
             SelectPlayerUIWeapon(*equippedPreview, previewGunSlot == previewPrimarySlot);
@@ -863,6 +870,28 @@ public:
         }
     }
 private:
+    void PlayPreviewSounds(const std::vector<GameObjectRef> &sounds) {
+        // UpdateUI :137574 uses direct WAV ordinals, not SoundEffect templates.
+        for (const auto &sound : sounds) {
+            const std::uint64_t key = (static_cast<std::uint64_t>(sound.packHash) << 32) | sound.localIndex;
+            if (!previewAudio.HasSound(key)) {
+                std::vector<std::uint8_t> bytes;
+                if (!resourceTables->ReadSectionResource(sound.packHash, GameSection::Wav, sound.localIndex, bytes) ||
+                    !previewAudio.Load(key, bytes)) {
+                    std::printf("[player-ui-audio] failed WAV=%08x:%u\n", sound.packHash, sound.localIndex);
+                    continue;
+                }
+            }
+            if (!previewAudio.Play(key)) {
+                std::printf("[player-ui-audio] playback failed WAV=%08x:%u\n", sound.packHash, sound.localIndex);
+                continue;
+            }
+            ++previewSoundCount;
+            std::printf("[player-ui-audio] WAV=%08x:%u\n", sound.packHash, sound.localIndex);
+        }
+    }
+    CAudioPlayer previewAudio;
+    std::size_t previewSoundCount = 0;
     CResTOCManager *resourceToc = nullptr;
     PackTables *resourceTables = nullptr;
     CShaderProgram textProgram;
@@ -3097,6 +3126,7 @@ const StoreEntry *FindWeaponStore(const std::vector<StoreEntry> &store, const Ga
 
 void BeginPostGame(MenuState &state, const SurvivalGameContext &context, const std::vector<WeaponEntry> &weapons) {
     state.result = context.result;
+    state.postGameMusic = true;
     state.casualtyPage = 0;
     state.refineryTab = 0;
     state.refinementRequired = context.profile.xplodium != 0;
@@ -3698,6 +3728,7 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
             // DoAction38 :94446 chooses original menu20 if ore remains, 19 otherwise.
             unsigned target = 0;
             if (profile.xplodium != 0) { target = 3; }
+            state.postGameMusic = false;
             state.Navigate(target, true);
             return true;
         }
@@ -4667,9 +4698,18 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     const CPlayerProgress::Template &progressData, const CRefinementManager::Template &refinement,
     const std::vector<StoreEntry> &store, const std::vector<WeaponEntry> &weapons,
     const std::vector<ArmorEntry> &armors, MenuState &state, const std::filesystem::path &savePath,
-    const std::string &capturePath, const std::vector<MenuTestClick> *testClicks = nullptr, bool originalProfile = false, CWindow *sharedWindow = nullptr, bool testTransitions = false, MenuTransitionTrace *transitionTrace = nullptr) {
+    const std::string &capturePath, const std::vector<MenuTestClick> *testClicks = nullptr, bool originalProfile = false, CWindow *sharedWindow = nullptr, bool testTransitions = false, MenuTransitionTrace *transitionTrace = nullptr, CBGM *sharedMusic = nullptr) {
+    // CGunBros owns CBGM across loading, gameplay and postgame menus.
     GameMenu view(sharedWindow);
-    if (!view.Open(toc, tables, &profile, state.page == 14)) { return -3; }
+    if (!view.window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return -3; }
+    CBGM ownedMusic;
+    if (sharedMusic == nullptr) { sharedMusic = &ownedMusic; }
+    CBGM &music = *sharedMusic;
+    music.SetEnabled(profile.musicEnabled);
+    music.SetPaused(false);
+    if (!state.postGameMusic && !music.Play(0)) { return -3; }
+    CAudioPlayer::SetEffectsEnabled(profile.soundEnabled);
+    if (!view.Open(toc, tables, &profile, state.page == 14, &music)) { return -3; }
     view.animateNavigation = capturePath.empty() || testTransitions;
     view.scripted = testClicks != nullptr;
     // A new view has a new clock (including deterministic capture sessions).
@@ -4678,10 +4718,6 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     state.socialBound = false;
     state.starBound = false;
     state.modeBound = false;
-    CBGM music;
-    if (!music.Play(0)) { return -3; }
-    music.SetEnabled(profile.musicEnabled);
-    CAudioPlayer::SetEffectsEnabled(profile.soundEnabled);
     CPlayerProgress progress;
     progress.Bind(progressData);
     progress.SetExperience(profile.experience);
@@ -4711,6 +4747,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         wipe.Update(wipeDelta);
         music.Update();
         bool activate = false;
+        const bool wasPostGameMusic = state.postGameMusic;
         const unsigned previousPage = state.page;
         const unsigned previousCategory = state.shopCategory;
         for (std::string cheat = view.window.TakeCheatCode(); !cheat.empty(); cheat = view.window.TakeCheatCode()) {
@@ -4906,6 +4943,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             view.movies.Text(debug, 7, 138, 0, 0.65f);
         }
         // The pressed plate's burst plays above whatever the click opened.
+        if (wasPostGameMusic && !state.postGameMusic && !music.Play(0)) { return -3; }
         view.DrawPress();
         if (view.animateNavigation) {
             // Only navigation between branches sweeps; see MenuBranchPage.
@@ -7393,6 +7431,94 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
     return failures != 0;
 }
 
+/** Actual menu preview and scene handoffs, with isolated save data. */
+int RunAudioTransitionsCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    CPlayerProgress::Template progress;
+    CRefinementManager::Template refinement;
+    std::vector<StoreEntry> store;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armor;
+    if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
+        !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
+        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    const auto savePath = std::filesystem::path("out/audio-transitions") / std::to_string(GetTickCount64());
+    CProfileManager profile;
+    if (!LoadNativeProfile(toc, tables, profile, savePath, std::filesystem::path(ASSET_ROOT) / "saves")) { return 1; }
+    CWindow window;
+    if (!window.Open("Audio transition verification", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    unsigned failures = 0;
+    {
+        GameMenu view(&window);
+        if (!view.Open(toc, tables, &profile)) { return 1; }
+        view.EnableSilentPreviewAudio();
+        MovieRegion panel;
+        if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 2, 0, panel)) { return 1; }
+        for (unsigned actor = 0; actor < 2; ++actor) {
+            profile.playerBrother = actor;
+            if (!view.DrawEquippedPlayer(toc, tables, profile, weapons, armor, 0, nullptr, &panel)) { return 1; }
+            for (unsigned tick = 0; tick < 300; ++tick) { view.AdvancePlayerPreview(16); }
+            for (unsigned exchange = 0; exchange < 2; ++exchange) {
+                const unsigned slot = 1 - view.GetPlayerPreviewSlot();
+                const auto before = view.PreviewSoundCount();
+                if (!view.DrawEquippedPlayer(toc, tables, profile, weapons, armor, slot, nullptr, &panel)) { return 1; }
+                for (unsigned tick = 0; tick < 300; ++tick) { view.AdvancePlayerPreview(16); }
+                const auto sounds = view.PreviewSoundCount() - before;
+                if (sounds == 0 || view.GetPlayerPreviewSlot() != slot || view.PreviewAudioState().voices == 0) { ++failures; }
+                std::printf("[audio-transition-check] store brother=%u slot=%u sounds=%zu failures=%u\n", actor, slot, sounds, failures);
+            }
+        }
+    }
+    CBGM music;
+    music.EnableSilentValidation();
+    if (!music.Play(0)) { return 1; }
+    MenuState state;
+    state.page = 2;
+    unsigned starts = CBGM::GetPlaybackStarts();
+    if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
+        savePath, "out/audio-transition-menu.png", nullptr, false, &window, false, nullptr, &music) != -2) { return 1; }
+    if (CBGM::GetPlaybackStarts() != starts || music.GetTrack() != 0) { ++failures; }
+    std::printf("[audio-transition-check] menu retained=%d extra-starts=%u failures=%u\n",
+        music.GetTrack() == 0, CBGM::GetPlaybackStarts() - starts, failures);
+    SurvivalGameContext context{profile, savePath, 0};
+    context.music = &music;
+    if (RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0,
+        &context, false, false, nullptr, false, &window) != 0) { return 1; }
+    const int battleTrack = music.GetTrack();
+    if (battleTrack <= 0) { ++failures; }
+    starts = CBGM::GetPlaybackStarts();
+    music.SetPaused(true); // Re-entering menus must resume the retained battle track.
+    BeginPostGame(state, context, weapons);
+    if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
+        savePath, "out/audio-transition-postgame.png", nullptr, false, &window, false, nullptr, &music) != -2) { return 1; }
+    if (music.GetTrack() != battleTrack || CBGM::GetPlaybackStarts() != starts) { ++failures; }
+    std::printf("[audio-transition-check] postgame track=%d expected=%d extra-starts=%u failures=%u\n",
+        music.GetTrack(), battleTrack, CBGM::GetPlaybackStarts() - starts, failures);
+    // Drive the real authored close timer; existing postgame checks cover hitboxes.
+    state.page = 27;
+    state.postGameClosing = true;
+    state.postGameCloseTime = 100000;
+    profile.xplodium = 1; // Explicit test fixture chooses the refinery branch.
+    const std::vector<MenuTestClick> closeTicks{{-100, -100, 16}, {-100, -100, 16}};
+    if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
+        savePath, "out/audio-transition-refinery.png", &closeTicks, false, &window, false, nullptr, &music) != -2) { return 1; }
+    if (state.page != 3 || music.GetTrack() != 0) { ++failures; }
+    std::printf("[audio-transition-check] refinery page=%u track=%d failures=%u\n", state.page, music.GetTrack(), failures);
+    const auto playback = music.GetPlaybackState();
+    if (playback.voices != 1 || playback.devicesOpened != 1 || playback.streamsCreated != 1 ||
+        playback.queuedBytes <= 0 || playback.paused) { ++failures; }
+    // Muting is a gain change; switching tracks must not silently enable music.
+    music.SetEnabled(false);
+    if (!music.NextTrack() || music.GetPlaybackState().volume != 0) { ++failures; }
+    music.SetEnabled(true);
+    if (std::abs(music.GetPlaybackState().volume - 0.3f) > 0.001f) { ++failures; }
+    std::printf("[audio-transition-check] real-SDL voices=%u devices=%u streams=%u queued=%lld pause=%d settings-preserved failures=%u\n",
+        playback.voices, playback.devicesOpened, playback.streamsCreated, playback.queuedBytes, playback.paused, failures);
+    return failures != 0;
+}
+
 int RunSceneTransitionCheck(const std::string &bigDirectory) {
     CWindow window;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
@@ -7470,6 +7596,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
             return 1;
         }
     }
+    CBGM music; // Lifetime includes every menu, loading screen and game session.
     MenuState state;
     state.shopGunSlot = profile.activeWeaponSlot;
     state.page = std::min(page, 29u);
@@ -7485,12 +7612,13 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
     if (state.page == 15) { state.page = 0; }
     if (state.page == 19 || state.page == 23) { state.page = 21; }
     while (true) {
-        const int choice = ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, savePath, screenshotPath, nullptr, originalProfile, &window);
+        const int choice = ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, savePath, screenshotPath, nullptr, originalProfile, &window, false, nullptr, &music);
         if (choice == -3) { return 1; }
         if (choice == -2) { return 0; }
         if (choice < 0) { return !profile.SaveToDisk(savePath); }
         if (choice == 5) {
             SurvivalGameContext context{profile, savePath, 0};
+            context.music = &music;
             context.tutorial = true;
             std::string tutorialPack = "pack2";
             unsigned tutorialMap = 7;
@@ -7523,6 +7651,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
                 if (selected.data.type != 2 || OriginalMissionLocked(profile, selected.data, planet.missionInfo[state.hordeStart])) { return 1; }
                 const auto &map = planet.missionInfo[state.hordeStart].map;
                 SurvivalGameContext context{profile, savePath};
+                context.music = &music;
                 context.hordeStart = static_cast<int>(state.hordeStart);
                 if (RunSurvival(bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, "", 0, false, false, false, 2,
                     selected.data.value64, &context, profile.brotherEnabled, false, &selected, false, &window) != 0) { return 1; }
@@ -7539,6 +7668,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
             }
             if (selected == nullptr) { return 1; }
             SurvivalGameContext context{profile, savePath};
+            context.music = &music;
             context.hordeStart = static_cast<int>(state.hordeStart);
             if (RunSurvival(bigDirectory, "pack11", 0, 0, -1, "", 0, false, false, false, 2,
                 selected->data.value64, &context, profile.brotherEnabled, false, selected, false, &window) != 0) { return 1; }
@@ -7549,6 +7679,7 @@ int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screensh
         if (wave >= 500) { wave = 0; }
         if (state.startingWave >= 0) { wave = static_cast<unsigned>(state.startingWave); }
         SurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
+        context.music = &music;
         std::string mapPack;
         unsigned mapIndex = 0;
         if (profile.nativeArchive) {

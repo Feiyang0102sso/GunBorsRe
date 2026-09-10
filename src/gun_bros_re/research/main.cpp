@@ -137,6 +137,7 @@ void PrintUsage() {
         "  --player-weapon [n]       weapon preview: 1-7 category, N/M weapon\n"
         "  --weapons                 list weapon templates and holding overrides\n"
         "  --weapon-check            verify all weapon models and input transitions\n"
+        "  --audio-transitions-check  store move sounds and menu/battle music handoffs\n"
         "  --weapon-effects-check    laser continuity, ray collision and projectile visuals\n"
         "  --arena [n]               combat arena for enemy template n\n"
         "  --arena-check             verify enemy catalogue and combat contracts\n"
@@ -251,6 +252,7 @@ int PromptForHarness() {
         " 73  promotions -- original Invite and Free Warbucks popups\n"
         " 74  loading and wipe -- original CG, STR and menu sweep\n"
         " 72  combat feedback -- spire, authored health bars, hits and audio bursts\n"
+        " 76  audio transitions -- store swap and continuous scene music\n"
         " 75  weapon effects -- laser, Kraken and authored projectile visuals\n"
         " 68  powerup selector -- original layout, input and native purchase\n"
         " 66  pause -- original pause list, help and native preferences\n"
@@ -265,7 +267,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 75) {
+    if (choice < 1 || choice > 76) {
         return 26;
     }
     return choice;
@@ -357,6 +359,7 @@ int main(int argc, char **argv) {
     int armorIndex = -1;
     bool checkWeapons = false;
     bool checkWeaponEffects = false;
+    bool checkAudioTransitions = false;
     bool arena = false;
     bool checkArena = false;
     std::string dumpPackName;
@@ -574,6 +577,8 @@ int main(int argc, char **argv) {
             surveyWeapons = true;
         } else if (std::strcmp(argument, "--weapon-check") == 0) {
             checkWeapons = true;
+        } else if (std::strcmp(argument, "--audio-transitions-check") == 0) {
+            checkAudioTransitions = true;
         } else if (std::strcmp(argument, "--weapon-effects-check") == 0) {
             checkWeaponEffects = true;
         } else if (std::strcmp(argument, "--arena-check") == 0) {
@@ -698,6 +703,7 @@ int main(int argc, char **argv) {
         if (choice == 69) { return RunSceneTransitionCheck(bigDirectory); }
         if (choice == 70) { return RunOriginalDialogCheck(bigDirectory); }
         if (choice == 71) { return RunDualWeaponCheck(bigDirectory); }
+        if (choice == 76) { return RunAudioTransitionsCheck(bigDirectory); }
         if (choice == 75) { return RunWeaponEffectsCheck(bigDirectory); }
         if (choice == 73) { return RunPromotionCheck(bigDirectory); }
         if (choice == 74) { return RunLoadingWipeCheck(bigDirectory); }
@@ -906,6 +912,7 @@ int main(int argc, char **argv) {
                            stateIndex);
     }
     if (surveyWeapons) { return RunWeaponSurvey(bigDirectory); }
+    if (checkAudioTransitions) { return RunAudioTransitionsCheck(bigDirectory); }
     if (checkWeaponEffects) { return RunWeaponEffectsCheck(bigDirectory); }
     if (checkWeapons) { return RunWeaponCheck(bigDirectory); }
     if (runM37) {

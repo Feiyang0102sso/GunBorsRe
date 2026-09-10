@@ -111,6 +111,7 @@ void CAudioPlayer::SetVolume(float volume) {
     if (volume < 0) { volume = 0; }
     if (volume > 1) { volume = 1; }
     m_impl->volume = volume;
+    if (m_impl->silentDeviceValidation) { volume = 0; }
     for (PlayingSound &sound : m_impl->playing) { SDL_SetAudioStreamGain(sound.stream, volume); }
 }
 
@@ -176,7 +177,9 @@ bool CAudioPlayer::Play(std::uint64_t key, bool loop, std::uint64_t owner) {
         std::printf("[audio] could not open playback stream: %s\n", SDL_GetError());
         return false;
     }
-    SDL_SetAudioStreamGain(stream, m_impl->volume);
+    float volume = m_impl->volume;
+    if (m_impl->silentDeviceValidation) { volume = 0; }
+    SDL_SetAudioStreamGain(stream, volume);
     if (!SDL_PutAudioStreamData(stream, sound.samples.data(),
                                 static_cast<int>(sound.samples.size())) ||
         !SDL_FlushAudioStream(stream)) {
@@ -253,6 +256,22 @@ bool CAudioPlayer::HasSound(std::uint64_t key) const {
 
 unsigned CAudioPlayer::GetVoiceCount() const {
     return static_cast<unsigned>(m_impl->playing.size());
+}
+
+void CAudioPlayer::EnableSilentValidation() {
+    m_impl->silentDeviceValidation = true;
+    SetVolume(m_impl->volume);
+}
+
+AudioPlaybackState CAudioPlayer::GetPlaybackState() const {
+    AudioPlaybackState state;
+    state.voices = GetVoiceCount();
+    state.devicesOpened = m_impl->devicesOpened;
+    state.streamsCreated = m_impl->streamsCreated;
+    state.paused = m_impl->paused;
+    state.volume = m_impl->volume;
+    for (const auto &sound : m_impl->playing) { state.queuedBytes += SDL_GetAudioStreamQueued(sound.stream); }
+    return state;
 }
 
 unsigned CAudioPlayer::GetDurationMs(std::uint64_t key) const {

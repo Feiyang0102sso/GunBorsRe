@@ -58,6 +58,8 @@ public:
 
     /** Move the clock on. The move's own speed scales `deltaMs`. */
     void Update(std::int32_t deltaMs);
+    /** Collect authored WAV cues after an externally advanced UI animation. */
+    void CollectSounds(std::int32_t previousMs);
     /** Direct WAV references emitted by crossed move frames (not sound templates). */
     std::vector<GameObjectRef> TakeSounds();
 

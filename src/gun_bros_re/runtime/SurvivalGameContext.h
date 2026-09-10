@@ -17,6 +17,8 @@ struct SurvivalResult {
     std::vector<WeaponCombatProgress> weapons;
 };
 
+class CBGM;
+
 struct SurvivalGameContext {
     CProfileManager &profile;
     std::filesystem::path savePath;
@@ -30,5 +32,6 @@ struct SurvivalGameContext {
     std::uint64_t startingExperience = 0;
     std::map<std::uint64_t, unsigned> accountedWeaponExperience;
     SurvivalResult result;
+    CBGM *music = nullptr; // Owned by the outer game flow, including loading and results.
 };
 #endif

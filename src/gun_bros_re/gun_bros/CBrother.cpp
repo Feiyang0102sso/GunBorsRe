@@ -313,6 +313,7 @@ void CBrother::UpdateUI(std::int32_t deltaMs) {
     auto &torso = m_torso.GetAnimation();
     auto &legs = m_legs.GetAnimation();
     const int previousTorsoTime = torso.GetTimeMs();
+    const int previousLegsTime = legs.GetTimeMs();
     const int torsoDuration = torso.GetRangeDurationMs();
     const int legsDuration = legs.GetRangeDurationMs();
     // UpdateUI calls the animation controller directly and truncates the
@@ -328,6 +329,9 @@ void CBrother::UpdateUI(std::int32_t deltaMs) {
         const int phase = static_cast<int>(previousTorsoTime * ratio * speed);
         legs.SetTimeMs(phase % legsDuration + legs.GetRangeStartMs());
     }
+    // UpdateUI :137565 queries both move sets after advancing their clocks.
+    m_torso.CollectSounds(previousTorsoTime);
+    m_legs.CollectSounds(previousLegsTime);
     m_gun->Update(deltaMs);
     m_interpreter.Refresh();
 }
