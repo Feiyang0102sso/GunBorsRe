@@ -1907,6 +1907,7 @@ public:
     }
 
     void Reset() override {
+        m_activeProps.clear();
         for (PlacedProp &prop : m_map.props) { prop.active = false; }
         BuildCollisionScene(m_map);
     }
@@ -1915,7 +1916,17 @@ public:
         // Original OnStart spawns this layer's props. Changing the update
         // layer does not remove objects already added to CLevel's pools.
         unsigned spawned = 0;
+        // CLayerObject::OnStart :126250 visits the authored object indices.
+        // Rendering sorts m_map.props spatially, so maintain a separate registration order.
+        std::vector<PlacedProp *> layerProps;
         for (PlacedProp &prop : m_map.props) {
+            if (prop.objectLayer == static_cast<unsigned>(layer)) { layerProps.push_back(&prop); }
+        }
+        std::sort(layerProps.begin(), layerProps.end(), [](const PlacedProp *first, const PlacedProp *second) {
+            return first->objectId < second->objectId;
+        });
+        for (PlacedProp *instance : layerProps) {
+            PlacedProp &prop = *instance;
             if (prop.objectLayer != static_cast<unsigned>(layer) || prop.active) { continue; }
             bool manual = false;
             for (unsigned index = 0; index < m_map.map.GetObjectLayerCount(); ++index) {
@@ -1929,6 +1940,7 @@ public:
             // cleared by SetSpawnMode. Native SpawnInstance activates them later.
             if (manual) { continue; }
             prop.active = true;
+            m_activeProps.push_back(&prop);
             ++spawned;
             if (prop.runtime == nullptr) { continue; }
             prop.runtime->SetLevelContext(&m_level);
@@ -1944,6 +1956,7 @@ public:
             if (prop.objectLayer != static_cast<unsigned>(layer) || prop.objectId != objectId) { continue; }
             if (prop.active) { return true; }
             prop.active = true;
+            m_activeProps.push_back(&prop);
             if (prop.runtime != nullptr) {
                 prop.runtime->SetLevelContext(&m_level);
                 prop.runtime->Bind(prop.sprite->data, &prop.sprite->durations);
@@ -1968,12 +1981,50 @@ public:
         }
     }
 
-    bool GetObjectPosition(int objectId, float &x, float &y) const override {
-        for (const PlacedProp &prop : m_map.props) {
-            if (!prop.active || prop.objectId != objectId || (prop.runtime != nullptr && prop.runtime->IsRemoved())) { continue; }
-            x = prop.x; y = prop.y; return true;
+    unsigned ResolveIndicatorTarget(int objectId) const override {
+        for (unsigned index = 0; index < m_activeProps.size(); ++index) {
+            const auto &prop = *m_activeProps[index];
+            if (prop.objectId == objectId && prop.active && (!prop.runtime || !prop.runtime->IsRemoved())) { return index + 1; }
         }
-        return false;
+        return 0;
+    }
+
+    bool GetObjectPosition(int objectId, float &x, float &y) const override {
+        const unsigned key = ResolveIndicatorTarget(objectId);
+        if (key == 0) { return false; }
+        x = m_activeProps[key - 1]->x;
+        y = m_activeProps[key - 1]->y;
+        return true;
+    }
+
+    bool GetIndicatorTarget(unsigned key, float &x, float &y) const override {
+        if (key == 0 || key > m_activeProps.size()) { return false; }
+        const auto &prop = *m_activeProps[key - 1];
+        if (!prop.active || (prop.runtime && prop.runtime->IsRemoved())) { return false; }
+        // CProp::GetBounds :123561 unions the active animation bounds of its
+        // three SpritePlayers. GetOrientation :191317 tracks the rectangle center.
+        const PropSlot *slots[] = {BackgroundSlotFor(prop), MainSlotFor(prop), ForegroundSlotFor(prop)};
+        float left = 0, top = 0, right = 0, bottom = 0;
+        bool hasBounds = false;
+        for (const auto *slot : slots) {
+            if (!slot) { continue; }
+            for (const auto &frame : slot->quadsByStep) {
+                for (const auto &quad : frame) {
+                    if (!hasBounds) {
+                        left = right = quad.offsetX;
+                        top = bottom = quad.offsetY;
+                        hasBounds = true;
+                    }
+                    left = std::min(left, float(quad.offsetX));
+                    top = std::min(top, float(quad.offsetY));
+                    right = std::max(right, float(quad.offsetX + quad.Width()));
+                    bottom = std::max(bottom, float(quad.offsetY + quad.Height()));
+                }
+            }
+        }
+        x = prop.x + left + int(right - left) / 2;
+        y = prop.y + top + int(bottom - top) / 2;
+        return true;
     }
 
     void Update(int deltaMs) override {
@@ -2170,6 +2221,7 @@ private:
     }
 
     LoadedMap &m_map;
+    std::vector<PlacedProp *> m_activeProps; // Stable until the next level Reset.
     const CLayerCollision *m_bodyLayer = nullptr;
     const CLayerCollision *m_bulletLayer = nullptr;
     CombatScene &m_scene;
@@ -3116,7 +3168,10 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     MovieRenderer loadingMovies;
     CResPackTOC *loadingCore = toc.GetPack(toc.GetCorePackIndex());
     if (!loadingMovies.Init(*loadingCore, *loadingCore)) { return 1; }
-    LoadingScreen loading(window, loadingMovies, tables);
+    const CProfileManager *loadingProfile = nullptr;
+    if (gameContext != nullptr) { loadingProfile = &gameContext->profile; }
+    LoadingScreen loading(window, loadingMovies, tables, loadingProfile, true);
+    if (!loading.IsValid()) { return 1; }
     if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     SurvivalHud survivalHud;
@@ -3390,7 +3445,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         gameContext->missionLevel = archiveMission->data.level;
     }
     if (horde) { session.SetHorde(true); }
-    if (gameContext != nullptr && pickupProfile->nativeArchive) { session.SetOriginalHud(&survivalHud); }
+    session.SetOriginalHud(&survivalHud);
     const float startX = loaded.players[0].x;
     const float startY = loaded.players[0].y;
     session.SetStartWave(static_cast<int>(startWave));
@@ -3412,6 +3467,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     scene.SetProps(&props);
     session.Restart(startX, startY);
     loading.Finish();
+    if (!loading.IsValid()) { return 1; }
     if (loading.Cancelled()) { return 0; }
     if (feedbackStudy) {
         // Real BIG instances and the same clocks as RunSurvival; no source save.
@@ -3426,6 +3482,33 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         const float moved = std::hypot(scene.playerX - beforeX, scene.playerY - beforeY);
         if (moved <= 0) { ++checkFailures; }
         std::printf("[feedback-check] notice-moving=%.3f interstitial=%d failures=%u\n", moved, survivalHud.HasInterstitial(), checkFailures);
+        // Reproduce duplicate object index 0 in the actual layer-2/layer-3 map.
+        for (const auto &prop : loaded.props) {
+            if (!prop.active || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
+            float targetX = 0, targetY = 0;
+            const unsigned target = props.ResolveIndicatorTarget(prop.objectId);
+            const bool bound = target != 0 && props.GetIndicatorTarget(target, targetX, targetY);
+            float placedX = 0, placedY = 0;
+            const bool originalOrder = props.GetObjectPosition(prop.objectId, placedX, placedY) &&
+                placedX == prop.x && placedY == prop.y;
+            bool found = false;
+            for (const auto &marker : session.GetLevel().GetIndicators()) {
+                if (marker.type != 1 || marker.objectId != prop.objectId) { continue; }
+                found = bound && marker.targetKey == ((2ULL << 32) | target) && marker.x == targetX && marker.y == targetY;
+            }
+            if (!found || !originalOrder) { ++checkFailures; }
+            // A later enemy sharing the map index must not steal the marker.
+            auto *duplicate = scene.Spawn(0, prop.x + 600, prop.y + 600);
+            if (!duplicate) { return 1; }
+            duplicate->objectId = prop.objectId;
+            float afterX = 0, afterY = 0;
+            const bool retained = session.GetIndicatorTarget((2ULL << 32) | target, afterX, afterY) &&
+                afterX == targetX && afterY == targetY;
+            if (!retained) { ++checkFailures; }
+            duplicate->model.enemy.combat.removed = true;
+            std::printf("[indicator-check] layer=%u object=%d placed=%.1f,%.1f target=%.1f,%.1f original-order=%d bound=%d duplicate-retained=%d failures=%u\n",
+                prop.objectLayer, prop.objectId, prop.x, prop.y, targetX, targetY, originalOrder, found, retained, checkFailures);
+        }
         // The spire's four phases come from pack7 PROP33's Flow. Compare the
         // runtime clock against native 58's actual Q8 scale, not guessed seconds.
         for (PlacedProp &prop : loaded.props) {
@@ -4448,17 +4531,19 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     leftPowerup.localIndex = 5;
     rightPowerup.packHash = leftPowerup.packHash;
     rightPowerup.localIndex = 13;
-    std::string shopMessage;
     const bool checkControls = gameContext != nullptr && gameContext->checkControls;
     unsigned controlFrame = 0;
+    // The keyboard fixture needs owned charges; selector purchases/equipping
+    // are separately exercised by RunOriginalPowerupSelectorCheck.
+    if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
     const std::uint64_t controlsInitialBucks = pickupProfile->warbucks;
     const bool controlsInitialSound = pickupProfile->soundEnabled;
     const unsigned controlsInitialGrenades = pickupProfile->GetPowerupCount(rightPowerup);
     const GameObjectRef controlsInitialLeft = leftPowerup;
     // Run the real HUD hit tests and the same host action path. No OS input.
-    constexpr float controlClicks[][2] = {{300,720}, {250,328}, {700,524}, {250,230},
-        {320,524}, {510,385}, {710,720}, {20,20}, {200,530}, {200,350}};
-    constexpr unsigned controlClickCount = sizeof(controlClicks) / sizeof(controlClicks[0]);
+    constexpr SurvivalHudAction controlActions[] = {SurvivalHudAction::OpenShop, SurvivalHudAction::CloseShop,
+        SurvivalHudAction::SwapWeapon, SurvivalHudAction::Pause, SurvivalHudAction::Resume};
+    constexpr unsigned controlClickCount = sizeof(controlActions) / sizeof(controlActions[0]);
     // Test through the production key dispatcher after the mouse regression.
     const KeyCode controlKeys[] = {KeyCode::Digit1, KeyCode::Escape, KeyCode::Digit2,
         KeyCode::Q, KeyCode::None, KeyCode::E, KeyCode::F, KeyCode::R};
@@ -4508,8 +4593,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         state.warbucks = pickupProfile->warbucks;
         state.soundEnabled = pickupProfile->soundEnabled;
         state.musicEnabled = pickupProfile->musicEnabled;
-        state.originalUi = gameContext != nullptr && pickupProfile->nativeArchive.has_value();
-        if (performanceStudy) { state.originalUi = true; }
+        state.originalUi = true;
         state.dockedSticks = pickupProfile->options.DockedSticks();
         state.powerupStatus.healthPercent = static_cast<int>(std::lround(vitals.health * 100 / vitals.maximum));
         state.powerupStatus.shield = player.weapon->brother.IsShield();
@@ -4517,7 +4601,6 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         state.powerupStatus.autoFire = player.weapon->brother.IsAutoFire();
         state.powerupStatus.turret = player.weapon->brother.IsTurretActive();
         for (unsigned type = 0; type < 3; ++type) { state.powerupStatus.frenzyTypes[type] = player.weapon->brother.IsFrenzyType(type); }
-        state.shopMessage = shopMessage;
         state.dead = vitals.dead;
         state.cleared = session.GetLevel().IsCleared();
         state.transitioning = session.IsTransitioning();
@@ -4598,15 +4681,24 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         survivalHud.Scroll(inputState, menuScroll);
         bool pointerDown = window.IsLeftMouseDown();
         if (checkControls && controlFrame < controlClickCount) {
-            inputX = controlClicks[controlFrame][0];
-            inputY = controlClicks[controlFrame][1];
+            // Bind and finish authored menu entrance before querying its live hitbox.
+            if (!survivalHud.Draw(inputState)) { return 1; }
+            survivalHud.AdvanceMenu(2000);
+            if (!survivalHud.Draw(inputState)) { return 1; }
+            MovieRegion target;
+            if (!survivalHud.FindActionRegion(inputState, controlActions[controlFrame], target)) {
+                std::printf("[combat-controls-check] missing original action=%d frame=%u\n", int(controlActions[controlFrame]), controlFrame);
+                return 1;
+            }
+            inputX = target.x + target.width / 2;
+            inputY = target.y + target.height / 2;
             survivalHud.Pointer(inputState, inputX, inputY, false);
             pointerDown = true;
         }
         const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
         const SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
         if (action == SurvivalHudAction::Exit) { break; }
-        if (action == SurvivalHudAction::OpenShop) { shopOpen = true; itemChoice = false; shopMessage.clear(); accumulator = 0; }
+        if (action == SurvivalHudAction::OpenShop) { shopOpen = true; itemChoice = false; accumulator = 0; }
         if (action == SurvivalHudAction::CloseShop) { shopOpen = false; itemChoice = false; }
         if (action == SurvivalHudAction::CancelItem) { itemChoice = false; }
         const StoreEntry *shopItem = survivalHud.SelectedItem();
@@ -4614,20 +4706,13 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             const GameObjectRef &resource = shopItem->data.objects.front().object;
             if (action == SurvivalHudAction::BuyItem) {
                 const PurchaseResult result = pickupProfile->AcquireItem(shopItem->data, progress.GetLevel());
-                shopMessage = "ITEMS ADDED";
-                if (result == PurchaseResult::InsufficientCoins) { shopMessage = "NOT ENOUGH COINS"; }
-                if (result == PurchaseResult::InsufficientWarbucks) { shopMessage = "NOT ENOUGH WARBUCKS"; }
-                if (result == PurchaseResult::LevelLocked) { shopMessage = "LEVEL " + std::to_string(shopItem->data.requiredLevel) + " REQUIRED"; }
-                if (result == PurchaseResult::Unsupported) { shopMessage = "ITEM UNAVAILABLE"; }
                 if (result == PurchaseResult::Purchased && gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
-                itemChoice = result == PurchaseResult::Purchased;
                 // CPowerUpSelector::OnPurchase :184861 updates quantity in place.
                 // An icon tap, not a purchase, enters the use/equip selection state.
-                if (inputState.originalUi) { itemChoice = false; }
-                if (inputState.originalUi) { survivalHud.ReportSelectorPurchase(result, inputState); }
+                itemChoice = false;
+                survivalHud.ReportSelectorPurchase(result, inputState);
             } else {
                 itemChoice = pickupProfile->GetPowerupCount(resource) > 0;
-                if (!itemChoice) { shopMessage = "BUY THIS ITEM TO EQUIP IT"; }
             }
         }
         if (shopItem != nullptr && itemChoice && (action == SurvivalHudAction::EquipLeft || action == SurvivalHudAction::EquipRight || action == SurvivalHudAction::UseNow)) {
@@ -4636,7 +4721,6 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (action == SurvivalHudAction::EquipRight) { rightPowerup = resource; itemChoice = false; }
             if (action == SurvivalHudAction::UseNow) {
                 if (powerups.SelectResource(resource) && powerups.Use()) { shopOpen = false; itemChoice = false; }
-                else { shopMessage = "CANNOT USE THIS ITEM RIGHT NOW"; }
             }
         }
         if (action == SurvivalHudAction::UseLeft && !paused && !shopOpen && !session.IsTransitioning()) {
@@ -4703,7 +4787,6 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             if (key == KeyCode::Digit1 && gameContext != nullptr && !paused && !vitals.dead && !session.IsTransitioning()) {
                 shopOpen = true;
                 itemChoice = false;
-                shopMessage.clear();
                 accumulator = 0;
                 continue;
             }
@@ -4794,7 +4877,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         music.SetPaused(paused || shopOpen);
         music.Update();
         const std::size_t shotsBeforeSwap = effects.GetShotCount();
-        const bool checkSwapFiring = checkControls && (controlFrame == 6 || controlFrame == controlClickCount + 2);
+        const bool checkSwapFiring = checkControls && (controlFrame == 2 || controlFrame == controlClickCount + 2);
         while (accumulator >= 16) {
             if (!session.HasOriginalHud()) { survivalHud.Advance(16); }
             if (pendingWeapon < weapons.size() && !swapEventAccepted) {
@@ -4907,9 +4990,9 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             indicator.y = (indicator.y - camera.y) * camera.zoom * 768 / height;
         }
         if (withBrother) {
-            hudState.brotherName = "PERCY GUN";
-            if (brotherModel.brotherIndex == 1) { hudState.brotherName = "FRANCIS GUN"; }
-            // CLevel::DrawBrotherName :120373 anchors three collision radii
+            // CLevel::Bind :121881 leaves this empty for the default local
+            // partner; only a selected friend or multiplayer peer supplies a name.
+            // CLevel::DrawBrotherLabel :120351 anchors three collision radii
             // above the AI's world position and follows the level's alpha.
             hudState.brotherLabelX = (brother.x - camera.x) * camera.zoom * 1024 / width;
             hudState.brotherLabelY = (brother.y - scene.GetPlayerRadius() * 3 - camera.y) * camera.zoom * 768 / height;
@@ -4929,16 +5012,15 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (!survivalHud.Draw(hudState)) { return 1; }
         if (!powerups.DrawMovies()) { return 1; }
         if (checkControls && controlFrame < controlClickCount) {
-            if (controlFrame == 1 && !window.SaveFrame("out/combat-controls-shop.png")) { return 1; }
-            if (controlFrame == 7 && !window.SaveFrame("out/combat-controls-pause.png")) { return 1; }
+            if (controlFrame == 0 && !window.SaveFrame("out/combat-controls-shop.png")) { return 1; }
+            if (controlFrame == 3 && !window.SaveFrame("out/combat-controls-pause.png")) { return 1; }
             if (controlFrame + 1 == controlClickCount) {
-                const bool purchased = pickupProfile->warbucks == controlsInitialBucks - 4 &&
-                    pickupProfile->GetPowerupCount(rightPowerup) == controlsInitialGrenades + 10;
-                const bool equipped = leftPowerup.packHash == rightPowerup.packHash && leftPowerup.localIndex == 13 && rightPowerup.localIndex == 13;
-                const bool controlsPassed = purchased && equipped && equippedWeaponSlot == 1 &&
-                    pickupProfile->soundEnabled != controlsInitialSound && !paused && !shopOpen;
-                std::printf("[combat-controls-check] purchase=%d equip-both=%d weapon=%u sound=%d resume=%d failures=%d\n",
-                    purchased, equipped, equippedWeaponSlot, pickupProfile->soundEnabled != controlsInitialSound, !paused && !shopOpen, !controlsPassed);
+                const bool inventoryUnchanged = pickupProfile->warbucks == controlsInitialBucks &&
+                    pickupProfile->GetPowerupCount(rightPowerup) == controlsInitialGrenades;
+                const bool controlsPassed = inventoryUnchanged && equippedWeaponSlot == 1 &&
+                    pickupProfile->soundEnabled == controlsInitialSound && !paused && !shopOpen;
+                std::printf("[combat-controls-check] original-hitboxes=5 inventory-unchanged=%d weapon=%u resume=%d failures=%d\n",
+                    inventoryUnchanged, equippedWeaponSlot, !paused && !shopOpen, !controlsPassed);
                 if (!controlsPassed) { ++checkFailures; }
             }
         }

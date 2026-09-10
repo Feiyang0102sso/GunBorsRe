@@ -33,6 +33,8 @@ public:
      *        texture gets tiled across a surface.
      */
     bool Create(const PNGImage &image, GLenum wrapMode = GL_CLAMP_TO_EDGE);
+    /** GPU copy for menu transition surfaces; OpenGL framebuffer orientation. */
+    bool CaptureFramebuffer();
 
     void Destroy();
 

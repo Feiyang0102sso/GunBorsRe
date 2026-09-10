@@ -39,6 +39,7 @@ public:
     bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) override;
     bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) override;
     bool GetObjectPosition(int objectId, float &x, float &y) const override;
+    std::uint64_t ResolveIndicatorTarget(int objectId) const override;
     bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const override;
     CLevel &GetLevel() { return m_level; }
     bool IsTransitioning() const;

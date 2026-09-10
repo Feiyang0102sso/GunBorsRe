@@ -229,14 +229,14 @@ void MovieRenderer::Rectangle(float x, float y, float width, float height, float
     m_markers.Draw(m_colorProgram, m_projection, r, g, b, alpha);
 }
 
-void MovieRenderer::Image(const CTexture &texture, float x, float y, float width, float height) {
+void MovieRenderer::Image(const CTexture &texture, float x, float y, float width, float height, bool flipVertical) {
     const float scale = std::min(width / texture.GetWidth(), height / texture.GetHeight());
     const float drawnWidth = texture.GetWidth() * scale;
     const float drawnHeight = texture.GetHeight() * scale;
     const SourceRect source{0, 0, static_cast<std::uint16_t>(texture.GetWidth()), static_cast<std::uint16_t>(texture.GetHeight())};
     m_batch.Begin();
     m_batch.AddQuad(texture, x + (width - drawnWidth) / 2, y + (height - drawnHeight) / 2,
-        drawnWidth, drawnHeight, source, false, false, BlendMode::Alpha);
+        drawnWidth, drawnHeight, source, false, flipVertical, BlendMode::Alpha);
     Flush();
 }
 

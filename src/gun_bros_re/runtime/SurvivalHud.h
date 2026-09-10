@@ -37,7 +37,6 @@ struct SurvivalHudState {
     GameObjectRef leftPowerup, rightPowerup;
     unsigned leftCount = 0, rightCount = 0;
     std::vector<PowerupInventoryEntry> inventory;
-    std::string shopMessage;
     std::string weapon, item, buffs, dialog, mission;
     int tutorialStep = -1;
     std::string brotherName;
@@ -73,6 +72,8 @@ public:
     bool BackFromSelectorPrompt();
     void ReportSelectorPurchase(PurchaseResult result, const SurvivalHudState &state);
     const StoreEntry *SelectedItem() const;
+    // Research/accessibility queries use the same authored hit regions as input.
+    bool FindActionRegion(const SurvivalHudState &state, SurvivalHudAction action, MovieRegion &region) const;
 private:
     CDialogPopup m_dialog;
     struct Button;
@@ -115,20 +116,13 @@ private:
     void Centre(const std::string &text, float y, unsigned font = 0, float scale = 1);
     void Icon(unsigned type, const GameObjectRef &object, const MovieRegion &region);
     void ObserveProgress(const SurvivalHudState &state);
-    void DrawNotice(bool originalUi);
+    void DrawNotice();
     void QueueOriginalNotice(const char *movie, const std::string &title, const std::string &footer = "", bool releaseLevel = false);
     std::string OriginalNoticeNumber(const char *name, unsigned number);
-    void DrawControls(const SurvivalHudState &state);
-    void DrawShop(const SurvivalHudState &state);
-    void CountBadge(unsigned count, float x, float y, float diameter);
-    std::vector<unsigned> m_shopEntries;
     int m_selectedItem = -1;
-    unsigned m_shopOffset = 0;
-    unsigned m_pauseOffset = 0;
     struct Notice { unsigned movie, elapsed; std::string title, footer; bool releaseLevel = false; };
     std::vector<Notice> m_notices;
-    unsigned m_previousLevel = 0, m_previousWave = 0;
-    unsigned m_previousBossIntro = 0;
+    unsigned m_previousLevel = 0;
     bool m_observedProgress = false;
     bool m_interstitialCompleted = false;
     mutable MovieRenderer m_movies;

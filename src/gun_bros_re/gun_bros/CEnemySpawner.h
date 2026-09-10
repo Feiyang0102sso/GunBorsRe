@@ -26,6 +26,7 @@ public:
     virtual bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) { return false; }
     virtual bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) { return false; }
     virtual bool GetObjectPosition(int objectId, float &x, float &y) const { return false; }
+    virtual std::uint64_t ResolveIndicatorTarget(int objectId) const { return 0; }
     virtual bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const { return false; }
     virtual unsigned GetPowerupCount(unsigned localIndex) const { return 0; }
 };

@@ -13,6 +13,9 @@
 bool CLevel::SetIndicator(int objectId, unsigned type, std::uint64_t targetKey) {
     if (type >= 7 || m_indicators.size() >= 30 || m_world == nullptr) { return false; }
     CLevelIndicator indicator;
+    // CLevel::FunctionResolver native 49 :117927 resolves once, then Init
+    // retains the target instance. A drawing-order ID search is not equivalent.
+    if (targetKey == 0) { targetKey = m_world->ResolveIndicatorTarget(objectId); }
     indicator.objectId = objectId;
     indicator.targetKey = targetKey;
     indicator.type = type;

@@ -456,6 +456,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\gun_bros_re\runtime\HostSettings.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\MenuWipe.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\OriginalLoadingSplash.h" />
+    <ClInclude Include="src\gun_bros_re\runtime\OriginalPromotionPopup.h" />
+    <ClInclude Include="src\gun_bros_re\engine\CKeysetResource.h" />
+    <None Include="src\gun_bros_re\runtime\OriginalSplashData.inc" />
+    <None Include="src\tools\extract_ui_transition_statics.py" />
+    <None Include="docs\ui-restoration-2026-09-09.md" />
     <ClInclude Include="src\gun_bros_re\runtime\LoadingScreen.h" />
     <ClCompile Include="src\gun_bros_re\runtime\HostSettings.cpp" />
     <ClInclude Include="src\gun_bros_re\gun_bros\CDailyBonusTracking.h" />

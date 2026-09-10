@@ -25,6 +25,8 @@ int RunPostGameMenuCheck(const std::string &bigDirectory);
 class CWindow;
 int RunDualWeaponCheck(const std::string &bigDirectory);
 int RunSceneTransitionCheck(const std::string &bigDirectory);
+int RunPromotionCheck(const std::string &bigDirectory);
+int RunLoadingWipeCheck(const std::string &bigDirectory);
 int RunOriginalDialogCheck(const std::string &bigDirectory);
 int RunGameFrontEnd(const std::string &bigDirectory, const std::string &screenshotPath = "", unsigned page = 0,
     bool originalProfile = false, const std::string &profilePath = "", CWindow *sharedWindow = nullptr);

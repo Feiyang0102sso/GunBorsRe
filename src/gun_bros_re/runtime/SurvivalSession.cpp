@@ -300,7 +300,24 @@ bool SurvivalSession::SpawnPickupAt(const GameObjectRef &pickup, float x, float 
     return true;
 }
 
+std::uint64_t SurvivalSession::ResolveIndicatorTarget(int objectId) const {
+    // Native 49 binds an existing map object once; later enemies may reuse its ID.
+    if (m_props != nullptr) {
+        const unsigned key = m_props->ResolveIndicatorTarget(objectId);
+        if (key != 0) { return (2ULL << 32) | key; }
+    }
+    for (const auto &actor : m_scene.enemies) {
+        if (actor->objectId == objectId && !actor->model.enemy.combat.dead && !actor->model.enemy.combat.removed) {
+            return actor->model.enemy.combat.id;
+        }
+    }
+    return 0;
+}
+
 bool SurvivalSession::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
+    if ((key >> 32) == 2) {
+        return m_props != nullptr && m_props->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
+    }
     if ((key >> 32) == 1) {
         return m_pickups != nullptr && m_pickups->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
@@ -482,10 +499,13 @@ void SurvivalSession::UpdateCamera(int deltaMs) {
     m_scene.SetViewCenter(m_map.GetCamera().GetX(), m_map.GetCamera().GetY());
     const float width = m_viewWidth * scale;
     const float height = m_viewHeight * scale;
-    // The original reserves 25 screen units at top/sides and 100 at bottom.
-    m_level.UpdateIndicators(deltaMs, m_map.GetCamera().GetX() - width * 0.5f + width * 20 / 1024,
-        m_map.GetCamera().GetY() - height * 0.5f + height * 20 / 768,
-        width * 984 / 1024, height * 668 / 768);
+    // Same camera-scaled 25/25/100 margins as CLevelIndicator::Init :191653.
+    const float viewportFactor = std::min(m_viewWidth / 480.0f, m_viewHeight / 320.0f);
+    const float margin = 25 * viewportFactor * scale;
+    const float bottomMargin = 100 * viewportFactor * scale;
+    m_level.UpdateIndicators(deltaMs, m_map.GetCamera().GetX() - width * 0.5f + margin,
+        m_map.GetCamera().GetY() - height * 0.5f + margin,
+        width - 2 * margin, height - margin - bottomMargin);
 }
 
 void SurvivalSession::UpdateAfterDeath(int deltaMs) {

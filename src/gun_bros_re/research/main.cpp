@@ -74,7 +74,7 @@ void PrintUsage() {
         "  --survival-check          real-map projectile/wave integration check\n"
         "  --brother-check           AI-only firing, death and wave revival check\n"
         "  --brother                 add the original AI follow/aim policy to --play\n"
-        "  --game-menu-check         refine, buy, equip and play an isolated profile\n"
+        "  --game-menu-check         original navigation, help, social, promotions and transitions\n"
         "  --store-card-check        verify GUNS/ARMOR/POWER UPS cards and capture stages\n"
         "  --upgrade-popup-check     verify original mastery playback and purchase\n"
         "  --native-profile-check    verify original DataStore files and new profile\n"
@@ -98,6 +98,8 @@ void PrintUsage() {
         "  --package-purchase-check  verify package delivery, equipment and restart\n"
         "  --daily-bonus-check       original rewards, calendar cycle and save checks\n"
         "  --tutorial-check          original move, fire, swap and grenade tutorial\n"
+        "  --loading-wipe-check original CG/STR pairs and two-region menu wipe\n"
+        "  --promotion-check original Invite / Free Warbucks modal flow\n"
         "  --scene-transition-check  verify logo/menu/game share a window and GL context\n"
         "  --dialog-check            original BIG dialog playback and completion\n"
         "  --dual-weapon-check       both equipped stamps, distinct slots, save reload\n"
@@ -245,6 +247,8 @@ int PromptForHarness() {
         " 69  scene transitions -- logo, menu, game, menu on one window\n"
         " 70  dialog -- original BIG popup, portrait and automatic completion\n"
         " 71  dual weapons -- equipped stamps, duplicate guard and native save\n"
+        " 73  promotions -- original Invite and Free Warbucks popups\n"
+        " 74  loading and wipe -- original CG, STR and menu sweep\n"
         " 72  combat feedback -- spire, authored health bars, hits and audio bursts\n"
         " 68  powerup selector -- original layout, input and native purchase\n"
         " 66  pause -- original pause list, help and native preferences\n"
@@ -259,7 +263,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 72) {
+    if (choice < 1 || choice > 74) {
         return 26;
     }
     return choice;
@@ -294,6 +298,8 @@ int main(int argc, char **argv) {
     bool checkPowerupSelector = false;
     bool checkTutorial = false;
     bool checkPerformance = false;
+    bool checkLoadingWipe = false;
+    bool checkPromotion = false;
     bool checkSceneTransition = false;
     bool checkDualWeapon = false;
     bool checkCombatFeedback = false;
@@ -529,6 +535,10 @@ int main(int argc, char **argv) {
             checkTutorial = true;
         } else if (std::strcmp(argument, "--daily-bonus-check") == 0) {
             checkDailyBonus = true;
+        } else if (std::strcmp(argument, "--loading-wipe-check") == 0) {
+            checkLoadingWipe = true;
+        } else if (std::strcmp(argument, "--promotion-check") == 0) {
+            checkPromotion = true;
         } else if (std::strcmp(argument, "--scene-transition-check") == 0) {
             checkSceneTransition = true;
         } else if (std::strcmp(argument, "--dual-weapon-check") == 0) {
@@ -645,6 +655,8 @@ int main(int argc, char **argv) {
     // Retail startup now enters the game; the historical menu above is explicit.
     if (modeArgumentCount == 0) { playGame = true; }
     if (checkMedia) { return RunMediaCheck(); }
+    if (checkLoadingWipe) { return RunLoadingWipeCheck(bigDirectory); }
+    if (checkPromotion) { return RunPromotionCheck(bigDirectory); }
     if (checkSceneTransition) { return RunSceneTransitionCheck(bigDirectory); }
     if (checkDualWeapon) { return RunDualWeaponCheck(bigDirectory); }
     if (checkCombatFeedback) { return RunSurvival(bigDirectory, "pack7", 6, 0, -1, "", 0, false, false, false, 2, 0, nullptr, false, false, nullptr, false, nullptr, true); }
@@ -678,6 +690,8 @@ int main(int argc, char **argv) {
         if (choice == 69) { return RunSceneTransitionCheck(bigDirectory); }
         if (choice == 70) { return RunOriginalDialogCheck(bigDirectory); }
         if (choice == 71) { return RunDualWeaponCheck(bigDirectory); }
+        if (choice == 73) { return RunPromotionCheck(bigDirectory); }
+        if (choice == 74) { return RunLoadingWipeCheck(bigDirectory); }
         if (choice == 72) { return RunSurvival(bigDirectory, "pack7", 6, 0, -1, "", 0, false, false, false, 2, 0, nullptr, false, false, nullptr, false, nullptr, true); }
         if (choice == 68) { return RunOriginalPowerupSelectorCheck(bigDirectory); }
         if (choice == 66) { return RunOriginalPauseCheck(bigDirectory); }

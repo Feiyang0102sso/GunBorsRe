@@ -31,6 +31,7 @@ public:
 class MovieRenderer {
 public:
     bool Init(CResPackTOC &pack, CResPackTOC &core);
+    CResPackTOC &CorePack() const { return *m_core; }
     CMovie *GetMovie(unsigned ordinal);
     int FindMovie(const char *name) const;
     /** Resolve and cache a movie ordinal from its original resource alias. */
@@ -49,7 +50,7 @@ public:
     unsigned SpriteDuration(unsigned archetype, unsigned animation);
     /** Original sprite geometry, for callbacks that align without scaling. */
     bool SpriteBounds(unsigned archetype, unsigned animation, MovieRegion &bounds);
-    void Image(const CTexture &texture, float x, float y, float width, float height);
+    void Image(const CTexture &texture, float x, float y, float width, float height, bool flipVertical = false);
     bool Text(const std::string &text, float x, float y, unsigned font = 0, float scale = 1, float maxWidth = 0, float alpha = 1);
     float TextWidth(const std::string &text, unsigned font = 0, float scale = 1);
     /** Authored line height of the BIG bitmap font used by Text. */

@@ -59,3 +59,22 @@ void CTexture::Bind(GLenum textureUnit) const {
     glActiveTexture(textureUnit);
     glBindTexture(GL_TEXTURE_2D, m_handle);
 }
+
+bool CTexture::CaptureFramebuffer() {
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    if (viewport[2] <= 0 || viewport[3] <= 0) { return false; }
+    if (!m_handle) { glGenTextures(1, &m_handle); }
+    glBindTexture(GL_TEXTURE_2D, m_handle);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    if (m_width != unsigned(viewport[2]) || m_height != unsigned(viewport[3])) {
+        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, viewport[0], viewport[1], viewport[2], viewport[3], 0);
+        m_width = viewport[2]; m_height = viewport[3];
+    } else {
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], viewport[2], viewport[3]);
+    }
+    return GLCheckErrors("menu surface copy");
+}
