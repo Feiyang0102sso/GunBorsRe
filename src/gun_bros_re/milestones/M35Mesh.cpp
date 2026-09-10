@@ -2166,6 +2166,42 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 effects.GetDrawnBeamQuadCount(), effects.GetDrawnLightningQuadCount());
         }
         if (sample.second == 104 && effects.GetDrawnLightningQuadCount() != 56) { ++failures; }
+        if (sample.second == 104) {
+            // The mech boss beam has to read as one line. Tiling the muzzle
+            // flare slot instead of the body slot turns it into a bead chain,
+            // whose troughs fall to a few percent of a bead's brightness.
+            // Column brightness, not coverage: the flare glow still touches
+            // every column, so counting unlit columns cannot tell them apart.
+            std::vector<unsigned char> pixels(800 * 600 * 4);
+            glReadPixels(0, 0, 800, 600, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            std::vector<int> columnGreen(800, 0);
+            for (int column = 0; column < 800; ++column) {
+                for (int row = 0; row < 600; ++row) {
+                    columnGreen[column] += pixels[(row * 800 + column) * 4 + 1];
+                }
+            }
+            int brightest = 0;
+            for (int column = 0; column < 800; ++column) {
+                if (columnGreen[column] > brightest) { brightest = columnGreen[column]; }
+            }
+            int firstLit = -1;
+            int lastLit = -1;
+            for (int column = 0; column < 800; ++column) {
+                if (columnGreen[column] * 2 < brightest) { continue; }
+                if (firstLit < 0) { firstLit = column; }
+                lastLit = column;
+            }
+            int weakest = brightest;
+            for (int column = firstLit; column >= 0 && column <= lastLit; ++column) {
+                if (columnGreen[column] < weakest) { weakest = columnGreen[column]; }
+            }
+            int troughPercent = 0;
+            if (brightest > 0) { troughPercent = weakest * 100 / brightest; }
+            std::printf("[boss-beam-check] beam span=%d..%d trough=%d%% of the brightest column\n",
+                firstLit, lastLit, troughPercent);
+            // Measured: bead chain 3%, tiled beam body 44%.
+            if (firstLit < 0 || troughPercent < 25) { ++failures; }
+        }
         window.SaveFrame("out/boss-beam-" + std::string(sample.first) + "-" + std::to_string(sample.second) + ".png");
     }
     effects.Clear();

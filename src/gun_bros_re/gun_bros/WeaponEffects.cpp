@@ -61,6 +61,23 @@ void FrameBounds(const VisualAnimation &animation, float ageMs, float &top, floa
     }
 }
 
+/**
+ * Whether a beam slot is the source cap rather than the tiled body.
+ *
+ * Beam sprite sets are authored body / source / end in consecutive slots.
+ * CBullet::Draw :62998 walks the tiles towards -Y and centres the source on
+ * the muzzle, so body and end frames hang backwards from their origin
+ * (bounds span [-h, 0]) while the source frame hangs forwards ([0, +h]).
+ * pack5 archetype 0 (player lasers) and 139 (Kraken / mech boss) both follow
+ * it, which is what makes the bounds a usable test rather than a guess.
+ */
+bool IsBeamSourceAnimation(const VisualAnimation &animation) {
+    if (animation.frames.empty()) { return false; }
+    float top = 0, bottom = 0;
+    FrameBounds(animation, 0, top, bottom);
+    return bottom > 0;
+}
+
 /** Billboards keep their authored size while position and travel use world units. */
 struct EffectProjection {
     const float *matrix = nullptr;
@@ -409,6 +426,26 @@ struct WeaponEffects::Impl {
             out.endMs.push_back(out.durationMs);
         }
         return out;
+    }
+
+    /**
+     * The slot CBullet::Draw tiles as the beam body.
+     *
+     * Bind :63647 tiles the slot the sprite ref names and caps it with the
+     * next two. Every beam checked so far names its body slot, except pack5
+     * BULLET104 -- the pack7 mech boss beam -- whose ref names the source slot
+     * (archetype 139, animation 1), so the unpatched trio tiles the muzzle
+     * flare and the beam draws as a bead chain instead of a line. This steps
+     * back to the body slot when the named one is a source cap. It is a
+     * deliberate deviation from the original bytes, written as the authoring
+     * rule rather than as a patch on one resource id; drop it to get the
+     * original data back verbatim.
+     */
+    int BeamBodyAnimation(const CGameSpriteGluRef &ref, int animation) {
+        if (animation <= 0) { return animation; }
+        VisualAnimation &named = Animation(ref.packHash, ref.archetype, animation);
+        if (!IsBeamSourceAnimation(named)) { return animation; }
+        return animation - 1;
     }
 
     void AddSprite(VisualAnimation &animation, float ageMs, float x, float y,
@@ -1218,7 +1255,9 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
         std::size_t beforeQuads = 0;
         if (shot->beam) { beforeQuads = scene.batch.GetQuadCount(); }
         const CGameSpriteGluRef &ref = shot->visual->data.GetSpriteRef();
-        VisualAnimation &animation = scene.Animation(ref.packHash, ref.archetype, shot->script.animation);
+        int bodyAnimation = shot->script.animation;
+        if (shot->beam) { bodyAnimation = scene.BeamBodyAnimation(ref, bodyAnimation); }
+        VisualAnimation &animation = scene.Animation(ref.packHash, ref.archetype, bodyAnimation);
         const float age = static_cast<float>(shot->script.animationAgeMs);
         const float scale = shot->visual->data.GetSpriteScale() * projection.scale;
         float x = shot->x, y = shot->y;
@@ -1227,8 +1266,8 @@ void WeaponEffects::Draw(const float *sceneMvp, const float *previewProjection, 
         if (shot->beam && (shot->script.flags & 0x400) == 0) {
             // Beam sprites have body / end / source animations in consecutive slots.
             // Corrected from CBullet::Draw: base+1 is source, base+2 is end.
-            VisualAnimation &start = scene.Animation(ref.packHash, ref.archetype, shot->script.animation + 1);
-            VisualAnimation &end = scene.Animation(ref.packHash, ref.archetype, shot->script.animation + 2);
+            VisualAnimation &start = scene.Animation(ref.packHash, ref.archetype, bodyAnimation + 1);
+            VisualAnimation &end = scene.Animation(ref.packHash, ref.archetype, bodyAnimation + 2);
             float endX = shot->x + std::cos(shot->direction * kRadians) * shot->length;
             float endY = shot->y + std::sin(shot->direction * kRadians) * shot->length;
             projection.Position(endX, endY, shot->z);

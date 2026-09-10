@@ -13,6 +13,24 @@
 - `pack5 BULLET:104` 的 Sprite 引用确实是 archetype139/animation1，绿色点状底图来自原资源；新增白色电弧叠在原底图上。原 iOS `FunctionResolver :61101` 没有 native16 分支，因此未将遗留颜色调用擅自实现为紫色。Windows 随机序列不保证与 iOS rand 逐帧一致，几何算法对应原代码。
 - BT：`entries/bullet_template.bt`、`flow_native_sources.bt`。实现：`CBullet`、`CLightningArc`、`WeaponEffects`。
 
+## Boss 光束断成珠链（2026-09-10 追加）
+
+现象：pack7 机械 Boss 的激光画成一串等距绿色光点，而不是一条连续光束。
+
+原因不在铺贴几何。`CBullet::Draw :62998` 的分段数、缩放和端点偏移与本项目实现一致：分段步长取 `CSpritePlayer::GetBounds` 的高度（`CalculateBoundsForFrame :58508` 写的第 4 个字段），实测间距 71.5 像素恰好等于所用动画帧的 72 像素高度，分段之间没有空隙。断点来自贴图本身。
+
+- `pack5` archetype139 的动画按 body / source / end 三连排列：动画 0 是 128×150 的连续光束段（帧包围盒 `[-150, 0]`），动画 1 是 128×72 的枪口闪光（包围盒 `[0, 72]`），动画 2 是 128×65 的命中端。archetype0（玩家激光）同样是 150 / 53 / 37 的同一约定。body 与 end 向原点后方（-Y，即光束前进方向）延伸，source 向前方延伸并由 `-h/2 - top` 居中在枪口。
+- `CBullet::Bind :63647` 用 SpriteGluRef 的第三个字节做 body，`+1` 做 source，`+2` 做 end。`pack5 BULLET:104`（Boss 光束，Flow `pack6_xga_0014_0x1316.bin` 状态 12/13 的 resources[15]）的这三个字节是 `8b 00 01`：archetype 139、action 0、**animation 1**。原始磁盘字节确为 1，`CGameSpriteGluRef::Init :191859`、`CBullet::Template::Init :130584` 与 `bullet_template.bt` 三处一致，未发现读取偏移错误。
+- 也就是说这条光束的 ref 指到了 source 槽，铺贴的是枪口闪光；同 archetype 的 Kraken 光束 `BULLET:87` 指的是 animation 0，画出来是正常光束。全包 BULLET 扫描中 archetype139 只有 86 / 87 / 104 / 124 四条，只有 104 指向 source 槽。
+
+处理：`WeaponEffects` 在光束绘制前按上述作者约定校正 body 槽——被指向的动画若包围盒向前方延伸（bottom > 0）即判为 source cap，三连整体前移一格。**这是对原始字节的有意偏离**，按约定而非按资源 ID 实现，注释里写明了删除方法。原始 `CBullet` 逻辑、模板解析和其他光束不受影响（`animation <= 0` 与 body 槽命中时直接返回原值）。没有 iOS 同场景对照视频，无法证明原版是否也画成珠链；若确认原版就是珠链，去掉 `WeaponEffects::Impl::BeamBodyAnimation` 的调用即可还原。
+
+验证：`--weapon-effects-check` 新增光束连续性断言，按列统计绿色能量，取亮度过半的列区间内最暗列与最亮列之比。珠链 3%、连续光束 44%，阈值 25%。
+
+- 修前：`[boss-beam-check] beam span=30..777 trough=3%`，`failures=1`，退出 1。
+- 修后：`[boss-beam-check] beam span=34..759 trough=44%`，`failures=0`，退出 0；截图 `out/boss-beam-pack5-104.png`。
+- `--boss-check` 四图退出 0；玩家激光（`--gameview --weapon 47 --fire`）截图无变化，差异仅限电弧的逐次随机抖动（同一 EXE 连跑两次同样有该差异）。
+
 ## Boss 血量与手雷：核实后保留原版
 
 四图真实 `stboss` 路径检查波25/50/250/451/500（程序索引24/49/249/450/499）。pack2/7/12 血量为600/1500/7500/1000/15000，倍率为1/1/5/10/10；pack9 为1800/4500/10500/1200/18000，倍率为3/3/7/12/12。REV倍率没有丢失。
