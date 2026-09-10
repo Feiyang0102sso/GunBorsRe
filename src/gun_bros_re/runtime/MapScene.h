@@ -22,4 +22,6 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     bool bossStudy = false);
 /** Four retail LEVEL scripts, their Boss camera and real grenade collisions. */
 int RunBossCheck(const std::string &bigDirectory);
+/** Real BIG scenery/player pixel checks above and below an obstacle. */
+int RunMapOcclusionCheck(const std::string &bigDirectory);
 #endif
