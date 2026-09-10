@@ -117,6 +117,20 @@ def main():
         + "// MDS_BUTTON_MP_TOGGLE: original pack and two particle ordinals.\n"
         + '{%s, {%d, %d}}\n' % (json.dumps(mode["pack"]), particles[0], particles[1]),
         encoding="utf-8")
+    # MENU_POST_GAME_WRAPUP+40 is factory type11 (CMenuPostGameOption),
+    # whose Bind :249949 also consumes the per-entry particle slot.
+    postgame = tables["MDS_ICON_POSTGAME"]
+    postgame_particles = []
+    for entry in postgame["entries"]:
+        packed_particles = entry["words"][8]
+        particle = struct.unpack("<2h", struct.pack("<I", packed_particles))[0]
+        postgame_particles.append(str(particle))
+    postgame_target = ROOT / "src/gun_bros_re/runtime/OriginalPostGameParticleData.inc"
+    postgame_target.write_text(
+        "\n".join(provenance) + "\n"
+        + "// MDS_ICON_POSTGAME: original pack and particle slot zero per entry.\n"
+        + '{%s, {%s}}\n' % (json.dumps(postgame["pack"]), ", ".join(postgame_particles)),
+        encoding="utf-8")
     # NAVBAR_MAIN at VA 0x3c3cc0: shared movie index, count, then branch IDs.
     # CMenuNavigationBar::Init :143357 maps branch-1 to MDS_BUTTON_TRUNK.
     navigation_offset = offset_of(0x3C3CC0)

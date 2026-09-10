@@ -20,6 +20,8 @@
 
 ## 红绿检查
 
+2026-09-10后续暂停反馈补充：游戏暂停采用原 `SetVolume(0.5)` 保持战斗曲流动，恢复/投降进入结算时还原1.0。暂停停止流的旧行为已纠正，新增真实HUD+SDL检查见[暂停与结算修复](postgame-pause-fix-2026-09-10.md)。
+
 永久研究菜单76 / `--mute --audio-transitions-check`，已加入 `test-muted.ps1 -Phase Core`。
 
 - 修复前：`out/audio-transitions-before.log`，退出1。两位兄弟双向4次切枪声音全部为0；菜单额外启动一次音轨、战斗未交接给流程持有者、结算重播菜单曲，共7项失败。

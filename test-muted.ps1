@@ -54,6 +54,7 @@ if ($Phase -eq 'Core') {
     Add-Check 'weapons' @('--weapon-check')
     Add-Check 'weapon-effects' @('--weapon-effects-check')
     Add-Check 'audio-transitions' @('--audio-transitions-check')
+    Add-Check 'postgame-presentation' @('--postgame-presentation-check')
     Add-Check 'armor-data' @('--armor-check')
     Add-Check 'enemies' @('--arena-check')
     Add-Check 'pickups' @('--pickup-check')

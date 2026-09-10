@@ -19,10 +19,13 @@ public:
     void SetPaused(bool paused);
     void Stop();
     void SetEnabled(bool enabled);
+    /** Original CBGM volume scale; OnSuspend uses 0.5, OnResume uses 1.0. */
+    void SetVolume(float scale);
     static const char *TrackName(unsigned track);
 private:
     CAudioPlayer m_audio;
     int m_track = -1;
     bool m_enabled = true;
+    float m_volumeScale = 1.0f;
 };
 #endif

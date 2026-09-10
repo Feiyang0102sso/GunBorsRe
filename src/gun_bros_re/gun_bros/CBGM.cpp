@@ -47,8 +47,13 @@ void CBGM::Update() { m_audio.Update(); }
 void CBGM::SetEnabled(bool enabled) {
     m_enabled = enabled;
     float volume = 0;
-    if (enabled) { volume = 0.3f; }
+    if (enabled) { volume = 0.3f * m_volumeScale; }
     m_audio.SetVolume(volume);
+}
+void CBGM::SetVolume(float scale) {
+    // CBGM::SetVolume :59971 applies the music bus gain after the scene scale.
+    m_volumeScale = scale;
+    SetEnabled(m_enabled);
 }
 void CBGM::SetPaused(bool paused) { m_audio.SetPaused(paused); }
 void CBGM::Stop() { m_audio.StopAll(); m_track = -1; }

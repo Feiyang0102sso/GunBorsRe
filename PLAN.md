@@ -898,6 +898,15 @@ PvP 掩体默认使用原版完整动画。`B` 会把当前地图上的全部掩
 收尾验证：OriginalUI18/18、Core20/20按预期；原PROP43异常仍明确保留。商店原按钮→PLAYER Flow→原1001保存重载、76款BIG武器原UI实拍通过，已从全目录定位IMG_0800为Ion Blaze（pack5:31，特殊类）。后续模型比对应使用同枪同盔甲及相同动作帧，不再从不同装备截图猜比例。图像验收索引及原件SHA结果见[本轮交接](docs/ui-original-overnight-2026-09-09.md)。
 
 
+### 2026-09-10 暂停音乐与结算反馈
+
+- [x] 后续纠正：Perfect Waves有限时长粒子循环；敌人加载遗漏MoveSet造成错误包围盒。30秒像素检查、七僵尸双路径差分及战斗/武器/结算/续玩回归通过，见[循环与缩放记录](docs/postgame-loop-enemy-scale-2026-09-10.md)。
+
+- [x] 暂停继续战斗BGM，按原OnSuspend/OnResume切换50%/100%音量；保留音乐开关。
+- [x] 按CMenuPostGameOption补齐XPlo、XP、Perfect Waves和Horde Best Streak的原粒子绑定，推进Sprite动画。
+- [x] Overview/Casualties直接切换，其他菜单横扫保留。
+- [x] Release构建、四图标像素专项、真实SDL暂停/续玩、音频交接、结算、加载横扫回归通过。新增永久研究77，证据见[修复记录](docs/postgame-pause-fix-2026-09-10.md)。
+
 ### 2026-09-09 用户 UI 去硬编码与加载反馈
 
 - [x] 独立地图和正式游戏统一原暂停/HUD/道具选择器，删除四项暂停、旧固定购买页和合成通知。

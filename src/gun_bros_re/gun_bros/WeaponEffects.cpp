@@ -120,6 +120,8 @@ struct Shot {
 struct EffectInstance {
     std::uint64_t handle = 0;
     bool persistent = false;
+    float loopDurationMs = 0;
+    std::vector<unsigned> emitterCycles;
     CombatId actor = 0;
     int slot = 0;
     int part = 0;
@@ -501,6 +503,7 @@ struct WeaponEffects::Impl {
         effect.x = x; effect.y = y; effect.z = z; effect.angle = angle;
         for (const ParticleEmitterTemplate &emitter : effect.data->GetEmitters()) {
             effect.nextSpawn.push_back(std::max(0.0f, emitter.startSeconds * 1000.0f));
+            effect.emitterCycles.push_back(0);
         }
         activeEffects.push_back(effect);
     }
@@ -643,10 +646,23 @@ struct WeaponEffects::Impl {
             for (std::size_t j = 0; j < effect.nextSpawn.size(); ++j) {
                 const ParticleEmitterTemplate &emitter = effect.data->GetEmitters()[j];
                 float end = std::max(0.0f, std::max(emitter.startSeconds, emitter.endSeconds) * 1000.0f);
+                const bool loop = effect.loopDurationMs > 1;
+                const float start = std::max(0.0f, emitter.startSeconds * 1000.0f);
+                end += effect.emitterCycles[j] * effect.loopDurationMs;
                 // An attached infinite emitter stays alive between emissions.
                 const bool continuous = (effect.owner != nullptr || effect.actor != 0 || effect.persistent)
                     && emitter.startSeconds == -1.0f && emitter.endSeconds == -1.0f;
-                while (effect.nextSpawn[j] <= effect.ageMs && (continuous || effect.nextSpawn[j] <= end)) {
+                while (effect.nextSpawn[j] <= effect.ageMs && (continuous || loop || effect.nextSpawn[j] <= end)) {
+                    // CParticleEffectPlayer::Update :131499 wraps the authored
+                    // effect period and preserves each emitter's interval remainder.
+                    // Finite menu sparkles need this in addition to infinite emitters.
+                    if (loop && !continuous && effect.nextSpawn[j] > end) {
+                        const float windowLength = std::max(0.0f, emitter.endSeconds * 1000.0f - start);
+                        effect.nextSpawn[j] += effect.loopDurationMs - windowLength;
+                        ++effect.emitterCycles[j];
+                        end += effect.loopDurationMs;
+                        continue;
+                    }
                     SpawnParticle(effect, j);
                     const float interval = Random(emitter.intervalMinimumSeconds, emitter.intervalMaximumSeconds) * 1000.0f;
                     // UpdateEmitters stops after one spawn when the authored
@@ -657,7 +673,7 @@ struct WeaponEffects::Impl {
                     }
                     effect.nextSpawn[j] += interval;
                 }
-                if (continuous || effect.nextSpawn[j] <= end) { pending = true; }
+                if (continuous || loop || effect.nextSpawn[j] <= end) { pending = true; }
             }
             if (!pending) { activeEffects.erase(activeEffects.begin() + i); }
             else { ++i; }
@@ -680,12 +696,19 @@ std::vector<WeaponProjectileState> WeaponEffects::GetProjectileStates() const {
 
 void WeaponEffects::SetCombatWorld(IProjectileWorld *world) { m_impl->world = world; }
 
-std::uint64_t WeaponEffects::StartPersistentEffect(const GameObjectRef &resource, float x, float y) {
+std::uint64_t WeaponEffects::StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop) {
     const std::size_t previous = m_impl->activeEffects.size();
     m_impl->StartEffect(resource, x, y, 0, 0, nullptr);
     if (m_impl->activeEffects.size() == previous) { return 0; }
     EffectInstance &effect = m_impl->activeEffects.back();
     effect.persistent = true;
+    if (loop) {
+        // CParticleEffect::Init :131032 derives the period from emitter end times.
+        for (const auto &emitter : effect.data->GetEmitters()) {
+            const int endMs = static_cast<int>(emitter.endSeconds * 1000.0f);
+            effect.loopDurationMs = std::max(effect.loopDurationMs, static_cast<float>(endMs));
+        }
+    }
     effect.handle = m_impl->nextEffectHandle++;
     return effect.handle;
 }

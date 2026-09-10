@@ -62,7 +62,7 @@ public:
     void RetireOwner(CombatId owner);
     void PlayMoveSound(const GameObjectRef &sound);
     /** CPickup owns an emitter handle; stopping it preserves living particles. */
-    std::uint64_t StartPersistentEffect(const GameObjectRef &resource, float x, float y);
+    std::uint64_t StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop = false);
     void StopEffect(std::uint64_t handle);
     /** Standalone research scenes have no brother/projectile update. */
     void AdvanceAmbientEffects(int deltaMs);

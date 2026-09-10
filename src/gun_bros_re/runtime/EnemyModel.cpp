@@ -125,7 +125,10 @@ static bool LoadEnemyConfigs(PackTables &tables, const EnemyTemplateData &entry,
         }
 
         CArrayInputStream meshStream(meshPayload);
-        if (!loaded->mesh.Init(meshStream)) {
+        // CEnemy::Template::Load :68895 -> CMoveSetMesh::LoadMesh :123178
+        // retains only move-used frames. The first retained pose supplies the
+        // bounds used by both DrawUI and gameplay size normalization.
+        if (!loaded->mesh.Init(meshStream, &entry.moveSet)) {
             configs.push_back(std::move(loaded));
             continue;
         }

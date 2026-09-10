@@ -200,6 +200,7 @@ struct MenuState {
     bool playerSelectBound = false, playerSelectReady = false;
     bool postGameBound = false, postGameUpgradePending = false, postGameClosing = false;
     unsigned postGameTime = 0, postGameItemTime = 0, postGameCloseTime = 0;
+    unsigned postGameIconTime = 0;
     float postGameGalleryPosition = 0, postGameGalleryVelocity = 0;
     unsigned postGameDelta = 0;
     std::uint64_t postGameLastTick = 0;
@@ -831,6 +832,40 @@ public:
         if (!modeEffects[0]) { return 0; }
         return modeEffects[0]->GetParticleCount();
     }
+    /** CMenuPostGameOption::Bind/Update/Draw :249755..249964 owns one
+     * particle player per card, behind the centered icon. */
+    bool AdvancePostGameEffect(unsigned index, unsigned elapsed) {
+        static const struct { const char *pack; int ordinals[7]; } binding =
+#include "runtime/OriginalPostGameParticleData.inc"
+        ;
+        if (index >= postGameEffects.size()) { return false; }
+        if (!postGameEffects[index]) {
+            const int pack = resourceToc->GetPackIndexFromName(binding.pack);
+            if (pack < 0 || binding.ordinals[index] < 0) { return false; }
+            GameObjectRef resource;
+            resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
+            resource.localIndex = static_cast<std::uint8_t>(binding.ordinals[index]);
+            auto effect = std::make_unique<WeaponEffects>(*resourceToc, *resourceTables, imageProgram);
+            // CParticleEffectPlayer's constructor enables looping (:131269).
+            if (effect->StartPersistentEffect(resource, 0, 0, true) == 0) { return false; }
+            postGameEffects[index] = std::move(effect);
+        }
+        postGameEffects[index]->AdvanceAmbientEffects(elapsed);
+        return true;
+    }
+    void ResetPostGameEffects() {
+        for (auto &effect : postGameEffects) { effect.reset(); }
+    }
+    std::size_t PostGameParticleCount(unsigned index) const {
+        if (!postGameEffects[index]) { return 0; }
+        return postGameEffects[index]->GetParticleCount();
+    }
+    void DrawPostGameEffect(unsigned index, const MovieRegion &icon) {
+        float transform[16];
+        std::copy(movies.CurrentProjection(), movies.CurrentProjection() + 16, transform);
+        Matrix4dTranslate(transform, icon.x + icon.width / 2, icon.y + icon.height / 2);
+        postGameEffects[index]->Draw(transform);
+    }
     void Scroll(MenuScrollMotion &motion, float &position, const MovieRegion &viewport,
         bool enabled, float maximum, float stride, unsigned duration) {
         const bool inside = MouseIn(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -897,6 +932,7 @@ private:
     CShaderProgram textProgram;
     CShaderProgram imageProgram;
     std::array<std::unique_ptr<WeaponEffects>, 2> modeEffects;
+    std::array<std::unique_ptr<WeaponEffects>, 7> postGameEffects;
     std::array<GameObjectRef, 2> modeEffectRefs;
     CMarkerBatch markers;
     CQuadBatch images;
@@ -992,7 +1028,15 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
     SurvivalGameContext context{profile, "out/game-profile-check.dat", 0};
     profile.warbucks = 50;
     context.checkControls = true;
-    if (RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context) != 0) { return 1; }
+    // This regression exercises real SDL transport at zero device gain.
+    // Keep the host alive across both sessions, as the formal front end does.
+    CWindow window;
+    if (!window.Open("Profile and pause audio verification", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    CBGM music;
+    music.EnableSilentValidation();
+    context.music = &music;
+    if (RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0,
+        &context, false, false, nullptr, false, &window) != 0) { return 1; }
     const std::uint64_t firstExperience = profile.experience;
     const std::uint64_t firstXplodium = profile.xplodium;
     CProfileManager restored;
@@ -1000,8 +1044,13 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
     if (!restored.LoadFromDisk(context.savePath) || restored.experience == 0 || restored.xplodium == 0 ||
         restored.clearedWaves[0] != 2 || restored.configuration.guns[0].packHash != gun.packHash) { return 1; }
     SurvivalGameContext continued{restored, context.savePath, 0};
-    if (RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 2, &continued) != 0) { return 1; }
+    continued.music = &music;
+    if (RunSurvival(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 2,
+        &continued, false, false, nullptr, false, &window) != 0) { return 1; }
     if (restored.experience <= firstExperience || restored.xplodium <= firstXplodium || restored.clearedWaves[0] != 4) { return 1; }
+    const auto playback = music.GetPlaybackState();
+    if (playback.paused || playback.voices != 1 || playback.queuedBytes <= 0 ||
+        std::abs(playback.volume - 0.3f) > 0.001f) { return 1; }
     std::printf("[profile-play-check] resumed=2 completed=4 xp=%llu xplodium=%llu failures=0\n",
         restored.experience, restored.xplodium);
     return 0;
@@ -3271,6 +3320,8 @@ unsigned MenuBranchPage(unsigned page) {
     if (page == 8 || page == 9 || page == 11) { return 6; }
     if (page == 13) { return 5; }
     if (page == 29) { return 4; }
+    // CMenuPostGame changes its current view inside the same menu (:165242).
+    if (page == 28) { return 27; }
     return page;
 }
 
@@ -3599,13 +3650,16 @@ std::string PostGameFormat(GameMenu &view, const char *name, const std::vector<s
 
 class PostGameCardCallbacks : public IMovieRegionCallback {
 public:
-    PostGameCardCallbacks(GameMenu &menu, const OriginalMenuEntry &data, const std::string &number)
-        : view(menu), entry(data), value(number) {}
+    PostGameCardCallbacks(GameMenu &menu, const OriginalMenuEntry &data, const std::string &number, unsigned elapsed = 0)
+        : view(menu), entry(data), value(number), iconTime(elapsed) {}
     bool DrawMovieRegion(const MovieRegion &region) override {
         if (region.index == 1) {
             const unsigned sprite = entry.sprites[0];
             if (sprite == UINT32_MAX) { return true; }
-            return view.movies.DrawSprite(sprite >> 16, sprite & 255, 0,
+            // A tab can become visible during this frame's input dispatch.
+            if (!view.AdvancePostGameEffect(entry.index, 0)) { return false; }
+            view.DrawPostGameEffect(entry.index, region);
+            return view.movies.DrawSprite(sprite >> 16, sprite & 255, iconTime,
                 region.x + static_cast<int>(region.width) / 2, region.y + static_cast<int>(region.height) / 2, 1, region.alpha);
         }
         if (region.index == 2) { UpgradeCenteredText(view, region, value, 6); }
@@ -3615,6 +3669,7 @@ public:
     GameMenu &view;
     const OriginalMenuEntry &entry;
     const std::string &value;
+    unsigned iconTime;
 };
 
 /** CMenuPostGame::OverviewCallback :164593; single-player default bro
@@ -3664,7 +3719,7 @@ public:
             if (index == 1) { x += region.width - bounds.width; }
             if (index == 2) { x += static_cast<int>(region.width) / 2 - static_cast<int>(bounds.width) / 2; }
             const std::string value = std::to_string(amount);
-            PostGameCardCallbacks callback(view, *entry, value);
+            PostGameCardCallbacks callback(view, *entry, value, state.postGameIconTime);
             if (!view.movies.Draw(ordinal, std::min(state.postGameItemTime, movie->duration),
                 x, region.y, kMenuWidth, kMenuHeight, 0, region.alpha, &callback)) { return false; }
         }
@@ -3688,6 +3743,8 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
         state.postGameBound = true;
         state.postGameTime = 0;
         state.postGameItemTime = 0;
+        state.postGameIconTime = 0;
+        view.ResetPostGameEffects();
         state.postGameCloseTime = 0;
         state.postGameLastTick = view.clock;
         state.postGameGalleryPosition = 0;
@@ -3712,6 +3769,15 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
     state.postGameLastTick = view.clock;
     state.postGameTime += delta;
     state.postGameItemTime += delta;
+    // CMenuPostGame::UpdateCurrentView :165242 updates active controls only.
+    if (state.page == 27) {
+        state.postGameIconTime += delta;
+        unsigned lastIcon = 4;
+        if (state.result.horde) { lastIcon = 5; }
+        for (unsigned icon : {0u, 1u, lastIcon}) {
+            if (!view.AdvancePostGameEffect(icon, delta)) { return false; }
+        }
+    }
     if (state.postGameTime > idleEnd) { state.postGameTime = idleStart + (state.postGameTime - idleStart) % (idleEnd - idleStart + 1); }
     const bool ready = state.postGameTime >= idleStart && !state.postGameClosing;
     const auto *back = OriginalMenuData("MDS_BUTTON_POSTGAME_BACK", 0);
@@ -4707,6 +4773,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     CBGM &music = *sharedMusic;
     music.SetEnabled(profile.musicEnabled);
     music.SetPaused(false);
+    music.SetVolume(1.0f);
     if (!state.postGameMusic && !music.Play(0)) { return -3; }
     CAudioPlayer::SetEffectsEnabled(profile.soundEnabled);
     if (!view.Open(toc, tables, &profile, state.page == 14, &music)) { return -3; }
@@ -7431,6 +7498,151 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
     return failures != 0;
 }
 
+/** Real BIG card rendering and tab input, with isolated save data. */
+int RunPostGamePresentationCheck(const std::string &bigDirectory) {
+    CResTOCManager toc;
+    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    PackTables tables(toc);
+    CPlayerProgress::Template progress;
+    CRefinementManager::Template refinement;
+    std::vector<StoreEntry> store;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armor;
+    if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
+        !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
+        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    CProfileManager profile;
+    const auto path = std::filesystem::path("out/postgame-presentation") / std::to_string(GetTickCount64());
+    if (!LoadNativeProfile(toc, tables, profile, path, std::filesystem::path(ASSET_ROOT) / "saves")) { return 1; }
+    CWindow window;
+    if (!window.Open("Postgame presentation verification", 1600, 1200)) { return 1; }
+    GameMenu view(&window);
+    if (!view.Open(toc, tables, &profile)) { return 1; }
+    unsigned failures = 0;
+    for (unsigned index : {0u, 1u, 4u, 5u}) {
+        const auto *entry = OriginalMenuData("MDS_ICON_POSTGAME", index);
+        if (!entry) { return 1; }
+        const unsigned sprite = entry->sprites[0];
+        const unsigned duration = view.movies.SpriteDuration(sprite >> 16, sprite & 255);
+        MovieRegion icon;
+        icon.index = 1; icon.x = 462; icon.y = 334; icon.width = 100; icon.height = 100;
+        std::vector<std::uint8_t> first, current(320 * 320 * 4);
+        unsigned changed = 0;
+        std::size_t particles = 0;
+        unsigned lateChanged = 0;
+        std::size_t lateParticles = 0;
+        std::vector<std::uint8_t> previous;
+        // Sample the final three seconds of a 30-second run to catch a finite
+        // emitter that stops after the short initial sparkle check has passed.
+        for (unsigned time = 0; time <= 30000; time += 20) {
+            view.Begin(27);
+            unsigned delta = 20;
+            if (time == 0) { delta = 0; }
+            if (!view.AdvancePostGameEffect(index, delta)) { return 1; }
+            particles = std::max(particles, view.PostGameParticleCount(index));
+            const std::string value;
+            PostGameCardCallbacks callback(view, *entry, value, time);
+            if (!callback.DrawMovieRegion(icon)) { return 1; }
+            if (time == 1000 && !window.SaveFrame("out/postgame-icon-" + std::to_string(index) + "-1000.png")) { return 1; }
+            glReadPixels(640, 440, 320, 320, GL_RGBA, GL_UNSIGNED_BYTE, current.data());
+            if (time >= 27000) {
+                if (current != previous) { ++lateChanged; }
+                lateParticles = std::max(lateParticles, view.PostGameParticleCount(index));
+            }
+            previous = current;
+            if (first.empty()) { first = current; }
+            else if (current != first) {
+                if (changed == 0 && !window.SaveFrame("out/postgame-icon-" + std::to_string(index) + "-sparkle.png")) { return 1; }
+                ++changed;
+            }
+        }
+        if (changed == 0 || particles == 0 || lateChanged == 0 || lateParticles == 0) { ++failures; }
+        std::printf("[postgame-loop-check] icon=%u late-changed=%u late-particles=%zu failures=%u\n",
+            index, lateChanged, lateParticles, failures);
+        std::printf("[postgame-presentation-check] icon=%u sprite=%u:%u duration=%u changed=%u particles=%zu failures=%u\n",
+            index, sprite >> 16, sprite & 255, duration, changed, particles, failures);
+    }
+    // Inspect the same original ENEMY resources in both spawn paths.
+    std::vector<EnemyTemplateData> enemies;
+    MenuState casualtyState;
+    casualtyState.page = 28;
+    casualtyState.result.horde = true;
+    if (!LoadEnemyCatalog(toc, tables, enemies)) { return 1; }
+    for (const auto &entry : enemies) {
+        std::vector<std::uint8_t> bytes;
+        if (!tables.ReadSectionResource(entry.packHash, GameSection::Enemy, entry.ordinal, bytes)) { return 1; }
+        CArrayInputStream input(bytes);
+        input.ReadUInt8();
+        CGameAssetRef nameRef;
+        nameRef.Init(input);
+        const std::string name = ReadGameString(toc, nameRef);
+        if (name.find("Zom") != 0 && name.find("ZOM") != 0 && name != "CUTTLES" && name != "Cuttles") { continue; }
+        EnemyCasualty casualty;
+        casualty.resource.packHash = entry.packHash;
+        casualty.resource.localIndex = static_cast<std::uint8_t>(entry.ordinal);
+        casualty.name = name;
+        casualty.count = 5;
+        casualtyState.result.casualties.push_back(casualty);
+        for (auto mode : {EnemySpawnMode::Menu, EnemySpawnMode::Level}) {
+            EnemyModel model;
+            if (!LoadEnemyModel(tables, entry, false, nullptr, mode, model)) { return 1; }
+            const int config = EnemyPartConfig(model, 0);
+            if (config < 0) { return 1; }
+            const auto &bounds = model.configs[config]->mesh.GetBounds();
+            const auto &meshConfig = entry.moveSet.GetMeshConfigs()[config];
+            std::vector<std::uint8_t> meshBytes;
+            if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), GameSection::Mesh, meshConfig.meshOrdinal, meshBytes)) { return 1; }
+            CArrayInputStream meshInput(meshBytes);
+            CMesh originalMesh;
+            // CMoveSetMesh::LoadMesh :123178 supplies its move ranges to CMesh.
+            if (!originalMesh.Init(meshInput, &entry.moveSet)) { return 1; }
+            const auto &originalBounds = originalMesh.GetBounds();
+            if (std::abs(bounds.inverseExtent - originalBounds.inverseExtent) > 0.00001f) { ++failures; }
+            std::printf("[enemy-scale-check] expected-inverse=%.5f retained-bounds=%.2f/%.2f/%.2f failures=%u\n",
+                originalBounds.inverseExtent, originalBounds.maxX-originalBounds.minX,
+                originalBounds.maxY-originalBounds.minY, originalBounds.maxZ-originalBounds.minZ, failures);
+            std::printf("[enemy-scale-check] %s %s mode=%d game=%.1f ui=%.1f factor=%.4f bounds=%.2f/%.2f/%.2f inverse=%.5f world=%.4f\n",
+                entry.owner.c_str(), name.c_str(), int(mode), entry.gameScale, entry.uiScalePercent,
+                model.enemy.combat.scaleFactor, bounds.maxX-bounds.minX, bounds.maxY-bounds.minY,
+                bounds.maxZ-bounds.minZ, bounds.inverseExtent, EnemyModelWorldScale(model, entry.gameScale, 1));
+        }
+    }
+    // Render the corrected models through the real, uniformly sized Movie cards.
+    if (casualtyState.result.casualties.size() != 7) { return 1; }
+    view.Begin(28);
+    if (!DrawOriginalPostGame(view, casualtyState, toc, tables, profile)) { return 1; }
+    for (unsigned page = 0; page < 3; ++page) {
+        view.Begin(28);
+        view.clock += 1000;
+        if (!DrawOriginalPostGame(view, casualtyState, toc, tables, profile)) { return 1; }
+        casualtyState.postGameGalleryPosition = static_cast<float>(page * 2);
+        view.Begin(28);
+        if (!DrawOriginalPostGame(view, casualtyState, toc, tables, profile) ||
+            !window.SaveFrame("out/enemy-scale-casualties-" + std::to_string(page) + ".png")) { return 1; }
+    }
+    const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN");
+    unsigned idleStart = 0, idleEnd = 0;
+    if (!view.movies.GetMovie(ordinal)->GetChapterRange(1, idleStart, idleEnd)) { return 1; }
+    MovieRegion tabs, buttonBounds;
+    const auto *button = OriginalMenuData("MDS_BUTTON_POSTGAME_INFO", 0);
+    if (!view.movies.Region(ordinal, 1, idleStart, tabs) || !button ||
+        !view.movies.Region(view.movies.Ordinal(button->movies[0]), 0, 0, buttonBounds)) { return 1; }
+    const float firstX = tabs.x + static_cast<int>(tabs.width) / 2 - static_cast<int>((buttonBounds.width + 2) * 2) / 2;
+    for (unsigned target = 0; target < 2; ++target) {
+        MenuState state;
+        state.page = 28 - target;
+        MenuTransitionTrace trace;
+        const std::vector<MenuTestClick> clicks{{-100, -100, 1}, {-100, -100, idleEnd + 1},
+            {firstX + target * (buttonBounds.width + 2) + buttonBounds.width / 2, tabs.y + buttonBounds.height / 2, 1}};
+        if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, path,
+            "out/postgame-tab-" + std::to_string(target) + ".png", &clicks, true, &window, true, &trace) != -2) { return 1; }
+        if (state.page != 27 + target || trace.starts != 0 || trace.active) { ++failures; }
+        std::printf("[postgame-presentation-check] tab=%u page=%u wipes=%u active=%d failures=%u\n",
+            target, state.page, trace.starts, trace.active, failures);
+    }
+    return failures != 0;
+}
+
 /** Actual menu preview and scene handoffs, with isolated save data. */
 int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
@@ -7490,10 +7702,12 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     if (battleTrack <= 0) { ++failures; }
     starts = CBGM::GetPlaybackStarts();
     music.SetPaused(true); // Re-entering menus must resume the retained battle track.
+    music.SetVolume(0.5f); // Leaving pause for results must restore the scene gain.
     BeginPostGame(state, context, weapons);
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
         savePath, "out/audio-transition-postgame.png", nullptr, false, &window, false, nullptr, &music) != -2) { return 1; }
-    if (music.GetTrack() != battleTrack || CBGM::GetPlaybackStarts() != starts) { ++failures; }
+    if (music.GetTrack() != battleTrack || CBGM::GetPlaybackStarts() != starts ||
+        std::abs(music.GetPlaybackState().volume - 0.3f) > 0.001f) { ++failures; }
     std::printf("[audio-transition-check] postgame track=%d expected=%d extra-starts=%u failures=%u\n",
         music.GetTrack(), battleTrack, CBGM::GetPlaybackStarts() - starts, failures);
     // Drive the real authored close timer; existing postgame checks cover hitboxes.
@@ -7514,6 +7728,12 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     if (!music.NextTrack() || music.GetPlaybackState().volume != 0) { ++failures; }
     music.SetEnabled(true);
     if (std::abs(music.GetPlaybackState().volume - 0.3f) > 0.001f) { ++failures; }
+    music.SetVolume(0.5f);
+    music.SetEnabled(false);
+    if (music.GetPlaybackState().volume != 0) { ++failures; }
+    music.SetEnabled(true);
+    if (std::abs(music.GetPlaybackState().volume - 0.15f) > 0.001f || music.GetPlaybackState().paused) { ++failures; }
+    music.SetVolume(1.0f);
     std::printf("[audio-transition-check] real-SDL voices=%u devices=%u streams=%u queued=%lld pause=%d settings-preserved failures=%u\n",
         playback.voices, playback.devicesOpened, playback.streamsCreated, playback.queuedBytes, playback.paused, failures);
     return failures != 0;

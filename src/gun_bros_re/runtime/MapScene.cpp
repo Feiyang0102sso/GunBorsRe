@@ -3489,6 +3489,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
     if (loading.Cancelled()) { return 0; }
     // CGunBros::OnLoaded :79321: battle music begins only after game binding.
     music.SetPaused(false);
+    music.SetVolume(1.0f);
     if (!music.NextTrack()) { return 1; }
     if (feedbackStudy) {
         // Real BIG instances and the same clocks as RunSurvival; no source save.
@@ -4820,6 +4821,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         if (action == SurvivalHudAction::Exit) {
             // Surrender leaves a paused menu; the same BGM continues into results.
             music.SetPaused(false);
+            music.SetVolume(1.0f);
             break;
         }
         if (action == SurvivalHudAction::OpenShop) { shopOpen = true; itemChoice = false; accumulator = 0; }
@@ -4998,8 +5000,23 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         }
         if (checkControls && !paused && !shopOpen) { accumulator = 960; }
         effects.SetPaused(paused || shopOpen);
-        music.SetPaused(paused || shopOpen);
+        // CGunBros::OnSuspend :78263 lowers BGM to half without stopping it.
+        // Gameplay and effects stay suspended; the music stream keeps advancing.
+        float musicScale = 1.0f;
+        if (paused || shopOpen) { musicScale = 0.5f; }
+        music.SetVolume(musicScale);
         music.Update();
+        if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
+            const auto playback = music.GetPlaybackState();
+            float expectedVolume = 0;
+            if (pickupProfile->musicEnabled) {
+                expectedVolume = 0.3f;
+                if (paused || shopOpen) { expectedVolume *= 0.5f; }
+            }
+            if (playback.paused || std::abs(playback.volume - expectedVolume) > 0.001f) { ++checkFailures; }
+            std::printf("[pause-bgm-check] frame=%u menu=%d paused-stream=%d gain=%.2f expected=%.2f failures=%u\n",
+                controlFrame, paused || shopOpen, playback.paused, playback.volume, expectedVolume, checkFailures);
+        }
         const std::size_t shotsBeforeSwap = effects.GetShotCount();
         const bool checkSwapFiring = checkControls && (controlFrame == 2 || controlFrame == controlClickCount + 2);
         while (accumulator >= 16) {
