@@ -17,6 +17,10 @@ constexpr float kRadians = 3.14159265f / 180;
 constexpr float kPlayerSpeed = 220;
 constexpr float kSpawnDistance = 280;
 constexpr int kCorpseLimitMs = 10000;
+// CEffectLayer::AddTextEffect :66884 and TextEffect::Update :67086.
+constexpr unsigned kTextEffectCapacity = 20;
+constexpr unsigned kTextEffectLifetimeMs = 2000;
+constexpr float kTextEffectRisePerSecond = 100;
 
 bool Skipped(CombatId id, const std::vector<CombatId> &ids) {
     return std::find(ids.begin(), ids.end(), id) != ids.end();
@@ -99,10 +103,35 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
         m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL, m_score + points));
         if (playerKill) { AddExperience(experience); }
     } else { AddExperience(experience); }
+    // CLevel::OnEnemyKilled VA0x950AC passes the awarded XP to the STR
+    // formatter, then projects enemy position (+828/+832) once. The text
+    // survives the corpse and does not follow later camera/player movement.
+    if (m_experienceTexts.size() < kTextEffectCapacity) {
+        const auto &enemy = actor.model.enemy.combat;
+        ExperienceText text;
+        text.amount = experience;
+        text.x = static_cast<float>(static_cast<int>((enemy.x - m_textViewX) * m_textScaleX));
+        text.y = static_cast<float>(static_cast<int>((enemy.y - m_textViewY) * m_textScaleY));
+        m_experienceTexts.push_back(text);
+    }
     if (actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId) {
         const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
             m_level->GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(m_player, 4)));
         AddXplodium(xplodium);
+    }
+}
+
+void CombatScene::UpdateExperienceTexts(int deltaMs) {
+    if (deltaMs <= 0) { return; }
+    for (auto text = m_experienceTexts.begin(); text != m_experienceTexts.end();) {
+        text->elapsedMs += static_cast<unsigned>(deltaMs);
+        if (text->elapsedMs >= kTextEffectLifetimeMs) {
+            text = m_experienceTexts.erase(text);
+            continue;
+        }
+        text->alpha = 1 - static_cast<float>(text->elapsedMs) / kTextEffectLifetimeMs;
+        text->y -= kTextEffectRisePerSecond * deltaMs / 1000.0f;
+        ++text;
     }
 }
 
@@ -272,6 +301,7 @@ void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
 }
 
 void CombatScene::Reset() {
+    m_experienceTexts.clear();
     m_weaponProgress.clear();
     m_casualties.clear();
     m_xplodiumRemainder = 0;
@@ -981,6 +1011,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     m_player.weapon->brother.SetLevelContext(m_level);
     if (deltaMs <= 0) { return; }
     m_effects.BeginAudioFrame();
+    UpdateExperienceTexts(deltaMs);
     deaths.clear();
     levelEvents.clear();
     pickupSpawns.clear();

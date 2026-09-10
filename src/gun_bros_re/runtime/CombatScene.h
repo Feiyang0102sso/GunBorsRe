@@ -80,6 +80,20 @@ public:
      * The HUD projection converts this anchor to a screen top-left rectangle.
      */
     std::vector<HealthBar> EnemyHealthBars(float viewportScale = 1) const;
+    /** CEffectLayer::TextEffect, captured in screen space on a real death.
+     * The HUD resolves the number's original STR template and bitmap font. */
+    struct ExperienceText {
+        unsigned amount = 0;
+        float x = 0, y = 0, alpha = 1;
+        unsigned elapsedMs = 0;
+    };
+    const std::vector<ExperienceText> &GetExperienceTexts() const { return m_experienceTexts; }
+    void UpdateExperienceTexts(int deltaMs);
+    /** Windows camera projection into the HUD's 1024 x 768 logical surface. */
+    void SetTextView(float left, float top, float scaleX, float scaleY) {
+        m_textViewX = left; m_textViewY = top;
+        m_textScaleX = scaleX; m_textScaleY = scaleY;
+    }
     CombatEnemy *Find(CombatId id);
     std::size_t AliveCount() const;
     float GetPlayerRadius() const { return m_playerRadius; }
@@ -155,6 +169,8 @@ private:
     void RewardEnemy(const CombatEnemy &actor);
     std::vector<WeaponCombatProgress> m_weaponProgress;
     std::vector<EnemyCasualty> m_casualties;
+    std::vector<ExperienceText> m_experienceTexts;
+    float m_textViewX = 0, m_textViewY = 0, m_textScaleX = 1, m_textScaleY = 1;
     CPlayerProgress *m_progress = nullptr;
     std::uint64_t m_xplodium = 0;
     unsigned m_xplodiumRemainder = 0;

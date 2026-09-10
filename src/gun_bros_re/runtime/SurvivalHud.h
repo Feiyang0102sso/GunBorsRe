@@ -55,6 +55,8 @@ public:
     bool IsDialogDone() const { return m_dialog.IsDone(); }
     bool Init(CResTOCManager &toc, PackTables &tables);
     bool Draw(const SurvivalHudState &state);
+    /** Original level effect pass, also callable by the permanent death check. */
+    bool DrawExperienceTexts(const std::vector<CombatScene::ExperienceText> &texts, bool horde);
     void Advance(int deltaMs);
     void ResetNotices();
     // Original CInputPad interstitial callbacks release LEVEL event 2.

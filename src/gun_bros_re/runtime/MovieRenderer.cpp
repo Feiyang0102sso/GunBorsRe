@@ -544,9 +544,9 @@ bool MovieRenderer::Draw(unsigned ordinal, unsigned time, float x, float y, floa
                         SourceRect source = quad.source;
                         if (quad.rotateTexture) {
                             // A packed quarter-turn maps display Y to atlas X.
-                            sourceX = quad.Height() - bottom + rawY;
+                            sourceX = drawY - rawY;
                             sourceY = drawX - rawX;
-                            if (quad.flipHorizontal) { sourceX = drawY - rawY; }
+                            if (quad.flipHorizontal) { sourceX = quad.Height() - bottom + rawY; }
                             if (quad.flipVertical) { sourceY = quad.Width() - right + rawX; }
                             source.width = static_cast<unsigned short>(std::ceil(drawHeight));
                             source.height = static_cast<unsigned short>(std::ceil(drawWidth));

@@ -17,6 +17,21 @@ bool PowerupMoviePlayer::Start(const PowerupEntry &entry, bool fromSelector) {
         m_particles = std::make_unique<WeaponEffects>(m_toc, m_tables, m_program);
     }
     Reset();
+    if (fromSelector) {
+        if (!m_selectorRenderer) {
+            auto renderer = std::make_unique<MovieRenderer>();
+            CResPackTOC &core = *m_toc.GetPack(m_toc.GetCorePackIndex());
+            if (!renderer->Init(core, core)) { return false; }
+            m_selectorRenderer = std::move(renderer);
+        }
+        // CPowerUpSelector::Draw :186536 keeps its main Movie behind the
+        // foreground powerup after HideOnlyItems. Native 5 closes it later.
+        m_selectorOrdinal = m_selectorRenderer->Ordinal("GLU_MOVIE_POWERUP_MENU_NEW");
+        const CMovie *movie = m_selectorRenderer->GetMovie(m_selectorOrdinal);
+        if (movie == nullptr || !movie->GetChapterRange(2, m_selectorLoopStart, m_selectorLoopEnd)) { return false; }
+        m_selectorTime = m_selectorLoopStart;
+        m_selectorVisible = true;
+    }
     m_script.Bind(entry.data);
     m_script.SetLevelContext(m_scene.GetLevel());
     m_script.Equip();
@@ -61,6 +76,14 @@ bool PowerupMoviePlayer::ApplyActions() {
             m_callbackEvent = 2;
             if (action.function == 4) { m_callbackEvent = 1; }
             if (action.function == 13) { m_callbackEvent = 4; }
+            if ((action.function == 2 || action.function == 5) && m_selectorVisible) {
+                // SetState(6/7) :185760 plays chapter 3, then Update :186710
+                // emits OnSelectorHidden. Use the authored 100 ms, not 300.
+                const CMovie *movie = m_selectorRenderer->GetMovie(m_selectorOrdinal);
+                if (!movie->GetChapterRange(3, m_selectorTime, m_selectorEnd)) { ++failures; return false; }
+                m_selectorClosing = true;
+                m_callbackMs = static_cast<int>(m_selectorEnd - m_selectorTime);
+            }
         } else if (action.function == 14 || action.function == 26) {
             // Selector-only input/mode controls are already inaccessible while
             // its powerup owns presentation. Neither native emits an event.
@@ -119,6 +142,16 @@ void PowerupMoviePlayer::Update(int deltaMs) {
     if (m_particles) { m_particles->AdvanceAmbientEffects(deltaMs); }
     if (!m_active) { return; }
     m_elapsed += deltaMs;
+    if (m_selectorVisible) {
+        m_selectorTime += static_cast<unsigned>(deltaMs);
+        if (m_selectorClosing) {
+            m_selectorTime = std::min(m_selectorTime, m_selectorEnd);
+            if (m_selectorTime == m_selectorEnd) { m_selectorVisible = false; }
+        } else if (m_selectorTime > m_selectorLoopEnd) {
+            m_selectorTime = m_selectorLoopStart + (m_selectorTime - m_selectorLoopStart) %
+                (m_selectorLoopEnd - m_selectorLoopStart + 1);
+        }
+    }
     if (m_callbackMs > 0) {
         m_callbackMs -= deltaMs;
         if (m_callbackMs <= 0) {
@@ -143,6 +176,7 @@ void PowerupMoviePlayer::Update(int deltaMs) {
     if (m_script.IsDone()) {
         m_active = false;
         m_movieActive = false;
+        m_selectorVisible = false;
         std::printf("[powerup-movie] complete elapsed=%u movies=%u splashes=%u\n", m_elapsed, movieCompletions, splashCount);
     }
 }
@@ -157,6 +191,7 @@ bool PowerupMoviePlayer::Draw() {
         Matrix4dOrthoTopLeft(1024, 768, 1, projection);
         m_particles->Draw(projection);
     }
+    if (m_selectorVisible && !m_selectorRenderer->Draw(m_selectorOrdinal, m_selectorTime)) { return false; }
     if (m_movieActive && m_renderer != nullptr) { return m_renderer->Draw(m_movieOrdinal, m_movieTime); }
     return failures == 0;
 }
@@ -168,6 +203,8 @@ void PowerupMoviePlayer::Reset() {
     }
     m_active = false;
     m_movieActive = false;
+    m_selectorVisible = false;
+    m_selectorClosing = false;
     m_callbackMs = 0;
     m_elapsed = 0;
     if (m_particles) { m_particles->Clear(); }

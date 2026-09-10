@@ -169,6 +169,33 @@ int RunMovieCheck(const std::string &bigDirectory) {
     if (!window.Open("Gun Bros - Original Fonts", 1024, 768)) { return 1; }
     MovieRenderer fontRenderer;
     if (!fontRenderer.Init(*core, *core)) { return 1; }
+    // Inspect every authored leaf of the compatibility frame, including leaves
+    // that the iterator currently discards. This is a visual regression probe.
+    {
+        CSpriteGlu glu;
+        if (!glu.Init(*core)) { return 1; }
+        const auto *archetype = glu.GetArchetype(0);
+        CSpriteIterator iterator(glu, *archetype);
+        std::vector<SpriteQuad> quads;
+        if (!iterator.Expand(172, 0, quads)) { return 1; }
+        std::printf("[decoration-check] sprite=0:172 quads=%zu skipped=%u\n", quads.size(), iterator.GetSkippedPartCount());
+        if (iterator.GetSkippedPartCount() != 0) { ++failures; }
+        glClearColor(0, 0, 0, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!fontRenderer.DrawSprite(0, 172, 0, 100, 100)) { return 1; }
+        std::vector<std::uint8_t> pixels(120 * 32 * 4);
+        glReadPixels(120, 768 - 132, 120, 32, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        unsigned upper = 0, lower = 0;
+        for (unsigned y = 0; y < 7; ++y) {
+            for (unsigned x = 0; x < 120; ++x) {
+                if (pixels[(y * 120 + x) * 4 + 1] > 12) { ++lower; }
+                if (pixels[((31 - y) * 120 + x) * 4 + 1] > 12) { ++upper; }
+            }
+        }
+        if (upper < 100 || lower < 100) { ++failures; }
+        std::printf("[decoration-border-check] upper=%u lower=%u failures=%u\n", upper, lower, failures);
+        if (!window.SaveFrame("out/powerup-border-check.png")) { ++failures; }
+    }
     glClearColor(0.035f, 0.05f, 0.07f, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_BLEND);

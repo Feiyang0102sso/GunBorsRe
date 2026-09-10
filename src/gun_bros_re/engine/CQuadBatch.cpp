@@ -219,10 +219,13 @@ void CQuadBatch::AddTransformedQuad(
     Vertex bottomRight = {transformedX[3], transformedY[3], u1, v1, alpha};
     if (rotateTexture) {
         // SpriteGlu packs long sprites sideways; restore the 90-degree blit.
-        topLeft.u = u1; topLeft.v = v0;
-        topRight.u = u1; topRight.v = v1;
-        bottomLeft.u = u0; bottomLeft.v = v0;
-        bottomRight.u = u0; bottomRight.v = v1;
+        // CSpritePlayer::Draw :59209 -> drawSurface :111818 swaps the flip
+        // enum and remaps it before rotating. Bit 2 therefore TRANSPOSES UVs;
+        // an extra U reversal folds the two halves of border 0:172 together.
+        topLeft.u = u0; topLeft.v = v0;
+        topRight.u = u0; topRight.v = v1;
+        bottomLeft.u = u1; bottomLeft.v = v0;
+        bottomRight.u = u1; bottomRight.v = v1;
     }
     AddVertices(texture, blend, topLeft, topRight, bottomLeft, bottomRight);
 }

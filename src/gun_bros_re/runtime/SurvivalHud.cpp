@@ -47,7 +47,10 @@ bool SurvivalHud::Init(CResTOCManager &toc, PackTables &tables) {
     }
     constexpr unsigned sprites[] = {6, 7, 8, 27, 28, 35, 36, 39, 87};
     for (unsigned sprite : sprites) { m_movies.SpriteDuration(1, sprite); }
-    for (unsigned font : {0u, 1u, 5u, 6u, 7u}) { m_movies.TextWidth("0123456789", font); }
+    for (unsigned font : {0u, 1u, 5u, 6u, 7u, 9u}) { m_movies.TextWidth("0123456789", font); }
+    for (const char *name : {"IDS_HUD_EXPERIENCE_UP", "IDS_HUD_POINTS_UP"}) {
+        if (m_movies.NamedString(name).empty()) { return false; }
+    }
     // Composite sticks and badges have their own lazy-expanded frame caches.
     // Draw a neutral snapshot while the loading screen still owns presentation.
     if (!DrawOriginalControls(SurvivalHudState{})) { return false; }
@@ -411,6 +414,21 @@ std::string SurvivalHud::OriginalNoticeNumber(const char *name, unsigned number)
         percent = text.find("%%", percent + 1);
     }
     return text;
+}
+
+bool SurvivalHud::DrawExperienceTexts(const std::vector<CombatScene::ExperienceText> &texts, bool horde) {
+    // CLevel::Bind :121860 selects the original STR. TextEffect::Draw ARM
+    // 0x394D4..0x394F4 centers font 9 on both axes; it never scales with zoom.
+    const char *name = "IDS_HUD_EXPERIENCE_UP";
+    if (horde) { name = "IDS_HUD_POINTS_UP"; }
+    for (const auto &effect : texts) {
+        const std::string text = OriginalNoticeNumber(name, effect.amount);
+        if (text.empty() || text.find('%') != std::string::npos) { return false; }
+        const float x = effect.x - static_cast<int>(m_movies.TextWidth(text, 9)) / 2;
+        const float y = effect.y - static_cast<int>(m_movies.TextHeight(9)) / 2;
+        if (!m_movies.Text(text, x, y, 9, 1, 0, effect.alpha)) { return false; }
+    }
+    return true;
 }
 
 void SurvivalHud::QueueOriginalNotice(const char *movie, const std::string &title, const std::string &footer, bool releaseLevel) {

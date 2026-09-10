@@ -3376,12 +3376,69 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                 rewardProbe.Update(16, 0, 0, false);
             }
             if (!target->deathReported) { ++checkFailures; }
+            const auto &texts = rewardProbe.GetExperienceTexts();
+            if (texts.empty() || texts.back().amount != experience) { ++checkFailures; }
+            std::printf("[xp-text-check] death=%u amount=%u visible=%zu failures=%u\n",
+                death, experience, texts.size(), checkFailures);
         }
         if (expectedExperience == 0 || rewardProbe.GetScore() != expectedExperience * 9 ||
             rewardProbe.GetKillStreak() != 2 || pickupProgress.GetExperience() != expectedExperience * 2) { ++checkFailures; }
         std::printf("[horde-score-check] enemy-xp=%u points=%u expected=%u streak=%u xp=%llu failures=%u\n",
             expectedExperience, rewardProbe.GetScore(), expectedExperience * 9,
             rewardProbe.GetKillStreak(), pickupProgress.GetExperience(), checkFailures);
+        // A standard-mode real death must draw the original XP string, float
+        // in screen space, fade, expire and stay absent after restart.
+        rewardProbe.Reset();
+        rewardProbe.SetHorde(false);
+        rewardProbe.SetTextView(400, 100, 2, 1.5f);
+        CombatEnemy *xpTarget = rewardProbe.Spawn(0, 600, 350);
+        if (xpTarget == nullptr) { return 1; }
+        CombatHit xpHit;
+        xpHit.owner = kPlayerCombatId;
+        xpHit.ownerType = 0;
+        xpHit.damage = 1000000;
+        xpHit.applyArmorAttack = false;
+        for (unsigned tick = 0; tick < 300 && !xpTarget->deathReported; ++tick) {
+            rewardProbe.ApplyHit(xpTarget->model.enemy.combat.id, xpHit);
+            rewardProbe.Update(16, 0, 0, false);
+        }
+        if (!xpTarget->deathReported || rewardProbe.GetExperienceTexts().size() != 1) { return 1; }
+        const auto bornText = rewardProbe.GetExperienceTexts().front();
+        const auto &deadState = xpTarget->model.enemy.combat;
+        if (bornText.amount != expectedExperience || bornText.x != int((deadState.x - 400) * 2) ||
+            bornText.y != int((deadState.y - 100) * 1.5f) || bornText.alpha != 1) { ++checkFailures; }
+        rewardProbe.SetTextView(900, 700, 4, 3);
+        rewardProbe.UpdateExperienceTexts(0);
+        if (rewardProbe.GetExperienceTexts().front().y != bornText.y) { ++checkFailures; }
+        int frameWidth = 0, frameHeight = 0;
+        window.GetDrawableSize(frameWidth, frameHeight);
+        std::vector<std::uint8_t> pixels(static_cast<std::size_t>(frameWidth) * frameHeight * 4);
+        std::uint64_t previousLight = 0;
+        for (unsigned stage = 0; stage < 3; ++stage) {
+            if (stage > 0) { rewardProbe.UpdateExperienceTexts(1000); }
+            if (stage == 1) {
+                const auto &text = rewardProbe.GetExperienceTexts().front();
+                if (text.x != bornText.x || text.y != bornText.y - 100 || text.alpha != 0.5f) { ++checkFailures; }
+            }
+            glClearColor(0, 0, 0, 1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            if (!survivalHud.DrawExperienceTexts(rewardProbe.GetExperienceTexts(), false) ||
+                !window.SaveFrame("out/xp-text-" + std::to_string(stage * 1000) + ".png")) { ++checkFailures; }
+            glReadPixels(0, 0, frameWidth, frameHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            std::uint64_t light = 0;
+            for (std::size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
+                light += pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2];
+            }
+            if (stage == 0 && light == 0) { ++checkFailures; }
+            if (stage == 1 && (light == 0 || light >= previousLight)) { ++checkFailures; }
+            if (stage == 2 && (light != 0 || !rewardProbe.GetExperienceTexts().empty())) { ++checkFailures; }
+            previousLight = light;
+            std::printf("[xp-text-render-check] time=%u light=%llu failures=%u\n", stage * 1000, light, checkFailures);
+        }
+        rewardProbe.Update(16, 0, 0, false);
+        if (!rewardProbe.GetExperienceTexts().empty()) { ++checkFailures; }
+        rewardProbe.Reset();
+        if (!rewardProbe.GetExperienceTexts().empty()) { ++checkFailures; }
         vitals.invincible = false;
     }
     CombatScene scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
@@ -4367,6 +4424,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             unsigned splashTime = 0;
             unsigned movingFrames = 0;
             unsigned warningFrames = 0;
+            unsigned closingFrames = 0;
             const float frozenX = airstrikeScene.playerX;
             const float frozenY = airstrikeScene.playerY;
             const float frozenEnemyX = target->model.enemy.combat.x;
@@ -4378,6 +4436,14 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             for (int elapsed = 0; elapsed < 12000 && airstrike.IsMovieActive(); elapsed += 16) {
                 airstrikeSession.Update(16, 1, 0, true);
                 if (airstrike.GetMoviePlayer().IsForegroundMovie()) { ++warningFrames; }
+                if (airstrike.GetMoviePlayer().IsSelectorFrameClosing()) {
+                    ++closingFrames;
+                    if (closingFrames == 4 && airstrikeIndex == 0) {
+                        glClearColor(0.04f, 0.05f, 0.07f, 1);
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                        if (!airstrike.DrawMovies() || !window.SaveFrame("out/airstrike-frame-closing.png")) { ++checkFailures; }
+                    }
+                }
                 if (airstrikeScene.playerX != frozenX || airstrikeScene.playerY != frozenY || airstrikeEffects.GetShotCount() != 0) { ++movingFrames; }
                 if (target->model.enemy.combat.x != frozenEnemyX || target->model.enemy.combat.y != frozenEnemyY ||
                     vitals.health != frozenHealth || airstrikeScene.enemies.size() != frozenEnemyCount) { ++movingFrames; }
@@ -4388,11 +4454,29 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
                     std::string suffix = "-equipped";
                     if (fromSelector) { suffix = "-selector"; }
                     if (!airstrike.DrawMovies() || !window.SaveFrame("out/airstrike-check-" + std::to_string(airstrikeIndex) + suffix + ".png")) { ++checkFailures; }
+                    if (fromSelector) {
+                        // Sample the actual selector frame away from the title,
+                        // character and thin moving streaks. A movie-active flag
+                        // alone passed while the whole frame was missing.
+                        std::vector<std::uint8_t> pixels(200 * 400 * 4);
+                        glReadPixels(0, 640, 200, 400, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                        unsigned framePixels = 0;
+                        for (std::size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
+                            if (pixels[pixel + 1] > 40 && pixels[pixel + 2] > 50) { ++framePixels; }
+                        }
+                        if (framePixels < 300) { ++checkFailures; }
+                        std::printf("[airstrike-frame-check] item=%u pixels=%u failures=%u\n", airstrikeIndex, framePixels, checkFailures);
+                    }
                 }
             }
             float expectedDamage = 240;
             if (movingFrames != 0) { ++checkFailures; }
             if (fromSelector && warningFrames == 0) { ++checkFailures; }
+            if (fromSelector && closingFrames == 0) { ++checkFailures; }
+            if (!fromSelector && closingFrames != 0) { ++checkFailures; }
+            if (airstrike.GetMoviePlayer().HasSelectorFrame()) { ++checkFailures; }
+            std::printf("[airstrike-frame-lifecycle] item=%u selector=%d closing-frames=%u failures=%u\n",
+                airstrikeIndex, fromSelector, closingFrames, checkFailures);
             if (airstrikeSession.GetLevel().IsPaused()) { ++checkFailures; }
             std::printf("[airstrike-route-check] item=%u selector=%d warning-frames=%u\n", airstrikeIndex, fromSelector, warningFrames);
             std::printf("[airstrike-freeze-check] item=%u moving-frames=%u failures=%u\n", airstrikeIndex, movingFrames, checkFailures);
@@ -5336,6 +5420,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
         session.SetViewSize(width / baselineZoom, height / baselineZoom);
         FollowPlayerCamera(loaded, width, height, camera);
         scene.SetViewCenter(camera.x + width / camera.zoom * 0.5f, camera.y + height / camera.zoom * 0.5f);
+        scene.SetTextView(camera.x, camera.y, camera.zoom * 1024 / width, camera.zoom * 768 / height);
         float mouseX = 0, mouseY = 0;
         if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead && !powerups.IsMovieActive()) {
             scene.facing = std::atan2(camera.y + mouseY / camera.zoom - scene.playerY,
@@ -5515,7 +5600,7 @@ int RunSurvival(const std::string &bigDirectory, const std::string &packShortNam
             hudState.aimX = std::sin(scene.facing / kRadiansToDegrees);
             hudState.aimY = -std::cos(scene.facing / kRadiansToDegrees);
         }
-        if (!survivalHud.Draw(hudState)) { return 1; }
+        if (!survivalHud.DrawExperienceTexts(scene.GetExperienceTexts(), horde) || !survivalHud.Draw(hudState)) { return 1; }
         if (!powerups.DrawMovies()) { return 1; }
         if (checkControls && controlFrame < controlClickCount) {
             if (controlFrame == 0 && !window.SaveFrame("out/combat-controls-shop.png")) { return 1; }

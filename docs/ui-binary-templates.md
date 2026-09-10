@@ -1,5 +1,7 @@
 # Gun Bros UI 二进制模板与文件索引
 
+2026-09-10 消费链纠错：SpriteGlu 的旋转位最终转置纹理坐标，不能额外反转U；否则 Movie144 的模式外框会叠成横线。Airstrike 的 pack5 Movie2 只含前景，外围来自持续播放的 core Movie131。详见 [原函数与像素验证](xp-ui-decoration-fix-2026-09-10.md)。
+
 本次任务以 `big_360_out` 为输入，定位原 UI 时间轴并制作辅助理解的 010 Editor `.bt`。不修改 UI 实现，不修改解包文件；按用户要求未执行 010 Editor 编译或运行测试。
 
 ## 阅读入口
