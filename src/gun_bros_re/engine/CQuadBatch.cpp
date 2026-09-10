@@ -27,6 +27,42 @@ void ApplyBlendMode(BlendMode blend) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
+/**
+ * Texture coordinates for one atlas rectangle, half a texel in on each side.
+ *
+ * GL_LINEAR reads a 2x2 neighbourhood around the sample point, so a quad edge
+ * placed exactly on the rectangle's border mixes in whatever the atlas packs
+ * next to it. Landing on the outermost texel CENTRES instead keeps every
+ * sample inside the rectangle. The map atlases pack their 256x256 tiles edge
+ * to edge, and that mix is what drew a dark grid over the tile layers.
+ *
+ * The flips are applied here as well, since they are only a swap of the two
+ * ends of each axis.
+ */
+void TexelCentreRect(const CTexture &texture, const SourceRect &source,
+                     bool flipHorizontal, bool flipVertical,
+                     float &u0, float &v0, float &u1, float &v1) {
+    // Pixels -> the shader's 4096-per-texture-width units.
+    const float uScale = kTexCoordScale / static_cast<float>(texture.GetWidth());
+    const float vScale = kTexCoordScale / static_cast<float>(texture.GetHeight());
+
+    u0 = (static_cast<float>(source.x) + 0.5f) * uScale;
+    v0 = (static_cast<float>(source.y) + 0.5f) * vScale;
+    u1 = (static_cast<float>(source.x + source.width) - 0.5f) * uScale;
+    v1 = (static_cast<float>(source.y + source.height) - 0.5f) * vScale;
+
+    if (flipHorizontal) {
+        const float swap = u0;
+        u0 = u1;
+        u1 = swap;
+    }
+    if (flipVertical) {
+        const float swap = v0;
+        v0 = v1;
+        v1 = swap;
+    }
+}
+
 }  // namespace
 
 CQuadBatch::CQuadBatch()
@@ -133,25 +169,8 @@ void CQuadBatch::AddQuad(const CTexture &texture, float x, float y, float width,
         return;
     }
 
-    // Pixels -> the shader's 4096-per-texture-width units.
-    const float uScale = kTexCoordScale / static_cast<float>(texture.GetWidth());
-    const float vScale = kTexCoordScale / static_cast<float>(texture.GetHeight());
-
-    float u0 = static_cast<float>(source.x) * uScale;
-    float v0 = static_cast<float>(source.y) * vScale;
-    float u1 = static_cast<float>(source.x + source.width) * uScale;
-    float v1 = static_cast<float>(source.y + source.height) * vScale;
-
-    if (flipHorizontal) {
-        const float swap = u0;
-        u0 = u1;
-        u1 = swap;
-    }
-    if (flipVertical) {
-        const float swap = v0;
-        v0 = v1;
-        v1 = swap;
-    }
+    float u0 = 0, v0 = 0, u1 = 0, v1 = 0;
+    TexelCentreRect(texture, source, flipHorizontal, flipVertical, u0, v0, u1, v1);
 
     const float left = x;
     const float top = y;
@@ -175,24 +194,10 @@ void CQuadBatch::AddTransformedQuad(
         return;
     }
 
-    const float uScale = kTexCoordScale / static_cast<float>(texture.GetWidth());
-    const float vScale = kTexCoordScale / static_cast<float>(texture.GetHeight());
     // Sample texel centres. Filtering beyond an atlas rectangle picks up the
     // separator row or the neighbouring effect, exposing beam tile seams.
-    float u0 = (static_cast<float>(source.x) + 0.5f) * uScale;
-    float v0 = (static_cast<float>(source.y) + 0.5f) * vScale;
-    float u1 = (static_cast<float>(source.x + source.width) - 0.5f) * uScale;
-    float v1 = (static_cast<float>(source.y + source.height) - 0.5f) * vScale;
-    if (flipHorizontal) {
-        const float swap = u0;
-        u0 = u1;
-        u1 = swap;
-    }
-    if (flipVertical) {
-        const float swap = v0;
-        v0 = v1;
-        v1 = swap;
-    }
+    float u0 = 0, v0 = 0, u1 = 0, v1 = 0;
+    TexelCentreRect(texture, source, flipHorizontal, flipVertical, u0, v0, u1, v1);
 
     const float radians = rotationDegrees * kDegreesToRadians;
     const float sine = std::sin(radians);
