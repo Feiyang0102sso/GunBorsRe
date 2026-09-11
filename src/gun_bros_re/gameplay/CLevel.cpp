@@ -94,6 +94,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_timerFunction = -1;
     m_eventTimerMs = 0;
     m_objectLayer = -1;
+    m_cameraEntered.assign(map.GetCameraLayerCount(), false);
     m_spawnedObjects.clear();
     m_indicators.clear();
     for (bool &manual : m_manualSpawnTags) { manual = false; }
@@ -249,6 +250,10 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
         }
         return 0;
     case 52: m_timerMs = 0; m_timerFunction = -1; return 0;
+    case 48:
+        // CLevel::FunctionResolver :117883 resolves enemy and prop object IDs.
+        if (m_world != nullptr) { m_world->SetEnemyPortal(first, second); }
+        return 0;
     case 49: SetIndicator(first, static_cast<unsigned>(second)); return 0;
     case 50:
         // Shipped scripts pass one object ID. The decompiler's a3[1] in this
@@ -487,6 +492,48 @@ void CLevel::SetWave(int wave) {
         wave = m_template->waveLimit - 1;
     }
     m_variables[0] = static_cast<std::int16_t>(wave);
+}
+
+static bool ContainsCameraPoint(const MapRectangle &bounds, int x, int y) {
+    return bounds.width != 0 && bounds.height != 0 && x >= bounds.x && y >= bounds.y &&
+        x <= bounds.x + bounds.width && y <= bounds.y + bounds.height;
+}
+
+void CLevel::CheckForCameraChange(float playerX, float playerY) {
+    if (m_map == nullptr || m_cleared) { return; }
+    const auto *current = m_map->GetCurrentCameraLayer();
+    if (current == nullptr) { return; }
+    // CLevel::CheckForCameraChange :116091 consumes the second rectangle,
+    // emits export 7 with the whole-map layer index, and lets Flow select the
+    // camera. Within the current region, other regions fire only on entry.
+    const int x = static_cast<int>(playerX);
+    const int y = static_cast<int>(playerY);
+    const bool inCurrent = ContainsCameraPoint(current->GetSecondaryBounds(), x, y);
+    for (unsigned index = 0; index < m_map->GetCameraLayerCount(); ++index) {
+        const auto &camera = m_map->GetCameraLayer(index);
+        const bool inside = ContainsCameraPoint(camera.GetSecondaryBounds(), x, y);
+        if (inside && &camera != current && (!inCurrent || !m_cameraEntered[index])) {
+            m_interpreter.CallExportFunction(7, static_cast<std::int16_t>(camera.GetLayerIndex()));
+        }
+        m_cameraEntered[index] = inside;
+    }
+}
+
+void CLevel::OnEnemyTeleport(int objectId, const GameObjectRef &enemy) {
+    if (m_template == nullptr || m_cleared) { return; }
+    int resourceIndex = -1;
+    const auto &resources = m_template->script.GetResources();
+    for (std::size_t index = 0; index < resources.size(); ++index) {
+        const auto &ref = resources[index];
+        if (ref.packHash == enemy.packHash && ref.resourceId == enemy.localIndex && ref.sectionOrType == 5) {
+            resourceIndex = static_cast<int>(index);
+            break;
+        }
+    }
+    // CLevel::OnEnemyTeleport :118252 calls export 9, independently of kills.
+    RemoveIndicator(objectId);
+    m_interpreter.CallExportFunction(9, static_cast<std::int16_t>(objectId), static_cast<std::int16_t>(resourceIndex));
+    std::printf("[level] enemy teleported id=%d resource=%d\n", objectId, resourceIndex);
 }
 
 void CLevel::OnPickupCollected(int objectId, const GameObjectRef &pickup) {

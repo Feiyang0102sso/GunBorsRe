@@ -91,6 +91,17 @@ for (std::string cheat = view.window.TakeCheatCode(); !cheat.empty(); cheat = vi
 #endif
 
         for (KeyCode key = view.window.TakeKeyPress(); key != KeyCode::None; key = view.window.TakeKeyPress()) {
+#if GB_ENABLE_TESTS
+            if (GameDebugKeys::OpensMapBrowser(key, view.window)) {
+                music.SetPaused(true);
+                const bool selected = ShowDebugMapPicker(toc, tables, view.window, state.debugMap);
+                music.SetPaused(false);
+                if (selected) { return kDebugMapMenuChoice; }
+                frameTicks = view.window.GetTicksMs();
+                wipeLastTick = frameTicks;
+                continue;
+            }
+#endif
             if (wipe.IsActive()) { continue; }
             if (state.page == 14) {
                 if (key == KeyCode::Space || key == KeyCode::Enter) { activate = true; }

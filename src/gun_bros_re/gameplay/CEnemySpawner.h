@@ -21,6 +21,8 @@ public:
     virtual bool SpawnMapObject(const PlacedObject &object, int objectId) { return false; }
     virtual void SendEnemyMessage(int objectId, int message) {}
     virtual void SendPropMessage(int objectId, int message) {}
+    virtual void SetEnemyPortal(int enemyId, int propId) {}
+    virtual bool IsActivePortal(int propId) const { return false; }
     virtual void PlayLevelSound(const GameObjectRef &sound) {}
     virtual void OnWaveCleared(unsigned perfectRewardPercent) {}
     virtual bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) { return false; }

@@ -215,6 +215,9 @@ void CEnemy::SetBehaviour(const std::int16_t *arguments, int count) {
         // UpdatePathFinder reads speed from script variable 0 (:70077).
         combat.arrivalDistance = Random(static_cast<float>(arguments[1]), maximum);
         combat.arrived = false;
+    } else if (mode == 2) {
+        m_linkPathFinder.Init(m_path, combat.x, combat.y);
+        combat.arrived = false;
     } else if ((mode == 3 && count >= 2) || (mode == 5 && count >= 3)) {
         float angle = combat.facing;
         float distance = static_cast<float>(arguments[1]);
@@ -297,6 +300,24 @@ void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
         } else if (!combat.arrived) {
             combat.arrived = true;
             TriggerEvent(0);
+        }
+    } else if (combat.behaviour == 2) {
+        // CEnemy::UpdatePathFinder :70031 advances links before movement and
+        // emits event 0 when the once-mode route is exhausted.
+        m_linkPathFinder.Update(combat.x, combat.y);
+        const auto *node = m_linkPathFinder.GetDestination();
+        if (m_linkPathFinder.IsDone()) {
+            if (!combat.arrived) { combat.arrived = true; TriggerEvent(0); }
+        } else if (node != nullptr) {
+            const float dx = node->x - combat.x;
+            const float dy = node->y - combat.y;
+            const float distance = std::hypot(dx, dy);
+            const float travel = std::max(0.0f, combat.variables[0] * seconds);
+            if (travel >= distance) { combat.x = node->x; combat.y = node->y; }
+            else if (distance > 0) {
+                combat.x += dx * travel / distance;
+                combat.y += dy * travel / distance;
+            }
         }
     } else if (combat.behaviour == 1 || combat.behaviour == 3) {
         const float dx = combat.destinationX - combat.x;
@@ -482,7 +503,9 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         result = 1; // Empty Arena has no intervening collision edges.
         return true;
     case 24:
-        return true; // Link-path mode has no effect without a path layer.
+        // Link-path mode has no effect without a path layer.
+        m_linkPathFinder.SetMode(args[0] == 1, combat.x, combat.y);
+        return true;
     case 26:
         action.kind = EnemyAction::Kind::Broadcast;
         action.slot = args[0];
@@ -582,7 +605,10 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         action.slot = 1;
         break;
     case 47:
-        return true; // Level objectives/teleport notifications have no Arena owner.
+        // Level objectives/teleport notifications have no Arena owner.
+        // World sessions consume the authored callback after the actor update.
+        action.kind = EnemyAction::Kind::Teleported;
+        break;
     case 56:
         // CEnemy native 0x38 forwards its argument to CLevel::HandleEvent.
         action.kind = EnemyAction::Kind::LevelEvent;

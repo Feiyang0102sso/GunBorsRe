@@ -30,6 +30,9 @@ public:
         const PlayerVitals &vitals = m_scene.GetPlayerVitals();
         return vitals.dead && vitals.deathAnimationComplete;
     }
+    /** Shared session exit decision used by the host loop and regression. */
+    // CLevel::OnLevelCleared -> CGame::OnMissionSuccess starts mission wrap-up.
+    bool IsFinished() const { return m_level.IsCleared() || IsDeathComplete(); }
     /** Desktop cheat: drain the current wave through original Flow callbacks. */
     bool SkipToBoss();
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
@@ -38,6 +41,8 @@ public:
     bool SpawnMapObject(const PlacedObject &object, int objectId) override;
     void SendEnemyMessage(int objectId, int message) override;
     void SendPropMessage(int objectId, int message) override;
+    void SetEnemyPortal(int enemyId, int propId) override;
+    bool IsActivePortal(int propId) const override { return m_props != nullptr && m_props->IsActivePortal(propId); }
     void PlayLevelSound(const GameObjectRef &sound) override;
 
 #if GB_ENABLE_TESTS

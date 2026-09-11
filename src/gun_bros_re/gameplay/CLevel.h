@@ -116,12 +116,15 @@ public:
         if (!m_cleared) { m_interpreter.HandleEvent(4, event); }
     }
     void OnEnemyKilled(int objectId, const GameObjectRef &enemy);
+    void OnEnemyTeleport(int objectId, const GameObjectRef &enemy);
+    bool IsActivePortal(int objectId) const { return m_world != nullptr && m_world->IsActivePortal(objectId); }
     void OnPickupCollected(int objectId, const GameObjectRef &pickup);
     void OnPropEvent(int objectId, const GameObjectRef &prop, bool entered);
     /** Original trigger export 6; disabled and paused groups do not fire. */
     bool OnTrigger(int group);
     int GetTriggerLayer() const { return m_triggerLayer; }
     void UpdateProximitySpawns(float left, float top, float width, float height);
+    void CheckForCameraChange(float playerX, float playerY);
     bool GetResource(int index, GameObjectRef &out) const;
     bool GetStringResource(int index, CGameAssetRef &out) const;
     int GetDialogResource() const { return m_dialogResource; }
@@ -221,6 +224,7 @@ private:
     int m_timerFunction = -1;
     int m_eventTimerMs = 0;
     int m_objectLayer = -1;
+    std::vector<bool> m_cameraEntered;
     std::vector<bool> m_spawnedObjects;
     bool m_manualSpawnTags[256] = {};
     int m_pathLayer = -1;

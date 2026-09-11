@@ -312,6 +312,7 @@ void CombatScene::Reset() {
     m_effects.Clear();
     enemies.clear();
     deaths.clear();
+    teleports.clear();
     levelEvents.clear();
     pickupSpawns.clear();
     m_pendingSpawns.clear();
@@ -961,6 +962,8 @@ void CombatScene::Actions(CombatEnemy &actor) {
         if (state.targetType == 2) { ownerType = 0; }
         if (action.kind == EnemyAction::Kind::LevelEvent) {
             levelEvents.push_back(static_cast<std::uint8_t>(action.slot));
+        } else if (action.kind == EnemyAction::Kind::Teleported) {
+            teleports.push_back({actor.objectId, state.templateRef});
         } else if (action.kind == EnemyAction::Kind::Shake) {
             if (m_map != nullptr) { m_map->GetCamera().Shake(action.durationMs); }
         } else if (action.kind == EnemyAction::Kind::TurretActive) {
@@ -1020,6 +1023,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     m_effects.BeginAudioFrame();
     UpdateExperienceTexts(deltaMs);
     deaths.clear();
+    teleports.clear();
     levelEvents.clear();
     pickupSpawns.clear();
     m_previousPlayerX = playerX;

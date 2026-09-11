@@ -729,6 +729,12 @@ public:
     }
 
     bool GetIndicatorTarget(unsigned key, float &x, float &y) const override ;
+    bool IsActivePortal(int objectId) const override {
+        const unsigned key = ResolveIndicatorTarget(objectId);
+        if (key == 0) { return false; }
+        const auto &prop = *m_activeProps[key - 1];
+        return prop.runtime != nullptr && prop.runtime->IsActivePortal();
+    }
 
     void Update(int deltaMs) override ;
 

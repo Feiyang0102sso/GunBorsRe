@@ -124,7 +124,10 @@ namespace MapDetail {
         float radius, const std::vector<CombatId> &skip) {
         CombatTrace nearest;
         for (const PlacedProp &prop : m_map.props) {
-            if (!prop.active || prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0 || hit.ownerType != 0) { continue; }
+            // CLayerCollision::TestCollisionSegment :125350 tests prop edges
+            // without CanCollide's health gate. CBullet::CheckCollisionWithLevel
+            // :61954 then sends Damage, including to zero-health script walls.
+            if (!prop.active || prop.runtime == nullptr || prop.runtime->IsRemoved() || hit.ownerType != 0) { continue; }
             const CombatId id = kPropIdBase + prop.objectId;
             if (std::find(skip.begin(), skip.end(), id) != skip.end()) { continue; }
             const auto &shape = prop.runtime->GetCollision(true);

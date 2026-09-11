@@ -1,10 +1,13 @@
 #include "gun_bros_re/DebugKeys.h"
+#include "gun_bros_re/DebugMaps.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #if GB_ENABLE_TESTS
 #include "gameplay/SurvivalStudy.h"
 #endif
 #if GB_ENABLE_TESTS
 #include "gameplay/SurvivalChecks.h"
+#include "gameplay/CampaignDoorChecks.h"
+#include "gameplay/DebugMapChecks.h"
 #endif
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 #if GB_ENABLE_TESTS
@@ -275,6 +278,9 @@ if (check) {
         archiveLevel = &gameContext->profile.nativeArchive->survivalLevels[gameContext->planet];
     }
     session.SetDialogHud(&survivalHud);
+#if GB_ENABLE_TESTS
+    if (launch.debugMap != nullptr) { archiveLevel = &launch.debugMap->level; }
+#endif
     if (!session.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
     const bool horde = archiveMission != nullptr && archiveMission->data.type == 2;
     if (horde && gameContext != nullptr) {
@@ -315,6 +321,16 @@ if (check) {
     session.Restart(startX, startY, startFacing);
     loading.Finish();
 #if GB_ENABLE_TESTS
+    if (development->debugMapProfileCheck) {
+        if (gameContext == nullptr) { return 1; }
+        return CheckDebugMapProfile(tables, player, progress, *gameContext, scene, session.GetLevel());
+    }
+    if (development->campaignDoorCheck) { return CheckCampaignDoorPassage(loaded, scene, session); }
+    if (development->campaignTargetCheck) { return CheckCampaignTargets(loaded, scene, session); }
+    if (development->campaignProgressionCheck) { return CheckCampaignProgression(loaded, scene, session, mapIndex); }
+    if (development->campaignRescueCheck) { return CheckCampaignRescue(loaded, scene, session); }
+    if (development->campaignPortalCheck) { return CheckCampaignPortal(loaded, scene, session); }
+    if (development->campaignCacheCheck) { return CheckCampaignCache(loaded, scene, session, pickups); }
     {
         const int result = CheckSurvivalDeath({
             checkFailures, packShortName, deathStudy, vitals, window, program, batch, loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing
@@ -608,7 +624,7 @@ for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.
                 if (cheat == GameCheats::Money) { gameContext->profile.coins += 5000; gameContext->profile.warbucks += 500; }
                 if (cheat == GameCheats::NextDay) { ++gameContext->profile.dailyDayOffset; }
                 if (cheat == GameCheats::UnlockWaves) { gameContext->profile.clearedWaves.fill(500); }
-                if (!gameContext->profile.SaveToDisk(gameContext->savePath)) { return 1; }
+                if (!gameContext->SaveProfile()) { return 1; }
             }
             std::printf("[cheat] %s invincible=%d\n", cheat.c_str(), vitals.invincible);
         }
@@ -664,7 +680,7 @@ if (checkControls && controlFrame < controlClickCount) {
             const GameObjectRef &resource = shopItem->data.objects.front().object;
             if (action == SurvivalHudAction::BuyItem) {
                 const PurchaseResult result = pickupProfile->AcquireItem(shopItem->data, progress.GetLevel());
-                if (result == PurchaseResult::Purchased && gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
+                if (result == PurchaseResult::Purchased && gameContext != nullptr && !gameContext->SaveProfile()) { return 1; }
                 // CPowerUpSelector::OnPurchase :184861 updates quantity in place.
                 // An icon tap, not a purchase, enters the use/equip selection state.
                 itemChoice = false;
@@ -682,7 +698,7 @@ if (checkControls && controlFrame < controlClickCount) {
                     leftPowerup = powerups.GetEquipped(0);
                     rightPowerup = powerups.GetEquipped(1);
                     itemChoice = false;
-                    if (gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
+                    if (gameContext != nullptr && !gameContext->SaveProfile()) { return 1; }
                 }
             }
             if (action == SurvivalHudAction::UseNow) {
@@ -698,7 +714,7 @@ if (checkControls && controlFrame < controlClickCount) {
             if (action == SurvivalHudAction::DockedSticks) { pickupProfile->options.ToggleDockedSticks(); }
             music.SetEnabled(pickupProfile->musicEnabled);
             CAudioPlayer::SetEffectsEnabled(pickupProfile->soundEnabled);
-            if (gameContext != nullptr && !pickupProfile->SaveToDisk(gameContext->savePath)) { return 1; }
+            if (gameContext != nullptr && !gameContext->SaveProfile()) { return 1; }
         }
         KeyCode pointerKey = KeyCode::None;
         if (action == SurvivalHudAction::Pause || action == SurvivalHudAction::Resume || action == SurvivalHudAction::Continue) { pointerKey = KeyCode::Space; }
@@ -710,7 +726,26 @@ if (checkControls && controlFrame < controlClickCount) {
         if (action == SurvivalHudAction::SwapWeapon) { pointerKey = KeyCode::Digit2; }
         std::vector<KeyCode> inputs;
         if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) { AppendSurvivalShortcut(inputs, key); }
+        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+#if GB_ENABLE_TESTS
+            if (launch.debugSelection != nullptr && GameDebugKeys::OpensMapBrowser(key, window)) {
+                music.SetPaused(true);
+                const bool selected = ShowDebugMapPicker(toc, tables, window, *launch.debugSelection);
+                music.SetPaused(paused);
+                previous = window.GetTicksMs();
+                debugTicks = previous;
+                accumulator = 0;
+                inputs.clear();
+                if (selected) {
+                    if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
+                    return kDebugMapSessionChoice;
+                }
+                continue;
+            }
+            if (launch.debugMap != nullptr && key == GameDebugKeys::MapBack) { return 0; }
+#endif
+            AppendSurvivalShortcut(inputs, key);
+        }
         const int controlsWaveBeforeInput = session.GetLevel().GetWave();
         
 #if GB_ENABLE_TESTS
@@ -961,7 +996,11 @@ if (checkSwapFiring) {
         }
         // Gameplay death opens the original postgame flow; research keeps its
         // death/restart controls so existing isolated checks remain available.
-        if (session.IsDeathComplete() && gameContext != nullptr && !check && capturePath.empty()) { break; }
+#if GB_ENABLE_TESTS
+        // The archive browser owns preview wrap-up instead of the retail menu.
+        if (launch.debugMap != nullptr && session.GetLevel().IsCleared()) { return kDebugMapSessionComplete; }
+#endif
+        if (session.IsFinished() && gameContext != nullptr && !check && capturePath.empty()) { break; }
         loaded.players[0].x = scene.playerX;
         loaded.players[0].y = scene.playerY;
         loaded.players[0].facingDegrees = scene.facing;

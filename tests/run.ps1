@@ -73,6 +73,7 @@ function Add-Check {
 
 foreach ($suite in ($Phase | Select-Object -Unique)) {
     if ($suite -eq 'Core') {
+        Add-Check 'debug-input' @('--debug-input-check')
         Add-Check 'resources' @('--m1')
         Add-Check 'weapons' @('--weapon-check')
         Add-Check 'weapon-effects' @('--weapon-effects-check')
@@ -146,6 +147,14 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         # redirection keeps OpenGameLog from writing to the real userdata directory.
         Add-Check 'game-menu' @('--skip-intro', '--menu-page', '2') -Game
     } elseif ($suite -eq 'Campaign') {
+        Add-Check 'campaign-doors' @('--campaign-door-check')
+        Add-Check 'debug-map-profile' @('--debug-map-profile-check')
+        Add-Check 'campaign-content' @('--campaign-content-check')
+        Add-Check 'campaign-targets' @('--campaign-target-check')
+        Add-Check 'campaign-progression' @('--campaign-progression-check')
+        Add-Check 'campaign-rescue' @('--campaign-rescue-check')
+        Add-Check 'campaign-portal' @('--campaign-portal-check')
+        Add-Check 'campaign-cache' @('--campaign-cache-check')
         foreach ($mission in @(10, 11, 12, 13, 14)) {
             Add-Check "campaign-pack2-$mission" @('--campaign-check', 'pack2', "$mission", '--weapon', '65')
         }

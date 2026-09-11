@@ -13,6 +13,7 @@ public:
     virtual void Update(int deltaMs) = 0;
     virtual void SendMessage(int objectId, int message) = 0;
     virtual bool GetObjectPosition(int objectId, float &x, float &y) const { return false; }
+    virtual bool IsActivePortal(int objectId) const { return false; }
     virtual unsigned ResolveIndicatorTarget(int objectId) const { return 0; }
     virtual bool GetIndicatorTarget(unsigned key, float &x, float &y) const { return false; }
     virtual CombatTrace Trace(const CombatHit &hit, float x, float y, float dx, float dy,

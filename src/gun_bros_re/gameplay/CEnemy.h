@@ -37,6 +37,7 @@
 
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptInterpreter.h"
+#include "gun_bros_re/gameplay/CLinkPathFinder.h"
 #include "engine/glu/script/CScriptResolver.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMoveSetMesh.h"
@@ -173,6 +174,7 @@ public:
     void ConfigureTemplate(float radius, bool targetable,
         const GameObjectRef &bullet, const CCollisionData &collision);
     void SetTarget(CombatId id, float x, float y, bool alive);
+    void SetPath(const ILayerPath *path);
     bool CanReceiveProjectile(int ownerType, CombatId owner) const;
     HitResult ReceiveHit(const CombatHit &hit);
     void Damage(float amount);
@@ -239,6 +241,8 @@ private:
     std::uint32_t m_partCount;
 
     CScriptInterpreter m_interpreter;
+    const ILayerPath *m_path = nullptr;
+    CLinkPathFinder m_linkPathFinder;
 
     // Whether SetBodyMoveLocked has taken part 0's move away from the script.
     bool m_bodyMoveLocked;

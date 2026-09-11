@@ -117,6 +117,8 @@ public:
     bool IsRemoved() const { return m_template != nullptr && m_template->RemoveWhenDead() && m_health <= 0; }
     const CCollisionData &GetEntryCollision() const { return m_collision; }
     bool ChecksEntry() const { return m_checkEntry; }
+    // CProp::IsActivePortal :123363: entry checks enabled and player inside.
+    bool IsActivePortal() const { return m_checkEntry && m_inside; }
     void SetResearchState(std::uint8_t state) { m_interpreter.SetState(state); }
     bool CollisionChanged() const { return m_collisionChanged; }
     void ClearCollisionChanged() { m_collisionChanged = false; }

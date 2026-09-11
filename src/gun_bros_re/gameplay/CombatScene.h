@@ -153,6 +153,8 @@ public:
 
     std::vector<std::unique_ptr<CombatEnemy>> enemies;
     std::vector<CombatDeath> deaths;
+    struct Teleport { int objectId; GameObjectRef enemy; };
+    std::vector<Teleport> teleports;
     std::vector<std::uint8_t> levelEvents;
     std::vector<PickupSpawn> pickupSpawns;
     float playerX = 600;

@@ -14,7 +14,7 @@ struct EnemyAction {
     enum class Kind {
         Bullet, Effect, LinkedEffect, StopEffect, Sound, LoopSound, StopSound,
         Splash, Broadcast, SpawnEnemy, RemoveBullet, CollisionResolved,
-        Shake, Reward, Stun, LevelEvent, SpawnPickup, TurretActive
+        Shake, Reward, Stun, LevelEvent, SpawnPickup, TurretActive, Teleported
     };
     Kind kind = Kind::Effect;
     GameObjectRef resource;
@@ -58,6 +58,8 @@ struct EnemyCombat {
     int healthBarFlashMs = 0; // CEnemy::Damage mem+1240, independent of mesh tint.
     bool dead = false;
     bool removed = false;
+    int portalObjectId = -1;
+    bool portalActive = false;
     bool targetable = true;
     bool turret = false;
     int targetType = 0;

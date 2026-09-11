@@ -34,6 +34,7 @@ enum class KeyCode {
     Up,
     Down,
     Home,
+    F3,
     T,
     P,
     G,
@@ -144,6 +145,8 @@ public:
      * with a while loop.
      */
     KeyCode TakeKeyPress();
+    /** Modifiers captured with the last dequeued key, even if released meanwhile. */
+    bool WasShiftPressed() const { return m_lastKeyShift; }
 
     /** Whether a key is currently held. Intended for continuous movement. */
     bool IsKeyDown(KeyCode key) const;
@@ -172,7 +175,9 @@ private:
     int m_dragDeltaY;
     bool m_rightDrag = false;
     float m_wheelDelta;
-    std::vector<KeyCode> m_keyPresses;
+    struct KeyPress { KeyCode code; bool shift; };
+    std::vector<KeyPress> m_keyPresses;
+    bool m_lastKeyShift = false;
 #if GB_ENABLE_CHEATS
     bool m_cheatsEnabled = false;
     std::string m_cheatPrefix;

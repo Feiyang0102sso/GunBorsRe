@@ -3,6 +3,15 @@
 #include "gun_bros_re/ui/MenuInternal.h"
 using namespace MenuDetail;
 
+namespace {
+int RunFrontEndSurvival(SurvivalLaunch launch, MenuState &state) {
+#if GB_ENABLE_TESTS
+    launch.debugSelection = &state.debugMap;
+#endif
+    return RunSurvival(launch);
+}
+}
+
 int RunGameMenuSession(const std::string &bigDirectory, const std::string &screenshotPath, unsigned page, bool originalProfile,
     const std::string &profilePath, CWindow *sharedWindow) {
     CWindow ownedWindow;
@@ -60,7 +69,18 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
     if (state.page == 15) { state.page = 0; }
     if (state.page == 19 || state.page == 23) { state.page = 21; }
     while (true) {
+#if GB_ENABLE_TESTS
+        if (state.debugMap.ready) {
+            // Research sessions own their BGM; suspend the shared menu track.
+            music.SetPaused(true);
+            RunDebugMaps(bigDirectory, window, state.debugMap, profile);
+            music.SetPaused(false);
+        }
+#endif
         const int choice = ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, savePath, screenshotPath, nullptr, originalProfile, &window, false, nullptr, &music);
+#if GB_ENABLE_TESTS
+        if (choice == kDebugMapMenuChoice) { continue; }
+#endif
         if (choice == -3) { return 1; }
         if (choice == -2) { return 0; }
         if (choice < 0) { return !profile.SaveToDisk(savePath); }
@@ -80,7 +100,11 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 tutorialPack = tables.GetPackName(data.mapRef.packHash);
                 tutorialMap = data.mapRef.localIndex;
             }
-            if (RunSurvival(SurvivalLaunch{bigDirectory, tutorialPack, tutorialMap, 0, -1, 0, &context, true, nullptr, &window}) != 0) { return 1; }
+            const int result = RunFrontEndSurvival(SurvivalLaunch{bigDirectory, tutorialPack, tutorialMap, 0, -1, 0, &context, true, nullptr, &window}, state);
+#if GB_ENABLE_TESTS
+            if (result == kDebugMapSessionChoice) { continue; }
+#endif
+            if (result != 0) { return 1; }
             if (profile.tutorialCompleted) { BeginPostGame(state, context, weapons); }
             else { state.Navigate(25, true); }
             continue;
@@ -101,7 +125,11 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 SurvivalGameContext context{profile, savePath};
                 context.music = &music;
                 context.hordeStart = static_cast<int>(state.hordeStart);
-                if (RunSurvival(SurvivalLaunch{bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, selected.data.value64, &context, profile.brotherEnabled, &selected, &window}) != 0) { return 1; }
+                const int result = RunFrontEndSurvival(SurvivalLaunch{bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, selected.data.value64, &context, profile.brotherEnabled, &selected, &window}, state);
+#if GB_ENABLE_TESTS
+                if (result == kDebugMapSessionChoice) { continue; }
+#endif
+                if (result != 0) { return 1; }
                 BeginPostGame(state, context, weapons);
                 continue;
             }
@@ -117,7 +145,11 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             SurvivalGameContext context{profile, savePath};
             context.music = &music;
             context.hordeStart = static_cast<int>(state.hordeStart);
-            if (RunSurvival(SurvivalLaunch{bigDirectory, "pack11", 0, 0, -1, selected->data.value64, &context, profile.brotherEnabled, selected, &window}) != 0) { return 1; }
+            const int result = RunFrontEndSurvival(SurvivalLaunch{bigDirectory, "pack11", 0, 0, -1, selected->data.value64, &context, profile.brotherEnabled, selected, &window}, state);
+#if GB_ENABLE_TESTS
+            if (result == kDebugMapSessionChoice) { continue; }
+#endif
+            if (result != 0) { return 1; }
             BeginPostGame(state, context, weapons);
             continue;
         }
@@ -142,7 +174,11 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             mapPack = kPlanetPacks[choice];
             mapIndex = kPlanetMaps[choice];
         }
-        if (RunSurvival(SurvivalLaunch{bigDirectory, mapPack, mapIndex, 0, -1, wave, &context, profile.brotherEnabled, nullptr, &window}) != 0) { return 1; }
+        const int result = RunFrontEndSurvival(SurvivalLaunch{bigDirectory, mapPack, mapIndex, 0, -1, wave, &context, profile.brotherEnabled, nullptr, &window}, state);
+#if GB_ENABLE_TESTS
+        if (result == kDebugMapSessionChoice) { continue; }
+#endif
+        if (result != 0) { return 1; }
         BeginPostGame(state, context, weapons);
     }
 }

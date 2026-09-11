@@ -13,6 +13,13 @@ struct SurvivalDevelopment {
     bool feedbackStudy = false;
     bool bossStudy = false;
     bool deathStudy = false;
+    bool campaignDoorCheck = false;
+    bool debugMapProfileCheck = false;
+    bool campaignTargetCheck = false;
+    bool campaignProgressionCheck = false;
+    bool campaignRescueCheck = false;
+    bool campaignPortalCheck = false;
+    bool campaignCacheCheck = false;
 };
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,

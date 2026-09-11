@@ -101,6 +101,10 @@ public:
     const CLayerCamera &GetCameraLayer(std::uint32_t index) const {
         return m_cameraLayers[index];
     }
+    const CLayerCamera *GetCurrentCameraLayer() const {
+        if (m_currentCameraLayer >= m_cameraLayers.size()) { return nullptr; }
+        return &m_cameraLayers[m_currentCameraLayer];
+    }
 
     /**
      * Choose the current camera layer by its index in the layer stack -- the

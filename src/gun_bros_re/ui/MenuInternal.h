@@ -1,5 +1,6 @@
 #include "engine/core/Paths.h"
 #pragma once
+#include "gun_bros_re/DebugMaps.h"
 /** @file GameFrontEnd.cpp
  * @brief Connect the rebuilt offline account to actual gameplay.
  */
@@ -223,6 +224,9 @@ struct SocialMenuState {
 };
 
 struct MenuState {
+#if GB_ENABLE_TESTS
+    DebugMapSelection debugMap;
+#endif
 
     unsigned page = 0;
     unsigned planet = 0;

@@ -74,6 +74,7 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_UP:     return KeyCode::Up;
         case SDLK_DOWN:   return KeyCode::Down;
         case SDLK_HOME:   return KeyCode::Home;
+        case SDLK_F3:     return KeyCode::F3;
         case SDLK_T:      return KeyCode::T;
         case SDLK_P:      return KeyCode::P;
         case SDLK_G:      return KeyCode::G;
@@ -254,7 +255,7 @@ bool CWindow::PumpEvents() {
                 if (code != KeyCode::None) {
                     const int index = static_cast<int>(code);
                     if (!m_keyDown[index]) {
-                        m_keyPresses.push_back(code);
+                        m_keyPresses.push_back({code, (event.key.mod & SDL_KMOD_SHIFT) != 0});
                     }
                     m_keyDown[index] = true;
                 }
@@ -305,7 +306,8 @@ KeyCode CWindow::TakeKeyPress() {
     if (m_keyPresses.empty()) {
         return KeyCode::None;
     }
-    const KeyCode code = m_keyPresses.front();
+    const KeyCode code = m_keyPresses.front().code;
+    m_lastKeyShift = m_keyPresses.front().shift;
     m_keyPresses.erase(m_keyPresses.begin());
     return code;
 }

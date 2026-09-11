@@ -101,6 +101,12 @@ bool CEnemy::SetState(std::uint8_t stateId) {
     return m_interpreter.SetState(stateId);
 }
 
+void CEnemy::SetPath(const ILayerPath *path) {
+    // CEnemy::SetPath :72849 starts the authored route through export 2.
+    m_path = path;
+    m_interpreter.CallExportFunction(2);
+}
+
 void CEnemy::Update(std::int32_t deltaMs) {
     if (combat.enabled && !combat.dead && GetLevelContext() != nullptr && deltaMs > 0) {
         // Original Update :67783 scales the whole actor clock, rounded to ms.
@@ -121,6 +127,16 @@ void CEnemy::Update(std::int32_t deltaMs) {
     }
     if (combat.enabled) {
         UpdateCombatBeforeAnimation(deltaMs);
+        // UpdatePortal :69300 follows behaviour and precedes animation. Only
+        // activation edges reach the script; the script owns teleport timing.
+        if (!combat.dead && combat.portalObjectId >= 0 && GetLevelContext() != nullptr) {
+            const bool active = GetLevelContext()->IsActivePortal(combat.portalObjectId);
+            if (active != combat.portalActive) {
+                if (active) { TriggerEvent(6); }
+                else { TriggerEvent(7); }
+            }
+            combat.portalActive = active;
+        }
     }
     const float deltaSeconds = static_cast<float>(deltaMs) * 0.001f;
 

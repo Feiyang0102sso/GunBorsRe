@@ -151,6 +151,21 @@ int SurvivalSession::ChooseSpawnNode(const ILayerPath &path) {
     const float top = m_cameraTop - 10;
     const float right = left + m_cameraWidth + 20;
     const float bottom = top + m_cameraHeight + 20;
+    if (dynamic_cast<const CLayerPathMesh *>(&path) != nullptr) {
+        // CLayerPathMesh::GetSpawnLocation :168115 starts at a random polygon
+        // and scans cyclically for the first unlocked, offscreen centre.
+        // Link layers below instead choose among the five nearest nodes.
+        const unsigned start = static_cast<unsigned>(m_level.RandomInteger(0, static_cast<std::int16_t>(nodes.size())));
+        for (unsigned offset = 0; offset < nodes.size(); ++offset) {
+            const std::size_t index = (start + offset) % nodes.size();
+            const auto &node = nodes[index];
+            if (node.locked) { continue; }
+            if (m_cameraWidth > 0 && m_cameraHeight > 0 &&
+                node.x >= left && node.x <= right && node.y >= top && node.y <= bottom) { continue; }
+            return static_cast<int>(index);
+        }
+        return -1;
+    }
     // {node index, squared distance to the player}, nearest first.
     std::vector<std::pair<int, float>> nearest;
     for (std::size_t index = 0; index < nodes.size(); ++index) {
@@ -174,13 +189,18 @@ int SurvivalSession::ChooseSpawnNode(const ILayerPath &path) {
 }
 
 bool SurvivalSession::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int nodeIndex, int objectId) {
+    const bool hasAuthoredRoute = layerIndex >= 0 && nodeIndex >= 0;
     std::size_t entryIndex = 0;
     while (entryIndex < m_catalog.size()) {
         if (m_catalog[entryIndex].packHash == enemy.packHash && m_catalog[entryIndex].ordinal == enemy.localIndex) { break; }
         ++entryIndex;
     }
     if (entryIndex == m_catalog.size()) { return false; }
-    CLayerPathLink *path = m_map.GetPathLinkLayer(layerIndex);
+    // CEnemySpawner::GetSpawnPointOffScreen :146112 uses CMap's current path
+    // when no override is selected. Reset clears that override before Lava 0's
+    // final single spawn; treating -1 as a literal link layer dropped the enemy.
+    if (layerIndex < 0) { layerIndex = m_level.GetPathLayer(); }
+    ILayerPath *path = m_map.GetPathLayer(layerIndex);
     if (path == nullptr || path->GetNodes().empty()) { return false; }
     const auto &nodes = path->GetNodes();
     if (nodeIndex < 0) { nodeIndex = ChooseSpawnNode(*path); }
@@ -196,6 +216,8 @@ bool SurvivalSession::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int
         }
     }
     actor->objectId = objectId;
+    // SpawnEnemyPath -> SetPath :147015; a spawn override alone is not a route.
+    if (hasAuthoredRoute) { actor->model.enemy.SetPath(path); }
     // CLevel::AddObject :116890 attaches the enemy direction marker.
     m_level.SetIndicator(objectId, 0, actor->model.enemy.combat.id);
     return true;
@@ -224,6 +246,7 @@ bool SurvivalSession::SpawnMapObject(const PlacedObject &object, int objectId) {
         if (actor == nullptr) { return false; }
         actor->objectId = objectId;
         actor->mapPlaced = true;
+        if (object.pathLayer != 255) { actor->model.enemy.SetPath(m_map.GetPathLayer(object.pathLayer)); }
         m_level.SetIndicator(objectId, 0, actor->model.enemy.combat.id);
         actor->model.enemy.combat.facing = static_cast<float>(object.facing);
         std::printf("[survival] placed enemy id=%d tag=%u item=%u path=%u facing=%d\n",
@@ -244,6 +267,16 @@ void SurvivalSession::SendEnemyMessage(int objectId, int message) {
             }
             return;
         }
+    }
+}
+
+void SurvivalSession::SetEnemyPortal(int enemyId, int propId) {
+    for (const auto &actor : m_scene.enemies) {
+        if (actor->objectId != enemyId) { continue; }
+        // CEnemy::SetPortal :67225 resets the previous activation state.
+        actor->model.enemy.combat.portalObjectId = propId;
+        actor->model.enemy.combat.portalActive = false;
+        return;
     }
 }
 
@@ -506,6 +539,7 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         if (m_transitionMs <= 0) { m_level.HandleEvent(2); }
     }
     const int previousWave = m_level.GetWave();
+    m_level.CheckForCameraChange(m_scene.playerX, m_scene.playerY);
     m_level.Update(deltaMs);
     m_scene.SetPathLayer(m_level.GetPathLayer());
     const float previousX = m_scene.playerX;
@@ -525,6 +559,7 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         }
     }
     for (std::uint8_t event : m_scene.levelEvents) { m_level.HandleEvent(event); }
+    for (const auto &event : m_scene.teleports) { m_level.OnEnemyTeleport(event.objectId, event.enemy); }
     // Deliver only after the scene update, so callbacks may safely spawn actors.
     for (const CombatDeath &death : m_scene.deaths) {
         m_level.OnEnemyKilled(death.objectId, death.enemy);

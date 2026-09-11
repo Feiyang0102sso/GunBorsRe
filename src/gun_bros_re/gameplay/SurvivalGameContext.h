@@ -35,5 +35,11 @@ struct SurvivalGameContext {
     std::map<std::uint64_t, unsigned> accountedWeaponExperience;
     SurvivalResult result;
     CBGM *music = nullptr; // Owned by the outer game flow, including loading and results.
+    // Debug map sessions use a copy of the current profile without disk writes.
+    bool persistProgress = true;
+    bool SaveProfile() const {
+        if (!persistProgress) { return true; }
+        return profile.SaveToDisk(savePath);
+    }
 };
 #endif

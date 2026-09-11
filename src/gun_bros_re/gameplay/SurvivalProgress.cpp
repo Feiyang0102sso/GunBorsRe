@@ -2,7 +2,7 @@
 using namespace MapDetail;
 bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &progress,
     const CombatScene &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded ) {
-    if (context == nullptr) { return true; }
+    if (context == nullptr || !context->persistProgress) { return true; }
     CProfileManager &profile = context->profile;
     if (context->tutorial) {
         const int step = level.GetTutorialStep();
