@@ -797,7 +797,7 @@ bool BuildViewerCharacter(PackTables &tables, const CharacterSink &catalog,
 
 int RunMeshSurvey(const std::string &bigDirectory) {
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 
@@ -821,7 +821,7 @@ int RunMeshSurvey(const std::string &bigDirectory) {
 
 int RunMoveSetSurvey(const std::string &bigDirectory) {
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 
@@ -846,7 +846,7 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     std::printf("=== M3.5: a model on screen ===\n\n");
 
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 
@@ -1070,7 +1070,7 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
     std::printf("=== M3.7: a whole character ===\n\n");
 
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 
@@ -1360,7 +1360,7 @@ int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
 
 int RunWeaponSurvey(const std::string &bigDirectory) {
     CResTOCManager toc;
-    if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
+    if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
     PackTables tables(toc);
     std::vector<WeaponEntry> weapons;
     if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }

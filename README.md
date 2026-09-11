@@ -59,3 +59,19 @@ pwsh -File tests/verify-runtime.ps1
 构建和测试只依赖当前工程内的 三个 `.vcxproj`、`src`、`big`、`assets` 与 `tests`，不读取 `_prep`。原始 BIG、运行媒体和存档样本不提交版本库；新环境需要自行提供这些输入。
 
 程序以 EXE 所在目录解析资源和相对路径，默认账户在该目录的 `saves`。已有 `userdata` 账户可通过绝对 `--profile` 路径继续使用；测试样本不会自动导入正式账户。
+
+Viewer 根据 BIG 内容自动选择 `BigVersion`，只记录三档格式，最新一档为 `1`（含 3.6.0），旧格式依次为 `2`、`3`。集中配置在 `src/gun_bros_re/data/BigVersions.h`，不维护发行版本号列表，也不需要手填版本参数：
+
+| BigVersion | 对象类型数 | 类型分段总数 |
+| --- | ---: | ---: |
+| 1 | 28 | 33 |
+| 2 | 27 | 32 |
+| 3 | 26 | 31 |
+
+自动识别同时核对原 `___GAME_TOC_KEYSET` 和 `OBJECT_SCRIPT__COUNTS_`，并按实际对象类型数定位图片、声音、模型和字符串。Viewer 优先读取 `packTOC_xga.dat`，缺少该文件时读取普通 `packTOC.dat`；已有但为空或损坏的 XGA TOC 会报错，不自动换一套资源。未知或混合格式拒绝作为一个完整资源集打开。
+
+使用 `GunBrosViewer.exe --big <资源目录> --viewer` 打开查看器；`--big-version` 或菜单 **81** 显示识别结果和各包类型信息。相对目录按 EXE 目录解析，研究目录建议传绝对路径。`--maps`、`--meshes`、`--mesh 0`、`--map pack2 0` 等原入口沿用自动识别。M1 使用当前资源的字符串引用；原 3.6.0 固定引用检查保留为 Tests 的 `--asset-sample-check`。
+
+这三档仅覆盖资源格式。小版本中的实体字段、Movie 或脚本差异仍以具体解析结果为准，不表示旧版玩法和存档兼容；正式菜单与生存流程仍要求 BigVersion 1。`big-version` 专项检查用独立小型 BIG 验证三档、普通/XGA、媒体索引、字符串、错配和截断，不依赖 `_prep` 原版资料。
+
+需要保留 EXE 目录中手工更换的 BIG 时，构建传 `/p:SkipRuntimeStaging=true` 跳过运行资源复制。正常构建仍复制项目原有资源。

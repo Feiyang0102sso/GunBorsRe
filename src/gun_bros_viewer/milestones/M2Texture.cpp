@@ -88,7 +88,7 @@ GLuint CreateTexture(const PNGImage &image) {
 bool LoadImageFromPack(const std::string &bigDirectory, const std::string &packShortName,
                        std::uint32_t resourceId, PNGImage &image) {
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga)) {
+    if (!tocManager.InitAuto(bigDirectory)) {
         return false;
     }
 

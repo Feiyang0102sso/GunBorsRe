@@ -26,7 +26,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     std::uint32_t weaponIndex, const std::string &screenshot, std::uint32_t advanceMs,
     bool fire, bool check, bool showCollisions, int armorIndex) {
     CResTOCManager toc;
-    if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
+    if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
     PackTables tables(toc);
     std::vector<EnemyTemplateData> catalog;
     std::vector<WeaponEntry> weapons;

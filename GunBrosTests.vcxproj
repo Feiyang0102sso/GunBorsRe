@@ -89,7 +89,7 @@
   <Target Name="RejectReleaseTestTarget" BeforeTargets="PrepareForBuild" Condition="'$(Configuration)'!='Debug'">
     <Error Text="Tests are development-only. Build Debug or use tests/run.ps1." />
   </Target>
-  <Target Name="StageRuntime" AfterTargets="Build">
+  <Target Name="StageRuntime" AfterTargets="Build" Condition="'$(SkipRuntimeStaging)'!='true'">
     <ItemGroup>
       <RuntimeBig Include="$(RepoRoot)big\**\*" />
       <RuntimeAssets Include="$(RepoRoot)assets\**\*" />

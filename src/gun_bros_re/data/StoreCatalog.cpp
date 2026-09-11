@@ -23,14 +23,11 @@ int GetStoreDisplayOrder(const CStoreItem &item, const CProfileManager &profile)
 std::string ReadGameString(CResTOCManager &toc, const CGameAssetRef &ref) {
     if (ref.assetId < 0 || ref.IsNull()) { return {}; }
     CResPackTOC *pack = toc.GetPack(toc.GetPackIndexFromHash(ref.packHash));
+    CGameObjectPack objects;
+    if (!objects.Init(*pack)) { return {}; }
     std::vector<std::uint8_t> payload;
-    if (!pack->GetResource(pack->GetResValue(kGameTocKeysetName), payload)) { return {}; }
-    CArrayInputStream keyset(payload);
-    const unsigned count = keyset.ReadUInt16();
-    const unsigned index = kSectionCount + ref.assetId;
-    if (index >= count) { return {}; }
-    keyset.Skip(index * 4);
-    const unsigned handle = keyset.ReadUInt32();
+    const unsigned handle = objects.GetStringHandle(ref.assetId);
+    if (handle == 0) { return {}; }
     if (!pack->GetResource(handle, payload)) { return {}; }
     std::string text;
     for (std::uint8_t byte : payload) {

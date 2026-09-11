@@ -51,6 +51,7 @@ bool ReadWholeFile(const std::string &path, std::vector<std::uint8_t> &out) {
 
 /** Strip a trailing "_<artSet>" from a pack name. */
 std::string StripArtSetSuffix(const std::string &fullName, const std::string &artSet) {
+    if (artSet.empty()) { return fullName; }
     const std::string suffix = "_" + artSet;
     if (fullName.size() <= suffix.size()) {
         return fullName;
@@ -115,7 +116,19 @@ bool CResTOCManager::ReadPackTOCFile(const std::string &path,
         records.push_back(record);
     }
 
-    return !records.empty();
+    if (position != data.size() || records.empty()) {
+        std::printf("[toc] %s: empty or truncated pack directory\n", path.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool CResTOCManager::InitAuto(const std::string &bigDirectory) {
+    // The art-set choice is independent of BigVersion: early plain and XGA
+    // archives share an object layout. Do not hide a corrupt XGA TOC by fallback.
+    const auto xgaPath = std::filesystem::u8path(bigDirectory) / "packTOC_xga.dat";
+    if (std::filesystem::exists(xgaPath)) { return Init(bigDirectory, kArtSetXga); }
+    return Init(bigDirectory, "");
 }
 
 bool CResTOCManager::Init(const std::string &bigDirectory, const std::string &artSet) {
@@ -125,7 +138,9 @@ bool CResTOCManager::Init(const std::string &bigDirectory, const std::string &ar
     m_corePackIndex = 0;
 
     // The original assembles this name piecewise in CResTOCManager::Init.
-    const std::string tocPath = bigDirectory + "/packTOC_" + artSet + ".dat";
+    std::string tocPath = bigDirectory + "/packTOC";
+    if (!artSet.empty()) { tocPath += "_" + artSet; }
+    tocPath += ".dat";
 
     std::vector<PackTOCRecord> records;
     if (!ReadPackTOCFile(tocPath, artSet, records)) {

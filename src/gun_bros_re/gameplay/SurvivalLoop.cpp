@@ -59,6 +59,10 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     const int packIndex = toc.GetPackIndexFromName(packShortName.c_str());
     if (packIndex < 0) { return 1; }
     PackTables tables(toc);
+    if (!tables.HasLatestBigVersion()) {
+        std::printf("[survival] BigVersion 1 required; older formats are supported for resource viewing only\n");
+        return 1;
+    }
     std::vector<WeaponEntry> weapons;
     std::vector<EnemyTemplateData> enemies;
     PlayerVitals vitals;

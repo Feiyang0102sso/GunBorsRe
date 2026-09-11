@@ -18,6 +18,7 @@
 #define GUN_BROS_RE_GUN_BROS_CGAMEOBJECTPACK_H
 
 #include "engine/resources/CResPackTOC.h"
+#include "gun_bros_re/data/BigVersions.h"
 
 #include <cstdint>
 #include <string>
@@ -62,10 +63,10 @@ enum class GameSection {
 };
 
 // How many section bases the 3.6.0 build stores.
-constexpr std::uint32_t kSectionCount = 33;
+constexpr std::uint32_t kSectionCount = kBigVersionLayouts[0].sectionCount;
 
 // Object types covered by the counts resource -- the first 28 sections.
-constexpr std::uint32_t kObjectTypeCount = 28;
+constexpr std::uint32_t kObjectTypeCount = kBigVersionLayouts[0].objectTypeCount;
 
 /**
  * One pack's object addressing: section bases plus the per-type object counts.
@@ -77,7 +78,14 @@ public:
     /** Read the keyset and the counts resource out of an already-bound pack. */
     bool Init(CResPackTOC &pack);
 
-    bool IsInitialised() const { return !m_sectionBases.empty(); }
+    bool IsInitialised() const { return m_version != BigVersion::Unknown; }
+    BigVersion GetBigVersion() const { return m_version; }
+    std::uint32_t GetSectionCount() const { return static_cast<std::uint32_t>(m_sectionBases.size()); }
+    std::uint32_t GetTypeCount() const { return static_cast<std::uint32_t>(m_objectCounts.size()); }
+    std::uint32_t GetStringCount() const { return static_cast<std::uint32_t>(m_stringHandles.size()); }
+
+    /** Strings follow the actual section prefix, not a fixed release offset. */
+    std::uint32_t GetStringHandle(std::uint32_t ordinal) const;
 
     /**
      * Handle for one object of a section.
@@ -111,8 +119,12 @@ public:
     std::uint32_t GetSectionSpan(GameSection section) const;
 
 private:
+    /** GameSection uses the latest names; trailing asset sections shift in older BIGs. */
+    std::size_t GetSectionIndex(GameSection section) const;
+    BigVersion m_version = BigVersion::Unknown;
     std::vector<std::uint32_t> m_sectionBases;
     std::vector<std::uint8_t> m_objectCounts;
+    std::vector<std::uint32_t> m_stringHandles;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CGAMEOBJECTPACK_H

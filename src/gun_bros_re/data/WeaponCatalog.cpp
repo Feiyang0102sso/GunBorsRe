@@ -15,14 +15,11 @@ constexpr GameSection kStoreSection = static_cast<GameSection>(23);
 std::string ReadWeaponName(CResTOCManager &toc, const CGameAssetRef &ref) {
     if (ref.assetId < 0) { return {}; }
     CResPackTOC *pack = toc.GetPack(toc.GetPackIndexFromHash(ref.packHash));
+    CGameObjectPack objects;
+    if (!objects.Init(*pack)) { return {}; }
     std::vector<std::uint8_t> payload;
-    if (!pack->GetResource(pack->GetResValue(kGameTocKeysetName), payload)) { return {}; }
-    CArrayInputStream keyset(payload);
-    const std::uint16_t count = keyset.ReadUInt16();
-    const std::uint32_t index = kSectionCount + ref.assetId;
-    if (index >= count) { return {}; }
-    keyset.Skip(index * 4);
-    const std::uint32_t handle = keyset.ReadUInt32();
+    const std::uint32_t handle = objects.GetStringHandle(ref.assetId);
+    if (handle == 0) { return {}; }
     if (!pack->GetResource(handle, payload)) { return {}; }
     // Localized strings use UTF-8 bytes in this archive's English locale.
     std::string name;

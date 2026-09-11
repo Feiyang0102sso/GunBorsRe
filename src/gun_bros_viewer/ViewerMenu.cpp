@@ -251,7 +251,8 @@ void PrintUsage() {
         "                            (default: %s %u)\n"
         "  --image <pack> <id>       which PNG M2 should display\n"
         "                            (default: %s %u)\n"
-        "  --big <directory>         where the .big files are\n"
+        "  --big <directory>         where the .big files are (XGA or plain TOC)\n"
+        "  --big-version             inspect auto-detected BigVersion 1/2/3\n"
         "                            (default: EXE-directory/big)\n"
 #if GB_ENABLE_TESTS
         "  --screenshot <file.png>   save the first frame and exit\n"
@@ -460,6 +461,7 @@ int PromptForHarness() {
 #if GB_ENABLE_TESTS
         " 65  postgame -- original result cards, casualties and native progress\n"
 #endif
+        " 81  BIG format -- auto-detected BigVersion 1/2/3 and package layout\n"
         "\n"
         "choice [1]: ");
     std::fflush(stdout);
@@ -470,7 +472,7 @@ int PromptForHarness() {
     }
 
     const int choice = std::atoi(line);
-    if (choice < 1 || choice > 80) {
+    if (choice < 1 || choice > 81) {
         return 1;
     }
     return choice;

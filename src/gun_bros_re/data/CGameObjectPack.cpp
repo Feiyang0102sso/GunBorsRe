@@ -15,8 +15,10 @@ const char *const kObjectScriptCountsName = "OBJECT_SCRIPT__COUNTS_";
 CGameObjectPack::CGameObjectPack() = default;
 
 bool CGameObjectPack::Init(CResPackTOC &pack) {
+    m_version = BigVersion::Unknown;
     m_sectionBases.clear();
     m_objectCounts.clear();
+    m_stringHandles.clear();
 
     // --- section bases, from the keyset ---
     const std::uint32_t keysetHandle = pack.GetResValue(kGameTocKeysetName);
@@ -35,15 +37,24 @@ bool CGameObjectPack::Init(CResPackTOC &pack) {
     // Keyset format: uint16 count, then that many uint32 handles.
     CArrayInputStream stream(payload);
     const std::uint16_t handleCount = stream.ReadUInt16();
+    if (stream.Overran() || stream.Available() != static_cast<std::size_t>(handleCount) * 4) {
+        std::printf("[objpack] %s: keyset size mismatch\n", pack.GetShortName().c_str());
+        return false;
+    }
 
     // The section bases are the leading handles that are not aggregate
     // references; the aggregate ones after them are the pack's strings.
     for (std::uint16_t i = 0; i < handleCount; ++i) {
         const std::uint32_t handle = stream.ReadUInt32();
         if ((handle & kHandleAggregateFlag) != 0) {
-            break;
+            m_stringHandles.push_back(handle);
+        } else {
+            if (!m_stringHandles.empty()) {
+                std::printf("[objpack] %s: non-string handle after string prefix\n", pack.GetShortName().c_str());
+                return false;
+            }
+            m_sectionBases.push_back(handle);
         }
-        m_sectionBases.push_back(handle);
     }
 
     if (stream.Overran()) {
@@ -51,16 +62,18 @@ bool CGameObjectPack::Init(CResPackTOC &pack) {
         m_sectionBases.clear();
         return false;
     }
-    if (m_sectionBases.size() != kSectionCount) {
-        std::printf("[objpack] %s: %zu section bases, expected %u\n",
-                    pack.GetShortName().c_str(), m_sectionBases.size(), kSectionCount);
-        m_sectionBases.clear();
+    if (m_sectionBases.empty()) {
+        std::printf("[objpack] %s: section prefix missing\n", pack.GetShortName().c_str());
         return false;
     }
 
     // --- object counts ---
     // The last section's base points at the counts resource itself.
-    const std::uint32_t countsHandle = m_sectionBases[kSectionCount - 1];
+    const std::uint32_t countsHandle = m_sectionBases.back();
+    if (countsHandle != pack.GetResValue(kObjectScriptCountsName)) {
+        std::printf("[objpack] %s: counts handle does not match the named resource\n", pack.GetShortName().c_str());
+        return false;
+    }
     if (!pack.GetResource(countsHandle, payload)) {
         std::printf("[objpack] %s: counts resource unreadable\n",
                     pack.GetShortName().c_str());
@@ -70,6 +83,12 @@ bool CGameObjectPack::Init(CResPackTOC &pack) {
     // Format: uint8 typeCount, then one uint8 per type.
     CArrayInputStream countsStream(payload);
     const std::uint8_t typeCount = countsStream.ReadUInt8();
+    const BigVersionLayout *layout = FindBigVersionLayout(GetSectionCount(), typeCount);
+    if (layout == nullptr || countsStream.Overran() || countsStream.Available() != typeCount) {
+        std::printf("[objpack] %s: unsupported or invalid layout sections=%zu types=%u bytes=%zu\n",
+                    pack.GetShortName().c_str(), m_sectionBases.size(), typeCount, payload.size());
+        return false;
+    }
     for (std::uint8_t i = 0; i < typeCount; ++i) {
         m_objectCounts.push_back(countsStream.ReadUInt8());
     }
@@ -79,11 +98,24 @@ bool CGameObjectPack::Init(CResPackTOC &pack) {
         return false;
     }
 
+    m_version = layout->version;
     return true;
 }
 
+std::size_t CGameObjectPack::GetSectionIndex(GameSection section) const {
+    if (!IsInitialised()) { return m_sectionBases.size(); }
+    const std::uint32_t number = static_cast<std::uint32_t>(section);
+    if (number == 0) { return m_sectionBases.size(); }
+    if (number <= kObjectTypeCount) {
+        // New object types must never alias an older pack's PNG/WAV sections.
+        if (number > m_objectCounts.size()) { return m_sectionBases.size(); }
+        return number - 1;
+    }
+    return m_objectCounts.size() + (number - kObjectTypeCount - 1);
+}
+
 std::uint32_t CGameObjectPack::GetSectionBase(GameSection section) const {
-    const std::uint32_t index = static_cast<std::uint32_t>(section) - 1;
+    const std::size_t index = GetSectionIndex(section);
     if (index >= m_sectionBases.size()) {
         return 0;
     }
@@ -91,13 +123,14 @@ std::uint32_t CGameObjectPack::GetSectionBase(GameSection section) const {
 }
 
 std::uint32_t CGameObjectPack::GetSectionSpan(GameSection section) const {
-    const std::uint32_t index = static_cast<std::uint32_t>(section) - 1;
+    const std::size_t index = GetSectionIndex(section);
     if (index + 1 >= m_sectionBases.size()) {
         return 0;
     }
 
-    const std::uint32_t base = m_sectionBases[index];
-    const std::uint32_t nextBase = m_sectionBases[index + 1];
+    // Section tags differ for PNG/WAV/BIN; only logical IDs define the span.
+    const std::uint32_t base = m_sectionBases[index] & kHandleIdMask;
+    const std::uint32_t nextBase = m_sectionBases[index + 1] & kHandleIdMask;
     if (nextBase <= base) {
         return 0;
     }
@@ -116,9 +149,14 @@ std::uint32_t CGameObjectPack::GetHandle(GameSection section,
 std::uint32_t CGameObjectPack::GetObjectCount(GameSection section) const {
     // Only the first 28 sections are object types; PNG and beyond are not
     // covered by the counts resource.
-    const std::uint32_t index = static_cast<std::uint32_t>(section) - 1;
+    const std::size_t index = GetSectionIndex(section);
     if (index >= m_objectCounts.size()) {
         return 0;
     }
     return m_objectCounts[index];
+}
+
+std::uint32_t CGameObjectPack::GetStringHandle(std::uint32_t ordinal) const {
+    if (!IsInitialised() || ordinal >= m_stringHandles.size()) { return 0; }
+    return m_stringHandles[ordinal];
 }

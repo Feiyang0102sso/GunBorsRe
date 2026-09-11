@@ -898,7 +898,7 @@ int RunEnemySurvey(const std::string &bigDirectory) {
     std::printf("=== M3.8: what each enemy script assembles ===\n\n");
 
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 
@@ -940,7 +940,7 @@ int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
     std::printf("=== M3.8: the animations each enemy script plays ===\n\n");
 
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 
@@ -989,7 +989,7 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
     std::printf("=== M3.8: an enemy, assembled by its own script ===\n\n");
 
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 

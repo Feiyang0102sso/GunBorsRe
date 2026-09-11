@@ -2,6 +2,7 @@
 #include "ui/GameMenuStudy.h"
 #endif
 #include "gun_bros_viewer/ViewerMenu.h"
+#include "gun_bros_viewer/BigVersionSurvey.h"
 #include "gun_bros_viewer/Config.h"
 #include "gun_bros_viewer/viewers/MapViewer.h"
 #include "gun_bros_viewer/viewers/SurvivalViewer.h"
@@ -141,6 +142,7 @@ int RunViewerApplication(int argc, char **argv) {
     bool checkDialog = false;
     int modeArgumentCount = 0;
     bool researchMenu = false;
+    bool inspectBigVersion = false;
     std::string profilePath;
     bool introStudy = false;
     bool checkMedia = false;
@@ -753,6 +755,8 @@ else if (std::strcmp(argument, "--arena-check") == 0) {
             imageResourceId = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else if (std::strcmp(argument, "--big") == 0 && i + 1 < argc) {
             bigDirectory = Paths::Resolve(std::filesystem::u8path(argv[++i])).u8string();
+        } else if (std::strcmp(argument, "--big-version") == 0) {
+            inspectBigVersion = true;
         } 
 #if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
@@ -782,6 +786,11 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     }
     // Retail startup now enters the game; the historical menu above is explicit.
     if (modeArgumentCount == 0) { researchMenu = true; }
+    BigVersion bigVersion = BigVersion::Unknown;
+    if (inspectBigVersion || (!introStudy && !checkMedia)) {
+        if (!DetectViewerBigVersion(bigDirectory, bigVersion, inspectBigVersion)) { return 1; }
+    }
+    if (inspectBigVersion) { return 0; }
 #if GB_ENABLE_TESTS
     if (checkMedia) { return RunMediaCheck(); }
 #endif
@@ -825,6 +834,10 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     }
     if (researchMenu) {
         const int choice = PromptForHarness();
+        if (choice == 81) {
+            if (!DetectViewerBigVersion(bigDirectory, bigVersion, true)) { return 1; }
+            return 0;
+        }
 #if GB_ENABLE_TESTS
         
 #if GB_ENABLE_TESTS

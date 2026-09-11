@@ -74,6 +74,8 @@ function Add-Check {
 foreach ($suite in ($Phase | Select-Object -Unique)) {
     if ($suite -eq 'Core') {
         Add-Check 'debug-input' @('--debug-input-check')
+        Add-Check 'big-version' @('--big-version-check')
+        Add-Check 'asset-sample' @('--asset-sample-check')
         Add-Check 'resources' @('--m1')
         Add-Check 'weapons' @('--weapon-check')
         Add-Check 'weapon-effects' @('--weapon-effects-check')

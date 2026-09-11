@@ -86,7 +86,7 @@
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="StageRuntime" AfterTargets="Build">
+  <Target Name="StageRuntime" AfterTargets="Build" Condition="'$(SkipRuntimeStaging)'!='true'">
     <ItemGroup>
       <RuntimeBig Include="$(RepoRoot)big\**\*" />
       <RuntimeAssets Include="$(RepoRoot)assets\**\*" />

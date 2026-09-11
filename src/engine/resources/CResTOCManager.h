@@ -56,6 +56,9 @@ public:
     /** Parse packTOC_<artSet>.dat and create a CResPackTOC per record. */
     bool Init(const std::string &bigDirectory, const std::string &artSet);
 
+    /** Viewer art-set selection: prefer XGA; use plain TOC only when XGA is absent. */
+    bool InitAuto(const std::string &bigDirectory);
+
     /** Open and bind every pack. Returns false if any one of them fails. */
     bool Bind();
 

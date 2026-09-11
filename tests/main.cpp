@@ -7,12 +7,24 @@
 #include "gameplay/DebugMapChecks.h"
 #include "TestOutput.h"
 int CheckDebugInput();
+int RunBigVersionCheck();
+int RunOriginalAssetSampleCheck(const std::string &bigDirectory);
 int wmain(int argc, wchar_t **argv) {
+    auto sampleBigDirectory = Paths::Root() / Paths::BigDirectory;
     for (int index = 1; index + 1 < argc; ++index) {
         if (std::wstring(argv[index]) == L"--fixtures") { TestOutput::fixtureDirectory = argv[index + 1]; }
         if (std::wstring(argv[index]) == L"--test-output") { TestOutput::Configure(argv[index + 1]); }
+        if (std::wstring(argv[index]) == L"--big") { sampleBigDirectory = Paths::Resolve(argv[index + 1]); }
     }
     for (int index = 1; index < argc; ++index) {
+        if (std::wstring(argv[index]) == L"--big-version-check") {
+            CAudioPlayer::SetMuted(true);
+            return RunBigVersionCheck();
+        }
+        if (std::wstring(argv[index]) == L"--asset-sample-check") {
+            CAudioPlayer::SetMuted(true);
+            return RunOriginalAssetSampleCheck(sampleBigDirectory.u8string());
+        }
         if (std::wstring(argv[index]) == L"--debug-map-profile-check") {
             CAudioPlayer::SetMuted(true);
             return RunDebugMapProfileCheck();

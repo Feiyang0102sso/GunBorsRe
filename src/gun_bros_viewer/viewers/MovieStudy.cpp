@@ -18,7 +18,7 @@
 int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::string &screenshotPath, unsigned advanceMs,
     bool gallery, bool regionOverlay) {
     CResTOCManager toc;
-    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
     CWindow window;
     if (!window.Open("Gun Bros - Original UI Movies", 1024, 768)) { return 1; }
     MovieRenderer renderer;

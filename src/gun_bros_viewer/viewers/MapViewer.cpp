@@ -4,7 +4,7 @@ using namespace MapDetail;
 
 int RunMapList(const std::string &bigDirectory) {
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga)) {
+    if (!tocManager.InitAuto(bigDirectory)) {
         return 1;
     }
     if (!tocManager.Bind()) {
@@ -54,7 +54,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
 
     // --- resources, before any GL exists ---
     CResTOCManager tocManager;
-    if (!tocManager.Init(bigDirectory, kArtSetXga) || !tocManager.Bind()) {
+    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
         return 1;
     }
 

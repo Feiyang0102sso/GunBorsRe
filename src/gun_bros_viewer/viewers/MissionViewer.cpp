@@ -19,7 +19,7 @@ using namespace MissionCatalogDetail;
 int RunMissionPlay(const std::string &bigDirectory, const std::string &packName, int missionIndex,
     unsigned weaponIndex, int armorIndex, const std::string &screenshot, unsigned advanceMs, bool fire, bool check) {
     CResTOCManager toc;
-    if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
+    if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
     PackTables tables(toc);
     std::vector<MissionEntry> catalog;
     if (!LoadMissionCatalog(toc, tables, catalog)) { return 1; }

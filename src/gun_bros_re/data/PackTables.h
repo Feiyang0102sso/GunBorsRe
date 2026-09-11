@@ -33,6 +33,14 @@ public:
     }
 
     CGameObjectPack &GetObjectPack(int packIndex) { return m_objectPacks[packIndex]; }
+    /** Game entry points still use the latest rule set; older BIGs are viewer inputs. */
+    bool HasLatestBigVersion() const {
+        if (m_objectPacks.empty()) { return false; }
+        for (const CGameObjectPack &pack : m_objectPacks) {
+            if (pack.GetBigVersion() != BigVersion::V1) { return false; }
+        }
+        return true;
+    }
     void SetLoadProgress(IPackLoadProgress *progress) { m_resources.SetLoadProgress(progress); }
 
     /** Which pack a hash lands on. The reference decides, not its owner. */
