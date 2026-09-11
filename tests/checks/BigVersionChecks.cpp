@@ -5,7 +5,7 @@
 #include "TestOutput.h"
 #include "engine/core/CStringToKey.h"
 #include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_viewer/BigVersionSurvey.h"
+#include "gun_bros_viewer/scenes/ResourceInfo.h"
 #include <cstdio>
 #include <fstream>
 #include <vector>

@@ -1,10 +1,10 @@
 /**
- * @file M38Enemy.h
- * @brief M3.8 harness: enemies, assembled by their own scripts.
+ * @file EnemyPreview.h
+ * @brief Enemy presentation using the shared game model and script state animation.
  */
 
-#ifndef GUN_BROS_RE_MILESTONES_M38ENEMY_H
-#define GUN_BROS_RE_MILESTONES_M38ENEMY_H
+#ifndef GUN_BROS_VIEWER_ENEMYPREVIEW_H
+#define GUN_BROS_VIEWER_ENEMYPREVIEW_H
 
 #include <cstdint>
 #include <string>
@@ -29,10 +29,10 @@
  *        move set's raw moves. A state is what the game plays -- a chain of
  *        moves -- so this is the mode that shows idle, attack and death.
  * @param stateIndex Enter this state before the first frame, or -1 to leave
- *        the enemy as SpawnForUI left it. What the M and N keys do in state
+ *        the enemy as the shared level-spawn path left it. What the M and N keys do in state
  *        mode, so a screenshot can name an animation.
  */
-int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
+int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
                 float spinDegrees, const std::string &screenshotPath,
                 std::uint32_t advanceMs, std::int32_t bodyMoveIndex,
                 bool stepStates, std::int32_t stateIndex);
@@ -58,4 +58,4 @@ int RunEnemySurvey(const std::string &bigDirectory);
  */
 int RunEnemyAnimationSurvey(const std::string &bigDirectory);
 
-#endif  // GUN_BROS_RE_MILESTONES_M38ENEMY_H
+#endif  // GUN_BROS_VIEWER_ENEMYPREVIEW_H

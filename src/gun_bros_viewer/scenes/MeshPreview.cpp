@@ -1,6 +1,8 @@
+#include "gun_bros_viewer/ViewerControls.h"
+#include "gun_bros_viewer/ViewerSettings.h"
 #include "engine/core/Paths.h"
 /**
- * @file M35Mesh.cpp
+ * @file MeshPreview.cpp
  * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
  *
  * Four entry points over one body of knowledge:
@@ -29,10 +31,11 @@
  */
 
 #define NOMINMAX
-#include "gun_bros_viewer/milestones/M35Mesh.h"
+#include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/PackTables.h"
 #include "gun_bros_re/gameplay/PlayerModel.h"
+#include "gun_bros_re/gameplay/EnemyModel.h"
 #include "gun_bros_re/data/ArmorCatalog.h"
 #include "gun_bros_re/data/WeaponCatalog.h"
 #include "gun_bros_re/data/StoreCatalog.h"
@@ -69,10 +72,10 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "gun_bros_viewer/milestones/M35MeshInternal.h"
-using namespace M35MeshDetail;
+#include "gun_bros_viewer/scenes/MeshPreviewInternal.h"
+using namespace MeshPreviewDetail;
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 // ---------------------------------------------------------------------------
 // --meshes: every model, parsed
@@ -91,7 +94,7 @@ std::string JoinBoneNames(const CMesh &mesh) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Report texture coordinates that leave the unit square.
@@ -124,7 +127,7 @@ void ReportTexCoordsOutsideUnitSquare(const CMesh &mesh) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Report anything odd about the index buffer.
@@ -158,7 +161,7 @@ void ReportIndexBuffer(const CMesh &mesh) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Report triangles that span a large part of the model.
@@ -234,7 +237,7 @@ void ReportLongTriangles(const CMesh &mesh) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Parse every Section 31 resource of one pack and print a line each. */
 void SurveyPack(CResPackTOC &pack, MeshSurveyTotals &totals) {
@@ -300,7 +303,7 @@ void SurveyPack(CResPackTOC &pack, MeshSurveyTotals &totals) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** "pack1 enemy 3" */
 std::string OwnerLabel(const CResPackTOC &pack, const char *kind,
@@ -312,7 +315,7 @@ std::string OwnerLabel(const CResPackTOC &pack, const char *kind,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Hand every config of a move set to the sink. */
 void EmitMoveSet(const CMoveSetMesh &moveSet, const std::string &owner,
@@ -334,7 +337,7 @@ void EmitMoveSet(const CMoveSetMesh &moveSet, const std::string &owner,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Hand a pair of asset refs to the sink. Two refs, so two packs. */
 void EmitAssetRefs(const CGameAssetRef &meshRef, const CGameAssetRef &imageRef,
@@ -351,7 +354,7 @@ void EmitAssetRefs(const CGameAssetRef &meshRef, const CGameAssetRef &imageRef,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Fetch one template resource. Returns false when the section is empty. */
 bool ReadTemplate(CResPackTOC &pack, CGameObjectPack &objectPack,
@@ -361,7 +364,7 @@ bool ReadTemplate(CResPackTOC &pack, CGameObjectPack &objectPack,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Player templates: parsed whole, so their leftover count means something. */
 void WalkPlayers(CResPackTOC &pack, PackTables &tables, int packIndex,
@@ -391,7 +394,7 @@ void WalkPlayers(CResPackTOC &pack, PackTables &tables, int packIndex,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Enemy templates, read only as far as their move set.
@@ -402,39 +405,25 @@ namespace M35MeshDetail {
  * therefore cannot check for leftover bytes. A survey shortcut, not a CEnemy
  * port: that class stays unwritten until its own milestone.
  */
+// The historical partial-reader notes above are superseded by ReadEnemyTemplate.
 void WalkEnemies(CResPackTOC &pack, PackTables &tables, int packIndex,
                  IMeshPairSink &sink) {
     CGameObjectPack &objectPack = tables.GetObjectPack(packIndex);
     const std::uint32_t count = objectPack.GetObjectCount(GameSection::Enemy);
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
-        std::vector<std::uint8_t> payload;
-        if (!ReadTemplate(pack, objectPack, GameSection::Enemy, ordinal, payload)) {
-            continue;
-        }
-
         const std::string owner = OwnerLabel(pack, "enemy", ordinal);
-        CArrayInputStream stream(payload);
-        stream.ReadUInt8();
-
-        CGameAssetRef assetRef;
-        assetRef.Init(stream);
-
-        CScript script;
-        script.Load(stream);
-
-        CMoveSetMesh moveSet;
-        if (!moveSet.Init(stream)) {
+        EnemyTemplateData entry;
+        if (!ReadEnemyTemplate(tables, pack.GetPackHash(), ordinal, owner, entry)) {
             sink.OnTemplateFailed(owner);
             continue;
         }
-
-        EmitMoveSet(moveSet, owner, sink);
+        EmitMoveSet(entry.moveSet, owner, sink);
     }
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Gun templates: a move set at the end, plus the weapon's own model. */
 void WalkGuns(CResPackTOC &pack, PackTables &tables, int packIndex,
@@ -465,7 +454,7 @@ void WalkGuns(CResPackTOC &pack, PackTables &tables, int packIndex,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Bullet templates: a pair of asset refs, and most name neither. */
 void WalkBullets(CResPackTOC &pack, PackTables &tables, int packIndex,
@@ -497,7 +486,7 @@ void WalkBullets(CResPackTOC &pack, PackTables &tables, int packIndex,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Armour templates: one model per brother, either of which may be absent. */
 void WalkArmor(CResPackTOC &pack, PackTables &tables, int packIndex,
@@ -534,7 +523,7 @@ void WalkArmor(CResPackTOC &pack, PackTables &tables, int packIndex,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Every model/atlas pair in the archives.
@@ -560,7 +549,7 @@ void WalkMeshPairs(CResTOCManager &tocManager, PackTables &tables,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 // ---------------------------------------------------------------------------
 // --movesets: follow every pair to a real resource
@@ -581,7 +570,7 @@ void ReadPngSize(const std::vector<std::uint8_t> &payload, std::uint32_t &width,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Who owns the models, per pack.
@@ -612,7 +601,7 @@ void PrintTemplateCounts(CResTOCManager &tocManager, PackTables &tables) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Bind the move set and pick out the moves that drive this model.
@@ -642,7 +631,7 @@ void BindMoveSet(const CatalogEntry &entry, LoadedModel &model) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Put the current pose in the vertex buffer.
@@ -654,18 +643,14 @@ namespace M35MeshDetail {
  */
 void UploadPose(LoadedModel &model, CMeshBuffer &buffer,
                 std::uint32_t stillFrameIndex) {
-    if (model.moves.empty()) {
-        buffer.SetFrame(model.mesh, stillFrameIndex);
-        return;
-    }
-
-    if (model.controller.GetAnimation().Evaluate(model.pose)) {
+    if (model.rawAnimation.Evaluate(model.pose)) {
         buffer.SetVertices(model.pose);
     }
+    (void)stillFrameIndex;
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Run the animation on before the first frame is drawn.
@@ -676,27 +661,24 @@ namespace M35MeshDetail {
  * that match what a running viewer does.
  */
 void WarmUp(LoadedModel &model, std::uint32_t advanceMs) {
-    if (model.moves.empty()) {
-        return;
-    }
     for (std::uint32_t elapsed = 0; elapsed < advanceMs; elapsed += kWarmUpFrameMs) {
-        model.controller.Update(kWarmUpFrameMs);
+        model.rawAnimation.Update(kWarmUpFrameMs);
     }
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** "move 3 of 18 -- frames 40..79, speed 1.00" */
 void ReportMove(const CatalogEntry &entry, const LoadedModel &model) {
     if (model.moves.empty()) {
-        std::printf("[m35] no move drives this model; showing frame 0\n");
+        std::printf("[mesh] no move drives this model; showing frame 0\n");
         return;
     }
 
     const std::int32_t moveIndex = model.moves[model.moveSlot];
     const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
-    std::printf("[m35] move %d (%zu of %zu for this mesh) -- frames %u..%u, "
+    std::printf("[mesh] move %d (%zu of %zu for this mesh) -- frames %u..%u, "
                 "%d ms, speed %.2f%s\n",
                 moveIndex, model.moveSlot + 1, model.moves.size(),
                 move.firstFrame, move.lastFrame,
@@ -705,25 +687,35 @@ void ReportMove(const CatalogEntry &entry, const LoadedModel &model) {
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Fetch and decode one catalogue entry. */
 bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) {
-    if (!LoadMeshAndAtlas(tables, entry.owner.c_str(), entry.meshPackHash,
-                          entry.meshOrdinal, entry.imagePackHash,
-                          entry.imageOrdinal, out.mesh, out.texture)) {
+    if (entry.imageOrdinal == UINT32_MAX) {
+        std::vector<std::uint8_t> payload;
+        if (!tables.ReadSectionResource(entry.meshPackHash, GameSection::Mesh, entry.meshOrdinal, payload)) { return false; }
+        CArrayInputStream stream(payload);
+        if (!out.mesh.Init(stream)) { return false; }
+        // Neutral inspection material; explicitly labeled as untextured, not a game asset.
+        PNGImage neutral;
+        neutral.width = 1;
+        neutral.height = 1;
+        neutral.pixels.assign(4, 255);
+        if (!out.texture.Create(neutral, GL_REPEAT)) { return false; }
+    } else if (!LoadMeshAndAtlas(tables, entry.owner.c_str(), entry.meshPackHash,
+                   entry.meshOrdinal, entry.imagePackHash, entry.imageOrdinal, out.mesh, out.texture)) {
         return false;
     }
-
-    if (entry.hasMoveSet) {
-        BindMoveSet(entry, out);
-        ReportMove(entry, out);
-    }
+    if (out.mesh.GetFrames().empty()) { return false; }
+    out.rawAnimation.SetMesh(&out.mesh);
+    out.rawAnimation.SetRange(0, static_cast<std::int32_t>(out.mesh.GetFrames().size() - 1));
+    out.rawAnimation.SetLooped(true);
+    std::printf("[mesh] raw frames 0..%zu; %s\n", out.mesh.GetFrames().size() - 1, entry.owner.c_str());
     return true;
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /**
  * Model to clip space, following CMeshCamera.
@@ -778,7 +770,7 @@ void BuildModelViewProjection(const MeshBounds &bounds, const Turntable &view,
 }
 }
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 /** Assemble the player, with one of the catalogue's guns in his hand. */
 bool BuildViewerCharacter(PackTables &tables, const CharacterSink &catalog,
@@ -801,7 +793,7 @@ int RunMeshSurvey(const std::string &bigDirectory) {
         return 1;
     }
 
-    std::printf("\n=== M3.5: Section 31 meshes ===\n");
+    std::printf("\n=== Mesh: Section 31 meshes ===\n");
 
     MeshSurveyTotals totals;
     for (std::uint32_t i = 0; i < tocManager.GetPackCount(); ++i) {
@@ -825,7 +817,7 @@ int RunMoveSetSurvey(const std::string &bigDirectory) {
         return 1;
     }
 
-    std::printf("\n=== M3.5: move sets, mesh to atlas ===\n");
+    std::printf("\n=== Mesh: move sets, mesh to atlas ===\n");
 
     PackTables tables(tocManager);
     ReportingSink sink(tables);
@@ -840,10 +832,10 @@ int RunMoveSetSurvey(const std::string &bigDirectory) {
     return 0;
 }
 
-int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
+int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
                float spinDegrees, std::uint32_t frameIndex,
                const std::string &screenshotPath, std::uint32_t advanceMs) {
-    std::printf("=== M3.5: a model on screen ===\n\n");
+    std::printf("=== Mesh: a model on screen ===\n\n");
 
     CResTOCManager tocManager;
     if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
@@ -853,23 +845,26 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     PackTables tables(tocManager);
     CatalogSink catalog;
     WalkMeshPairs(tocManager, tables, catalog);
+    catalog.AddRawMeshes(tocManager, tables);
     if (catalog.GetEntries().empty()) {
-        std::printf("[m35] no template names a model\n");
+        std::printf("[mesh] no template names a model\n");
         return 1;
     }
-    std::printf("\n[m35] %zu models in the catalogue\n",
+    std::printf("\n[mesh] %zu models in the catalogue\n",
                 catalog.GetEntries().size());
 
     std::size_t slot = startIndex;
     if (slot >= catalog.GetEntries().size()) {
-        slot = 0;
+        std::printf("[mesh] index out of range\n"); return 1;
     }
 
     CWindow window;
-    if (!window.Open("gun_bros_re -- M3.5", kDefaultWindowWidth,
-                     kDefaultWindowHeight)) {
+    if (!OpenViewerWindow(window, "Mesh")) {
         return 1;
     }
+    ViewerControls controls(window, meshview::Bindings);
+    if (!controls.Init()) { return 1; }
+
 
     CShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
@@ -890,6 +885,8 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     if (!buffer.SetMesh(model->mesh)) {
         return 1;
     }
+    if (frameIndex >= model->mesh.GetFrames().size()) { std::printf("[mesh] frame index out of range\n"); return 1; }
+    model->rawAnimation.SetFrame(frameIndex);
     WarmUp(*model, advanceMs);
     UploadPose(*model, buffer, frameIndex);
 
@@ -908,48 +905,51 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
     view.extraTilt = 0.0f;
     view.zoom = 1.0f;
 
-    std::printf("\n[m35] left/right: model, up/down: ten at a time, "
-                "M/N: move, space: pause, period: step, "
-                "drag: turn, wheel: zoom, G: game tilt, Home: reset view, "
-                "Esc: quit\n");
+    // Input help is generated by ViewerControls from ViewerBindings.h.
 
     std::uint64_t previousTicks = window.GetTicksMs();
     bool paused = false;
     bool singleStep = false;
 
     bool reportedFirstFrame = false;
-    while (window.PumpEvents()) {
+    while (controls.PumpEvents()) {
         int drawableWidth = 0;
         int drawableHeight = 0;
-        window.GetDrawableSize(drawableWidth, drawableHeight);
+        controls.GetDrawableSize(drawableWidth, drawableHeight);
 
         // --- walking the catalogue ---
         const std::size_t previousSlot = slot;
-        bool moveChanged = false;
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
-             key = window.TakeKeyPress()) {
+        bool frameChanged = false;
+        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None;
+             key = controls.TakeKeyPress()) {
             const std::size_t count = catalog.GetEntries().size();
-            if (key == KeyCode::Right) {
+            if (controls.IsPressed(key, ViewerAction::Next)) {
                 slot = (slot + 1) % count;
-            } else if (key == KeyCode::Left) {
+            } else if (controls.IsPressed(key, ViewerAction::Previous)) {
                 slot = (slot + count - 1) % count;
-            } else if (key == KeyCode::Down) {
+            } else if (controls.IsPressed(key, ViewerAction::NextPage)) {
                 slot = (slot + 10) % count;
-            } else if (key == KeyCode::Up) {
+            } else if (controls.IsPressed(key, ViewerAction::PreviousPage)) {
                 slot = (slot + count - 10) % count;
-            } else if (key == KeyCode::M && !model->moves.empty()) {
-                model->moveSlot = (model->moveSlot + 1) % model->moves.size();
-                moveChanged = true;
-            } else if (key == KeyCode::N && !model->moves.empty()) {
-                const std::size_t moveCount = model->moves.size();
-                model->moveSlot = (model->moveSlot + moveCount - 1) % moveCount;
-                moveChanged = true;
-            } else if (key == KeyCode::Space) {
+            } else if (controls.IsPressed(key, ViewerAction::NextVariant) || controls.IsPressed(key, ViewerAction::PreviousVariant)) {
+                const auto &frames = model->mesh.GetFrames();
+                std::size_t currentFrame = 0;
+                for (std::size_t index = 0; index < frames.size(); ++index) {
+                    if (frames[index].timeMs > model->rawAnimation.GetTimeMs()) { break; }
+                    currentFrame = index;
+                }
+                if (controls.IsPressed(key, ViewerAction::NextVariant)) { currentFrame = (currentFrame + 1) % frames.size(); }
+                else { currentFrame = (currentFrame + frames.size() - 1) % frames.size(); }
+                frameIndex = static_cast<std::uint32_t>(currentFrame);
+                model->rawAnimation.SetFrame(frameIndex);
+                paused = true;
+                frameChanged = true;
+            } else if (controls.IsPressed(key, ViewerAction::Pause)) {
                 paused = !paused;
-                std::printf("[m35] %s\n", paused ? "paused" : "playing");
-            } else if (key == KeyCode::Period) {
+                std::printf("[mesh] %s\n", paused ? "paused" : "playing");
+            } else if (controls.IsPressed(key, ViewerAction::Step)) {
                 singleStep = true;
-            } else if (key == KeyCode::G) {
+            } else if (controls.IsPressed(key, ViewerAction::Tilt)) {
                 // The 30-degree lean the game plays at, against the 90 the
                 // menus stand a model up with.
                 if (view.tiltDegrees == kUiTiltDegrees) {
@@ -957,8 +957,8 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
                 } else {
                     view.tiltDegrees = kUiTiltDegrees;
                 }
-                std::printf("[m35] tilt %.0f degrees\n", view.tiltDegrees);
-            } else if (key == KeyCode::Home) {
+                std::printf("[mesh] tilt %.0f degrees\n", view.tiltDegrees);
+            } else if (controls.IsPressed(key, ViewerAction::ResetView)) {
                 view.spinDegrees = kUiFacingDegrees + spinDegrees;
                 view.extraTilt = 0.0f;
                 view.zoom = 1.0f;
@@ -966,32 +966,31 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
         }
 
         if (slot != previousSlot) {
-            std::printf("\n[m35] --- model %zu of %zu ---\n", slot + 1,
+            std::printf("\n[mesh] --- model %zu of %zu ---\n", slot + 1,
                         catalog.GetEntries().size());
 
             std::unique_ptr<LoadedModel> replacement(new LoadedModel());
             if (LoadModel(tables, catalog.GetEntries()[slot], *replacement)) {
                 model = std::move(replacement);
+                frameIndex = 0;
                 buffer.SetMesh(model->mesh);
                 WarmUp(*model, advanceMs);
                 UploadPose(*model, buffer, frameIndex);
             } else {
                 // A model that will not load leaves the previous one on screen
                 // rather than a blank window.
-                std::printf("[m35] staying on the previous model\n");
+                std::printf("[mesh] staying on the previous model\n");
                 slot = previousSlot;
             }
-        } else if (moveChanged) {
-            if (!model->controller.SetMove(model->moves[model->moveSlot])) {
-                // Refused, so this is the move already playing and it is not
-                // flagged to restart. Cycling round a mesh with one move would
-                // otherwise look like a dead key; rewind it by hand.
-                CMeshAnimationController &animation = model->controller.GetAnimation();
-                animation.SetTimeMs(animation.GetRangeStartMs());
-            }
+        } else if (frameChanged) {
+            // Explicit frame stepping pauses the shared animation clock.
             UploadPose(*model, buffer, frameIndex);
-            ReportMove(catalog.GetEntries()[slot], *model);
+            std::printf("[mesh] frame %u at %d ms\n", frameIndex, model->rawAnimation.GetTimeMs());
         }
+
+        const CatalogEntry &selected = catalog.GetEntries()[slot];
+        window.SetTitle(ViewerWindowTitle("Mesh", std::to_string(slot) + " | " + tables.GetPackName(selected.meshPackHash) +
+            " mesh " + std::to_string(selected.meshOrdinal) + " | " + selected.owner));
 
         // --- animation clock ---
         const std::uint64_t nowTicks = window.GetTicksMs();
@@ -1009,19 +1008,20 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
             singleStep = false;
         }
 
-        if (elapsedMs > 0 && !model->moves.empty()) {
-            model->controller.Update(static_cast<std::int32_t>(elapsedMs));
+        if (!screenshotPath.empty()) { elapsedMs = 0; }
+        if (elapsedMs > 0) {
+            model->rawAnimation.Update(static_cast<std::int32_t>(elapsedMs));
             UploadPose(*model, buffer, frameIndex);
         }
 
         // --- turntable ---
         int dragX = 0;
         int dragY = 0;
-        window.TakeDragDelta(dragX, dragY);
+        controls.TakeDragDelta(dragX, dragY);
         view.spinDegrees += static_cast<float>(dragX) * kDragToDegrees;
         view.extraTilt += static_cast<float>(dragY) * kDragToDegrees;
 
-        const float wheel = window.TakeWheelDelta();
+        const float wheel = controls.TakeWheelDelta();
         for (float notch = 0.0f; notch < wheel; notch += 1.0f) {
             view.zoom *= kZoomPerNotch;
         }
@@ -1044,6 +1044,8 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
                                  drawableHeight, mvp);
         buffer.Draw(program, mvp, model->texture);
 
+        if (!controls.Draw()) { return 1; }
+
         if (!reportedFirstFrame) {
             GLCheckErrors("first frame");
             reportedFirstFrame = true;
@@ -1060,301 +1062,7 @@ int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
         window.Present();
     }
 
-    std::printf("[m35] done\n");
-    return 0;
-}
-
-int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
-                    float spinDegrees, const std::string &screenshotPath,
-                    std::uint32_t advanceMs, bool firePreview, int armorIndex) {
-    std::printf("=== M3.7: a whole character ===\n\n");
-
-    CResTOCManager tocManager;
-    if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
-        return 1;
-    }
-
-    PackTables tables(tocManager);
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData playerTemplate;
-    if (!LoadWeaponCatalog(tocManager, tables, weapons)) { return 1; }
-
-    std::vector<ArmorEntry> armors;
-    if (armorIndex >= 0 && !LoadArmorCatalog(tocManager, tables, armors)) {
-        return 1;
-    }
-    if (armorIndex >= static_cast<int>(armors.size()) && armorIndex >= 0) {
-        std::printf("[armor] index %d out of range\n", armorIndex);
-        return 1;
-    }
-
-    if (!FindPlayerTemplate(tocManager, tables, playerTemplate)) {
-        std::printf("[m37] no player template found\n");
-        return 1;
-    }
-    if (weapons.empty()) {
-        std::printf("[m37] no gun names a weapon model\n");
-        return 1;
-    }
-    std::printf("\n[m37] %s, %zu weapon models\n", playerTemplate.owner.c_str(),
-                weapons.size());
-
-    std::size_t gunSlot = gunIndex;
-    if (gunSlot >= weapons.size()) {
-        gunSlot = 0;
-    }
-
-    CWindow window;
-    if (!window.Open("gun_bros_re -- M3.7", kDefaultWindowWidth,
-                     kDefaultWindowHeight)) {
-        return 1;
-    }
-
-    CShaderProgram program;
-    if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
-        return 1;
-    }
-
-    // Held by pointer for the same reason one part is: swapping the gun
-    // rebuilds the whole thing, and nothing in it can be moved.
-    std::unique_ptr<PlayerModel> character(new PlayerModel());
-    if (!BuildPlayerBody(tables, playerTemplate.moveSet, *character) ||
-        !EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
-                           weapons[gunSlot].owner, *character) ||
-        !CreatePlayerBuffers(*character, program)) {
-        return 1;
-    }
-
-    std::size_t moveSlot = 0;
-    SelectPlayerMoveSlot(*character, moveSlot, true);
-    SetPlayerInput(*character, false, firePreview);
-    window.SetRightDrag(false);
-    window.SetTitle("player weapon | " + WeaponSelectionLabel(weapons, gunSlot));
-    if (armorIndex >= 0) {
-        if (!EquipPlayerArmor(tables, armors[armorIndex].data, program, *character)) {
-            return 1;
-        }
-        window.SetTitle("armor " + std::to_string(armorIndex) + "/" +
-            std::to_string(armors.size() - 1) + " | " + armors[armorIndex].owner);
-        std::printf("[armor] Left/Right: armor; B: remove all; 1-7,N/M: weapon; F: fire; WASD: walk\n");
-    }
-    PosePlayer(*character);
-    WeaponEffects effects(tocManager, tables, program);
-
-    glEnable(GL_DEPTH_TEST);
-
-    // Meshes carry alpha: the turret's ground shadow is a faded disc, and
-    // without this it draws as a white plate.
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    Turntable view;
-    view.spinDegrees = kUiFacingDegrees + spinDegrees;
-    view.tiltDegrees = kUiTiltDegrees;
-    view.extraTilt = 0.0f;
-    view.zoom = 1.0f;
-
-    std::printf("\n[m37] 1-7: category, N/M: weapon, F: fire, WASD: walk, space: pause, "
-                "period: step, left drag: turn, wheel: zoom, G: game tilt, "
-                "Home: reset view, Esc: quit\n");
-
-    std::uint64_t previousTicks = window.GetTicksMs();
-    bool paused = false;
-    bool singleStep = false;
-    bool reportedFirstFrame = false;
-    std::uint32_t warmUpRemaining = advanceMs;
-
-    while (window.PumpEvents()) {
-        int drawableWidth = 0;
-        int drawableHeight = 0;
-        window.GetDrawableSize(drawableWidth, drawableHeight);
-
-        const std::size_t previousGunSlot = gunSlot;
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
-             key = window.TakeKeyPress()) {
-            if (armorIndex >= 0 && (key == KeyCode::Left || key == KeyCode::Right)) {
-                int next = armorIndex + 1;
-                if (key == KeyCode::Left) {
-                    next = armorIndex + static_cast<int>(armors.size()) - 1;
-                }
-                next %= static_cast<int>(armors.size());
-                if (!EquipPlayerArmor(tables, armors[next].data, program, *character)) {
-                    return 1;
-                }
-                armorIndex = next;
-                window.SetTitle("armor " + std::to_string(armorIndex) + "/" +
-                    std::to_string(armors.size() - 1) + " | " + armors[armorIndex].owner);
-                continue;
-            }
-            if (armorIndex >= 0 && key == KeyCode::B) {
-                ClearPlayerArmor(*character);
-                continue;
-            }
-            const std::size_t gunCount = weapons.size();
-            gunSlot = SelectWeaponKey(weapons, gunSlot, key);
-            if (key == KeyCode::Right) {
-                gunSlot = (gunSlot + 1) % gunCount;
-            } else if (key == KeyCode::Left) {
-                gunSlot = (gunSlot + gunCount - 1) % gunCount;
-            } else if (key == KeyCode::Down) {
-                gunSlot = (gunSlot + 10) % gunCount;
-            } else if (key == KeyCode::Up) {
-                gunSlot = (gunSlot + gunCount - 10) % gunCount;
-            } else if (key == KeyCode::M) {
-                // N/M now select equipment through the shared catalogue above.
-            } else if (key == KeyCode::N) {
-                // The torso has the longest move list, so step by it and let
-                // the shorter ones wrap inside SelectMoveSlot.
-                // The old synchronized slot convention is superseded by scripts.
-            } else if (key == KeyCode::Space) {
-                paused = !paused;
-                std::printf("[m37] %s\n", paused ? "paused" : "playing");
-            } else if (key == KeyCode::Period) {
-                singleStep = true;
-            } else if (key == KeyCode::G) {
-                if (view.tiltDegrees == kUiTiltDegrees) {
-                    view.tiltDegrees = kGameTiltDegrees;
-                } else {
-                    view.tiltDegrees = kUiTiltDegrees;
-                }
-                std::printf("[m37] tilt %.0f degrees\n", view.tiltDegrees);
-            } else if (key == KeyCode::Home) {
-                view.spinDegrees = kUiFacingDegrees + spinDegrees;
-                view.extraTilt = 0.0f;
-                view.zoom = 1.0f;
-            }
-        }
-
-        if (gunSlot != previousGunSlot) {
-            std::printf("\n[m37] --- weapon %zu of %zu ---\n", gunSlot + 1,
-                        weapons.size());
-
-            std::unique_ptr<PlayerModel> replacement(new PlayerModel());
-            if (BuildPlayerBody(tables, playerTemplate.moveSet, *replacement) &&
-                EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
-                                  weapons[gunSlot].owner, *replacement) &&
-                CreatePlayerBuffers(*replacement, program)) {
-                // Weapon changes preserve all independently equipped armour slots.
-                for (std::uint32_t slot = 0; slot < kArmorSlotCount; ++slot) {
-                    replacement->armor[slot] = std::move(character->armor[slot]);
-                }
-                character = std::move(replacement);
-                effects.Clear();
-                SelectPlayerMoveSlot(*character, moveSlot, true);
-                PosePlayer(*character);
-                window.SetTitle("player weapon | " + WeaponSelectionLabel(weapons, gunSlot));
-            } else {
-                std::printf("[m37] staying on the previous weapon\n");
-                gunSlot = previousGunSlot;
-            }
-        }
-
-        const std::uint64_t nowTicks = window.GetTicksMs();
-        std::uint64_t elapsedMs = nowTicks - previousTicks;
-        previousTicks = nowTicks;
-
-        if (elapsedMs > kMaxFrameMs) {
-            elapsedMs = kMaxFrameMs;
-        }
-        if (paused) {
-            elapsedMs = 0;
-        }
-        if (singleStep) {
-            elapsedMs = static_cast<std::uint64_t>(kSingleStepMs);
-            singleStep = false;
-        }
-        // Screenshots advance by the requested fixed steps, independent of loading time.
-        if (!screenshotPath.empty()) { elapsedMs = 0; }
-        if (elapsedMs > 0) {
-            const bool moving = window.IsKeyDown(KeyCode::W) || window.IsKeyDown(KeyCode::A) ||
-                window.IsKeyDown(KeyCode::S) || window.IsKeyDown(KeyCode::D);
-            SetPlayerInput(*character, moving, firePreview || window.IsKeyDown(KeyCode::F));
-            AdvancePlayer(*character, static_cast<std::int32_t>(elapsedMs));
-        }
-
-        int dragX = 0;
-        int dragY = 0;
-        window.TakeDragDelta(dragX, dragY);
-        view.spinDegrees += static_cast<float>(dragX) * kDragToDegrees;
-        view.extraTilt += static_cast<float>(dragY) * kDragToDegrees;
-
-        const float wheel = window.TakeWheelDelta();
-        for (float notch = 0.0f; notch < wheel; notch += 1.0f) {
-            view.zoom *= kZoomPerNotch;
-        }
-        for (float notch = 0.0f; notch > wheel; notch -= 1.0f) {
-            view.zoom /= kZoomPerNotch;
-        }
-        if (view.zoom < kMinZoom) {
-            view.zoom = kMinZoom;
-        }
-        if (view.zoom > kMaxZoom) {
-            view.zoom = kMaxZoom;
-        }
-
-        glViewport(0, 0, drawableWidth, drawableHeight);
-        glClearColor(0.08f, 0.08f, 0.10f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        float base[kMatrix4dElements];
-        BuildModelViewProjection(PlayerBounds(*character), view, drawableWidth,
-                                 drawableHeight, base);
-        float viewport[kMatrix4dElements];
-        Matrix4dIdentity(viewport);
-        viewport[0] = drawableWidth * 0.5f;
-        viewport[3] = drawableWidth * 0.5f;
-        viewport[5] = -drawableHeight * 0.5f;
-        viewport[7] = drawableHeight * 0.5f;
-        float modelToScreen[kMatrix4dElements];
-        Matrix4dMultiply(viewport, base, modelToScreen);
-        // Simulate both viewers in the same world units. The turntable only
-        // projects the result; spread is applied before the camera rotation.
-        const float worldScale = PlayerModelWorldScale(*character, playerTemplate.gameScale, 1);
-        float modelToWorld[kMatrix4dElements];
-        Matrix4dScale(worldScale, modelToWorld);
-        float inverseScale[kMatrix4dElements];
-        Matrix4dScale(1.0f / worldScale, inverseScale);
-        float worldToScreen[kMatrix4dElements];
-        Matrix4dMultiply(modelToScreen, inverseScale, worldToScreen);
-        // Looking straight into a barrel projects its travel to a point.
-        // Do not turn floating-point noise at 90 degrees into diagonal shots.
-        while (warmUpRemaining > 0) {
-            const int step = static_cast<int>(std::min<std::uint32_t>(warmUpRemaining, kWarmUpFrameMs));
-            AdvancePlayer(*character, step);
-            effects.Update(*character, modelToWorld, 0, step);
-            warmUpRemaining -= step;
-        }
-        effects.SetPaused(paused);
-        effects.Update(*character, modelToWorld, 0, static_cast<int>(elapsedMs));
-        float screenMvp[kMatrix4dElements];
-        Matrix4dOrthoTopLeft(static_cast<float>(drawableWidth), static_cast<float>(drawableHeight), 1000.0f, screenMvp);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, WeaponDrawPass::BehindPlayer);
-        glEnable(GL_DEPTH_TEST);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        DrawPlayer(*character, program, base);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, WeaponDrawPass::InFrontOfPlayer);
-
-        if (!reportedFirstFrame) {
-            GLCheckErrors("first frame");
-            reportedFirstFrame = true;
-
-            if (!screenshotPath.empty()) {
-                std::printf("[weapon-render] shots=%zu live=%zu torsoMove=%d legsMove=%d\n",
-                    effects.GetShotCount(), effects.GetBulletCount(),
-                    character->weapon->brother.GetTorso().GetMoveIndex(),
-                    character->weapon->brother.GetLegs().GetMoveIndex());
-                if (!GB_SAVE_FRAME(window, screenshotPath)) {
-                    return 1;
-                }
-                window.Present();
-                break;
-            }
-        }
-
-        window.Present();
-    }
-
-    std::printf("[m37] done\n");
+    std::printf("[mesh] done\n");
     return 0;
 }
 

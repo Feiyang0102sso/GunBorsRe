@@ -1,6 +1,8 @@
+#include "gun_bros_viewer/ViewerControls.h"
+#include "gun_bros_viewer/ViewerSettings.h"
 #include "engine/core/Paths.h"
 /**
- * @file M38Enemy.cpp
+ * @file EnemyPreview.cpp
  * @brief M3.8 harness: enemies, assembled by their own scripts.
  *
  * Two entry points over one body of knowledge:
@@ -13,7 +15,7 @@
  * time by its own script, so this harness has to actually run one.
  */
 
-#include "gun_bros_viewer/milestones/M38Enemy.h"
+#include "gun_bros_viewer/scenes/EnemyPreview.h"
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/core/CMatrix4d.h"
@@ -25,7 +27,7 @@
 #include "engine/platform/GLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptState.h"
-#include "gun_bros_re/gameplay/CEnemy.h"
+#include "gun_bros_re/gameplay/EnemyModel.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include "engine/graphics/CMesh.h"
@@ -87,40 +89,13 @@ constexpr std::int32_t kWarmUpFrameMs = 16;
  * orientation, because DrawUI passes 1 for DrawHeirarchy's mode argument and
  * so gets OrientForUI's straight-on view instead of the game's 30-degree lean.
  */
-struct EnemyTemplate {
-    std::uint32_t packHash;
-    std::uint32_t ordinal;
-    std::string owner;
-
-    CScript script;
-    CMoveSetMesh moveSet;
-
-    // Template word 66, CEnemy::Bind's this[213]. World units across the
-    // model's longest side.
-    float gameScale;
-
-    // Template word 67, CEnemy::Bind's this[214]. A percentage of the box the
-    // menu gives it; DrawUI divides it by 100.
-    float uiScalePercent;
-
-    // Named for their template offsets, which is the one thing certainly true
-    // about them. Read so the two scales land at the right place.
-    GameObjectRef objectRef104;
-    std::uint16_t experienceReward;
-    std::uint16_t xplodiumReward;
-    std::uint8_t flag117;
-    std::uint8_t radius116;
-
-    EnemyTemplate()
-        : packHash(0),
-          ordinal(0),
-          gameScale(0.0f),
-          uiScalePercent(0.0f),
-          experienceReward(0),
-          xplodiumReward(0),
-          flag117(0),
-          radius116(0) {}
-};
+// Template word 66, CEnemy::Bind's this[213]. World units across the
+// model's longest side.
+// Template word 67, CEnemy::Bind's this[214]. A percentage of the box the
+// menu gives it; DrawUI divides it by 100.
+// Named for their template offsets, which is the one thing certainly true
+// about them. Read so the two scales land at the right place.
+using EnemyTemplate = EnemyTemplateData;
 
 /** "pack1 enemy 18" */
 std::string OwnerLabel(const std::string &packName, std::uint32_t ordinal) {
@@ -130,58 +105,13 @@ std::string OwnerLabel(const std::string &packName, std::uint32_t ordinal) {
 }
 
 /** Every enemy template in every pack, in the order the archives hand them over. */
-void CollectEnemies(CResTOCManager &tocManager, PackTables &tables,
+bool CollectEnemies(CResTOCManager &tocManager, PackTables &tables,
                     std::vector<EnemyTemplate> &out) {
-    for (std::uint32_t packIndex = 0; packIndex < tocManager.GetPackCount();
-         ++packIndex) {
-        CResPackTOC *pack = tocManager.GetPack(static_cast<int>(packIndex));
-        CGameObjectPack &objectPack =
-            tables.GetObjectPack(static_cast<int>(packIndex));
-        const std::uint32_t count = objectPack.GetObjectCount(GameSection::Enemy);
+    // Historical implementation notes; execution now delegates to the shared game model.
+// A move set names one pack for every model in it, and that is the
+// pack an enemy's parts come out of.
 
-        for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
-            std::vector<std::uint8_t> payload;
-            const std::uint32_t handle =
-                objectPack.GetHandle(GameSection::Enemy, ordinal);
-            if (handle == 0 || !pack->GetResource(handle, payload)) {
-                continue;
-            }
-
-            EnemyTemplate entry;
-            entry.ordinal = ordinal;
-            entry.owner = OwnerLabel(pack->GetShortName(), ordinal);
-
-            CArrayInputStream stream(payload);
-            stream.ReadUInt8();
-
-            CGameAssetRef assetRef;
-            assetRef.Init(stream);
-
-            entry.script.Load(stream);
-            if (!entry.moveSet.Init(stream)) {
-                std::printf("[m38] %s: move set unreadable\n", entry.owner.c_str());
-                continue;
-            }
-
-            entry.objectRef104.Init(stream);
-            entry.experienceReward = stream.ReadUInt16();
-            entry.xplodiumReward = stream.ReadUInt16();
-            entry.flag117 = stream.ReadUInt8();
-            entry.radius116 = stream.ReadUInt8();
-            entry.gameScale = static_cast<float>(stream.ReadUInt16());
-            entry.uiScalePercent = static_cast<float>(stream.ReadUInt16());
-            if (stream.Overran()) {
-                std::printf("[m38] %s: template truncated before its scales\n",
-                            entry.owner.c_str());
-                continue;
-            }
-
-            // A move set names one pack for every model in it, and that is the
-            // pack an enemy's parts come out of.
-            entry.packHash = entry.moveSet.GetPackHash();
-            out.push_back(entry);
-        }
-    }
+    return LoadEnemyCatalog(tocManager, tables, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -189,14 +119,7 @@ void CollectEnemies(CResTOCManager &tocManager, PackTables &tables,
 // ---------------------------------------------------------------------------
 
 /** One mesh config of a move set, decoded and uploaded. */
-struct LoadedConfig {
-    CMesh mesh;
-    CTexture texture;
-    CMeshBuffer buffer;
-    bool valid;
-
-    LoadedConfig() : valid(false) {}
-};
+using LoadedConfig = EnemyModelConfig;
 
 /**
  * Every model a move set names, whether or not the script ends up using it.
@@ -206,65 +129,17 @@ struct LoadedConfig {
  * between them has not run yet.
  */
 bool LoadConfigs(PackTables &tables, const EnemyTemplate &entry,
-                 std::vector<std::unique_ptr<LoadedConfig>> &out,
+                 std::vector<std::shared_ptr<LoadedConfig>> &out,
                  bool createBuffers, const CShaderProgram *program) {
-    out.clear();
-    for (std::size_t i = 0; i < entry.moveSet.GetMeshConfigs().size(); ++i) {
-        const MeshConfig &config = entry.moveSet.GetMeshConfigs()[i];
-        std::unique_ptr<LoadedConfig> loaded(new LoadedConfig());
-
-        std::vector<std::uint8_t> meshPayload;
-        if (!tables.ReadSectionResource(entry.packHash, GameSection::Mesh,
-                                        config.meshOrdinal, meshPayload)) {
-            std::printf("[m38] %s: mesh %u unreadable\n", entry.owner.c_str(),
-                        config.meshOrdinal);
-            out.push_back(std::move(loaded));
-            continue;
-        }
-
-        CArrayInputStream meshStream(meshPayload);
-        if (!loaded->mesh.Init(meshStream)) {
-            out.push_back(std::move(loaded));
-            continue;
-        }
-
-        if (createBuffers) {
-            std::vector<std::uint8_t> imagePayload;
-            PNGImage decoded;
-            if (!tables.ReadSectionResource(entry.packHash, GameSection::Png,
-                                            config.imageOrdinal, imagePayload) ||
-                !PNGDecode(imagePayload, decoded) ||
-                !loaded->texture.Create(decoded, GL_REPEAT)) {
-                std::printf("[m38] %s: atlas %u unreadable\n", entry.owner.c_str(),
-                            config.imageOrdinal);
-                out.push_back(std::move(loaded));
-                continue;
-            }
-
-            if (!loaded->buffer.Create(*program) ||
-                !loaded->buffer.SetMesh(loaded->mesh)) {
-                out.push_back(std::move(loaded));
-                continue;
-            }
-        }
-
-        loaded->valid = true;
-        out.push_back(std::move(loaded));
-    }
-    return !out.empty();
+    EnemyModel model;
+    const bool result = LoadEnemyModel(tables, entry, createBuffers, program, EnemySpawnMode::Level, model);
+    out = std::move(model.configs);
+    return result;
 }
 
 /** The mesh pointers CEnemy::Bind wants, indexed by config. */
-std::vector<const CMesh *> ConfigMeshes(
-    const std::vector<std::unique_ptr<LoadedConfig>> &configs) {
-    std::vector<const CMesh *> meshes(configs.size(), nullptr);
-    for (std::size_t i = 0; i < configs.size(); ++i) {
-        if (configs[i]->valid) {
-            meshes[i] = &configs[i]->mesh;
-        }
-    }
-    return meshes;
-}
+// Implemented by EnemyModel in the game package.
+
 
 // ---------------------------------------------------------------------------
 // --enemies: what each script assembles
@@ -345,7 +220,7 @@ const std::vector<std::uint8_t> *SequenceOfState(const CScript &script,
  * models, which is why the listing loads them even though it draws nothing.
  */
 std::int32_t MoveDurationMs(const EnemyTemplate &entry,
-                            const std::vector<std::unique_ptr<LoadedConfig>> &configs,
+                            const std::vector<std::shared_ptr<LoadedConfig>> &configs,
                             std::uint8_t moveIndex) {
     if (moveIndex >= entry.moveSet.GetMoves().size()) {
         return 0;
@@ -357,12 +232,15 @@ std::int32_t MoveDurationMs(const EnemyTemplate &entry,
         return 0;
     }
 
-    const std::vector<MeshFrame> &frames =
-        configs[move.meshConfigIndex]->mesh.GetFrames();
-    if (move.firstFrame >= frames.size() || move.lastFrame >= frames.size()) {
-        return 0;
+    CMoveSetMeshController controller;
+    std::vector<const CMesh *> meshes;
+    for (const auto &config : configs) {
+        if (config->valid) { meshes.push_back(&config->mesh); }
+        else { meshes.push_back(nullptr); }
     }
-    return frames[move.lastFrame].timeMs - frames[move.firstFrame].timeMs;
+    controller.SetMoveSet(&entry.moveSet, meshes);
+    controller.SetMove(moveIndex);
+    return controller.GetAnimation().GetRangeDurationMs();
 }
 
 /**
@@ -370,7 +248,7 @@ std::int32_t MoveDurationMs(const EnemyTemplate &entry,
  * runs. "moves 4" on its own says nothing; this says what move 4 IS.
  */
 void PrintSequence(const EnemyTemplate &entry,
-                   const std::vector<std::unique_ptr<LoadedConfig>> &configs,
+                   const std::vector<std::shared_ptr<LoadedConfig>> &configs,
                    const std::vector<std::uint8_t> &sequence) {
     std::int32_t total = 0;
     for (std::size_t i = 0; i < sequence.size(); ++i) {
@@ -393,7 +271,7 @@ void PrintSequence(const EnemyTemplate &entry,
 
 /** One enemy's states, with the moves each of them chains. */
 void ReportStates(std::size_t index, const EnemyTemplate &entry,
-                  const std::vector<std::unique_ptr<LoadedConfig>> &configs) {
+                  const std::vector<std::shared_ptr<LoadedConfig>> &configs) {
     std::printf("  %3zu  %-18s %zu states, %u moves\n", index,
                 entry.owner.c_str(), entry.script.GetStates().size(),
                 static_cast<unsigned>(entry.moveSet.GetMoves().size()));
@@ -461,13 +339,8 @@ struct Turntable {
 };
 
 /** One enemy on screen: its models, its script, and the parts it assembled. */
-struct LoadedEnemy {
-    std::vector<std::unique_ptr<LoadedConfig>> configs;
-    std::vector<const CMesh *> configMeshes;
-    CEnemy enemy;
-
-    // Reused between frames so the evaluator does not reallocate.
-    std::vector<float> pose;
+struct LoadedEnemy : EnemyModel {
+    // Shared EnemyModel owns configs, scripts, parts and the reused pose buffer.
 
     // Which move the viewer is holding on part 0 once M or N has taken it away
     // from the script. kNoMoveIndex until then.
@@ -490,53 +363,27 @@ std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex)
  */
 bool BuildEnemy(PackTables &tables, const EnemyTemplate &entry,
                 const CShaderProgram &program, LoadedEnemy &out) {
-    if (!LoadConfigs(tables, entry, out.configs, true, &program)) {
+    // Historical implementation notes; execution now delegates to the shared game model.
+// Export 3 is the menu's, and for eighteen of the seventy-eight templates
+// it gives part 0 nothing to play: a turret assembled this way is a bare
+// base with no barrel. Run the LEVEL export instead when that happens --
+// it is the one the game itself uses for these, and it is what puts the
+// second part on.
+// Still nothing: no export animates part 0. Show its first move rather
+// than a blank window, and say that is what happened -- this is the viewer
+// being helpful, not the engine doing it.
+
+    if (!LoadEnemyModel(tables, entry, true, &program, EnemySpawnMode::Level, out)) {
+        std::printf("[enemy] %s: model unavailable\n", entry.owner.c_str());
         return false;
     }
-
-    out.configMeshes = ConfigMeshes(out.configs);
-    out.enemy.Bind(entry.script, entry.moveSet, out.configMeshes);
-    out.enemy.SpawnForUI();
-
-    // Export 3 is the menu's, and for eighteen of the seventy-eight templates
-    // it gives part 0 nothing to play: a turret assembled this way is a bare
-    // base with no barrel. Run the LEVEL export instead when that happens --
-    // it is the one the game itself uses for these, and it is what puts the
-    // second part on.
-    if (out.enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex) {
-        out.enemy.Spawn();
-        std::printf("[m38] %s: export 3 assembled nothing; spawned as a level "
-                    "would instead\n",
-                    entry.owner.c_str());
-    }
-
-    // Still nothing: no export animates part 0. Show its first move rather
-    // than a blank window, and say that is what happened -- this is the viewer
-    // being helpful, not the engine doing it.
-    if (out.enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex &&
-        !entry.moveSet.GetMoves().empty()) {
-        std::printf("[m38] %s: no spawn export set a move; falling back to "
-                    "move 0\n",
-                    entry.owner.c_str());
-        out.enemy.GetPart(0).controller.SetMove(0);
-    }
-
-    std::printf("[m38] %s: %zu configs -> %u parts\n", entry.owner.c_str(),
-                out.configs.size(), out.enemy.GetPartCount());
-
+    std::printf("[enemy] %s: %zu configs -> %u parts\n", entry.owner.c_str(), out.configs.size(), out.enemy.GetPartCount());
     return true;
 }
 
 /** Which config a part is currently showing, or -1 when it shows nothing. */
 std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex) {
-    const std::int32_t configIndex =
-        loaded.enemy.GetPart(partIndex).controller.GetMeshConfigIndex();
-    if (configIndex < 0 ||
-        static_cast<std::size_t>(configIndex) >= loaded.configs.size() ||
-        !loaded.configs[configIndex]->valid) {
-        return -1;
-    }
-    return configIndex;
+    return EnemyPartConfig(loaded, partIndex);
 }
 
 /**
@@ -546,18 +393,8 @@ std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex)
  * buffer -- so this cannot upload once and draw twice. It uploads immediately
  * before each part is drawn instead; see DrawEnemy.
  */
-void UploadPart(LoadedEnemy &loaded, std::uint32_t partIndex,
-                std::int32_t configIndex) {
-    const CMeshAnimationController &animation =
-        loaded.enemy.GetPart(partIndex).controller.GetAnimation();
-    LoadedConfig &config = *loaded.configs[configIndex];
+// Implemented by EnemyModel in the game package.
 
-    if (animation.Evaluate(loaded.pose)) {
-        config.buffer.SetVertices(loaded.pose);
-    } else {
-        config.buffer.SetFrame(config.mesh, 0);
-    }
-}
 
 /**
  * Walk part 0's move forward or back through the set's move list.
@@ -589,7 +426,7 @@ void TakeOverBodyMove(LoadedEnemy &loaded) {
     // Start from whatever the script had chosen, so the first press steps one
     // along from what is on screen rather than jumping to the top of the list.
     loaded.bodyMoveIndex = controller.GetMoveIndex();
-    std::printf("[m38] body move taken over from the script; it now loops\n");
+    std::printf("[enemy] body move taken over from the script; it now loops\n");
 }
 
 /** Hold one particular move on the body, by its index into the set. */
@@ -609,7 +446,7 @@ void SelectBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded,
     animation.SetTimeMs(animation.GetRangeStartMs());
 
     const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
-    std::printf("[m38] body move %d of %zu -- config %u, frames %u..%u, %d ms\n",
+    std::printf("[enemy] body move %d of %zu -- config %u, frames %u..%u, %d ms\n",
                 moveIndex, entry.moveSet.GetMoves().size(), move.meshConfigIndex,
                 move.firstFrame, move.lastFrame, animation.GetRangeDurationMs());
 }
@@ -649,7 +486,7 @@ void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
             // Said out loud, because a silent skip looks like a lost state.
             // Such a state is pure logic: entering it would leave whatever was
             // last on screen exactly where it was.
-            std::printf("[m38] state %d has no animation, skipped\n", stateId);
+            std::printf("[enemy] state %d has no animation, skipped\n", stateId);
             continue;
         }
 
@@ -658,12 +495,12 @@ void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
 
         // Ids are zero-based, so the last one is stateCount - 1. Spelt out
         // because "state 6 of 7" reads like there is a seventh still to come.
-        std::printf("[m38] state %d of 0..%zu", stateId, stateCount - 1);
+        std::printf("[enemy] state %d of 0..%zu", stateId, stateCount - 1);
         PrintSequence(entry, loaded.configs, *sequence);
         return;
     }
 
-    std::printf("[m38] no state of this enemy carries an animation\n");
+    std::printf("[enemy] no state of this enemy carries an animation\n");
 }
 
 /**
@@ -862,40 +699,13 @@ void BuildBaseMatrix(const MeshBounds &bounds, const Turntable &view, float scal
  */
 void DrawEnemy(LoadedEnemy &loaded, const CShaderProgram &program,
                const float *base) {
-    const CMeshAnimationController &parent =
-        loaded.enemy.GetPart(0).controller.GetAnimation();
-
-    for (std::uint32_t i = 0; i < loaded.enemy.GetPartCount(); ++i) {
-        const std::int32_t configIndex = PartConfigIndex(loaded, i);
-        if (configIndex < 0) {
-            continue;
-        }
-
-        UploadPart(loaded, i, configIndex);
-
-        const EnemyPart &part = loaded.enemy.GetPart(i);
-        MeshPart placement;
-        placement.extraAngleDegrees = part.extraAngleDegrees;
-        placement.extraAxisX = part.extraAxisX;
-        placement.extraAxisY = part.extraAxisY;
-        placement.extraAxisZ = part.extraAxisZ;
-        if (part.boneIndex != kEnemyNoBoneIndex) {
-            parent.GetNodeAt(static_cast<std::size_t>(part.boneIndex),
-                             placement.attachment);
-        }
-
-        float mvp[kMatrix4dElements];
-        MeshCameraBuildPartMatrix(placement, base, mvp);
-
-        LoadedConfig &config = *loaded.configs[configIndex];
-        config.buffer.Draw(program, mvp, config.texture);
-    }
+    DrawEnemyModel(loaded, program, base);
 }
 
 }  // namespace
 
 int RunEnemySurvey(const std::string &bigDirectory) {
-    std::printf("=== M3.8: what each enemy script assembles ===\n\n");
+    std::printf("=== Enemy: what each enemy script assembles ===\n\n");
 
     CResTOCManager tocManager;
     if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
@@ -904,20 +714,14 @@ int RunEnemySurvey(const std::string &bigDirectory) {
 
     PackTables tables(tocManager);
     std::vector<EnemyTemplate> enemies;
-    CollectEnemies(tocManager, tables, enemies);
+    if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
 
     unsigned assembled = 0;
     unsigned attached = 0;
     for (std::size_t i = 0; i < enemies.size(); ++i) {
-        std::vector<std::unique_ptr<LoadedConfig>> configs;
-        LoadConfigs(tables, enemies[i], configs, false, nullptr);
-
-        CEnemy enemy;
-        enemy.Bind(enemies[i].script, enemies[i].moveSet, ConfigMeshes(configs));
-        enemy.SpawnForUI();
-        if (enemy.GetPart(0).controller.GetMoveIndex() == kNoMoveIndex) {
-            enemy.Spawn();
-        }
+        EnemyModel model;
+        if (!LoadEnemyModel(tables, enemies[i], false, nullptr, EnemySpawnMode::Level, model)) { return 1; }
+        CEnemy &enemy = model.enemy;
 
         ReportPartTable(i, enemies[i], enemy);
         if (enemy.GetPartCount() > 1) {
@@ -937,7 +741,7 @@ int RunEnemySurvey(const std::string &bigDirectory) {
 }
 
 int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
-    std::printf("=== M3.8: the animations each enemy script plays ===\n\n");
+    std::printf("=== Enemy: the animations each enemy script plays ===\n\n");
 
     CResTOCManager tocManager;
     if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
@@ -946,14 +750,14 @@ int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
 
     PackTables tables(tocManager);
     std::vector<EnemyTemplate> enemies;
-    CollectEnemies(tocManager, tables, enemies);
+    if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
 
     unsigned animated = 0;
     unsigned inherited = 0;
     for (std::size_t i = 0; i < enemies.size(); ++i) {
         // Meshes but no textures and no GL: the timestamps a move's duration
         // is measured from live in the mesh, not in the move set.
-        std::vector<std::unique_ptr<LoadedConfig>> configs;
+        std::vector<std::shared_ptr<LoadedConfig>> configs;
         LoadConfigs(tables, enemies[i], configs, false, nullptr);
 
         ReportStates(i, enemies[i], configs);
@@ -980,13 +784,13 @@ int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
     return 0;
 }
 
-int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
+int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
                 float spinDegrees, const std::string &screenshotPath,
                 std::uint32_t advanceMs, std::int32_t bodyMoveIndex,
                 bool stepStates, std::int32_t stateIndex) {
     const StepTarget stepTarget =
         stepStates ? StepTarget::States : StepTarget::Moves;
-    std::printf("=== M3.8: an enemy, assembled by its own script ===\n\n");
+    std::printf("=== Enemy: an enemy, assembled by its own script ===\n\n");
 
     CResTOCManager tocManager;
     if (!tocManager.InitAuto(bigDirectory) || !tocManager.Bind()) {
@@ -995,23 +799,28 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
 
     PackTables tables(tocManager);
     std::vector<EnemyTemplate> enemies;
-    CollectEnemies(tocManager, tables, enemies);
+    if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
     if (enemies.empty()) {
-        std::printf("[m38] no enemy template parsed\n");
+        std::printf("[enemy] no enemy template parsed\n");
         return 1;
     }
-    std::printf("\n[m38] %zu enemies\n", enemies.size());
+    std::printf("\n[enemy] %zu enemies\n", enemies.size());
 
     std::size_t slot = startIndex;
     if (slot >= enemies.size()) {
-        slot = 0;
+        std::printf("[enemy] index out of range\n"); return 1;
+    }
+    if (stateIndex >= static_cast<int>(enemies[slot].script.GetStates().size())) {
+        std::printf("[enemy] state index out of range\n"); return 1;
     }
 
     CWindow window;
-    if (!window.Open("gun_bros_re -- M3.8", kDefaultWindowWidth,
-                     kDefaultWindowHeight)) {
+    if (!OpenViewerWindow(window, "Enemy")) {
         return 1;
     }
+    ViewerControls controls(window, enemyview::Bindings);
+    if (!controls.Init()) { return 1; }
+
 
     CShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
@@ -1025,7 +834,7 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
     if (stateIndex >= 0) {
         loaded->heldStateId = stateIndex;
         loaded->enemy.SetState(static_cast<std::uint8_t>(stateIndex));
-        std::printf("[m38] entered state %d\n", stateIndex);
+        std::printf("[enemy] entered state %d\n", stateIndex);
     }
     if (bodyMoveIndex >= 0) {
         SelectBodyMove(enemies[slot], *loaded, bodyMoveIndex);
@@ -1036,7 +845,7 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
             HoldState(*loaded);
         }
     }
-    std::printf("[m38] after %u ms: state %u, body on move %d%s\n", advanceMs,
+    std::printf("[enemy] after %u ms: state %u, body on move %d%s\n", advanceMs,
                 loaded->enemy.GetStateId(),
                 loaded->enemy.GetPart(0).controller.GetMoveIndex(),
                 loaded->enemy.IsBodyMoveLocked() ? " (held)" : " (script's)");
@@ -1057,58 +866,53 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
     // viewer opens on; G swaps to the menu one.
     view.mode = ViewMode::Game;
 
-    std::printf("\n[m38] left/right: enemy, up/down: ten at a time, "
-                "M/N: %s, space: pause, period: step, drag: turn, "
-                "wheel: zoom, G: game/menu view, Home: reset view, Esc: quit\n",
-                stepTarget == StepTarget::States
-                    ? "animation (a script state)"
-                    : "body move (one raw move)");
+    // Input help is generated by ViewerControls from ViewerBindings.h.
 
     std::uint64_t previousTicks = window.GetTicksMs();
     bool paused = false;
     bool singleStep = false;
     bool reportedFirstFrame = false;
 
-    while (window.PumpEvents()) {
+    while (controls.PumpEvents()) {
         int drawableWidth = 0;
         int drawableHeight = 0;
-        window.GetDrawableSize(drawableWidth, drawableHeight);
+        controls.GetDrawableSize(drawableWidth, drawableHeight);
 
         const std::size_t previousSlot = slot;
         int moveStep = 0;
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
-             key = window.TakeKeyPress()) {
+        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None;
+             key = controls.TakeKeyPress()) {
             const std::size_t count = enemies.size();
-            if (key == KeyCode::Right) {
+            if (controls.IsPressed(key, ViewerAction::Next)) {
                 slot = (slot + 1) % count;
-            } else if (key == KeyCode::Left) {
+            } else if (controls.IsPressed(key, ViewerAction::Previous)) {
                 slot = (slot + count - 1) % count;
-            } else if (key == KeyCode::Down) {
+            } else if (controls.IsPressed(key, ViewerAction::NextPage)) {
                 slot = (slot + 10) % count;
-            } else if (key == KeyCode::Up) {
+            } else if (controls.IsPressed(key, ViewerAction::PreviousPage)) {
                 slot = (slot + count - 10) % count;
-            } else if (key == KeyCode::Space) {
+            } else if (controls.IsPressed(key, ViewerAction::Pause)) {
                 paused = !paused;
-                std::printf("[m38] %s\n", paused ? "paused" : "playing");
-            } else if (key == KeyCode::Period) {
+                std::printf("[enemy] %s\n", paused ? "paused" : "playing");
+            } else if (controls.IsPressed(key, ViewerAction::Step)) {
                 singleStep = true;
-            } else if (key == KeyCode::M) {
+            } else if (controls.IsPressed(key, ViewerAction::NextVariant)) {
                 moveStep = 1;
-            } else if (key == KeyCode::N) {
+            } else if (controls.IsPressed(key, ViewerAction::PreviousVariant)) {
                 moveStep = -1;
-            } else if (key == KeyCode::G) {
+            } else if (controls.IsPressed(key, ViewerAction::Tilt)) {
                 // Both halves swap together: the lean and the scale belong to
                 // the same one of the game's two draw paths.
                 if (view.mode == ViewMode::Game) {
                     view.mode = ViewMode::Ui;
-                    std::printf("[m38] menu view, %.0f%% of its box\n",
+                    std::printf("[enemy] menu view, %.0f%% of its box\n",
                                 enemies[slot].uiScalePercent);
                 } else {
                     view.mode = ViewMode::Game;
-                    std::printf("[m38] game view, %.0f units across\n",
+                    std::printf("[enemy] game view, %.0f units across\n",
                                 enemies[slot].gameScale);
                 }
-            } else if (key == KeyCode::Home) {
+            } else if (controls.IsPressed(key, ViewerAction::ResetView)) {
                 view.spinDegrees = kUiFacingDegrees + spinDegrees;
                 view.extraTilt = 0.0f;
                 view.zoom = 1.0f;
@@ -1117,14 +921,14 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
 
         if (slot != previousSlot) {
             // Zero-based, so it is the number --enemy and --enemies both use.
-            std::printf("\n[m38] --- enemy %zu of %zu ---\n", slot,
+            std::printf("\n[enemy] --- enemy %zu of %zu ---\n", slot,
                         enemies.size());
 
             std::unique_ptr<LoadedEnemy> replacement(new LoadedEnemy());
             if (BuildEnemy(tables, enemies[slot], program, *replacement)) {
                 loaded = std::move(replacement);
             } else {
-                std::printf("[m38] staying on the previous enemy\n");
+                std::printf("[enemy] staying on the previous enemy\n");
                 slot = previousSlot;
             }
         } else if (moveStep != 0) {
@@ -1158,11 +962,11 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
 
         int dragX = 0;
         int dragY = 0;
-        window.TakeDragDelta(dragX, dragY);
+        controls.TakeDragDelta(dragX, dragY);
         view.spinDegrees += static_cast<float>(dragX) * kDragToDegrees;
         view.extraTilt += static_cast<float>(dragY) * kDragToDegrees;
 
-        const float wheel = window.TakeWheelDelta();
+        const float wheel = controls.TakeWheelDelta();
         for (float notch = 0.0f; notch < wheel; notch += 1.0f) {
             view.zoom *= kZoomPerNotch;
         }
@@ -1188,6 +992,8 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
                         scale, drawableWidth, drawableHeight, base);
         DrawEnemy(*loaded, program, base);
 
+        if (!controls.Draw()) { return 1; }
+
         if (!reportedFirstFrame) {
             GLCheckErrors("first frame");
             reportedFirstFrame = true;
@@ -1204,6 +1010,6 @@ int RunM38Enemy(const std::string &bigDirectory, std::uint32_t startIndex,
         window.Present();
     }
 
-    std::printf("[m38] done\n");
+    std::printf("[enemy] done\n");
     return 0;
 }

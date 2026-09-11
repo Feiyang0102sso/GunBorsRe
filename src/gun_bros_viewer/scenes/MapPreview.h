@@ -1,11 +1,10 @@
-#include "gun_bros_viewer/viewers/MapViewer.h"
 /**
- * @file M3Map.h
- * @brief M3 milestone harness: a whole level, terrain and scenery, on screen.
+ * @file MapPreview.h
+ * @brief Map presentation backed by the game terrain and object renderer.
  */
 
-#ifndef GUN_BROS_RE_MILESTONES_M3MAP_H
-#define GUN_BROS_RE_MILESTONES_M3MAP_H
+#ifndef GUN_BROS_VIEWER_MAPPREVIEW_H
+#define GUN_BROS_VIEWER_MAPPREVIEW_H
 
 #include <cstdint>
 #include <string>
@@ -31,7 +30,7 @@
  *                        GameView is the fixed, playable camera.
  * @return 0 when the map was displayed.
  */
-int RunM3Map(const std::string &bigDirectory, const std::string &packShortName,
+int RunMapPreview(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
              std::uint32_t advanceMs, bool showSpawns, bool showCollisions,
              MapViewMode viewMode, std::uint32_t weaponIndex = 0,
@@ -45,4 +44,4 @@ struct SurvivalGameContext;
 struct MissionEntry;
 // RunSurvival is declared in runtime/MapScene.h; no game caller needs this harness.
 
-#endif  // GUN_BROS_RE_MILESTONES_M3MAP_H
+#endif  // GUN_BROS_VIEWER_MAPPREVIEW_H

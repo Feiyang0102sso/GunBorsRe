@@ -1,5 +1,4 @@
 #pragma once
-/** Viewer help and interactive menus retaining the original milestone numbers. */
+/** The launcher exposes six views; inspection logic lives in scenes/. */
 void PrintUsage();
-int PromptForHarness();
-
+int PromptForViewer();

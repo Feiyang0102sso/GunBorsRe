@@ -70,13 +70,13 @@
     <ClCompile Include="$(RepoRoot)src\gun_bros_re\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_re\main.cpp" />
     <ClInclude Include="$(RepoRoot)src\gun_bros_re\**\*.h" />
   </ItemGroup>
-  <!-- Debug checks use viewer helpers; Release Re contains only engine and game. -->
-  <ItemGroup>
-    <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
-    <!-- Only CheatCodes.cpp collides with the game filename. Keep /MP batching for all other sources. -->
-    <ClCompile Update="$(RepoRoot)src\gun_bros_viewer\CheatCodes.cpp">
-      <ObjectFileName>$(IntDir)ViewerCheatCodes.obj</ObjectFileName></ClCompile>
-    <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\**\*.h" />
+  <!-- Test capture cases reuse the same viewer scene hosts. -->
+  <ItemGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\scenes\*.cpp" />
+    <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\ViewerSettings.cpp" />
+    <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\ViewerControls.cpp" />
+    <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\ViewerSettings.h" />
+    <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\scenes\*.h" />
   </ItemGroup>
   <ItemGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile Include="$(RepoRoot)tests\**\*.cpp" Exclude="$(RepoRoot)tests\main.cpp;$(RepoRoot)tests\out\**" />

@@ -1,4 +1,4 @@
-#include "gun_bros_viewer/viewers/SurvivalViewer.h"
+#include "tests/research/SurvivalStudyHost.h"
 #if GB_ENABLE_TESTS
 #include "gameplay/SurvivalStudy.h"
 #endif

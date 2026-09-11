@@ -1,6 +1,36 @@
-#include "gun_bros_viewer/viewers/MapViewer.h"
+#include "gun_bros_viewer/ViewerControls.h"
+#include "gun_bros_viewer/ViewerSettings.h"
+#include "gun_bros_viewer/scenes/MapPreview.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include <algorithm>
+#include <charconv>
 using namespace MapDetail;
+
+namespace {
+bool ReadPackNumber(const std::string &name, std::uint32_t &number) {
+    if (name.compare(0, 4, "pack") != 0) { return false; }
+    const char *end = name.data() + name.size();
+    const auto parsed = std::from_chars(name.data() + 4, end, number);
+    return parsed.ec == std::errc() && parsed.ptr == end;
+}
+
+bool ViewerMapComesBefore(const CatalogMap &first, const CatalogMap &second) {
+    std::uint32_t firstNumber = 0, secondNumber = 0;
+    const bool firstNumbered = ReadPackNumber(first.packName, firstNumber);
+    const bool secondNumbered = ReadPackNumber(second.packName, secondNumber);
+    if (firstNumbered != secondNumbered) { return firstNumbered; }
+    if (firstNumbered && firstNumber != secondNumber) { return firstNumber < secondNumber; }
+    if (first.packName != second.packName) { return first.packName < second.packName; }
+    return first.mapIndex < second.mapIndex;
+}
+
+std::vector<CatalogMap> BuildViewerMapCatalog(CResTOCManager &tocManager) {
+    // Sort only the presentation list; pack indices and resource ordinals stay intact.
+    std::vector<CatalogMap> catalog = BuildCatalog(tocManager);
+    std::stable_sort(catalog.begin(), catalog.end(), ViewerMapComesBefore);
+    return catalog;
+}
+}
 
 int RunMapList(const std::string &bigDirectory) {
     CResTOCManager tocManager;
@@ -31,7 +61,7 @@ int RunMapList(const std::string &bigDirectory) {
 
     // The flat order the viewer's left and right keys walk, so a map can be
     // named by one number instead of a pack and an ordinal.
-    const std::vector<CatalogMap> catalog = BuildCatalog(tocManager);
+    const std::vector<CatalogMap> catalog = BuildViewerMapCatalog(tocManager);
     std::printf("\nviewer order (%zu maps):\n", catalog.size());
     for (std::size_t i = 0; i < catalog.size(); ++i) {
         std::printf("  %2zu  %-8s map %u\n", i + 1, catalog[i].packName.c_str(),
@@ -50,7 +80,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     if (gameView) {
         modeName = "GameView";
     }
-    std::printf("=== M3: %s ===\n\n", modeName);
+    std::printf("=== Map: %s ===\n\n", modeName);
 
     // --- resources, before any GL exists ---
     CResTOCManager tocManager;
@@ -58,26 +88,28 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         return 1;
     }
 
-    std::vector<CatalogMap> catalog = BuildCatalog(tocManager);
+    std::vector<CatalogMap> catalog = BuildViewerMapCatalog(tocManager);
     if (catalog.empty()) {
-        std::printf("[m3] no pack contains any maps\n");
+        std::printf("[map] no pack contains any maps\n");
         return 1;
     }
 
     // --map only picks where to start now; the whole catalogue is reachable
     // from the keyboard.
     std::size_t slot = 0;
-    for (std::size_t i = 0; i < catalog.size(); ++i) {
-        if (catalog[i].packName != packShortName) {
-            continue;
+    if (!packShortName.empty()) {
+        bool found = false;
+        for (std::size_t index = 0; index < catalog.size(); ++index) {
+            if (catalog[index].packName == packShortName && catalog[index].mapIndex == mapIndex) {
+                slot = index;
+                found = true;
+                break;
+            }
         }
-        slot = i;
-        if (catalog[i].mapIndex == mapIndex) {
-            break;  // exact match; otherwise the pack's first map stands
-        }
+        if (!found) { std::printf("[map] map not found: %s %u\n", packShortName.c_str(), mapIndex); return 1; }
     }
 
-    std::printf("[m3] %zu maps across the archives:", catalog.size());
+    std::printf("[map] %zu maps across the archives:", catalog.size());
     for (std::size_t i = 0; i < catalog.size(); ++i) {
         if (i == 0 || catalog[i].packIndex != catalog[i - 1].packIndex) {
             std::printf(" %s(", catalog[i].packName.c_str());
@@ -91,11 +123,12 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
 
     // --- window, then everything that needs a context ---
     CWindow window;
-    std::string windowTitle = "gun_bros_re -- ";
-    windowTitle += modeName;
-    if (!window.Open(windowTitle, kDefaultWindowWidth, kDefaultWindowHeight)) {
+    if (!OpenViewerWindow(window, "Map")) {
         return 1;
     }
+    ViewerControls controls(window, mapview::Bindings, !gameView);
+    if (!controls.Init()) { return 1; }
+
 
     CShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
@@ -128,14 +161,13 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         if (!LoadWeaponCatalog(tocManager, weaponTables, weapons)) { return 1; }
         if (weaponSlot >= weapons.size()) { weaponSlot = 0; }
         weaponEffects.reset(new WeaponEffects(tocManager, weaponTables, program));
-        window.SetTitle("GameView | " + WeaponSelectionLabel(weapons, weaponSlot));
     }
 
     int drawableWidth = 0;
     int drawableHeight = 0;
-    window.GetDrawableSize(drawableWidth, drawableHeight);
+    controls.GetDrawableSize(drawableWidth, drawableHeight);
 
-    std::printf("\n[m3] --- %s map %u (%zu of %zu) ---\n",
+    std::printf("\n[map] --- %s map %u (%zu of %zu) ---\n",
                 catalog[slot].packName.c_str(), catalog[slot].mapIndex, slot + 1,
                 catalog.size());
 
@@ -187,36 +219,30 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                     "T: tiles, P: props, K: spawns, B: covers, E: barrels, "
                     "F: spires, C: collision, "
                     "space: pause, '.': one step, Esc: quit\n");
-    } else {
-        std::printf("\n[preview] arrows: change map, Home: refit, "
-                    "drag: pan, wheel: zoom, T: tiles, P: props, "
-                    "K: spawns, B: covers, E: barrels, S/F: spires, "
-                    "C: collision, space: pause, "
-                    "'.': one step, Esc: quit\n");
     }
 
     bool reportedFirstFrame = false;
-    while (window.PumpEvents()) {
-        window.GetDrawableSize(drawableWidth, drawableHeight);
+    while (controls.PumpEvents()) {
+        controls.GetDrawableSize(drawableWidth, drawableHeight);
 
         // --- switching maps and packs ---
+        const std::size_t previousSlot = slot;
         bool reload = false;
         bool refit = false;
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None;
-             key = window.TakeKeyPress()) {
+        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None;
+             key = controls.TakeKeyPress()) {
             if (gameView) {
                 const std::size_t nextWeapon = SelectWeaponKey(weapons, weaponSlot, key);
                 if (nextWeapon != weaponSlot && EquipControlledPlayer(weaponTables, loaded, program, weapons[nextWeapon])) {
                     weaponEffects->Clear();
                     weaponSlot = nextWeapon;
-                    window.SetTitle("GameView | " + WeaponSelectionLabel(weapons, weaponSlot));
                     std::printf("[weapon] %s\n", WeaponSelectionLabel(weapons, weaponSlot).c_str());
                 }
             }
-            if (key == KeyCode::T) {
+            if (controls.IsPressed(key, ViewerAction::Tiles)) {
                 showTiles = !showTiles;
                 reportGeometry = true;
-            } else if (key == KeyCode::B) {
+            } else if (controls.IsPressed(key, ViewerAction::Cover)) {
                 coverState = NextCoverState(coverState);
                 const std::uint32_t changed = SetCoverState(loaded, coverState);
                 StartTransitionParticles(
@@ -229,7 +255,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 reportGeometry = true;
                 std::printf("[m4] %u covers: %s\n", changed,
                             CoverStateName(coverState));
-            } else if (key == KeyCode::E) {
+            } else if (controls.IsPressed(key, ViewerAction::Barrel)) {
                 barrelState = static_cast<std::uint8_t>((barrelState + 1) % 4);
                 const std::uint32_t changed = SetInteractiveState(
                     loaded, InteractivePropKind::Barrel, barrelState);
@@ -243,8 +269,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 std::printf("[m4] %u barrels: %s\n", changed,
                             InteractiveStateName(InteractivePropKind::Barrel,
                                                  barrelState));
-            } else if (key == KeyCode::F ||
-                       (key == KeyCode::S && !gameView)) {
+            } else if (controls.IsPressed(key, ViewerAction::Spire) ||
+                       (controls.IsPressed(key, ViewerAction::SpireAlias) && !gameView)) {
                 spireState = static_cast<std::uint8_t>((spireState + 1) % 3);
                 const std::uint32_t changed = SetInteractiveState(
                     loaded, InteractivePropKind::Spire, spireState);
@@ -257,45 +283,45 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 std::printf("[m4] %u spires: %s\n", changed,
                             InteractiveStateName(InteractivePropKind::Spire,
                                                  spireState));
-            } else if (key == KeyCode::C) {
+            } else if (controls.IsPressed(key, ViewerAction::Collisions)) {
                 showCollisions = !showCollisions;
                 std::printf("[m4] collision %s\n",
                             showCollisions ? "on" : "off");
-            } else if (key == KeyCode::K) {
+            } else if (controls.IsPressed(key, ViewerAction::Spawns)) {
                 showSpawns = !showSpawns;
-                std::printf("[m3] spawns %s\n", showSpawns ? "on" : "off");
-            } else if (key == KeyCode::P) {
+                std::printf("[map] spawns %s\n", showSpawns ? "on" : "off");
+            } else if (controls.IsPressed(key, ViewerAction::Props)) {
                 showProps = !showProps;
                 reportGeometry = true;
-            } else if (key == KeyCode::Space) {
+            } else if (controls.IsPressed(key, ViewerAction::Pause)) {
                 paused = !paused;
-                std::printf("[m3] %s\n", paused ? "paused" : "running");
-            } else if (key == KeyCode::Period) {
+                std::printf("[map] %s\n", paused ? "paused" : "running");
+            } else if (controls.IsPressed(key, ViewerAction::Step)) {
                 // Stepping implies pausing: otherwise the step is lost in the
                 // real time that keeps flowing around it.
                 paused = true;
                 singleStep = true;
-            } else if (key == KeyCode::Right) {
+            } else if (controls.IsPressed(key, ViewerAction::Next)) {
                 // One step through the flat list, so the last map of a pack is
                 // followed by the first map of the next.
                 slot = (slot + 1) % catalog.size();
                 reload = true;
-            } else if (key == KeyCode::Left) {
+            } else if (controls.IsPressed(key, ViewerAction::Previous)) {
                 slot = (slot + catalog.size() - 1) % catalog.size();
                 reload = true;
-            } else if (key == KeyCode::Down) {
+            } else if (controls.IsPressed(key, ViewerAction::NextPage)) {
                 slot = NextPackSlot(catalog, slot);
                 reload = true;
-            } else if (key == KeyCode::Up) {
+            } else if (controls.IsPressed(key, ViewerAction::PreviousPage)) {
                 slot = PreviousPackSlot(catalog, slot);
                 reload = true;
-            } else if (key == KeyCode::Home && !gameView) {
+            } else if (controls.IsPressed(key, ViewerAction::ResetView) && !gameView) {
                 refit = true;
             }
         }
 
         if (reload) {
-            std::printf("\n[m3] --- %s map %u (%zu of %zu) ---\n",
+            std::printf("\n[map] --- %s map %u (%zu of %zu) ---\n",
                         catalog[slot].packName.c_str(), catalog[slot].mapIndex,
                         slot + 1, catalog.size());
 
@@ -332,12 +358,20 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
             } else {
                 // A map that will not load leaves the previous one on screen
                 // rather than a blank window.
-                std::printf("[m3] staying on the previous map\n");
+                std::printf("[map] staying on the previous map\n");
+                slot = previousSlot;
             }
         }
         if (refit) {
             camera = FitCamera(loaded, drawableWidth, drawableHeight);
         }
+
+        // Identify the displayed map, including after catalogue navigation.
+        std::string titleDetails = catalog[slot].packName + " map " +
+            std::to_string(catalog[slot].mapIndex) + " | " +
+            std::to_string(slot + 1) + "/" + std::to_string(catalog.size());
+        if (gameView) { titleDetails += " | " + WeaponSelectionLabel(weapons, weaponSlot); }
+        window.SetTitle(ViewerWindowTitle("Map", titleDetails));
 
         // --- animation clock ---
         const std::uint64_t nowTicks = window.GetTicksMs();
@@ -397,7 +431,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         }
 
         // --- zoom about the centre of the view ---
-        const float wheel = window.TakeWheelDelta();
+        const float wheel = controls.TakeWheelDelta();
         if (!gameView && wheel != 0.0f) {
             const float viewWidthBefore = static_cast<float>(drawableWidth) / camera.zoom;
             const float viewHeightBefore = static_cast<float>(drawableHeight) / camera.zoom;
@@ -429,7 +463,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         // --- pan ---
         int dragX = 0;
         int dragY = 0;
-        window.TakeDragDelta(dragX, dragY);
+        controls.TakeDragDelta(dragX, dragY);
         if (!gameView) {
             // Dragging right moves the view left, as if pulling the map along.
             // Divided by zoom so a drag tracks the cursor at any scale.
@@ -486,6 +520,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
             glDisable(GL_SCISSOR_TEST);
         }
 
+        if (!controls.Draw()) { return 1; }
+
         if (!reportedFirstFrame) {
             GLCheckErrors("first frame");
             reportedFirstFrame = true;
@@ -506,6 +542,6 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         window.Present();
     }
 
-    std::printf("[m3] done\n");
+    std::printf("[map] done\n");
     return 0;
 }

@@ -1,4 +1,4 @@
-#include "gun_bros_viewer/milestones/ArenaInternal.h"
+#include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 namespace ArenaDetail {
 /** Exercise actual archive scripts, then write a per-entry audit for inspection. */
 int CheckArena(CWindow &window, CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,

@@ -1,7 +1,7 @@
 #pragma once
 #include "engine/core/Paths.h"
 /**
- * @file M35Mesh.cpp
+ * @file MeshPreview.cpp
  * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
  *
  * Four entry points over one body of knowledge:
@@ -30,7 +30,7 @@
  */
 
 #define NOMINMAX
-#include "gun_bros_viewer/milestones/M35Mesh.h"
+#include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/PackTables.h"
 #include "gun_bros_re/gameplay/PlayerModel.h"
@@ -71,7 +71,7 @@
 #include <string>
 #include <vector>
 
-namespace M35MeshDetail {
+namespace MeshPreviewDetail {
 
 // Where the ported shaders live; the same pair M2 and M3 use.
 const char *const kShaderDirectory = Paths::Shaders().c_str();
@@ -442,6 +442,27 @@ public:
         (void)bytes;
     }
 
+    /** Add unreferenced raw resources too; no invented atlas relationship. */
+    void AddRawMeshes(CResTOCManager &toc, PackTables &tables) {
+        for (std::uint32_t packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
+            CResPackTOC *pack = toc.GetPack(static_cast<int>(packIndex));
+            const auto count = tables.GetObjectPack(packIndex).GetSectionSpan(GameSection::Mesh);
+            for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
+                bool found = false;
+                for (const CatalogEntry &entry : m_entries) {
+                    if (entry.meshPackHash == pack->GetPackHash() && entry.meshOrdinal == ordinal) { found = true; break; }
+                }
+                if (found) { continue; }
+                CatalogEntry entry{};
+                entry.meshPackHash = pack->GetPackHash();
+                entry.meshOrdinal = ordinal;
+                entry.imageOrdinal = UINT32_MAX;
+                entry.owner = pack->GetShortName() + " mesh " + std::to_string(ordinal) + " [untextured: no authored reference]";
+                m_entries.push_back(entry);
+            }
+        }
+    }
+
     const std::vector<CatalogEntry> &GetEntries() const { return m_entries; }
 
 private:
@@ -462,6 +483,7 @@ struct LoadedModel {
     // The playback machinery, used only when the catalogue entry brought a
     // move set. A model named by a plain asset ref shows frame 0 and stops.
     CMoveSetMeshController controller;
+    CMeshAnimationController rawAnimation;
     std::vector<const CMesh *> configMeshes;
 
     // Which moves of the set drive THIS mesh, by index into the set. A player

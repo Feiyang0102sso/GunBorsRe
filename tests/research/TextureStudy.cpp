@@ -9,7 +9,7 @@
  * comes in M3 when there is something to batch.
  */
 
-#include "gun_bros_viewer/milestones/M2Texture.h"
+#include "tests/research/TextureStudy.h"
 
 #include "engine/graphics/CPNG.h"
 #include "engine/graphics/CShaderProgram.h"
@@ -118,7 +118,7 @@ bool LoadImageFromPack(const std::string &bigDirectory, const std::string &packS
 
 }  // namespace
 
-int RunM2Texture(const std::string &bigDirectory, const std::string &packShortName,
+int RunTextureStudy(const std::string &bigDirectory, const std::string &packShortName,
                  std::uint32_t resourceId, const std::string &screenshotPath) {
     std::printf("=== M2: a PNG from a .big, on screen ===\n\n");
 

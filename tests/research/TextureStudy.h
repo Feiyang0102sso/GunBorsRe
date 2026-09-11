@@ -21,7 +21,7 @@
  *                       milestone be checked without a human at the keyboard.
  * @return 0 when the image was displayed.
  */
-int RunM2Texture(const std::string &bigDirectory, const std::string &packShortName,
+int RunTextureStudy(const std::string &bigDirectory, const std::string &packShortName,
                  std::uint32_t resourceId, const std::string &screenshotPath);
 
 #endif  // GUN_BROS_RE_MILESTONES_M2TEXTURE_H

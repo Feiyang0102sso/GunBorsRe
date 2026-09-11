@@ -1,4 +1,4 @@
-#include "gun_bros_viewer/BigVersionSurvey.h"
+#include "gun_bros_viewer/scenes/ResourceInfo.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include "engine/resources/CResTOCManager.h"
 #include <cstdio>

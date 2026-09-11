@@ -1,4 +1,4 @@
-#include "gun_bros_viewer/viewers/SurvivalViewer.h"
+#include "tests/research/SurvivalStudyHost.h"
 /** @file MissionCatalog.cpp
  * @brief Validate full records, level/map references and original objective text.
  */

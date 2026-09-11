@@ -1,6 +1,6 @@
 /**
- * @file M35Mesh.h
- * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
+ * @file MeshPreview.h
+ * @brief Raw mesh inspection and fixed-position player equipment presentation.
  *
  * The character viewer lives alongside the model viewer because they share the
  * walk that answers "which atlas does this model wear" -- see the .cpp. The
@@ -8,8 +8,8 @@
  * the weapon catalogue it pages through.
  */
 
-#ifndef GUN_BROS_RE_MILESTONES_M35MESH_H
-#define GUN_BROS_RE_MILESTONES_M35MESH_H
+#ifndef GUN_BROS_VIEWER_MESHPREVIEW_H
+#define GUN_BROS_VIEWER_MESHPREVIEW_H
 
 #include <cstdint>
 #include <string>
@@ -18,17 +18,17 @@
  * Show one model, textured, on a turntable.
  *
  * @param startIndex Which model of the catalogue to open on. The catalogue is
- *        every distinct model any template names, in the order the archives
- *        hand them over.
+ *        every referenced model followed by unreferenced BIG meshes.
+ *        Texture associations come from original template references.
  * @param spinDegrees Turn the model this far about its own up axis before
  *        the first frame, so a screenshot can be taken from a chosen side.
- * @param frameIndex Which of the model's key frames to pose it with. Only
- *        used by the models that have no move set; the rest play a move.
+ * @param frameIndex Initial raw frame in the complete mesh frame bank.
+ *        The shared engine clock plays raw frames without entity scripts.
  * @param screenshotPath When non-empty, save the first frame here and exit.
  * @param advanceMs Run the animation on this far before the first frame, so a
  *        screenshot can be taken part way through a move.
  */
-int RunM35Mesh(const std::string &bigDirectory, std::uint32_t startIndex,
+int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
                float spinDegrees, std::uint32_t frameIndex,
                const std::string &screenshotPath, std::uint32_t advanceMs);
 
@@ -59,7 +59,7 @@ int RunWeaponSurvey(const std::string &bigDirectory);
 /** Exercise every weapon through equip, movement, firing and release with real assets. */
 
 /**
- * M3.7: stand a whole player up -- torso, legs and a gun in his hand.
+ * Stand a whole player up -- torso, legs and a gun in his hand.
  *
  * The three are separate models. The torso is the parent: the gun's placement
  * comes from a bone of the TORSO mesh evaluated at the TORSO's animation time,
@@ -71,9 +71,9 @@ int RunWeaponSurvey(const std::string &bigDirectory);
  * @param screenshotPath When non-empty, save the first frame here and exit.
  * @param advanceMs Run the animation on this far before that first frame.
  */
-int RunM37Character(const std::string &bigDirectory, std::uint32_t gunIndex,
+int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gunIndex,
                     float spinDegrees, const std::string &screenshotPath,
                     std::uint32_t advanceMs, bool firePreview = false,
                     int armorIndex = -1);
 
-#endif  // GUN_BROS_RE_MILESTONES_M35MESH_H
+#endif  // GUN_BROS_VIEWER_MESHPREVIEW_H

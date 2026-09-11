@@ -30,7 +30,7 @@
 
 #define NOMINMAX
 #include "TestOutput.h"
-#include "gun_bros_viewer/milestones/M35Mesh.h"
+#include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/PackTables.h"
 #include "gun_bros_re/gameplay/PlayerModel.h"
@@ -70,8 +70,8 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "gun_bros_viewer/milestones/M35MeshInternal.h"
-using namespace M35MeshDetail;
+#include "gun_bros_viewer/scenes/MeshPreviewInternal.h"
+using namespace MeshPreviewDetail;
 #include "Checks.h"
 
 /** A target beside the muzzle ray reproduces invisible wide-beam obstruction. */

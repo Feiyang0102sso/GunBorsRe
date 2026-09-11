@@ -73,9 +73,6 @@
   <!-- Debug checks use viewer helpers; Release Re contains only engine and game. -->
   <ItemGroup>
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
-    <!-- Only CheatCodes.cpp collides with the game filename. Keep /MP batching for all other sources. -->
-    <ClCompile Update="$(RepoRoot)src\gun_bros_viewer\CheatCodes.cpp">
-      <ObjectFileName>$(IntDir)ViewerCheatCodes.obj</ObjectFileName></ClCompile>
     <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\**\*.h" />
   </ItemGroup>
   <ItemGroup Condition="'$(Configuration)'=='Debug'">
@@ -99,6 +96,7 @@
   </Target>
   <Target Name="RunCorrespondingDebugTest" AfterTargets="StageRuntime" Condition="'$(Configuration)'=='Debug' and '$(SkipAutoTests)'!='true'">
     <MSBuild Projects="$(RepoRoot)GunBrosTests.vcxproj" Targets="Build" Properties="Configuration=Debug;Platform=x64;SkipAutoTests=true" />
-    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\run.ps1&quot; -Case movies -NoBuild" />
+    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\run.ps1&quot; -Case big-version,viewer-controls -NoBuild" />
+    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\viewer-smoke.ps1&quot;" />
   </Target>
 </Project>

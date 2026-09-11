@@ -9,7 +9,7 @@
  *   handle           ->  table1 -> table2 -> block -> zlib, or into an aggregate
  */
 
-#include "gun_bros_viewer/milestones/M1Resources.h"
+#include "tests/research/ResourceSurvey.h"
 
 #include "engine/core/CStringToKey.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
@@ -325,7 +325,7 @@ int RunLevelSurvey(const std::string &bigDirectory) {
     return 0;
 }
 
-int RunM1Resources(const std::string &bigDirectory) {
+int RunResourceSurvey(const std::string &bigDirectory) {
     std::printf("=== M1: resource addressing ===\n\n");
 
     if (!CheckStringToKey()) {

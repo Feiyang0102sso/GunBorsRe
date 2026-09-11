@@ -17,6 +17,7 @@
 #include <vector>
 
 struct SDL_Window;
+union SDL_Event;
 typedef struct SDL_GLContextState *SDL_GLContext;
 
 /**
@@ -86,8 +87,6 @@ constexpr int kRequiredGLMinor = 3;
 class CWindow {
 public:
     CWindow();
-    void SetToolAction(void (*action)()) { m_toolAction = action; }
-    void InvokeToolAction() { if (m_toolAction != nullptr) { m_toolAction(); } }
     ~CWindow();
 
     CWindow(const CWindow &) = delete;
@@ -113,6 +112,12 @@ public:
      * @return false once the user has asked to quit.
      */
     bool PumpEvents();
+    /** A host may consume input before it enters the scene accumulators. */
+    using EventFilter = bool (*)(void *, const SDL_Event &);
+    void SetEventFilter(EventFilter filter, void *context) {
+        m_eventFilter = filter;
+        m_eventContext = context;
+    }
     /** Game menus consume Escape as Back; research viewers retain Escape to quit. */
     void SetEscapeCloses(bool enabled) { m_escapeCloses = enabled; }
 
@@ -162,13 +167,14 @@ public:
 #endif
 
 private:
-    void (*m_toolAction)() = nullptr;
     SDL_Window *m_window;
     unsigned m_surfaceGeneration = 0;
     SDL_GLContext m_context;
     bool m_sdlInitialised;
     bool m_quitRequested;
     bool m_escapeCloses = true;
+    EventFilter m_eventFilter = nullptr;
+    void *m_eventContext = nullptr;
 
     // Input accumulators, drained by the Take* methods.
     int m_dragDeltaX;

@@ -6,7 +6,7 @@
 | --- | --- |
 | `src/engine` | 通用资源、渲染、平台与 Glu Script/Movie/Sprite |
 | `src/gun_bros_re` | 游戏启动、玩法、菜单、条目与存档 |
-| `src/gun_bros_viewer` | 查看器、里程碑和开发入口 |
+| `src/gun_bros_viewer` | 六类查看器、启动菜单和展示控制，复用主包游戏逻辑 |
 | `big`、`assets` | 运行所需的原归档、媒体和宿主着色器 |
 | `tests` | 检查实现、运行脚本与 `fixtures/saves` 原存档样本副本 |
 | `bin/Debug`、`bin/Release` | 全部 EXE 及运行依赖，按配置统一输出 |
@@ -46,7 +46,7 @@ msbuild gun_bro_re.slnx /p:Configuration=Debug /p:Platform=x64 /m
 msbuild gun_bro_re.slnx /p:Configuration=Release /p:Platform=x64 /m
 ```
 
-Debug 构建自动生成 `GunBrosTests.exe` 并运行对应检查：Re 为 `progress`，Viewer 为 `movies`。其他检查按需运行，脚本自动增量构建测试程序：
+Debug 构建自动生成 `GunBrosTests.exe` 并运行对应检查：Re 为 `progress`，Viewer 为 `big-version`、`viewer-controls` 及六入口冒烟检查。其他检查按需运行，脚本自动增量构建测试程序：
 
 ```powershell
 pwsh -File tests/run.ps1 -Case resources,progress,movies
@@ -70,7 +70,17 @@ Viewer 根据 BIG 内容自动选择 `BigVersion`，只记录三档格式，最�
 
 自动识别同时核对原 `___GAME_TOC_KEYSET` 和 `OBJECT_SCRIPT__COUNTS_`，并按实际对象类型数定位图片、声音、模型和字符串。Viewer 优先读取 `packTOC_xga.dat`，缺少该文件时读取普通 `packTOC.dat`；已有但为空或损坏的 XGA TOC 会报错，不自动换一套资源。未知或混合格式拒绝作为一个完整资源集打开。
 
-使用 `GunBrosViewer.exe --big <资源目录> --viewer` 打开查看器；`--big-version` 或菜单 **81** 显示识别结果和各包类型信息。相对目录按 EXE 目录解析，研究目录建议传绝对路径。`--maps`、`--meshes`、`--mesh 0`、`--map pack2 0` 等原入口沿用自动识别。M1 使用当前资源的字符串引用；原 3.6.0 固定引用检查保留为 Tests 的 `--asset-sample-check`。
+使用 `GunBrosViewer.exe --big <资源目录>` 打开六项菜单：地图、原始模型、敌人、玩家武器、玩家装甲、竞技场。退出展示窗口后返回菜单；输入 0 退出程序。也可用 `--map [pack index]`、`--mesh [index]`、`--enemy [index]`、`--weapon [index]`、`--armor [index]`、`--arena [index]` 直接启动。按键沿用现有操作，由右侧英文操作栏按功能完整列出；点击 Hide 收起，点击右侧 < 展开，鼠标在栏内滚动可查看长清单。资源格式在启动时自动识别，不再占菜单项。
+
+六类键位集中在 `src/gun_bros_viewer/ViewerBindings.h`，分别使用 `mapview`、`meshview`、`enemyview`、`weaponview`、`armorview`、`arena` 命名空间；重复键位各自保留。每个定义包含动作、键位、触发方式、分组和英文说明，输入分派与操作栏共用定义。面板与鼠标输入隔离由 `ViewerControls.h/.cpp` 负责，场景按剩余视口渲染。操作栏为 Windows 宿主界面，不读取或改写主程序配置。`pwsh -File tests/run.ps1 -Case viewer-controls` 验证改键、鼠标隔离、收起展开、缩放窗口及绘图状态恢复。
+
+展示场景全部位于 `src/gun_bros_viewer/scenes/`。主包没有新增 viewer 专用模块；地图调用现有地图模块，敌人调用 `EnemyModel`，装备调用 `PlayerModel`、`WeaponEffects`，竞技场调用 `CombatScene`。Mesh Viewer 使用完整原始帧库与原贴图引用，不运行实体拼接；没有原贴图关联的模型明确标记为未贴图。
+
+Viewer 使用 EXE 同目录的 `GunBrosViewer.cfg`，也可通过 `--config <文件>` 指定独立配置。字段、默认值、读取器和窗口标题统一在 `src/gun_bros_viewer/ViewerSettings.h/.cpp`，不再调用 `GameHostSettings`。当前支持 `WindowWidth=1600`、`WindowHeight=1200`、`EffectsVolume=3`（0–10）；窗口尺寸仍受可用桌面范围限制。已有文件保留注释和音量，缺失字段使用 viewer 默认值，旧 `DebugMode`／`IsConnected` 字段提示忽略。Tests 的研究配置另用 `GunBrosTests.cfg`，主程序仍使用 `GunBrosRe.cfg`。
+
+旧 milestone 菜单及 viewer 中的游戏、战役、Movie、自动检查入口已移除；现有检查和研究命令归 `GunBrosTests.exe`，原命令可继续用于回归。资源版本详情使用 Tests 的 `--big-version`，原 3.6.0 固定引用检查使用 `--asset-sample-check`。UI viewer 暂不开发。
+
+运行 `pwsh -File tests/viewer-smoke.ps1` 检查六项展示、敌人拼接、武器开火、原始帧变化和返回菜单。显式传 `--mute`，截图和日志位于 `tests/out/viewer-smoke/`；不运行全量截图基线。相对目录仍按 EXE 所在目录解析，外部资源目录建议传绝对路径。
 
 这三档仅覆盖资源格式。小版本中的实体字段、Movie 或脚本差异仍以具体解析结果为准，不表示旧版玩法和存档兼容；正式菜单与生存流程仍要求 BigVersion 1。`big-version` 专项检查用独立小型 BIG 验证三档、普通/XGA、媒体索引、字符串、错配和截断，不依赖 `_prep` 原版资料。
 

@@ -5,7 +5,7 @@
 #if GB_ENABLE_TESTS
 #include "TestOutput.h"
 #endif
-#include "gun_bros_viewer/viewers/MovieStudy.h"
+#include "tests/research/MovieStudy.h"
 #include "engine/glu/movie/MovieRenderer.h"
 #include "engine/platform/CWindow.h"
 #include "engine/glu/movie/CMovie.h"

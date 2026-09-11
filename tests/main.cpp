@@ -1,12 +1,13 @@
 /** Built on demand in Debug; reuses the same command routing and implementations. */
 #include "engine/platform/Startup.h"
-#include "gun_bros_viewer/ViewerApplication.h"
+#include "TestApplication.h"
 #include "engine/platform/CAudioPlayer.h"
 #include <string>
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/DebugMapChecks.h"
 #include "TestOutput.h"
 int CheckDebugInput();
+int CheckViewerControls();
 int RunBigVersionCheck();
 int RunOriginalAssetSampleCheck(const std::string &bigDirectory);
 int wmain(int argc, wchar_t **argv) {
@@ -17,6 +18,10 @@ int wmain(int argc, wchar_t **argv) {
         if (std::wstring(argv[index]) == L"--big") { sampleBigDirectory = Paths::Resolve(argv[index + 1]); }
     }
     for (int index = 1; index < argc; ++index) {
+        if (std::wstring(argv[index]) == L"--viewer-controls-check") {
+            CAudioPlayer::SetMuted(true);
+            return CheckViewerControls();
+        }
         if (std::wstring(argv[index]) == L"--big-version-check") {
             CAudioPlayer::SetMuted(true);
             return RunBigVersionCheck();
@@ -67,6 +72,6 @@ int wmain(int argc, wchar_t **argv) {
         }
     }
     Utf8Arguments arguments(argc, argv);
-    return RunViewerApplication(arguments.Count(), arguments.Data());
+    return RunTestApplication(arguments.Count(), arguments.Data());
 }
 

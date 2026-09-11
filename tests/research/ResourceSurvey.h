@@ -14,7 +14,7 @@
  *
  * @return 0 when the acceptance target matched.
  */
-int RunM1Resources(const std::string &bigDirectory);
+int RunResourceSurvey(const std::string &bigDirectory);
 
 /**
  * List one pack's resource table: index, logical ID, group, block size and

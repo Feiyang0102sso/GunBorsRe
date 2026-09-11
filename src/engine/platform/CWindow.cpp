@@ -22,15 +22,6 @@ CWindow::CommandMatcher commandMatcher = nullptr;
 #endif
 
 constexpr int kUsableDisplayPercent = 90;
-// Windows system-menu commands occupy the low range below 0xF000.
-constexpr UINT kResearchToolsCommand = 0x1FE0;
-
-bool SDLCALL HandleWindowsMenu(void *context, MSG *message) {
-    if (message->message != WM_SYSCOMMAND || (message->wParam & 0xFFF0) != kResearchToolsCommand) { return true; }
-    static_cast<CWindow *>(context)->InvokeToolAction();
-    return false;
-}
-
 /** Keep the requested 4:3 window comfortably inside the current desktop. */
 void FitWindowToUsableDisplay(int &width, int &height) {
     const SDL_DisplayID display = SDL_GetPrimaryDisplay();
@@ -179,16 +170,6 @@ bool CWindow::Open(const std::string &title, int width, int height) {
     SDL_SetWindowPosition(m_window, SDL_WINDOWPOS_CENTERED,
                           SDL_WINDOWPOS_CENTERED);
     ++m_surfaceGeneration;
-    // Host tool access lives in the window chrome, outside original BIG menus.
-    // Right-click the title bar / Alt+Space opens the permanent research entry.
-    const auto properties = SDL_GetWindowProperties(m_window);
-    const HWND handle = static_cast<HWND>(SDL_GetPointerProperty(properties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
-    if (handle != nullptr && m_toolAction != nullptr) {
-        const HMENU menu = GetSystemMenu(handle, FALSE);
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, kResearchToolsCommand, L"Gun Bros Viewer...");
-        SDL_SetWindowsMessageHook(HandleWindowsMenu, this);
-    }
 
     m_context = SDL_GL_CreateContext(m_window);
     if (m_context == nullptr) {
@@ -237,6 +218,9 @@ void CWindow::Close() {
 bool CWindow::PumpEvents() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        if (m_eventFilter != nullptr && !m_eventFilter(m_eventContext, event)) {
+            continue;
+        }
         if (event.type == SDL_EVENT_QUIT) {
             m_quitRequested = true;
         } else if (event.type == SDL_EVENT_KEY_DOWN) {
