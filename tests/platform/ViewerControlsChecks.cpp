@@ -67,6 +67,16 @@ int CheckViewerControls() {
     if (!window.Open("Viewer controls checks", 800, 600) || !window.PumpEvents()) { return 1; }
     while (window.TakeKeyPress() != KeyCode::None) {}
     {
+        ViewerControls controls(window, mapview::Bindings);
+        if (!controls.Init()) { return 1; }
+        if (!PushKey(SDL_EVENT_KEY_DOWN, 't') || !PushKey(SDL_EVENT_KEY_UP, 't') ||
+            !PushKey(SDL_EVENT_KEY_DOWN, 'g') || !PushKey(SDL_EVENT_KEY_UP, 'g') || !controls.PumpEvents()) { return 1; }
+        const KeyCode turretKey = controls.TakeKeyPress();
+        const KeyCode tilesKey = controls.TakeKeyPress();
+        Check(controls.IsPressed(turretKey, ViewerAction::Turret) && !controls.IsPressed(turretKey, ViewerAction::Tiles), "T selects turret only");
+        Check(controls.IsPressed(tilesKey, ViewerAction::Tiles) && !controls.IsPressed(tilesKey, ViewerAction::Turret), "G selects tiles only");
+    }
+    {
         // Changing the definition must affect both dispatch and the rendered help.
         std::vector<ViewerBinding> bindings(arena::All, arena::All + arena::Bindings.count);
         for (auto &binding : bindings) {

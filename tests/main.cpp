@@ -8,6 +8,8 @@
 #include "TestOutput.h"
 int CheckDebugInput();
 int CheckViewerControls();
+int RunCoverScaleStudy(const std::string &bigDirectory);
+int RunMapTurretChecks(const std::string &bigDirectory);
 int RunBigVersionCheck();
 int RunOriginalAssetSampleCheck(const std::string &bigDirectory);
 int wmain(int argc, wchar_t **argv) {
@@ -18,6 +20,14 @@ int wmain(int argc, wchar_t **argv) {
         if (std::wstring(argv[index]) == L"--big") { sampleBigDirectory = Paths::Resolve(argv[index + 1]); }
     }
     for (int index = 1; index < argc; ++index) {
+        if (std::wstring(argv[index]) == L"--map-turret-check") {
+            CAudioPlayer::SetMuted(true);
+            return RunMapTurretChecks(sampleBigDirectory.u8string());
+        }
+        if (std::wstring(argv[index]) == L"--cover-scale-study") {
+            CAudioPlayer::SetMuted(true);
+            return RunCoverScaleStudy(sampleBigDirectory.u8string());
+        }
         if (std::wstring(argv[index]) == L"--viewer-controls-check") {
             CAudioPlayer::SetMuted(true);
             return CheckViewerControls();

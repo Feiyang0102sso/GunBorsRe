@@ -7,7 +7,7 @@
 #include <cstddef>
 
 enum class ViewerAction {
-    Previous, Next, PreviousPage, NextPage, Drag, Zoom, ResetView, Tiles, Props, Spawns, Collisions, Cover, Barrel, Spire, SpireAlias, Pause, Step, Back, PreviousVariant, NextVariant, Tilt, Category1, Category2, Category3, Category4, Category5, Category6, Category7, Fire, MoveUp, MoveLeft, MoveDown, MoveRight, ClearArmor, Spawn, ResetBattle, Invincible, Aim
+    Previous, Next, PreviousPage, NextPage, Drag, Zoom, ResetView, Tiles, Props, Spawns, Collisions, Cover, Barrel, Spire, Pause, Step, Back, PreviousVariant, NextVariant, Tilt, Category1, Category2, Category3, Category4, Category5, Category6, Category7, Fire, MoveUp, MoveLeft, MoveDown, MoveRight, ClearArmor, Spawn, ResetBattle, Invincible, Aim, Turret
 };
 enum class ViewerInput { Press, Hold, LeftDrag, RightDrag, Wheel, Pointer, LeftHold, RightHold };
 struct ViewerBinding {
@@ -24,6 +24,8 @@ struct ViewerBindingSet {
 };
 
 namespace mapview {
+// Legacy playable research uses S for movement; its separate shortcut stays compatible.
+inline constexpr KeyCode GameViewSpire = KeyCode::F;
 inline constexpr ViewerBinding Previous{ViewerAction::Previous, KeyCode::Left, ViewerInput::Press, L"Maps", L"Previous map"};
 inline constexpr ViewerBinding Next{ViewerAction::Next, KeyCode::Right, ViewerInput::Press, L"Maps", L"Next map"};
 inline constexpr ViewerBinding PreviousPage{ViewerAction::PreviousPage, KeyCode::Up, ViewerInput::Press, L"Maps", L"Previous pack"};
@@ -31,19 +33,19 @@ inline constexpr ViewerBinding NextPage{ViewerAction::NextPage, KeyCode::Down, V
 inline constexpr ViewerBinding Drag{ViewerAction::Drag, KeyCode::None, ViewerInput::LeftDrag, L"View", L"Pan map"};
 inline constexpr ViewerBinding Zoom{ViewerAction::Zoom, KeyCode::None, ViewerInput::Wheel, L"View", L"Zoom"};
 inline constexpr ViewerBinding ResetView{ViewerAction::ResetView, KeyCode::Home, ViewerInput::Press, L"View", L"Fit map"};
-inline constexpr ViewerBinding Tiles{ViewerAction::Tiles, KeyCode::T, ViewerInput::Press, L"Layers", L"Toggle tiles"};
+inline constexpr ViewerBinding Tiles{ViewerAction::Tiles, KeyCode::G, ViewerInput::Press, L"Layers", L"Toggle tiles"};
 inline constexpr ViewerBinding Props{ViewerAction::Props, KeyCode::P, ViewerInput::Press, L"Layers", L"Toggle props"};
 inline constexpr ViewerBinding Spawns{ViewerAction::Spawns, KeyCode::K, ViewerInput::Press, L"Layers", L"Toggle spawn points"};
 inline constexpr ViewerBinding Collisions{ViewerAction::Collisions, KeyCode::C, ViewerInput::Press, L"Layers", L"Toggle collisions"};
 inline constexpr ViewerBinding Cover{ViewerAction::Cover, KeyCode::B, ViewerInput::Press, L"Object states", L"Cycle cover state"};
 inline constexpr ViewerBinding Barrel{ViewerAction::Barrel, KeyCode::E, ViewerInput::Press, L"Object states", L"Cycle barrel state"};
-inline constexpr ViewerBinding Spire{ViewerAction::Spire, KeyCode::F, ViewerInput::Press, L"Object states", L"Cycle spire state"};
-inline constexpr ViewerBinding SpireAlias{ViewerAction::SpireAlias, KeyCode::S, ViewerInput::Press, L"Object states", L"Cycle spire (alias)"};
+inline constexpr ViewerBinding Spire{ViewerAction::Spire, KeyCode::S, ViewerInput::Press, L"Object states", L"Cycle spire state"};
+inline constexpr ViewerBinding Turret{ViewerAction::Turret, KeyCode::T, ViewerInput::Press, L"Object states", L"Cycle turret state"};
 inline constexpr ViewerBinding Pause{ViewerAction::Pause, KeyCode::Space, ViewerInput::Press, L"Playback / return", L"Pause / resume"};
 inline constexpr ViewerBinding Step{ViewerAction::Step, KeyCode::Period, ViewerInput::Press, L"Playback / return", L"Pause and step"};
 inline constexpr ViewerBinding Back{ViewerAction::Back, KeyCode::Escape, ViewerInput::Press, L"Playback / return", L"Return to menu"};
 inline constexpr ViewerBinding All[] = {
-    Previous, Next, PreviousPage, NextPage, Drag, Zoom, ResetView, Tiles, Props, Spawns, Collisions, Cover, Barrel, Spire, SpireAlias, Pause, Step, Back
+    Previous, Next, PreviousPage, NextPage, Drag, Zoom, ResetView, Tiles, Props, Spawns, Collisions, Cover, Barrel, Spire, Turret, Pause, Step, Back
 };
 inline constexpr ViewerBindingSet Bindings{L"Map", All, sizeof(All) / sizeof(All[0])};
 }
@@ -183,4 +185,3 @@ inline constexpr ViewerBinding All[] = {
 };
 inline constexpr ViewerBindingSet Bindings{L"Arena", All, sizeof(All) / sizeof(All[0])};
 }
-

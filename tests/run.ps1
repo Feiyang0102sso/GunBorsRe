@@ -75,6 +75,7 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
     if ($suite -eq 'Core') {
         Add-Check 'debug-input' @('--debug-input-check')
         Add-Check 'viewer-controls' @('--viewer-controls-check')
+        Add-Check 'map-turret' @('--map-turret-check')
         Add-Check 'big-version' @('--big-version-check')
         Add-Check 'asset-sample' @('--asset-sample-check')
         Add-Check 'resources' @('--m1')

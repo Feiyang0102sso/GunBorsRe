@@ -166,7 +166,8 @@ void CEnemy::SetScriptSequenceFrame(std::uint8_t frame) {
         return;
     }
     std::size_t part = kEnemyScriptedPart;
-    if (combat.enabled && combat.variables[14] >= 0 && combat.variables[14] < kEnemyPartSlots) {
+    // OnMoveChanged :68811 selects mem+1064 (script variable 14), also in previews.
+    if (combat.variables[14] >= 0 && combat.variables[14] < kEnemyPartSlots) {
         part = static_cast<std::size_t>(combat.variables[14]);
     }
     m_parts[part].controller.SetMove(frame);
@@ -174,7 +175,8 @@ void CEnemy::SetScriptSequenceFrame(std::uint8_t frame) {
 
 bool CEnemy::IsScriptSequenceFrameFinished() {
     std::size_t part = kEnemyScriptedPart;
-    if (combat.enabled && combat.variables[14] >= 0 && combat.variables[14] < kEnemyPartSlots) {
+    // GetMoveLooped :68817 must inspect the same part that receives the sequence.
+    if (combat.variables[14] >= 0 && combat.variables[14] < kEnemyPartSlots) {
         part = static_cast<std::size_t>(combat.variables[14]);
     }
     return m_parts[part].controller.GetAnimation().IsFinished();

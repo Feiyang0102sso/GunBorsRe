@@ -1,6 +1,7 @@
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "gun_bros_viewer/scenes/MapPreview.h"
+#include "gun_bros_viewer/scenes/MapTurretPreview.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 #include <algorithm>
 #include <charconv>
@@ -180,9 +181,12 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     BuildCollisionScene(loaded);
     LoadPlacedEnemies(tocManager, program, loaded);
     LoadPlacedPlayers(tocManager, program, loaded);
+    MapTurretPreview turrets;
+    if (!gameView) { turrets.Bind(loaded); }
     if (gameView && !EquipControlledPlayer(weaponTables, loaded, program, weapons[weaponSlot])) { return 1; }
     ReportSpawns(loaded);
     WarmUp(loaded, advanceMs, weaponEffects.get(), firePreview);
+    turrets.Update(static_cast<int>(advanceMs));
 
     // Either layer can be hidden, which is how "is that rock in the right\n// place or is the ground wrong?" gets answered without a debugger.
     bool showTiles = true;
@@ -269,8 +273,10 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 std::printf("[m4] %u barrels: %s\n", changed,
                             InteractiveStateName(InteractivePropKind::Barrel,
                                                  barrelState));
-            } else if (controls.IsPressed(key, ViewerAction::Spire) ||
-                       (controls.IsPressed(key, ViewerAction::SpireAlias) && !gameView)) {
+            } else if (!gameView && controls.IsPressed(key, ViewerAction::Turret)) {
+                turrets.Cycle();
+            } else if ((!gameView && controls.IsPressed(key, ViewerAction::Spire)) ||
+                       (gameView && key == mapview::GameViewSpire)) {
                 spireState = static_cast<std::uint8_t>((spireState + 1) % 3);
                 const std::uint32_t changed = SetInteractiveState(
                     loaded, InteractivePropKind::Spire, spireState);
@@ -342,7 +348,9 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                     weaponEffects->Clear();
                 }
                 ReportSpawns(replacement);
+                if (!gameView) { turrets.Bind(replacement); }
                 WarmUp(replacement, advanceMs, weaponEffects.get(), firePreview);
+                turrets.Update(static_cast<int>(advanceMs));
                 loaded = std::move(replacement);
                 reportGeometry = true;
                 followPlayer = gameView && !loaded.players.empty();
@@ -371,6 +379,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
             std::to_string(catalog[slot].mapIndex) + " | " +
             std::to_string(slot + 1) + "/" + std::to_string(catalog.size());
         if (gameView) { titleDetails += " | " + WeaponSelectionLabel(weapons, weaponSlot); }
+        if (!turrets.Empty()) { titleDetails += std::string(" | Turret: ") + turrets.StateName(); }
         window.SetTitle(ViewerWindowTitle("Map", titleDetails));
 
         // --- animation clock ---
@@ -408,6 +417,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
         AdvanceParticleEffects(loaded, static_cast<std::uint16_t>(elapsedMs));
         AdvanceEnemies(loaded, static_cast<std::int32_t>(elapsedMs));
+        turrets.Update(static_cast<int>(elapsedMs));
         AdvancePlayers(loaded, static_cast<std::int32_t>(elapsedMs));
         if (gameView && !loaded.players.empty()) {
             PlacedPlayer &player = loaded.players[0];
