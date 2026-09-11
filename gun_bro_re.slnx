@@ -6,6 +6,12 @@
          configuration than the toolbar shows. -->
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="gun_bro_re.vcxproj" Id="1286f032-5e38-4e0d-a240-9e36ae2fdc4c" />
-  <Project Path="gun_bro_research.vcxproj" Id="394F9E89-26AF-46B8-95AE-3C2B98220D25" />
+  <Project Path="GunBrosRe.vcxproj" Id="1286f032-5e38-4e0d-a240-9e36ae2fdc4c" />
+  <Project Path="GunBrosViewer.vcxproj" Id="394F9E89-26AF-46B8-95AE-3C2B98220D25" />
+  <!-- Debug product builds request Tests automatically; Release never builds it. -->
+  <Project Path="GunBrosTests.vcxproj" Id="21F57E21-A3A1-4911-B950-CE56FF639B05">
+    <BuildType Solution="Release|*" Project="Debug" />
+    <Build Project="false" />
+  </Project>
 </Solution>
+

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <!-- The same engine/runtime is compiled with an independent entry and objects. -->
-  <PropertyGroup>
-    <ResearchTools>true</ResearchTools>
-  </PropertyGroup>
-  <Import Project="gun_bro_re.vcxproj" />
-</Project>

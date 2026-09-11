@@ -5,10 +5,13 @@
 # ---------- Build output ----------
 bin/
 obj/
-build/
 out/
 # Test artifacts: recreated by each top-level test run.
 /tests/out/
+/tests/run.lock
+/_prep/
+/assets/audio/
+/assets/startup/
 Debug/
 Release/
 x64/
@@ -74,6 +77,7 @@ saves/
 userdata/
 10-17-2011/
 big_360_out/
+assets/
 
 # ============================================================
 #  Third-party binaries we DO commit
@@ -85,3 +89,4 @@ big_360_out/
 #  directory is excluded, so the directory has to be un-ignored first.
 !src/third_party/SDL3/lib/x64/
 !src/third_party/SDL3/lib/x64/*.lib
+

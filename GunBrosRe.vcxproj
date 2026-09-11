@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{1286F032-5E38-4E0D-A240-9E36AE2FDC4C}</ProjectGuid>
+    <ProjectName>GunBrosRe</ProjectName>
+    <RepoRoot>$(MSBuildProjectDirectory)\</RepoRoot>
+    <Configuration Condition="'$(Configuration)'==''">Debug</Configuration>
+    <Platform Condition="'$(Platform)'==''">x64</Platform>
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <!-- x64 only: the bundled SDL3 runtime is x64. -->
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(RepoRoot)bin\$(Configuration)\</OutDir>
+    <IntDir>$(RepoRoot)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>--mute</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <FeatureDefinitions>GB_ENABLE_TESTS=0;GB_ENABLE_CAPTURE=0;GB_ENABLE_CHEATS=0</FeatureDefinitions>
+    <FeatureDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;GB_ENABLE_TESTS=1;GB_ENABLE_CAPTURE=1;GB_ENABLE_CHEATS=1</FeatureDefinitions>
+    <FeatureHeaders>$(RepoRoot)src\engine\core\BuildFeatures.h</FeatureHeaders>
+    <FeatureHeaders Condition="'$(Configuration)'=='Debug'">$(FeatureHeaders);$(RepoRoot)tests\Capture.h</FeatureHeaders>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(RepoRoot)src;$(RepoRoot);$(RepoRoot)tests;$(RepoRoot)src\third_party\zlib;$(RepoRoot)src\third_party\SDL3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(FeatureDefinitions);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ForcedIncludeFiles>$(FeatureHeaders);%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebugDLL</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
+      <AdditionalLibraryDirectories>$(RepoRoot)src\third_party\SDL3\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL3.lib;opengl32.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <!-- Compile the required source packages directly into this executable. -->
+  <ItemGroup>
+    <ClCompile Include="$(RepoRoot)src\engine\**\*.cpp" />
+    <ClInclude Include="$(RepoRoot)src\engine\**\*.h" />
+    <ClCompile Include="$(RepoRoot)src\third_party\zlib\*.c">
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="$(RepoRoot)src\gun_bros_re\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_re\main.cpp" />
+    <ClInclude Include="$(RepoRoot)src\gun_bros_re\**\*.h" />
+  </ItemGroup>
+  <!-- Debug checks use viewer helpers; Release Re contains only engine and game. -->
+  <ItemGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
+    <!-- Only CheatCodes.cpp collides with the game filename. Keep /MP batching for all other sources. -->
+    <ClCompile Update="$(RepoRoot)src\gun_bros_viewer\CheatCodes.cpp">
+      <ObjectFileName>$(IntDir)ViewerCheatCodes.obj</ObjectFileName></ClCompile>
+    <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\**\*.h" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile Include="$(RepoRoot)tests\**\*.cpp" Exclude="$(RepoRoot)tests\main.cpp;$(RepoRoot)tests\out\**" />
+    <ClInclude Include="$(RepoRoot)tests\**\*.h" Exclude="$(RepoRoot)tests\out\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(RepoRoot)src\gun_bros_re\main.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="StageRuntime" AfterTargets="Build">
+    <ItemGroup>
+      <RuntimeBig Include="$(RepoRoot)big\**\*" />
+      <RuntimeAssets Include="$(RepoRoot)assets\**\*" />
+    </ItemGroup>
+    <Error Condition="'@(RuntimeBig)'=='' or '@(RuntimeAssets)'==''" Text="Missing runtime inputs. Restore big/ and assets/ before building." />
+    <Copy SourceFiles="@(RuntimeBig)" DestinationFiles="@(RuntimeBig->'$(OutDir)big\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(RuntimeAssets)" DestinationFiles="@(RuntimeAssets->'$(OutDir)assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <!-- SDL3 is a DLL; it has to sit next to the .exe to run. -->
+    <Copy SourceFiles="$(RepoRoot)src\third_party\SDL3\lib\x64\SDL3.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="RunCorrespondingDebugTest" AfterTargets="StageRuntime" Condition="'$(Configuration)'=='Debug' and '$(SkipAutoTests)'!='true'">
+    <MSBuild Projects="$(RepoRoot)GunBrosTests.vcxproj" Targets="Build" Properties="Configuration=Debug;Platform=x64;SkipAutoTests=true" />
+    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\run.ps1&quot; -Case progress -NoBuild" />
+  </Target>
+</Project>
