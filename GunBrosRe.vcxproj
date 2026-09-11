@@ -28,9 +28,9 @@
     <OutDir>$(RepoRoot)bin\$(Configuration)\</OutDir>
     <IntDir>$(RepoRoot)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
-    <LocalDebuggerCommandArguments>--mute</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments />
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <FeatureDefinitions>GB_ENABLE_TESTS=0;GB_ENABLE_CAPTURE=0;GB_ENABLE_CHEATS=0</FeatureDefinitions>
+    <FeatureDefinitions>GB_ENABLE_TESTS=0;GB_ENABLE_CAPTURE=0;GB_ENABLE_CHEATS=1</FeatureDefinitions>
     <FeatureDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;GB_ENABLE_TESTS=1;GB_ENABLE_CAPTURE=1;GB_ENABLE_CHEATS=1</FeatureDefinitions>
     <FeatureHeaders>$(RepoRoot)src\engine\core\BuildFeatures.h</FeatureHeaders>
     <FeatureHeaders Condition="'$(Configuration)'=='Debug'">$(FeatureHeaders);$(RepoRoot)tests\Capture.h</FeatureHeaders>

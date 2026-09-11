@@ -15,6 +15,8 @@
 
 直接运行 `bin/Release/GunBrosRe.exe`；查看器是同目录的 `GunBrosViewer.exe`。Debug 的三个程序全部位于 `bin/Debug`，Tests 不参与 Release 构建。不生成内部静态库，不使用其他 EXE 输出目录。
 
+Debug 和 Release 均启用已有作弊码。VS 的 F5／Ctrl+F5 默认有声音；自动测试通过 `--mute` 显式静音。
+
 在 Developer PowerShell 中：
 
 ```powershell
@@ -35,4 +37,3 @@ pwsh -File tests/verify-runtime.ps1
 构建和测试只依赖当前工程内的 三个 `.vcxproj`、`src`、`big`、`assets` 与 `tests`，不读取 `_prep`。原始 BIG、运行媒体和存档样本不提交版本库；新环境需要自行提供这些输入。
 
 程序以 EXE 所在目录解析资源和相对路径，默认账户在该目录的 `saves`。已有 `userdata` 账户可通过绝对 `--profile` 路径继续使用；测试样本不会自动导入正式账户。
-

@@ -25,6 +25,15 @@ using System.Runtime.InteropServices;
 public static class RuntimeWindow {
     [DllImport("user32.dll", SetLastError=true)]
     public static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern uint MapVirtualKey(uint code, uint mapType);
+
+    public static void TypeLetter(IntPtr window, char letter) {
+        uint key = char.ToUpperInvariant(letter);
+        long keyInfo = 1L | ((long)MapVirtualKey(key, 0) << 16);
+        PostMessage(window, 0x0100, new IntPtr(key), new IntPtr(keyInfo));
+        PostMessage(window, 0x0101, new IntPtr(key), new IntPtr(keyInfo | (3L << 30)));
+    }
 }
 '@
 $stdout = Join-Path $reportDirectory 'game-stdout.log'
@@ -38,6 +47,16 @@ try {
         $process.Refresh()
         if ((Test-Path -LiteralPath $stdout) -and (Select-String -LiteralPath $stdout -SimpleMatch '[menu] ready' -Quiet) -and $process.MainWindowHandle -ne [IntPtr]::Zero) {
             $loaded = $true
+            # Exercise the Release keyboard matcher and menu handler on the test account.
+            foreach ($letter in 'chm'.ToCharArray()) {
+                [RuntimeWindow]::TypeLetter($process.MainWindowHandle, $letter)
+                Start-Sleep -Milliseconds 50
+            }
+            $cheatTimer = [Diagnostics.Stopwatch]::StartNew()
+            while (-not (Select-String -LiteralPath $stdout -SimpleMatch '[cheat] chm' -Quiet)) {
+                if ($process.HasExited -or $cheatTimer.Elapsed.TotalSeconds -gt 5) { throw 'Release did not execute the money cheat' }
+                Start-Sleep -Milliseconds 50
+            }
             $null = [RuntimeWindow]::PostMessage($process.MainWindowHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
             break
         }
@@ -45,8 +64,8 @@ try {
     if (-not $process.WaitForExit(10000)) { throw 'Game did not close after WM_CLOSE' }
     if (-not $loaded -or $process.ExitCode -ne 0) { throw "Game failed: loaded=$loaded exit=$($process.ExitCode)" }
     if (-not (Test-Path -LiteralPath (Join-Path $profileDirectory '-1_1000'))) { throw 'Game did not save its test account' }
-    [pscustomobject]@{ Resources = 'Passed'; OtherWorkingDirectory = 'Passed'; Menu = 'Passed'; Save = 'Passed'; ReleaseRejectsTests = 'Passed'; ExitCode = $process.ExitCode } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reportDirectory 'result.json')
-    Write-Output '[runtime] resources, working directory, menu, save, and release command checks passed'
+    [pscustomobject]@{ Resources = 'Passed'; OtherWorkingDirectory = 'Passed'; Menu = 'Passed'; Cheats = 'Passed'; Save = 'Passed'; ReleaseRejectsTests = 'Passed'; ExitCode = $process.ExitCode } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $reportDirectory 'result.json')
+    Write-Output '[runtime] resources, working directory, menu, cheats, save, and release command checks passed'
 } finally {
     if (-not $process.HasExited) { $process.Kill($true); $process.WaitForExit() }
     $process.Dispose()
