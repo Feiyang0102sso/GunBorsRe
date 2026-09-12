@@ -293,11 +293,13 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         const bool moving[] = {false, true, true, false, false, false, false};
         const bool shooting[] = {false, false, true, true, false, true, false};
         const int durations[] = {400, 400, 1600, 1600, 800, 800, 4000};
+        std::size_t settledReleaseShots = 0;
         for (int phase = 0; phase < 7; ++phase) {
             SetPlayerInput(player, moving[phase], shooting[phase]);
             for (int elapsed = 0; elapsed < durations[phase]; elapsed += 16) {
                 AdvancePlayer(player, 16);
                 effects.Update(player, modelToScene, 0, 16, &impactScene);
+                if (phase == 6 && elapsed == 2992) { settledReleaseShots = effects.GetShotCount(); }
                 if (i == 12 && phase == 2 && elapsed == 144 && effects.GetParticleCount() > 40) {
                     std::printf("[weapon-check] zero-interval shotgun emitter overproduced particles\n");
                     return 1;
@@ -341,7 +343,11 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             }
             return 1;
         }
-        if (player.weapon->gun.IsShooting() || effects.GetBulletCount() != 0) {
+        // Released mines persist until their BIG timer/contact, not a host fuse.
+        // Verify no continued firing after pending launch callbacks settle.
+        bool liveBeam = false;
+        for (const auto &shot : effects.GetProjectileStates()) { liveBeam = liveBeam || shot.beam; }
+        if (player.weapon->gun.IsShooting() || liveBeam || effects.GetShotCount() != settledReleaseShots) {
             std::printf("[weapon-check] %zu release left live bullets=%zu\n", i, effects.GetBulletCount());
             return 1;
         }
@@ -369,6 +375,9 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     WeaponEffects effects(toc, tables, program);
     WeaponRayCheckWorld rayWorld;
     effects.SetCombatWorld(&rayWorld);
+    // The fixture has a real 800x600 camera; off-screen rifle bullets retire by
+    // CanBeCulled, not the removed host-wide lifetime shortcut.
+    effects.SetViewBounds(400, 300, 800, 600);
     float identity[kMatrix4dElements], modelToScene[kMatrix4dElements], mvp[kMatrix4dElements];
     Matrix4dIdentity(identity);
     Matrix4dOrthoTopLeft(800, 600, 1000, mvp);
@@ -415,23 +424,27 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 if (!data.Init(stream)) { return 1; }
                 CBullet script;
                 script.Bind(data, false);
-                std::printf("[weapon-effects-check] %s bullet=%08x:%u flags=%x radius=%.2f template-animation=%u active-animation=%d lifetime=%d\n",
+                std::printf("[weapon-effects-check] %s bullet=%08x:%u flags=%x radius=%.2f template-animation=%u active-animation=%d\n",
                     entry.name.c_str(), shot.resource.packHash, shot.resource.localIndex, data.GetFlags(), data.GetRadius(),
-                    data.GetSpriteRef().animation, shot.animation, script.lifetimeMs);
+                    data.GetSpriteRef().animation, shot.animation);
                 if (rifle && shot.animation != data.GetSpriteRef().animation) {
                     ++failures;
                     std::printf("[weapon-effects-check] FAIL rifle lost authored sprite animation\n");
                 }
                 // Native 18 sets a beam's range; it must never become an expiry timer.
-                if (shot.beam && script.lifetimeMs < 1000000) {
-                    ++failures;
-                    std::printf("[weapon-effects-check] FAIL beam range became lifetime\n");
-                }
                 if (shot.beam) {
-                    const int lifetime = script.lifetimeMs;
+                    CBullet reference;
+                    reference.Bind(data, false);
                     const std::int16_t range[] = {123};
                     script.FunctionResolver(18, range, 1);
-                    if (script.maximumBeamLength != 123 || script.lifetimeMs != lifetime) { ++failures; }
+                    if (script.maximumBeamLength != 123) { ++failures; }
+                    // Some beams have authored short timers. Changing range must
+                    // preserve their removal timeline, not force indefinite life.
+                    for (int time = 0; time < 3500; time += 16) {
+                        script.Update(16, 1000000);
+                        reference.Update(16, 1000000);
+                        if (script.removed != reference.removed) { ++failures; break; }
+                    }
                 }
                 if (script.ribbon.capacity != 0) {
                     std::printf("[weapon-effects-check] ribbon points=%u width=%.1f interval=%u color=%u,%u,%u,%u\n",

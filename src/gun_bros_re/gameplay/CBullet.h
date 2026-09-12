@@ -60,6 +60,10 @@ constexpr std::int32_t kNoAssetId = -1;
 
 class CBullet : public GameScriptObject {
 public:
+    CBullet() = default;
+    ~CBullet();
+    CBullet(const CBullet &) = delete;
+    CBullet &operator=(const CBullet &) = delete;
     class Template {
     public:
         Template();
@@ -113,6 +117,9 @@ public:
     void Bind(const Template &data, bool alternate);
     void Update(int deltaMs, int animationDurationMs);
     void Hit();
+    /** ForceRemoval dispatches event 2 and releases the gun count immediately. */
+    void ForceRemoval();
+    void OnRemove();
     void OnWallCollision();
     void OnCollision(HitResult result);
     float GetDamage() const;
@@ -130,7 +137,6 @@ public:
     std::vector<GunCue> TakeCues();
 
     int ageMs = 0;
-    int lifetimeMs = 3000;
     int animation = 0;
     int animationAgeMs = 0;
     bool animationFinished = false;
@@ -147,6 +153,8 @@ public:
     int zOrderGroup = 3;
 
 private:
+    friend class CGun;
+    CGun *m_sourceGun = nullptr;
     CScriptInterpreter m_interpreter;
     std::vector<GunCue> m_cues;
     int m_timer = 0;

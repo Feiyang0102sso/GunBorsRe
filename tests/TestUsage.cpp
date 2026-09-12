@@ -225,6 +225,7 @@ void PrintTestUsage() {
 #endif
 #if GB_ENABLE_TESTS
         "  --weapon-effects-check    laser continuity, ray collision and projectile visuals\n"
+        "  --mine-check              mine recycling, boundary explosions and authored lifetime\n"
 #endif
         "  --arena [n]               combat arena for enemy template n\n"
 #if GB_ENABLE_TESTS

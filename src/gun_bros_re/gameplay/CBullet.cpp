@@ -6,7 +6,6 @@
 #include "gun_bros_re/gameplay/CBullet.h"
 
 #include <cstdio>
-#include <limits>
 #include <cmath>
 
 namespace {
@@ -83,7 +82,8 @@ void CBullet::Bind(const Template &data, bool alternate) {
     acceleration = data.GetAcceleration();
     m_damage = data.GetBaseDamage();
     // UpdateBeam is attached to the gun; only direct projectiles time out.
-    if ((data.GetFlags() & 0x100) != 0) { lifetimeMs = std::numeric_limits<int>::max(); }
+    // Correction: CBullet::Update :63502 has script timers, not a host-wide 3-second fuse.
+    // Direct bullets and beams both retain their authored removal behavior.
     m_interpreter.SetScript(data.GetScript(), *this);
     if (data.GetScript().IsPresent()) { m_interpreter.CallExportFunction(0, alternate); }
 }
@@ -95,6 +95,7 @@ void CBullet::SetScriptSequenceFrame(std::uint8_t frame) {
 }
 
 void CBullet::Update(int deltaMs, int animationDurationMs) {
+    if (removed) { return; }
     // Variable 1 is the authored damage period. The elapsed time is a separate
     // runtime field; overwriting the period makes beams frame-rate dependent.
     m_damageDeltaMs = deltaMs;
@@ -126,7 +127,23 @@ void CBullet::Update(int deltaMs, int animationDurationMs) {
         if (m_timer <= 0) { m_interpreter.CallFunctionDirect(m_timerFunction); }
     }
     m_interpreter.Refresh();
-    if (ageMs >= lifetimeMs && !removed) { Hit(); }
+}
+
+CBullet::~CBullet() { OnRemove(); }
+
+void CBullet::OnRemove() {
+    // CBullet::OnRemove :62312. Clear first so forced removal and destruction
+    // cannot notify twice, even when the gun export makes nested script calls.
+    CGun *source = m_sourceGun;
+    m_sourceGun = nullptr;
+    if (source != nullptr) { source->OnBulletRemoved(*this); }
+}
+
+void CBullet::ForceRemoval() {
+    if (removed) { return; }
+    removed = true;
+    m_interpreter.HandleEvent(8, 2);
+    OnRemove();
 }
 
 void CBullet::Hit() {

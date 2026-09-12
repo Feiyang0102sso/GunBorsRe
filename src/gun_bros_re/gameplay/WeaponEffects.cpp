@@ -135,6 +135,8 @@ struct Shot {
     bool beam = false;
     // CEnemy::FireBullet passes no anchor callback; only gun beams follow a muzzle.
     bool followsMuzzle = false;
+    bool spawnCollision = false;
+    float spawnNormalX = 0, spawnNormalY = 0;
 };
 
 struct EffectInstance {
@@ -175,7 +177,7 @@ struct Particle {
 
 /** Nearest intersection prevents fast projectiles from tunnelling through walls. */
 float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData *scene,
-    float *normalX = nullptr, float *normalY = nullptr) {
+    float *normalX = nullptr, float *normalY = nullptr, bool *hit = nullptr) {
     float fraction = 1.0f;
     if (scene == nullptr) { return fraction; }
     for (const CollisionEdge &edge : scene->GetEdges()) {
@@ -187,7 +189,8 @@ float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData
         if (std::abs(cross) < 0.00001f) { continue; }
         const float t = ((a.x - x) * ey - (a.y - y) * ex) / cross;
         const float u = ((a.x - x) * dy - (a.y - y) * dx) / cross;
-        if (t >= 0.0f && t < fraction && u >= 0.0f && u <= 1.0f) {
+        if (t >= 0.0f && t <= fraction && u >= 0.0f && u <= 1.0f) {
+            if (hit != nullptr) { *hit = true; }
             fraction = t;
             const float length = std::hypot(ex, ey);
             if (normalX != nullptr && normalY != nullptr && length > 0) {
@@ -863,8 +866,7 @@ void WeaponEffects::ResolveHit(CombatId projectile, HitResult result) {
 bool WeaponEffects::RemoveOldestProjectile(CombatId owner) {
     for (auto &shot : m_impl->shots) {
         if (shot->owner == owner && !shot->script.removed) {
-            shot->script.Hit();
-            shot->script.removed = true;
+            shot->script.ForceRemoval();
             return true;
         }
     }
@@ -991,15 +993,6 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
     // CLevel::UpdateNormal iterates a growing object list: bullets spawned
     // by a player are advanced before their first draw in the same tick.
     for (const GunCue &cue : player.ActiveWeapon().gun.TakeCues()) {
-        if (cue.kind == GunCue::Kind::RemoveBullet) {
-            if (scene.world != nullptr) { RemoveOldestProjectile(owner); }
-            else if (!scene.shots.empty()) {
-                scene.StopTrail(scene.shots.front().get());
-                scene.DetachRibbon(scene.shots.front().get());
-                scene.shots.erase(scene.shots.begin());
-            }
-            continue;
-        }
         if (cue.kind == GunCue::Kind::Sound || cue.kind == GunCue::Kind::LoopSound || cue.kind == GunCue::Kind::StopSound) {
             scene.PlaySound(cue, owner);
             continue;
@@ -1034,6 +1027,15 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             shot->beam = (visual->data.GetFlags() & kBeamFlag) != 0;
             if (m_impl->world != nullptr) { shot->script.SetLevelContext(m_impl->world->GetScriptLevel()); }
             shot->script.Bind(visual->data, cue.alternate);
+            player.ActiveWeapon().gun.AddBullet(shot->script);
+            // CBullet::Fire :62212-62243 tests owner -> muzzle before movement.
+            // A zero-speed mine can already be beyond the terrain at birth.
+            if (collision != nullptr) {
+                const CCollisionData *birthCollision = &collision->walls;
+                if ((shot->script.flags & 0x20) != 0) { birthCollision = &collision->terrain; }
+                SegmentFraction(modelToScene[3], modelToScene[7], x - modelToScene[3], y - modelToScene[7],
+                    birthCollision, &shot->spawnNormalX, &shot->spawnNormalY, &shot->spawnCollision);
+            }
             if (shot->beam) {
                 const float beamLength = static_cast<float>(shot->script.maximumBeamLength);
                 const float dx = std::cos(shot->direction * kRadians) * beamLength;
@@ -1107,10 +1109,11 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             }
         }
         const float startX = shot->x, startY = shot->y;
-        bool hitWall = false;
-        float wallNormalX = 0, wallNormalY = 0;
+        bool hitWall = shot->spawnCollision;
+        float wallNormalX = shot->spawnNormalX, wallNormalY = shot->spawnNormalY;
+        shot->spawnCollision = false;
         const float radians = shot->direction * kRadians;
-        if (shot->beam) {
+        if (!hitWall && shot->beam) {
             const float beamLength = static_cast<float>(shot->script.maximumBeamLength);
             if (shot->followsMuzzle && shot->owner == kPlayerCombatId) {
                 if (!player.ActiveWeapon().gun.IsShooting()) { shot->script.removed = true; }
@@ -1123,7 +1126,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
             const float dx = std::cos(shot->direction * kRadians) * beamLength;
             const float dy = std::sin(shot->direction * kRadians) * beamLength;
             shot->length = beamLength * SegmentFraction(shot->x, shot->y, dx, dy, shotCollision);
-        } else {
+        } else if (!hitWall) {
             shot->speed = std::max(0.0f, shot->speed + shot->script.acceleration * shotDeltaMs * 0.001f);
             const float distance = shot->speed * shot->script.velocityScale * shotDeltaMs * 0.001f;
             const float dx = std::cos(radians) * distance, dy = std::sin(radians) * distance;

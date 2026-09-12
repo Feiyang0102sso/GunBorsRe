@@ -46,6 +46,7 @@ int RunWeaponCheck(const std::string &bigDirectory);
 
 /** BIG scripts and the production projectile update, with no map or input noise. */
 int RunWeaponEffectsCheck(const std::string &bigDirectory);
+int RunMineCheck(const std::string &bigDirectory);
 
 int RunLevelFlowCheck(const std::string &bigDirectory);
 

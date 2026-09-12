@@ -190,6 +190,7 @@ int RunTestApplication(int argc, char **argv) {
     int armorIndex = -1;
     bool checkWeapons = false;
     bool checkWeaponEffects = false;
+    bool checkMines = false;
     bool checkAudioTransitions = false;
     bool checkPostGamePresentation = false;
     bool arena = false;
@@ -682,6 +683,9 @@ else if (std::strcmp(argument, "--audio-transitions-check") == 0) {
 else if (std::strcmp(argument, "--weapon-effects-check") == 0) {
             checkWeaponEffects = true;
         }
+else if (std::strcmp(argument, "--mine-check") == 0) {
+            checkMines = true;
+        }
 #endif
  
 #if GB_ENABLE_TESTS
@@ -1000,6 +1004,7 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
 #endif
 #if GB_ENABLE_TESTS
     if (checkWeaponEffects) { return RunWeaponEffectsCheck(bigDirectory); }
+    if (checkMines) { return RunMineCheck(bigDirectory); }
 #endif
 #if GB_ENABLE_TESTS
     if (checkWeapons) { return RunWeaponCheck(bigDirectory); }

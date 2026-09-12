@@ -4,6 +4,7 @@
  */
 
 #include "gun_bros_re/gameplay/CGun.h"
+#include "gun_bros_re/gameplay/CBullet.h"
 
 #include <cstdio>
 #include <algorithm>
@@ -112,7 +113,31 @@ CGun::CGun() : m_template(nullptr), m_ammo(1), m_mastery(0),
     m_functionTimer(0), m_timerFunction(0), m_eventTimer(0), m_fireMode(0),
     m_shooting(false), m_beam(false), m_heatIntensity(0.0f), m_targetHeat(0.0f) {}
 
+CGun::~CGun() { DetachBullets(); }
+
+void CGun::DetachBullets() {
+    // Host equipment replacement can destroy a gun before its world bullets.
+    // Detach rather than calling into an expired or newly rebound interpreter.
+    for (CBullet *bullet : m_bullets) { bullet->m_sourceGun = nullptr; }
+    m_bullets.clear();
+}
+
+void CGun::AddBullet(CBullet &bullet) {
+    bullet.OnRemove();
+    bullet.m_sourceGun = this;
+    m_bullets.push_back(&bullet);
+}
+
+void CGun::OnBulletRemoved(CBullet &bullet) {
+    const auto entry = std::find(m_bullets.begin(), m_bullets.end(), &bullet);
+    if (entry == m_bullets.end()) { return; }
+    m_bullets.erase(entry);
+    // CGun::OnBulletRemoved :128523 calls export 2, not a guessed ammo increment.
+    m_interpreter.CallExportFunction(2);
+}
+
 void CGun::Bind(const Template &data, const CMesh *mesh, bool beam) {
+    DetachBullets();
     m_beam = beam;
     m_template = &data;
     m_overrides.assign(11, -1);
@@ -266,9 +291,14 @@ std::int16_t CGun::FunctionResolver(std::uint8_t function,
         return 0;
     }
     case 13:
-        cue.kind = GunCue::Kind::RemoveBullet;
-        m_cues.push_back(cue);
-        return 1;
+        // FindOldestBullet(CGun*) :114474 and ForceRemoval :61876 are synchronous.
+        // The removal export must update script locals before Fire continues.
+        for (CBullet *bullet : m_bullets) {
+            if (bullet->removed) { continue; }
+            bullet->ForceRemoval();
+            return 1;
+        }
+        return 0;
     case 14:
         // Seek distance is gameplay targeting; it does not change the model.
         return 0;

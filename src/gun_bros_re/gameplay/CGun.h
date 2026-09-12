@@ -56,10 +56,11 @@
 
 // Stat tables in a gun template, all read the same way.
 constexpr std::uint32_t kGunStatTableCount = 6;
+class CBullet;
 
 /** A visual cue emitted by the original weapon script. */
 struct GunCue {
-    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, RemoveBullet, Splash, SpawnEnemy, Grenade };
+    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, Splash, SpawnEnemy, Grenade };
     Kind kind = Kind::Bullet;
     GameObjectRef resource;
     int hand = 0;
@@ -120,9 +121,15 @@ public:
     };
 
     CGun();
+    ~CGun();
+    CGun(const CGun &) = delete;
+    CGun &operator=(const CGun &) = delete;
     /** Bind before OnEquip; overrides refer to this template's move set. */
     void Bind(const Template &data, const CMesh *mesh, bool beam = false);
     void OnEquip();
+    /** Original Configure / OnRemove association, scoped to this gun instance. */
+    void AddBullet(CBullet &bullet);
+    void OnBulletRemoved(CBullet &bullet);
     void SetShooting(bool shooting);
     void Fire();
     void Update(std::int32_t deltaMs);
@@ -148,6 +155,8 @@ public:
     std::vector<GunCue> TakeCues();
 
 private:
+    void DetachBullets();
+    std::vector<CBullet *> m_bullets;
     const Template *m_template;
     CScriptInterpreter m_interpreter;
     CMeshAnimationController m_animation;
