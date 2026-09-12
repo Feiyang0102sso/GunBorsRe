@@ -360,7 +360,11 @@ HitResult CBrother::ReceiveDamage(float damage) {
     m_vitals->flash = 1;
     ++m_vitals->hits;
     if (m_vitals->invincible) { return HitResult::Hit; }
-    m_vitals->health = std::max(0.0f, m_vitals->health - damage);
+    // Arena still dispatches HandleDamage's event 5/4 (:136791), including
+    // hurt animations. Keep finite HP for percentage-based script queries.
+    if (!m_vitals->unlimitedHealth) {
+        m_vitals->health = std::max(0.0f, m_vitals->health - damage);
+    }
     if (m_vitals->health <= 0) {
         StartDeath();
         return HitResult::Killed;

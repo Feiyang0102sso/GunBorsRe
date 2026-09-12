@@ -71,6 +71,9 @@ public:
         float &waypointX, float &waypointY) override;
     void ResolveBrotherForce(float previousX, float previousY, float &x, float &y) override;
     void EnemyMatrix(const CombatEnemy &enemy, float *matrix) const;
+    struct MovementBounds { float left, top, right, bottom; };
+    /** Inclusive player-center limits used by ResolveMovement. */
+    MovementBounds GetPlayerMovementBounds() const { return {m_left, m_top, m_right, m_bottom}; }
     /** Shared centres for the actual hit test and the collision overlay. */
     void EnemyCircle(const CombatEnemy &enemy, int part, float &x, float &y, float &radius) const;
     struct HealthBar {

@@ -50,6 +50,8 @@ struct EnemyTemplateData {
     std::uint32_t packHash;
     std::uint32_t ordinal;
     std::string owner;
+    // enemy_template.bt / CEnemy::Template::Init :67183, template mem+120.
+    CGameAssetRef name;
 
     CScript script;
     CMoveSetMesh moveSet;

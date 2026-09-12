@@ -1,6 +1,8 @@
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
+#include "gun_bros_viewer/scenes/ArenaTools.h"
+#include "gun_bros_re/data/StoreCatalog.h"
 namespace ArenaDetail {
 constexpr float kRadians = 3.14159265f / 180;
 const char *const kShaders = Paths::Shaders().c_str();
@@ -64,6 +66,17 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
 if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, playerData, player, vitals, effects, scene); }
 #endif
 
+    std::array<PowerupEntry, 3> grenades;
+    if (!LoadArenaGrenades(toc, tables, grenades)) { return 1; }
+    std::vector<std::string> enemyNames;
+    for (const auto &enemy : catalog) {
+        std::string name = ReadGameString(toc, enemy.name);
+        if (name.empty()) { name = "UNKNOWN NAME"; }
+        enemyNames.push_back(name);
+    }
+    vitals.invincible = false;
+    vitals.unlimitedHealth = true;
+    ArenaCamera camera;
     if (armorIndex >= 0) {
         std::vector<ArmorEntry> armor;
         if (!LoadArmorCatalog(toc, tables, armor) || armorIndex >= static_cast<int>(armor.size()) ||
@@ -96,7 +109,10 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
                 if (scene.SpawnNearby(entry) == nullptr) { noticeUntil = window.GetTicksMs() + 2500; }
             }
             else if (controls.IsPressed(key, ViewerAction::ResetBattle)) { reset = true; }
-            else if (controls.IsPressed(key, ViewerAction::Invincible)) { vitals.invincible = !vitals.invincible; }
+            else if (controls.IsPressed(key, ViewerAction::Grenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[0]); }
+            else if (controls.IsPressed(key, ViewerAction::FreezeGrenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[1]); }
+            else if (controls.IsPressed(key, ViewerAction::ShockGrenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[2]); }
+            else if (controls.IsPressed(key, ViewerAction::ResetView)) { camera.zoom = kDefaultZoom; }
             else if (controls.IsPressed(key, ViewerAction::Pause)) { paused = !paused; accumulator = 0; effects.SetPaused(paused); }
             else if (controls.IsPressed(key, ViewerAction::Step)) { paused = true; step = true; effects.SetPaused(true); }
             else if (controls.IsPressed(key, ViewerAction::Collisions)) { collisions = !collisions; }
@@ -117,23 +133,19 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
         int width = 0, height = 0;
         controls.GetDrawableSize(width, height);
         // Keep the arena's world proportions when the dock narrows the viewport.
-        int arenaWidth = width;
-        int arenaHeight = static_cast<int>(width * kArenaHeight / kArenaWidth);
-        if (arenaHeight > height) {
-            arenaHeight = height;
-            arenaWidth = static_cast<int>(height * kArenaWidth / kArenaHeight);
-        }
-        arenaWidth = std::max(1, arenaWidth);
-        arenaHeight = std::max(1, arenaHeight);
-        const int arenaLeft = (width - arenaWidth) / 2;
-        const int arenaTop = (height - arenaHeight) / 2;
+        // A separate screen-space header leaves the whole remaining area usable.
+        const int arenaWidth = std::max(1, width);
+        const int arenaTop = std::min(kInfoHeight, height / 2);
+        const int arenaHeight = std::max(1, height - arenaTop);
+        camera.Scroll(controls.TakeWheelDelta());
+        camera.Follow(scene.playerX, scene.playerY, arenaWidth, arenaHeight);
         float mouseX = 0, mouseY = 0;
         const bool pointerInArena = controls.GetMousePosition(mouseX, mouseY) &&
-            mouseX >= arenaLeft && mouseX < arenaLeft + arenaWidth &&
+            mouseX >= 0 && mouseX < arenaWidth &&
             mouseY >= arenaTop && mouseY < arenaTop + arenaHeight;
         if (screenshot.empty() && pointerInArena && !vitals.dead) {
-            scene.facing = std::atan2((mouseX - arenaLeft) * kArenaWidth / arenaWidth - scene.playerX,
-                scene.playerY - (mouseY - arenaTop) * kArenaHeight / arenaHeight) / kRadians;
+            scene.facing = std::atan2(camera.WorldX(mouseX) - scene.playerX,
+                scene.playerY - camera.WorldY(mouseY - arenaTop)) / kRadians;
         }
         float moveX = 0, moveY = 0;
         if (controls.IsDown(ViewerAction::MoveLeft)) { moveX -= 1; }
@@ -149,15 +161,26 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
             accumulator -= kStepMs;
         }
         float projection[16];
-        Matrix4dOrthoTopLeft(kArenaWidth, kArenaHeight, 4000, projection);
-        glViewport(arenaLeft, height - arenaTop - arenaHeight, arenaWidth, arenaHeight);
-        glClearColor(0.055f, 0.075f, 0.09f, 1);
+        camera.Follow(scene.playerX, scene.playerY, arenaWidth, arenaHeight);
+        Matrix4dOrthoTopLeft(arenaWidth / camera.scale, arenaHeight / camera.scale, 4000, projection);
+        Matrix4dTranslate(projection, -camera.x, -camera.y);
+        glViewport(0, 0, arenaWidth, arenaHeight);
+        glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
+        // The movement clamp limits the player's center. Expand by its collision
+        // radius so the visible wall touches the player when movement stops.
+        const auto bounds = scene.GetPlayerMovementBounds();
+        const float radius = scene.GetPlayerRadius();
+        const float left = bounds.left - radius, right = bounds.right + radius;
+        const float top = bounds.top - radius, bottom = bounds.bottom + radius;
+        const float borderWidth = 2 / camera.scale;
         markers.Begin();
-        for (float x = 0; x <= kArenaWidth; x += 100) { markers.AddSegment(x, 140, x, kArenaHeight, 1); }
-        for (float y = 200; y <= kArenaHeight; y += 100) { markers.AddSegment(0, y, kArenaWidth, y, 1); }
-        markers.Draw(markerProgram, projection, 0.1f, 0.15f, 0.18f, 1);
+        markers.AddSegment(left, top, right, top, borderWidth);
+        markers.AddSegment(right, top, right, bottom, borderWidth);
+        markers.AddSegment(right, bottom, left, bottom, borderWidth);
+        markers.AddSegment(left, bottom, left, top, borderWidth);
+        markers.Draw(markerProgram, projection, 0.12f, 0.48f, 1, 1);
         float playerMatrix[16], model[16], mvp[16];
         scene.PlayerMatrix(playerMatrix);
         effects.Draw(projection, nullptr, 1, WeaponDrawPass::BehindPlayer);
@@ -190,11 +213,12 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
             if (!state.enabled) { markers.Draw(markerProgram, projection, 0.5f, 0.5f, 0.5f, 1); }
             else if (enemy.CanReceiveProjectile(0, kPlayerCombatId)) { markers.Draw(markerProgram, projection, 0.95f, 0.23f, 0.2f, 1); }
             else { markers.Draw(markerProgram, projection, 0.22f, 0.95f, 0.5f, 1); }
-            markers.Begin();
             char health[64];
             std::snprintf(health, sizeof(health), "%.0f/%.0f", state.health, state.maxHealth);
-            DrawHudText(markers, state.x - 32, barY - 12, health, 1.2f);
-            markers.Draw(markerProgram, projection, 0.82f, 0.88f, 0.9f, 1);
+            float labelProjection[16];
+            Matrix4dOrthoTopLeft(static_cast<float>(arenaWidth), static_cast<float>(arenaHeight), 1, labelProjection);
+            controls.DrawLabel(health, (state.x - 32 - camera.x) * camera.scale,
+                (barY - camera.y) * camera.scale - 26, 160, 18, labelProjection);
         }
         if (collisions) {
             markers.Begin();
@@ -223,9 +247,18 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
             }
             markers.Draw(markerProgram, projection, 0.3f, 0.8f, 1, 0.8f);
         }
+        // Diagnostic information is screen-space host UI, independent of zoom.
+        glViewport(0, 0, width, height);
+        float hudProjection[16];
+        const float hudScale = arenaTop / static_cast<float>(kInfoHeight);
+        const int hudWidth = static_cast<int>(width / hudScale);
+        Matrix4dOrthoTopLeft(width / hudScale, height / hudScale, 4000, hudProjection);
         markers.Begin();
-        markers.AddRect(0, 0, kArenaWidth, 132);
-        markers.Draw(markerProgram, projection, 0.025f, 0.04f, 0.05f, 0.97f);
+        markers.AddRect(0, 0, static_cast<float>(hudWidth), kInfoHeight);
+        markers.Draw(markerProgram, hudProjection, 0, 0, 0, 1);
+        markers.Begin();
+        markers.AddRect(16, kInfoHeight - 2, static_cast<float>(hudWidth - 32), 1);
+        markers.Draw(markerProgram, hudProjection, 0.18f, 0.38f, 0.48f, 1);
         unsigned kills = scene.kills, hits = scene.hits;
         float damage = scene.damageDealt;
         unsigned deferred = 0;
@@ -236,33 +269,33 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
             deferred |= state.deferredMechanisms;
         }
         char line[256];
-        std::snprintf(line, sizeof(line), "ARENA %zu/%zu - %s", entry, catalog.size() - 1, catalog[entry].owner.c_str());
-        markers.Begin();
-        DrawHudText(markers, 20, 16, line);
-        const char *godLabel = "GOD OFF";
-        if (vitals.invincible) { godLabel = "GOD ON"; }
-        std::snprintf(line, sizeof(line), "HP %.1f/%.0f   INCOMING %.1f   LAST %.1f   %s", vitals.health, vitals.maximum,
-            vitals.incomingDamage, vitals.lastDamage, godLabel);
-        DrawHudText(markers, 20, 42, line, 1.6f);
-        std::snprintf(line, sizeof(line), "ALIVE %zu   HITS %u   KILLS %u   DAMAGE %.1f   LAST %.1f", scene.AliveCount(), hits, kills, damage, scene.lastDamage);
-        DrawHudText(markers, 20, 62, line, 1.6f);
-        DrawHudText(markers, 20, 83, WeaponSelectionLabel(weapons, weapon).substr(0, 95), 1.4f);
-        if (paused) { DrawHudText(markers, 985, 18, "PAUSED", 2); }
+        int fontHeight = 22;
+        if (hudWidth < 600) { fontHeight = 18; }
+        controls.DrawLabel("Enemy - " + enemyNames[entry], 16, 6, hudWidth - 32, 26, hudProjection);
+        const char *playState = "Live";
+        if (paused) { playState = "Paused"; }
+        std::snprintf(line, sizeof(line), "%zu/%zu  %s  %s  Zoom %.0f%%", entry, catalog.size() - 1,
+            catalog[entry].owner.c_str(), playState, camera.zoom * 100);
+        controls.DrawLabel(line, 16, 38, hudWidth - 32, fontHeight, hudProjection);
+        controls.DrawLabel(WeaponSelectionLabel(weapons, weapon), 16, 62, hudWidth - 32, fontHeight, hudProjection);
+        std::snprintf(line, sizeof(line), "HP unlimited   Received hits %u", vitals.hits);
+        controls.DrawLabel(line, 16, 86, hudWidth - 32, fontHeight, hudProjection);
+        std::snprintf(line, sizeof(line), "Taken %.1f   Last hit %.1f", vitals.incomingDamage, vitals.lastDamage);
+        controls.DrawLabel(line, 16, 110, hudWidth - 32, fontHeight, hudProjection);
+        std::snprintf(line, sizeof(line), "Dealt %.1f   Last hit %.1f", damage, scene.lastDamage);
+        controls.DrawLabel(line, 16, 134, hudWidth - 32, fontHeight, hudProjection);
+        std::snprintf(line, sizeof(line), "Alive %zu   Kills %u   Landed hits %u", scene.AliveCount(), kills, hits);
+        controls.DrawLabel(line, 16, 158, hudWidth - 32, fontHeight, hudProjection);
         if (!scene.enemies.empty()) {
             const EnemyCombat &state = scene.enemies.front()->model.enemy.combat;
-            std::snprintf(line, sizeof(line), "FILTER %d  TARGET TYPE %d", state.variables[16], state.targetType);
-            DrawHudText(markers, 20, 145, line, 1.4f);
+            std::snprintf(line, sizeof(line), "Filter %d   Target type %d", state.variables[16], state.targetType);
+            controls.DrawLabel(line, 16, kInfoHeight + 8, hudWidth - 32, fontHeight, hudProjection);
         }
-        if ((deferred & 3) != 0) { DrawHudText(markers, 20, 167, "BOSS / LEVEL MECHANISMS DEFERRED", 1.4f); }
-        if (now < noticeUntil) { DrawHudText(markers, 380, 220, "NO FREE SPAWN POSITION", 2); }
-        if (!catalog[entry].script.IsPresent()) { DrawHudText(markers, 380, 180, "UNUSED - NO SCRIPT", 3); }
-        else if (catalog[entry].gameScale == 0) { DrawHudText(markers, 380, 180, "NO VISIBLE MODEL", 3); }
-        if (vitals.dead) { DrawHudText(markers, 400, 450, "PLAYER DEAD - RESET BATTLE", 3); }
-        markers.Draw(markerProgram, projection, 0.84f, 0.91f, 0.94f, 1);
-        markers.Begin();
-        markers.AddRect(20, 124, 260 * std::clamp(vitals.health / vitals.maximum, 0.0f, 1.0f), 4);
-        markers.Draw(markerProgram, projection, 0.2f, 0.7f, 1, 1);
-        window.SetTitle(ViewerWindowTitle("Arena", catalog[entry].owner + " | " + weapons[weapon].name));
+        if ((deferred & 3) != 0) { controls.DrawLabel("Boss / level mechanisms deferred", 16, kInfoHeight + 36, hudWidth - 32, fontHeight, hudProjection); }
+        if (now < noticeUntil) { controls.DrawLabel("No free spawn position", 16, kInfoHeight + 92, hudWidth - 32, fontHeight, hudProjection); }
+        if (!catalog[entry].script.IsPresent()) { controls.DrawLabel("Unused - no script", 16, kInfoHeight + 64, hudWidth - 32, fontHeight, hudProjection); }
+        else if (catalog[entry].gameScale == 0) { controls.DrawLabel("No visible model", 16, kInfoHeight + 64, hudWidth - 32, fontHeight, hudProjection); }
+        window.SetTitle(ViewerWindowTitle("Arena", enemyNames[entry] + " | " + catalog[entry].owner + " | " + weapons[weapon].name));
         if (!controls.Draw()) { return 1; }
         if (!screenshot.empty()) {
             if (GB_SAVE_FRAME(window, screenshot)) { return 0; }

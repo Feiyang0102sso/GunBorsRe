@@ -45,7 +45,7 @@ public:
         if (bitmap != nullptr) { DeleteObject(bitmap); }
         if (dc != nullptr) { DeleteDC(dc); }
     }
-    bool Create(int width, int height) {
+    bool Create(int width, int height, int fontHeight = kFontHeight) {
         dc = CreateCompatibleDC(nullptr);
         if (dc == nullptr) { return false; }
         BITMAPINFO info{};
@@ -56,7 +56,7 @@ public:
         info.bmiHeader.biBitCount = 32;
         info.bmiHeader.biCompression = BI_RGB;
         bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
-        font = CreateFontW(-kFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        font = CreateFontW(-fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
         if (bitmap == nullptr || font == nullptr) { return false; }
@@ -186,6 +186,7 @@ void ViewerControls::Layout() {
 }
 
 bool ViewerControls::PumpEvents() {
+    m_nextLabel = 0;
     Layout();
     if (!m_window.PumpEvents()) { return false; }
     Layout();
@@ -387,7 +388,53 @@ bool ViewerControls::RebuildPanel() {
     return true;
 }
 
+void ViewerControls::DrawLabel(const std::string &text, float x, float y, int width,
+    int fontHeight, const float *projection) {
+    if (m_labelFailed || text.empty() || width <= 0) { return; }
+    if (m_nextLabel == m_labels.size()) { m_labels.push_back(std::make_unique<Label>()); }
+    Label &label = *m_labels[m_nextLabel++];
+    const int height = fontHeight + 6;
+    if (label.text != text || label.width != width || label.fontHeight != fontHeight) {
+        PanelCanvas canvas;
+        if (!canvas.Create(width, height, fontHeight)) {
+            std::printf("[viewer-controls] cannot create label bitmap\n");
+            m_labelFailed = true;
+            return;
+        }
+        const int count = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+        std::wstring wide(count, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), count);
+        canvas.Fill(0, 0, width, height, RGB(0, 0, 0));
+        canvas.Text(0, 0, width, height, wide.c_str(), RGB(255, 255, 255));
+        GdiFlush();
+        PNGImage image;
+        image.width = width;
+        image.height = height;
+        image.pixels.resize(static_cast<std::size_t>(width) * height * 4);
+        const auto *source = static_cast<const unsigned char *>(canvas.pixels);
+        // Grayscale antialias coverage becomes alpha, avoiding black boxes
+        // and ClearType color fringes over the arena's models.
+        for (std::size_t offset = 0; offset < image.pixels.size(); offset += 4) {
+            image.pixels[offset] = 237;
+            image.pixels[offset + 1] = 241;
+            image.pixels[offset + 2] = 245;
+            image.pixels[offset + 3] = source[offset];
+        }
+        if (!label.texture.Create(image)) { m_labelFailed = true; return; }
+        label.text = text;
+        label.width = width;
+        label.fontHeight = fontHeight;
+    }
+    m_batch.Begin();
+    SourceRect source{0, 0, static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height)};
+    m_batch.AddQuad(label.texture, x, y, static_cast<float>(width), static_cast<float>(height),
+        source, false, false, BlendMode::Alpha);
+    m_batch.Upload();
+    m_batch.Draw(m_program, projection);
+}
+
 bool ViewerControls::Draw() {
+    if (m_labelFailed) { return false; }
     if (!m_enabled || m_panelWidth == 0) { return true; }
     if (m_dirty && !RebuildPanel()) { return false; }
     // Restore depth and viewport: turntables set their depth state outside the loop.

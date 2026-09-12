@@ -74,6 +74,10 @@ Viewer 根据 BIG 内容自动选择 `BigVersion`，只记录三档格式，最�
 
 六类键位集中在 `src/gun_bros_viewer/ViewerBindings.h`，分别使用 `mapview`、`meshview`、`enemyview`、`weaponview`、`armorview`、`arena` 命名空间；重复键位各自保留。每个定义包含动作、键位、触发方式、分组和英文说明，输入分派与操作栏共用定义。面板与鼠标输入隔离由 `ViewerControls.h/.cpp` 负责，场景按剩余视口渲染。操作栏为 Windows 宿主界面，不读取或改写主程序配置。`pwsh -File tests/run.ps1 -Case viewer-controls` 验证改键、鼠标隔离、收起展开、缩放窗口及绘图状态恢复。
 
+Arena 使用纯黑背景和跟随玩家的等比例镜头，默认放大至 150%；滚轮在场地内缩放（50%–400%），Home 恢复默认倍率。顶部信息栏固定显示 BIG 中的敌人名称、资源位置、武器、收发伤害与命中统计。G 投默认手雷，Q 投冰雷，E 投电雷；道具由原 POWERUP 脚本驱动，实验供应不消耗存档库存。玩家生命无限，但保留敌人攻击、伤害统计、受伤动作和反馈。R 重置战斗，左右方向键切换敌人；无限生命仅用于 Arena。
+
+Arena 信息栏和血量数字使用与操作栏一致的 Windows 系统字体；顶部不重复显示手雷快捷键。蓝框按玩家移动限制及碰撞半径绘制，表示实际场地边界，随镜头缩放、移动，线宽保持 2 像素。
+
 展示场景全部位于 `src/gun_bros_viewer/scenes/`。主包没有新增 viewer 专用模块；地图调用现有地图模块，敌人调用 `EnemyModel`，装备调用 `PlayerModel`、`WeaponEffects`，竞技场调用 `CombatScene`。Mesh Viewer 使用完整原始帧库与原贴图引用，不运行实体拼接；没有原贴图关联的模型明确标记为未贴图。
 
 Viewer 使用 EXE 同目录的 `GunBrosViewer.cfg`，也可通过 `--config <文件>` 指定独立配置。字段、默认值、读取器和窗口标题统一在 `src/gun_bros_viewer/ViewerSettings.h/.cpp`，不再调用 `GameHostSettings`。当前支持 `WindowWidth=1600`、`WindowHeight=1200`、`EffectsVolume=3`（0–10）；窗口尺寸仍受可用桌面范围限制。已有文件保留注释和音量，缺失字段使用 viewer 默认值，旧 `DebugMode`／`IsConnected` 字段提示忽略。Tests 的研究配置另用 `GunBrosTests.cfg`，主程序仍使用 `GunBrosRe.cfg`。

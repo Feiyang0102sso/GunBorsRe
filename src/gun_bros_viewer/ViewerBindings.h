@@ -7,7 +7,7 @@
 #include <cstddef>
 
 enum class ViewerAction {
-    Previous, Next, PreviousPage, NextPage, Drag, Zoom, ResetView, Tiles, Props, Spawns, Collisions, Cover, Barrel, Spire, Pause, Step, Back, PreviousVariant, NextVariant, Tilt, Category1, Category2, Category3, Category4, Category5, Category6, Category7, Fire, MoveUp, MoveLeft, MoveDown, MoveRight, ClearArmor, Spawn, ResetBattle, Invincible, Aim, Turret
+    Previous, Next, PreviousPage, NextPage, Drag, Zoom, ResetView, Tiles, Props, Spawns, Collisions, Cover, Barrel, Spire, Pause, Step, Back, PreviousVariant, NextVariant, Tilt, Category1, Category2, Category3, Category4, Category5, Category6, Category7, Fire, MoveUp, MoveLeft, MoveDown, MoveRight, ClearArmor, Spawn, ResetBattle, Grenade, FreezeGrenade, ShockGrenade, Aim, Turret
 };
 enum class ViewerInput { Press, Hold, LeftDrag, RightDrag, Wheel, Pointer, LeftHold, RightHold };
 struct ViewerBinding {
@@ -160,7 +160,11 @@ inline constexpr ViewerBinding Previous{ViewerAction::Previous, KeyCode::Left, V
 inline constexpr ViewerBinding Next{ViewerAction::Next, KeyCode::Right, ViewerInput::Press, L"Enemy / arena", L"Next enemy"};
 inline constexpr ViewerBinding Spawn{ViewerAction::Spawn, KeyCode::X, ViewerInput::Press, L"Enemy / arena", L"Spawn same enemy nearby"};
 inline constexpr ViewerBinding ResetBattle{ViewerAction::ResetBattle, KeyCode::R, ViewerInput::Press, L"Enemy / arena", L"Reset battle"};
-inline constexpr ViewerBinding Invincible{ViewerAction::Invincible, KeyCode::G, ViewerInput::Press, L"Enemy / arena", L"Toggle invincibility"};
+inline constexpr ViewerBinding Grenade{ViewerAction::Grenade, KeyCode::G, ViewerInput::Press, L"Combat", L"Throw default grenade"};
+inline constexpr ViewerBinding FreezeGrenade{ViewerAction::FreezeGrenade, KeyCode::Q, ViewerInput::Press, L"Combat", L"Throw freeze grenade"};
+inline constexpr ViewerBinding ShockGrenade{ViewerAction::ShockGrenade, KeyCode::E, ViewerInput::Press, L"Combat", L"Throw shock grenade"};
+inline constexpr ViewerBinding Zoom{ViewerAction::Zoom, KeyCode::None, ViewerInput::Wheel, L"View", L"Zoom arena"};
+inline constexpr ViewerBinding ResetView{ViewerAction::ResetView, KeyCode::Home, ViewerInput::Press, L"View", L"Reset zoom"};
 inline constexpr ViewerBinding Collisions{ViewerAction::Collisions, KeyCode::C, ViewerInput::Press, L"Enemy / arena", L"Toggle collisions"};
 inline constexpr ViewerBinding MoveUp{ViewerAction::MoveUp, KeyCode::W, ViewerInput::Hold, L"Combat", L"Move up"};
 inline constexpr ViewerBinding MoveLeft{ViewerAction::MoveLeft, KeyCode::A, ViewerInput::Hold, L"Combat", L"Move left"};
@@ -181,7 +185,7 @@ inline constexpr ViewerBinding Pause{ViewerAction::Pause, KeyCode::Space, Viewer
 inline constexpr ViewerBinding Step{ViewerAction::Step, KeyCode::Period, ViewerInput::Press, L"Playback / return", L"Pause and step"};
 inline constexpr ViewerBinding Back{ViewerAction::Back, KeyCode::Escape, ViewerInput::Press, L"Playback / return", L"Return to menu"};
 inline constexpr ViewerBinding All[] = {
-    Previous, Next, Spawn, ResetBattle, Invincible, Collisions, MoveUp, MoveLeft, MoveDown, MoveRight, Aim, Fire, PreviousVariant, NextVariant, Category1, Category2, Category3, Category4, Category5, Category6, Category7, Pause, Step, Back
+    Previous, Next, Spawn, ResetBattle, Collisions, MoveUp, MoveLeft, MoveDown, MoveRight, Aim, Fire, Grenade, FreezeGrenade, ShockGrenade, PreviousVariant, NextVariant, Category1, Category2, Category3, Category4, Category5, Category6, Category7, Zoom, ResetView, Pause, Step, Back
 };
 inline constexpr ViewerBindingSet Bindings{L"Arena", All, sizeof(All) / sizeof(All[0])};
 }

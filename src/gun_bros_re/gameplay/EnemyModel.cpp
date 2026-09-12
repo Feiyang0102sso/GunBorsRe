@@ -47,8 +47,7 @@ bool ReadEnemyTemplate(PackTables &tables, std::uint32_t packHash,
     CArrayInputStream stream(payload);
     stream.ReadUInt8();
 
-    CGameAssetRef assetRef;
-    assetRef.Init(stream);
+    out.name.Init(stream);
 
     out.script.Load(stream);
     if (!out.moveSet.Init(stream)) {

@@ -29,7 +29,7 @@ constexpr CombatId kBrotherCombatId = UINT64_MAX;
 
 enum class HitResult { Pending, Ignored, Hit, Killed };
 
-/** The actor owns health across equipment changes. Arena starts invincible. */
+/** The actor owns health across equipment changes. Legacy harnesses start invincible. */
 struct PlayerVitals {
     float maximum = 0;
     float health = 0;
@@ -38,6 +38,8 @@ struct PlayerVitals {
     float flash = 0;
     int stunMs = 0;
     bool invincible = true;
+    // Viewer-only unlimited health keeps the original nonfatal damage event.
+    bool unlimitedHealth = false;
     bool dead = false;
     // The original Flow native 1 reports death only after its mesh sequence.
     bool deathAnimationComplete = false;

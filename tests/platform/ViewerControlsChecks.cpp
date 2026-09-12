@@ -1,5 +1,6 @@
 /** Exercise real SDL routing: remapped keys, dock ownership, resize and GL state. */
 #include "gun_bros_viewer/ViewerControls.h"
+#include "gun_bros_viewer/scenes/ArenaTools.h"
 #include "tests/Capture.h"
 #include "tests/TestOutput.h"
 #include <SDL3/SDL.h>
@@ -75,6 +76,26 @@ int CheckViewerControls() {
         const KeyCode tilesKey = controls.TakeKeyPress();
         Check(controls.IsPressed(turretKey, ViewerAction::Turret) && !controls.IsPressed(turretKey, ViewerAction::Tiles), "T selects turret only");
         Check(controls.IsPressed(tilesKey, ViewerAction::Tiles) && !controls.IsPressed(tilesKey, ViewerAction::Turret), "G selects tiles only");
+    }
+    {
+        ViewerControls controls(window, arena::Bindings);
+        if (!controls.Init()) { return 1; }
+        Check(controls.IsPressed(KeyCode::G, ViewerAction::Grenade) &&
+            controls.IsPressed(KeyCode::Q, ViewerAction::FreezeGrenade) &&
+            controls.IsPressed(KeyCode::E, ViewerAction::ShockGrenade), "arena grenade shortcuts");
+        Check(PushWheel(200, 220, 2) && controls.PumpEvents(), "arena wheel event");
+        ArenaDetail::ArenaCamera camera;
+        camera.Scroll(controls.TakeWheelDelta());
+        Check(camera.zoom > ArenaDetail::kDefaultZoom, "arena wheel zooms in");
+        camera.Follow(600, 650, 400, 420);
+        Check(std::abs(camera.WorldX(200) - 600) < 0.001f &&
+            std::abs(camera.WorldY(420 * 0.72f) - 650) < 0.001f, "zoomed aim matches player position");
+        camera.Scroll(-100);
+        Check(camera.zoom == ArenaDetail::kMinimumZoom, "arena minimum zoom");
+        camera.Scroll(100);
+        Check(camera.zoom == ArenaDetail::kMaximumZoom, "arena maximum zoom");
+        Check(PushWheel(600, 220, -2) && controls.PumpEvents() && controls.TakeWheelDelta() == 0,
+            "arena panel scroll cannot zoom");
     }
     {
         // Changing the definition must affect both dispatch and the rendered help.

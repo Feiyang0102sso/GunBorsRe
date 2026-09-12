@@ -5,6 +5,7 @@
 #endif
 #include "gun_bros_viewer/ViewerBindings.h"
 #include "engine/graphics/CQuadBatch.h"
+#include <memory>
 
 class ViewerControls {
 public:
@@ -22,6 +23,9 @@ public:
     KeyCode WeaponSelectionKey(KeyCode key) const;
     void GetDrawableSize(int &width, int &height) const;
     bool Draw();
+    /** Screen-space system-font labels, cached by call order between frames. */
+    void DrawLabel(const std::string &text, float x, float y, int width,
+        int fontHeight, const float *projection);
 
 private:
     static bool Filter(void *context, const SDL_Event &event);
@@ -46,4 +50,13 @@ private:
     CShaderProgram m_program;
     CQuadBatch m_batch;
     CTexture m_texture;
+    struct Label {
+        std::string text;
+        int width = 0;
+        int fontHeight = 0;
+        CTexture texture;
+    };
+    std::vector<std::unique_ptr<Label>> m_labels;
+    std::size_t m_nextLabel = 0;
+    bool m_labelFailed = false;
 };

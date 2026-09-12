@@ -1,4 +1,6 @@
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
+#include "gun_bros_viewer/scenes/ArenaTools.h"
+#include "gun_bros_re/data/StoreCatalog.h"
 namespace ArenaDetail {
 /** Exercise actual archive scripts, then write a per-entry audit for inspection. */
 int CheckArena(CWindow &window, CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,
@@ -12,6 +14,55 @@ int CheckArena(CWindow &window, CResTOCManager &toc, PackTables &tables, const C
     unsigned scripted = 0;
     unsigned unused = 0;
     unsigned unsupported = 0;
+    // The viewer uses BIG names, real throw animations and nonfatal damage.
+    if (ReadGameString(toc, catalog[0].name).empty()) { ++failures; }
+    std::array<PowerupEntry, 3> grenades;
+    if (!LoadArenaGrenades(toc, tables, grenades)) { return 1; }
+    for (const auto &grenade : grenades) {
+        scene.Reset();
+        scene.Update(kStepMs, 0, 0, false);
+        const auto shotsBefore = effects.GetShotCount();
+        const bool requested = ThrowArenaGrenade(player.weapon->brother, grenade);
+        const bool replacedPending = ThrowArenaGrenade(player.weapon->brother, grenades[0]);
+        unsigned thrown = 0;
+        for (int tick = 0; tick < 180; ++tick) {
+            scene.Update(kStepMs, 0, 0, false);
+            thrown += player.weapon->brother.TakeThrownGrenades(0);
+        }
+        const auto shots = effects.GetShotCount() - shotsBefore;
+        std::printf("[arena-check] grenade=%s requested=%d thrown=%u shots=%zu\n",
+            grenade.name.c_str(), requested, thrown, shots);
+        if (!requested || replacedPending || thrown != 1 || shots == 0) { ++failures; }
+    }
+    scene.Reset();
+    scene.Update(kStepMs, 0, 0, false);
+    vitals.invincible = false;
+    // PLAYER pack0_core: event 0x0604 is authored in stun state 13
+    // (@0x3BE), which transitions to recovery state 14. Idle ignores it.
+    player.weapon->brother.Stun(1000);
+    player.weapon->brother.ReceiveDamage(1);
+    const int hurtState = player.weapon->brother.GetStateId();
+    scene.Reset();
+    scene.Update(kStepMs, 0, 0, false);
+    player.weapon->brother.Stun(1000);
+    const int stunnedState = player.weapon->brother.GetStateId();
+    vitals.unlimitedHealth = true;
+    const float lethalDamage = vitals.maximum * 100;
+    const HitResult unlimitedResult = player.weapon->brother.ReceiveDamage(lethalDamage);
+    std::printf("[arena-check] unlimited result=%d hp=%.1f/%.1f dead=%d hits=%u incoming=%.1f flash=%.1f states=%d/%d/%d\n",
+        static_cast<int>(unlimitedResult), vitals.health, vitals.maximum, vitals.dead,
+        vitals.hits, vitals.incomingDamage, vitals.flash, stunnedState, hurtState, player.weapon->brother.GetStateId());
+    if (unlimitedResult != HitResult::Hit || vitals.health != vitals.maximum || vitals.dead ||
+        vitals.hits != 1 || vitals.incomingDamage != lethalDamage || vitals.flash != 1 ||
+        hurtState == stunnedState || player.weapon->brother.GetStateId() != hurtState) {
+        std::printf("[arena-check] FAIL unlimited health damage feedback\n");
+        ++failures;
+    }
+    if (!Equip(tables, playerData, weapons[1], player, program) || !vitals.unlimitedHealth) { ++failures; }
+    scene.Reset();
+    if (!vitals.unlimitedHealth || vitals.dead || vitals.incomingDamage != 0) { ++failures; }
+    vitals.unlimitedHealth = false;
+    vitals.invincible = true;
     for (std::size_t i = 0; i < catalog.size(); ++i) {
         if (!window.PumpEvents()) { return 1; }
         scene.Reset();
