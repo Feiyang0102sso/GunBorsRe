@@ -9,7 +9,6 @@
 #endif
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
 #include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/ui/HudText.h"
 #include "gun_bros_re/gameplay/CombatScene.h"
 #include "gun_bros_re/data/WeaponCatalog.h"
 #include "engine/graphics/CMarkerBatch.h"

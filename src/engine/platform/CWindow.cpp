@@ -4,6 +4,7 @@
  */
 
 #include "engine/platform/CWindow.h"
+#include "engine/platform/IWindowOverlay.h"
 #define NOMINMAX
 #include <Windows.h>
 #include "engine/platform/CAudioPlayer.h"
@@ -82,6 +83,7 @@ KeyCode TranslateKey(SDL_Keycode key) {
         case SDLK_D:      return KeyCode::D;
         case SDLK_B:      return KeyCode::B;
         case SDLK_C:      return KeyCode::C;
+        case SDLK_I:      return KeyCode::I;
         case SDLK_E:      return KeyCode::E;
         case SDLK_F:      return KeyCode::F;
         case SDLK_Q:      return KeyCode::Q;
@@ -201,6 +203,7 @@ bool CWindow::Open(const std::string &title, int width, int height) {
 unsigned CWindow::GetSurfaceId() const { return SDL_GetWindowID(m_window); }
 
 void CWindow::Close() {
+    m_presentationOverlay.reset();
     if (m_context != nullptr) {
         SDL_GL_DestroyContext(m_context);
         m_context = nullptr;
@@ -225,7 +228,10 @@ bool CWindow::PumpEvents() {
             m_quitRequested = true;
         } else if (event.type == SDL_EVENT_KEY_DOWN) {
 #if GB_ENABLE_CHEATS
-            if (m_cheatsEnabled && commandMatcher != nullptr && event.key.key >= SDLK_A && event.key.key <= SDLK_Z) {
+            // Modified shortcuts must not become prefixes of typed cheat commands.
+            const bool modified = (event.key.mod & (SDL_KMOD_SHIFT | SDL_KMOD_CTRL | SDL_KMOD_ALT | SDL_KMOD_GUI)) != 0;
+            if (modified) { m_cheatPrefix.clear(); }
+            if (!modified && m_cheatsEnabled && commandMatcher != nullptr && event.key.key >= SDLK_A && event.key.key <= SDLK_Z) {
                 const auto now = SDL_GetTicks();
                 if (now - m_cheatKeyTime > 2500) { m_cheatPrefix.clear(); }
                 m_cheatKeyTime = now;
@@ -306,7 +312,20 @@ bool CWindow::IsKeyDown(KeyCode key) const {
 }
 
 void CWindow::Present() {
+    if (m_presentationOverlay) { m_presentationOverlay->Tick(GetTicksMs()); }
+    DrawPresentationOverlay();
     SDL_GL_SwapWindow(m_window);
+}
+
+void CWindow::SetPresentationOverlay(std::unique_ptr<IWindowOverlay> overlay) {
+    m_presentationOverlay = std::move(overlay);
+}
+
+void CWindow::DrawPresentationOverlay() const {
+    if (!m_presentationOverlay) { return; }
+    int width = 0, height = 0;
+    GetDrawableSize(width, height);
+    m_presentationOverlay->Draw(width, height);
 }
 
 bool CWindow::SetVSync(bool enabled) {

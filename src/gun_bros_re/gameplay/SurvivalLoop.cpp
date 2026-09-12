@@ -1,5 +1,8 @@
-#include "gun_bros_re/DebugKeys.h"
-#include "gun_bros_re/DebugMaps.h"
+#include "gun_bros_re/debug/SurvivalDebug.h"
+#include "gun_bros_re/debug/FrameRateOverlay.h"
+#include "gun_bros_re/debug/DebugKeys.h"
+#include "gun_bros_re/debug/CheatActions.h"
+#include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #if GB_ENABLE_TESTS
 #include "gameplay/SurvivalStudy.h"
@@ -48,7 +51,8 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
 #else
     const std::string screenshotPath;
     constexpr unsigned advanceMs = 0;
-    constexpr bool firePreview = false, showCollisions = false, check = false, powerupStudy = false;
+    bool showCollisions = false;
+    constexpr bool firePreview = false, check = false, powerupStudy = false;
     constexpr bool performanceStudy = false, feedbackStudy = false, bossStudy = false, deathStudy = false;
 #endif
 
@@ -86,6 +90,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     CWindow ownedWindow;
     CWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    if (!SetDebugFPS(window, GameHostSettings().drawFPS, bigDirectory)) { return 1; }
     window.SetEscapeCloses(false);
     // Both the retail frontend and standalone survival research use shortcuts.
 #if GB_ENABLE_CHEATS
@@ -551,6 +556,8 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
         state.transitioning = session.IsTransitioning();
         state.transitionTime = session.GetTransitionElapsed();
         state.perfectBonus = scene.GetLastWaveBonus();
+        state.damageHits = vitals.hits;
+        PopulateSurvivalDebugInfo(state, scene, effects, packShortName, mapIndex, showCollisions);
         state.dialog = session.GetDialogText();
         state.tutorialStep = session.GetLevel().GetTutorialStep();
         if (archiveMission != nullptr) { state.mission = archiveMission->title; }
@@ -558,16 +565,7 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
             state.item = powerups.GetSelected()->name;
             state.itemCount = powerups.GetCount();
         }
-        const char *buffNames[] = {"SHIELD", "ATTACK", "DEFENSE", "SPEED", "AUTO AIM", "TANTRUM"};
-        const int buffTimers[] = {player.powerups.shieldMs, player.powerups.frenzyMs[0],
-            player.powerups.frenzyMs[1], player.powerups.frenzyMs[2], player.powerups.autoFireMs, player.powerups.legacyFrenzyMs};
-        for (unsigned index = 0; index < 6; ++index) {
-            if (buffTimers[index] <= 0) { continue; }
-            if (!state.buffs.empty()) { state.buffs += "   "; }
-            state.buffs += buffNames[index];
-            state.buffs += " " + std::to_string((buffTimers[index] + 999) / 1000) + "S";
-        }
-        if (player.weapon->brother.IsTurretActive()) { state.buffs += "   TURRET ACTIVE"; }
+        PopulateDebugBuffs(state, player);
         return state;
     };
     int accumulator = 0;
@@ -576,8 +574,7 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     std::printf("[survival] WASD move, mouse aim/fire, Q/E powerups, 1 shop, 2 swap weapon, Esc/space pause\n");
-    auto debugTicks = window.GetTicksMs();
-    float debugFrameMs = 16.7f;
+    auto menuTicks = window.GetTicksMs();
 
 #if GB_ENABLE_TESTS
     // Deterministic 1,200 rendered frames, with real waves, AI and projectiles.
@@ -602,35 +599,19 @@ if (performanceStudy) {
     while (window.PumpEvents()) {
         const auto performanceStart = std::chrono::steady_clock::now();
         const auto frameTicks = window.GetTicksMs();
-        debugFrameMs = debugFrameMs * 0.9f + static_cast<float>(frameTicks - debugTicks) * 0.1f;
-        survivalHud.AdvanceMenu(static_cast<unsigned>(frameTicks - debugTicks));
-        debugTicks = frameTicks;
+        survivalHud.AdvanceMenu(static_cast<unsigned>(frameTicks - menuTicks));
+        menuTicks = frameTicks;
         
 #if GB_ENABLE_CHEATS
-for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
-            if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
-            if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
-            if (cheat == GameCheats::Invincible) { vitals.invincible = !vitals.invincible; }
-            if (cheat == GameCheats::HealthOrGreeting && !vitals.dead) { vitals.health = vitals.maximum; }
-            if (cheat == GameCheats::Suicide && !powerups.IsMovieActive() && scene.Suicide()) {
-                paused = false;
-                shopOpen = false;
-                itemChoice = false;
-                std::printf("[death] suicide started\n");
-            }
-            if (cheat == GameCheats::Boss) {
-                if (session.SkipToBoss()) { paused = false; shopOpen = false; itemChoice = false; }
+        for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
+            CombatCheatResult result;
+            if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result)) { return 1; }
+            if (result.resume) { paused = false; shopOpen = false; itemChoice = false; }
+            if (result.resetClock) {
                 effects.SetPaused(paused || shopOpen);
                 accumulator = 0;
                 previous = window.GetTicksMs();
             }
-            if (gameContext != nullptr) {
-                if (cheat == GameCheats::Money) { gameContext->profile.coins += 5000; gameContext->profile.warbucks += 500; }
-                if (cheat == GameCheats::NextDay) { ++gameContext->profile.dailyDayOffset; }
-                if (cheat == GameCheats::UnlockWaves) { gameContext->profile.clearedWaves.fill(500); }
-                if (!gameContext->SaveProfile()) { return 1; }
-            }
-            std::printf("[cheat] %s invincible=%d\n", cheat.c_str(), vitals.invincible);
         }
 #endif
 
@@ -731,13 +712,14 @@ if (checkControls && controlFrame < controlClickCount) {
         std::vector<KeyCode> inputs;
         if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+            if (HandleDebugKey(key, window, showCollisions)) { continue; }
 #if GB_ENABLE_TESTS
             if (launch.debugSelection != nullptr && GameDebugKeys::OpensMapBrowser(key, window)) {
                 music.SetPaused(true);
                 const bool selected = ShowDebugMapPicker(toc, tables, window, *launch.debugSelection);
                 music.SetPaused(paused);
                 previous = window.GetTicksMs();
-                debugTicks = previous;
+                menuTicks = previous;
                 accumulator = 0;
                 inputs.clear();
                 if (selected) {
@@ -789,9 +771,6 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
             if (key == KeyCode::Space || key == KeyCode::Escape) {
                 if (!paused || !survivalHud.BackFromHelp()) { paused = !paused; }
             }
-#if GB_ENABLE_TESTS
-            if (key == GameDebugKeys::ToggleCollision) { showCollisions = !showCollisions; }
-#endif
             if ((key == KeyCode::Q || key == KeyCode::E || key == KeyCode::G) &&
                 !paused && !vitals.dead && !session.IsTransitioning()) {
                 GameObjectRef item = rightPowerup;
@@ -1048,8 +1027,9 @@ if (check) {
 #endif
 
         if (showCollisions) {
-            BuildCollisionMarkers(loaded, markers);
-            markers.Draw(markerProgram, mvp, 0.15f, 0.85f, 1, 0.8f);
+            const CBrotherAI *collisionBrother = nullptr;
+            if (withBrother) { collisionBrother = &brother; }
+            DrawCollisionOverlay(markers, markerProgram, mvp, 1 / camera.zoom, &loaded, &scene, collisionBrother, &effects);
         }
         const auto performanceWorld = std::chrono::steady_clock::now();
         SurvivalHudState hudState = buildHudState();
@@ -1071,7 +1051,7 @@ if (check) {
             hudState.brotherLabelY = (brother.y - scene.GetPlayerRadius() * 3 - camera.y) * camera.zoom * 768 / height;
             hudState.brotherLabelAlpha = session.GetLevel().GetBrotherLabelAlpha();
         }
-        hudState.frameMs = debugFrameMs;
+
         hudState.playerX = scene.playerX;
         hudState.playerY = scene.playerY;
         hudState.damageDealt = scene.damageDealt;

@@ -93,7 +93,7 @@ std::wstring KeyLabel(const ViewerBinding &binding) {
         L"-", L"Esc", L"Enter", L"Left", L"Right", L"Up", L"Down", L"Home", L"F3",
         L"T", L"P", L"G", L"X", L"R", L"K", L"M", L"N", L"Space", L".",
         L"W", L"A", L"S", L"D", L"B", L"C", L"E", L"F", L"Q",
-        L"1", L"2", L"3", L"4", L"5", L"6", L"7", L"8", L"9"
+        L"1", L"2", L"3", L"4", L"5", L"6", L"7", L"8", L"9", L"I"
     };
     static_assert(sizeof(names) / sizeof(names[0]) == static_cast<int>(KeyCode::Count));
     std::wstring label = names[static_cast<int>(binding.key)];

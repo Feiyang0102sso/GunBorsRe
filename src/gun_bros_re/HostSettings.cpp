@@ -13,6 +13,7 @@ bool HostSettings::Load(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) {
         std::ofstream output(path);
         output << GameConfig::EffectsVolume << "=" << effectsVolume << "\n";
+        output << GameConfig::DrawFPS << "=1\n";
 #if GB_ENABLE_CHEATS
         output << GameConfig::DebugMode << "=0\n" << GameConfig::IsConnected << "=0\n";
 #endif
@@ -48,10 +49,11 @@ bool HostSettings::Load(const std::filesystem::path &path) {
         else if (name == GameConfig::DebugMode) { debugMode = value == 1; }
         else
 #endif
-        if (name == GameConfig::EffectsVolume) { effectsVolume = value; }
+        if (name == GameConfig::DrawFPS) { drawFPS = value == 1; }
+        else if (name == GameConfig::EffectsVolume) { effectsVolume = value; }
         else { std::printf("[config] unknown setting: %s\n", name.c_str()); }
     }
-    std::printf("[config] connected=%d debug=%d effects-volume=%d\n", isConnected, debugMode, effectsVolume);
+    std::printf("[config] connected=%d debug=%d draw-fps=%d effects-volume=%d\n", isConnected, debugMode, drawFPS, effectsVolume);
     return !input.bad();
 }
 

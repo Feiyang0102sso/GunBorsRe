@@ -15,6 +15,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <memory>
+class IWindowOverlay;
 
 struct SDL_Window;
 union SDL_Event;
@@ -64,6 +66,7 @@ enum class KeyCode {
     Digit7,
     Digit8,
     Digit9,
+    I,
     Count,
 };
 
@@ -123,6 +126,10 @@ public:
 
     /** Present the back buffer. */
     void Present();
+    /** Transfers a caller-provided presentation policy to this surface across scene changes. */
+    void SetPresentationOverlay(std::unique_ptr<IWindowOverlay> overlay);
+    bool HasPresentationOverlay() const { return m_presentationOverlay != nullptr; }
+    void DrawPresentationOverlay() const;
     /** Research benchmarks can separate draw cost from refresh-rate waiting. */
     bool SetVSync(bool enabled);
 
@@ -167,6 +174,7 @@ public:
 #endif
 
 private:
+    std::unique_ptr<IWindowOverlay> m_presentationOverlay;
     SDL_Window *m_window;
     unsigned m_surfaceGeneration = 0;
     SDL_GLContext m_context;

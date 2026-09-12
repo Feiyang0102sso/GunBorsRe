@@ -108,6 +108,10 @@ struct EnemyModel {
     std::vector<float> pose;
 };
 
+/** Shared hurtbox calculation. x/y enter as the actor's world anchor. */
+void EnemyCollisionCircle(const CEnemy &enemy, float gameScale, int part,
+    float &x, float &y, float &radius);
+
 /** Per-scene GL resources: poses/controllers stay on each individual enemy.
  * Drawing uploads a part's pose immediately before its draw, so the immutable
  * meshes, textures and upload buffers can be reused by the next enemy.

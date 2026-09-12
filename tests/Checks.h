@@ -50,3 +50,4 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory);
 int RunLevelFlowCheck(const std::string &bigDirectory);
 
 int RunMovieCheck(const std::string &bigDirectory);
+int RunFontBitmapCheck(const std::string &bigDirectory);

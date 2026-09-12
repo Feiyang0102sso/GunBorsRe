@@ -768,6 +768,9 @@ std::vector<WeaponProjectileState> WeaponEffects::GetProjectileStates() const {
     for (const auto &shot : m_impl->shots) {
         result.push_back({shot->source.resource, shot->owner, shot->beam, shot->x, shot->y,
             shot->direction, shot->length, shot->script.animation, shot->script.ageMs});
+        auto &state = result.back();
+        if (!shot->beam) { state.collisionRadius = shot->visual->data.GetRadius(); }
+        state.collisionEnabled = shot->script.HasActiveCollision() && !shot->script.removed;
     }
     return result;
 }

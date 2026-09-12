@@ -1,6 +1,7 @@
 #include "engine/core/Paths.h"
 #pragma once
-#include "gun_bros_re/DebugMaps.h"
+#include "gun_bros_re/debug/CheatActions.h"
+#include "gun_bros_re/debug/DebugMaps.h"
 /** @file GameFrontEnd.cpp
  * @brief Connect the rebuilt offline account to actual gameplay.
  */
@@ -14,7 +15,6 @@
 #include "gun_bros_re/data/ArmorCatalog.h"
 #include "gun_bros_re/data/PowerupCatalog.h"
 #include "gun_bros_re/gameplay/PlayerModel.h"
-#include "gun_bros_re/ui/HudText.h"
 #include "engine/glu/movie/MovieRenderer.h"
 #include "gun_bros_re/ui/LoadingScreen.h"
 #include "gun_bros_re/ui/OriginalMenuData.h"
@@ -960,7 +960,6 @@ bool DrawOriginalGreeting(GameMenu &view, MenuState &state, CResTOCManager &toc,
 
 /** User-authorized cht advances the native elapsed-day accumulator. The saved
  * launch timestamp stays on the real clock, so restarting cannot underflow it. */
-void AdvanceDailyDebugDay(CProfileManager &profile, const CDailyBonusTracking &daily, std::uint32_t now);
 
 /** Returns selected planet, -1 for quit, -2 after capture, -3 on failure. */
 int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profile,

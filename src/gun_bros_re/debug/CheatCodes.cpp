@@ -1,4 +1,4 @@
-#include "gun_bros_re/CheatCodes.h"
+#include "gun_bros_re/debug/CheatCodes.h"
 #if GB_ENABLE_CHEATS
 #include <cstring>
 bool GameCheats::Consume(std::string &prefix, std::vector<std::string> &commands, char letter, bool repeat) {

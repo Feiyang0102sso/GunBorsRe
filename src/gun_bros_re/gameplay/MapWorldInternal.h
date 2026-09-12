@@ -44,6 +44,7 @@
 #include "gun_bros_re/data/ArmorCatalog.h"
 #include "gun_bros_re/gameplay/SurvivalSession.h"
 #include "gun_bros_re/gameplay/CombatGeometry.h"
+#include "gun_bros_re/debug/CollisionOverlay.h"
 #include "gun_bros_re/data/StoreCatalog.h"
 #include <sstream>
 #include <chrono>
@@ -51,7 +52,6 @@
 #include "gun_bros_re/data/NativeProfile.h"
 #include "gun_bros_re/ui/LoadingScreen.h"
 #include "gun_bros_re/HostSettings.h"
-#include "gun_bros_re/ui/HudText.h"
 #include "gun_bros_re/ui/SurvivalHud.h"
 #include "gun_bros_re/data/MissionCatalog.h"
 #include "gun_bros_re/gameplay/WeaponEffects.h"
@@ -787,7 +787,6 @@ private:
 };
 
 /** Collect the exact collision scene used by player movement. */
-void BuildCollisionMarkers(const LoadedMap &loaded, CMarkerBatch &markers);
 
 /**
  * The camera scale a level snaps to. Reference: :120747, where CLevel does

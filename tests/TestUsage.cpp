@@ -15,6 +15,7 @@ void PrintTestUsage() {
 #endif
 #if GB_ENABLE_TESTS
         "  --movie-check             original Glu timelines and Powerup border pixels\n"
+        "  --fontbitmap              render all BIG fonts and export their original PNG atlases\n"
 #endif
         "  --movie <0..147>           inspect original UI; arrows browse, C regions\n"
 #if GB_ENABLE_TESTS

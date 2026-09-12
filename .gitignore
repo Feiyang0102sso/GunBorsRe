@@ -12,7 +12,12 @@ out/
 /_prep/
 /assets/audio/
 /assets/startup/
+# Font reference images contain original game artwork; regenerate from BIG locally.
+/docs/fontbitmap.png
+/docs/fontbitmap-atlases/
+/docs/GunBrosTests.cfg
 Debug/
+!src/gun_bros_re/debug/
 Release/
 x64/
 Win32/

@@ -1,4 +1,5 @@
-#include "gun_bros_re/DebugKeys.h"
+#include "gun_bros_re/debug/DebugKeys.h"
+#include "gun_bros_re/debug/CheatActions.h"
 #include "gun_bros_re/ui/MenuInternal.h"
 namespace MenuDetail {
 
@@ -44,7 +45,6 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     MenuWipe wipe;
     std::uint64_t wipeLastTick = 0;
     std::uint64_t frameTicks = view.window.GetTicksMs();
-    float smoothFrameMs = 16.7f;
     CDailyBonusTracking daily;
     if (!daily.Load(toc, tables)) { return -3; }
     if (profile.nativeArchive) {
@@ -54,7 +54,6 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     std::printf("[menu] ready page=%u\n", state.page);
     while (view.window.PumpEvents()) {
         const auto ticks = view.window.GetTicksMs();
-        smoothFrameMs = smoothFrameMs * 0.9f + static_cast<float>(ticks - frameTicks) * 0.1f;
         frameTicks = ticks;
 #if GB_ENABLE_TESTS
         if (testClicks != nullptr && testFrame < testClicks->size()) { testClock += (*testClicks)[testFrame].advanceMs; }
@@ -74,21 +73,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         const unsigned previousPage = state.page;
         const unsigned previousCategory = state.store.shopCategory;
         
-#if GB_ENABLE_CHEATS
-for (std::string cheat = view.window.TakeCheatCode(); !cheat.empty(); cheat = view.window.TakeCheatCode()) {
-            if (cheat == GameCheats::Money) { profile.coins += 5000; profile.warbucks += 500; state.message = "COINS +5000 / WARBUCKS +500"; }
-            if (cheat == GameCheats::NextDay) {
-                AdvanceDailyDebugDay(profile, daily, static_cast<std::uint32_t>(CurrentSeconds()));
-                state.Navigate(24);
-            }
-            if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
-            if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
-            if (cheat == GameCheats::HealthOrGreeting) { state.Navigate(24); }
-            if (cheat == GameCheats::UnlockWaves) { profile.clearedWaves.fill(500); state.message = "ALL WAVES UNLOCKED"; }
-            if (!profile.SaveToDisk(savePath)) { return -3; }
-            std::printf("[cheat] %s\n", cheat.c_str());
-        }
-#endif
+        if (!ProcessMenuCheats(view.window, profile, state, daily, savePath)) { return -3; }
 
         for (KeyCode key = view.window.TakeKeyPress(); key != KeyCode::None; key = view.window.TakeKeyPress()) {
 #if GB_ENABLE_TESTS
@@ -275,15 +260,6 @@ for (std::string cheat = view.window.TakeCheatCode(); !cheat.empty(); cheat = vi
                 }
             }
         }
-#if GB_ENABLE_TESTS
-        if (GameHostSettings().debugMode) {
-            char debug[160];
-            std::snprintf(debug, sizeof(debug), "FPS %.1f / %.1f MS / PAGE %u / NET %u", 1000.0f / std::max(0.1f, smoothFrameMs),
-                smoothFrameMs, state.page, GameHostSettings().isConnected);
-            view.movies.Rectangle(2, 135, 620, 22, 0, 0, 0, 0.8f);
-            view.movies.Text(debug, 7, 138, 0, 0.65f);
-        }
-#endif
 
         // The pressed plate's burst plays above whatever the click opened.
         if (wasPostGameMusic && !state.postGame.postGameMusic && !music.Play(0)) { return -3; }

@@ -23,6 +23,9 @@ struct WeaponProjectileState {
     float x = 0, y = 0, direction = 0, length = 0;
     int animation = 0;
     int ageMs = 0;
+    // Exact current collision parameters; beams use a ray, not their sprite radius.
+    float collisionRadius = 0;
+    bool collisionEnabled = false;
 };
 
 /** Game-layer adapter for CBullet and particle effects; not an original class.

@@ -74,6 +74,7 @@ function Add-Check {
 foreach ($suite in ($Phase | Select-Object -Unique)) {
     if ($suite -eq 'Core') {
         Add-Check 'debug-input' @('--debug-input-check')
+        Add-Check 'fontbitmap' @('--fontbitmap')
         Add-Check 'viewer-controls' @('--viewer-controls-check')
         Add-Check 'map-turret' @('--map-turret-check')
         Add-Check 'big-version' @('--big-version-check')

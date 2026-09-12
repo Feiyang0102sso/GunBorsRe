@@ -24,7 +24,13 @@ struct SurvivalHudState {
     unsigned stopwatchMs = 0;
     unsigned bossIntroSerial = 0;
     int xplodiumMultiplier = 100;
-    float frameMs = 0, playerX = 0, playerY = 0, damageDealt = 0;
+    float playerX = 0, playerY = 0, damageDealt = 0;
+    // Read-only diagnostics, populated by the active session rather than UI estimates.
+    std::string debugMap;
+    int levelState = 0;
+    std::size_t projectiles = 0, particles = 0;
+    unsigned damageHits = 0, perfectWaves = 0, clearedWaves = 0;
+    bool showCollisions = false, lastWavePerfect = false;
     bool horde = false;
     unsigned score = 0, killStreak = 0;
     bool paused = false, dead = false, cleared = false, transitioning = false, withBrother = false;

@@ -1,3 +1,4 @@
+#include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/ui/GameFrontEndInternal.h"
 #include "engine/core/Paths.h"
 #include "gun_bros_re/ui/MenuInternal.h"
@@ -31,6 +32,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
     {
         CWindow &loadingWindow = window;
         if (!loadingWindow.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+        if (!SetDebugFPS(loadingWindow, GameHostSettings().drawFPS, bigDirectory)) { return 1; }
         MovieRenderer loadingMovies;
         CResPackTOC *core = toc.GetPack(toc.GetCorePackIndex());
         if (!loadingMovies.Init(*core, *core)) { return 1; }

@@ -118,12 +118,5 @@ bool DrawOriginalGreeting(GameMenu &view, MenuState &state, CResTOCManager &toc,
     return true;
 }
 
-/** User-authorized cht advances the native elapsed-day accumulator. The saved
- * launch timestamp stays on the real clock, so restarting cannot underflow it. */
-void AdvanceDailyDebugDay(CProfileManager &profile, const CDailyBonusTracking &daily, std::uint32_t now) {
-    if (!profile.nativeArchive) { ++profile.dailyDayOffset; return; }
-    daily.RefreshUsageData(profile, now);
-    profile.dailyConsecutiveSeconds += 86400;
-    profile.dailyConsecutiveDays = profile.dailyConsecutiveSeconds / 86400 + 1;
-}
+
 } // namespace MenuDetail

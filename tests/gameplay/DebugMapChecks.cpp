@@ -4,7 +4,7 @@
 #include "gameplay/DebugMapChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "TestOutput.h"
-#include "gun_bros_re/DebugMaps.h"
+#include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 

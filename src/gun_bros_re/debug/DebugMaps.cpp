@@ -3,9 +3,9 @@
  * Resource chain: mission_entry.bt / Mission::Init :164402,
  * level_template.bt / CLevel::Template::Init :114770, map.bt / CMap::Init :92498.
  */
-#include "gun_bros_re/DebugMaps.h"
+#include "gun_bros_re/debug/DebugMaps.h"
 #if GB_ENABLE_TESTS
-#include "gun_bros_re/DebugKeys.h"
+#include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/MapScene.h"
@@ -17,8 +17,14 @@
 
 namespace {
 // Only host layout values live here. Map identities and relationships come from BIG.
-constexpr int kRowsPerPage = 15;
-constexpr float kRowTop = 132, kRowHeight = 31;
+namespace Layout = DebugConfig::Maps;
+namespace Labels = DebugConfig::Maps::Text;
+bool Contains(const Layout::Rect &rect, float x, float y) {
+    return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
+}
+void DrawText(MovieRenderer &renderer, const std::string &text, const DebugConfig::TextStyle &style) {
+    renderer.Text(text, style.x, style.y, style.font, style.scale, style.width, style.alpha);
+}
 struct MapRow {
     DebugMapSelection selection;
     std::string label;
@@ -60,7 +66,7 @@ bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows
             MapRow base;
             base.selection.pack = pack.GetShortName();
             base.selection.map = index;
-            base.label = pack.GetShortName() + " MAP " + std::to_string(index);
+            base.label = pack.GetShortName() + Labels::Map + std::to_string(index);
             std::vector<std::uint8_t> bytes;
             CMap map;
             bool valid = tables.ReadSectionResource(pack.GetPackHash(), GameSection::TileLayer, index, bytes);
@@ -74,20 +80,20 @@ bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows
                     }
                 }
             }
-            base.status = "No linked LEVEL; gameplay script unknown";
-            if (!valid) { base.status = "Map parsing failed; original data preserved"; }
-            else if (!hasPlayer) { base.status = "No authored player spawn"; }
+            base.status = Labels::NoLevel;
+            if (!valid) { base.status = Labels::InvalidMap; }
+            else if (!hasPlayer) { base.status = Labels::NoPlayer; }
             bool linked = false;
             for (const auto &level : levels) {
                 if (level.data.mapRef.packHash != pack.GetPackHash() || level.data.mapRef.localIndex != index) { continue; }
                 linked = true;
                 MapRow row = base;
                 row.selection.level = level.resource;
-                row.label += "  /  " + tables.GetPackName(level.resource.packHash) + " LEVEL " + std::to_string(level.resource.localIndex);
+                row.label += Labels::Separator + tables.GetPackName(level.resource.packHash) + Labels::Level + std::to_string(level.resource.localIndex);
                 row.playable = valid && hasPlayer;
                 if (row.playable) {
-                    row.status = "Script present; full completion unverified";
-                    if (!level.data.script.IsPresent()) { row.status = "LEVEL has no script; map exploration only"; }
+                    row.status = Labels::ScriptPresent;
+                    if (!level.data.script.IsPresent()) { row.status = Labels::NoScript; }
                 }
                 bool hasMission = false;
                 for (const auto &mission : missions) {
@@ -96,11 +102,11 @@ bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows
                     MapRow missionRow = row;
                     missionRow.selection.mission = mission;
                     missionRow.selection.hasMission = true;
-                    missionRow.label += "  /  " + mission.owner + " " + mission.title;
-                    if (mission.data.type == 0) { missionRow.label += " - CAMPAIGN"; }
+                    missionRow.label += Labels::Separator + mission.owner + " " + mission.title;
+                    if (mission.data.type == 0) { missionRow.label += Labels::Campaign; }
                     if (mission.data.type == 3) {
                         missionRow.playable = false;
-                        missionRow.status = "Multiplayer session is not implemented";
+                        missionRow.status = Labels::NoMultiplayer;
                     }
                     rows.push_back(std::move(missionRow));
                 }
@@ -145,31 +151,29 @@ bool ShowDebugMapPicker(CResTOCManager &toc, PackTables &tables, CWindow &window
             if (key == GameDebugKeys::MapBack || GameDebugKeys::OpensMapBrowser(key, window)) { return false; }
             if (key == GameDebugKeys::MapPrevious) { --selected; }
             if (key == GameDebugKeys::MapNext) { ++selected; }
-            if (key == GameDebugKeys::MapPreviousPage) { selected -= kRowsPerPage; }
-            if (key == GameDebugKeys::MapNextPage) { selected += kRowsPerPage; }
+            if (key == GameDebugKeys::MapPreviousPage) { selected -= Layout::RowsPerPage; }
+            if (key == GameDebugKeys::MapNextPage) { selected += Layout::RowsPerPage; }
             if (key == GameDebugKeys::MapLoad) { load = true; }
         }
         selected -= static_cast<int>(window.TakeWheelDelta());
         selected = std::clamp(selected, 0, static_cast<int>(rows.size()) - 1);
-        const int first = selected / kRowsPerPage * kRowsPerPage;
+        const int first = selected / Layout::RowsPerPage * Layout::RowsPerPage;
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
         if (width <= 0 || height <= 0) { continue; }
         float x = -1, y = -1;
         window.GetMousePosition(x, y);
-        x *= 1024.0f / width;
-        y *= 768.0f / height;
+        x *= DebugConfig::CanvasWidth / width;
+        y *= DebugConfig::CanvasHeight / height;
         const bool mouse = window.IsLeftMouseDown();
         const bool clicked = mouse && !previousMouse;
         previousMouse = mouse;
-        if (clicked && x >= 24 && x < 1000 && y >= kRowTop && y < kRowTop + kRowsPerPage * kRowHeight) {
-            const int row = first + static_cast<int>((y - kRowTop) / kRowHeight);
+        if (clicked && x >= Layout::List.x && x < Layout::List.x + Layout::List.width && y >= Layout::List.y && y < Layout::List.y + Layout::RowsPerPage * Layout::List.height) {
+            const int row = first + static_cast<int>((y - Layout::List.y) / Layout::List.height);
             if (row < static_cast<int>(rows.size())) { selected = row; }
         }
-        if (clicked && y >= 692 && y < 740) {
-            if (x >= 24 && x < 240) { load = true; }
-            if (x >= 780 && x < 1000) { return false; }
-        }
+        if (clicked && Contains(Layout::LoadButton, x, y)) { load = true; }
+        if (clicked && Contains(Layout::BackButton, x, y)) { return false; }
         if (load && rows[selected].playable) {
             selection = rows[selected].selection;
             selection.ready = true;
@@ -178,29 +182,38 @@ bool ShowDebugMapPicker(CResTOCManager &toc, PackTables &tables, CWindow &window
         glViewport(0, 0, width, height);
         glDisable(GL_SCISSOR_TEST);
         glDisable(GL_DEPTH_TEST);
-        glClearColor(0.035f, 0.055f, 0.08f, 1);
+        const auto &background = Layout::Background;
+        glClearColor(background.red, background.green, background.blue, background.alpha);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        renderer.Text("DEBUG MAP BROWSER", 24, 24, 0, 0.8f);
-        renderer.Text("All BIG maps / linked LEVEL and Mission entries", 24, 68, 1, 0.7f);
-        renderer.Text("UP/DOWN select   LEFT/RIGHT page   ENTER load   ESC back", 24, 100, 1, 0.6f);
-        for (int offset = 0; offset < kRowsPerPage && first + offset < static_cast<int>(rows.size()); ++offset) {
+        DrawText(renderer, Labels::Title, Layout::Title);
+        DrawText(renderer, Labels::Subtitle, Layout::Subtitle);
+        DrawText(renderer, Labels::Help, Layout::Help);
+        for (int offset = 0; offset < Layout::RowsPerPage && first + offset < static_cast<int>(rows.size()); ++offset) {
             const int index = first + offset;
             const auto &row = rows[index];
-            const float top = kRowTop + offset * kRowHeight;
-            if (index == selected) { renderer.Rectangle(24, top, 976, kRowHeight, 0.12f, 0.3f, 0.4f); }
-            float alpha = 0.45f;
-            if (row.playable) { alpha = 1; }
-            renderer.Text(row.label, 32, top + 5, 1, 0.65f, 955, alpha);
+            const float top = Layout::List.y + offset * Layout::List.height;
+            if (index == selected) {
+                const auto &color = Layout::Selection;
+                renderer.Rectangle(Layout::List.x, top, Layout::List.width, Layout::List.height,
+                    color.red, color.green, color.blue, color.alpha);
+            }
+            auto style = Layout::Row;
+            style.y += top;
+            if (!row.playable) { style.alpha = Layout::DisabledAlpha; }
+            DrawText(renderer, row.label, style);
         }
-        renderer.Text(std::to_string(selected + 1) + " / " + std::to_string(rows.size()) + "  " + rows[selected].status, 24, 614, 1, 0.65f, 976);
+        DrawText(renderer, std::to_string(selected + 1) + " / " + std::to_string(rows.size()) + "  " + rows[selected].status, Layout::Status);
         std::string notice = message;
-        if (notice.empty()) { notice = "Current save equipment / no progress saved. Campaign completion is unverified."; }
-        renderer.Text(notice, 24, 650, 1, 0.6f, 976);
-        renderer.Rectangle(24, 692, 216, 48, 0.12f, 0.3f, 0.4f);
-        std::string button = "UNAVAILABLE";
-        if (rows[selected].playable) { button = "LOAD MAP"; }
-        renderer.Text(button, 40, 704, 1, 0.75f);
-        renderer.Text("BACK", 840, 704, 1, 0.75f);
+        if (notice.empty()) { notice = Labels::Notice; }
+        DrawText(renderer, notice, Layout::Notice);
+        const auto &buttonRect = Layout::LoadButton;
+        const auto &buttonColor = Layout::Selection;
+        renderer.Rectangle(buttonRect.x, buttonRect.y, buttonRect.width, buttonRect.height,
+            buttonColor.red, buttonColor.green, buttonColor.blue, buttonColor.alpha);
+        std::string button = Labels::Unavailable;
+        if (rows[selected].playable) { button = Labels::Load; }
+        DrawText(renderer, button, Layout::Load);
+        DrawText(renderer, Labels::Back, Layout::Back);
         window.Present();
     }
     return false;
@@ -239,9 +252,9 @@ void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSele
         const int result = RunSurvival(launch);
         if (result == kDebugMapSessionChoice) { continue; }
         if (result != 0) {
-            std::string message = "Map load failed. See GunBrosRe log for the resource and error.";
+            std::string message = Labels::LoadFailed;
             if (result == kDebugMapSessionComplete) {
-                message = "Mission complete: " + current.pack + " / MAP " + std::to_string(current.map) + ". Select a map to continue.";
+                message = Labels::Complete + current.pack + " / MAP " + std::to_string(current.map) + Labels::SelectNext;
                 std::printf("[debug-maps] mission complete; returning to map browser\n");
             } else {
                 std::printf("[debug-maps] load failed result=%d; returning to map browser\n", result);

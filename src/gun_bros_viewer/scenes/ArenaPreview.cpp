@@ -3,18 +3,10 @@
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
 #include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/debug/CollisionOverlay.h"
 namespace ArenaDetail {
 constexpr float kRadians = 3.14159265f / 180;
 const char *const kShaders = Paths::Shaders().c_str();
-
-void Circle(CMarkerBatch &batch, float x, float y, float radius) {
-    for (int i = 0; i < 32; ++i) {
-        const float a = i * 360 / 32.0f * kRadians;
-        const float b = (i + 1) * 360 / 32.0f * kRadians;
-        batch.AddSegment(x + std::cos(a) * radius, y + std::sin(a) * radius,
-            x + std::cos(b) * radius, y + std::sin(b) * radius, 1.5f);
-    }
-}
 
 bool Equip(PackTables &tables, const PlayerTemplateData &data, const WeaponEntry &entry,
     PlayerModel &player, const CShaderProgram &program) {
@@ -221,31 +213,7 @@ if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, p
                 (barY - camera.y) * camera.scale - 26, 160, 18, labelProjection);
         }
         if (collisions) {
-            markers.Begin();
-            Circle(markers, scene.playerX, scene.playerY, scene.GetPlayerRadius());
-            for (const auto &actor : scene.enemies) {
-                const CEnemy &enemy = actor->model.enemy;
-                const EnemyCombat &state = enemy.combat;
-                if (!state.enabled || state.dead || state.removed) { continue; }
-                if (state.collision.GetEdges().empty()) {
-                    for (std::uint32_t part = 0; part < enemy.GetPartCount(); ++part) {
-                        float x = 0, y = 0, radius = 0;
-                        scene.EnemyCircle(*actor, part, x, y, radius);
-                        if (radius > 0 && enemy.GetPart(part).visible) { Circle(markers, x, y, radius); }
-                    }
-                }
-                const auto &vertices = state.collision.GetVertices();
-                for (const auto &edge : state.collision.GetEdges()) {
-                    if (!edge.enabled || edge.firstVertex >= vertices.size() || edge.secondVertex >= vertices.size()) { continue; }
-                    const auto &a = vertices[edge.firstVertex], &b = vertices[edge.secondVertex];
-                    const float c = std::cos(state.facing * kRadians), s = std::sin(state.facing * kRadians);
-                    markers.AddSegment(state.x + (a.x * c - a.y * s) * state.scaleFactor,
-                        state.y + (a.x * s + a.y * c) * state.scaleFactor,
-                        state.x + (b.x * c - b.y * s) * state.scaleFactor,
-                        state.y + (b.x * s + b.y * c) * state.scaleFactor, 2);
-                }
-            }
-            markers.Draw(markerProgram, projection, 0.3f, 0.8f, 1, 0.8f);
+            DrawCollisionOverlay(markers, markerProgram, projection, 1 / camera.scale, nullptr, &scene, nullptr, &effects);
         }
         // Diagnostic information is screen-space host UI, independent of zoom.
         glViewport(0, 0, width, height);

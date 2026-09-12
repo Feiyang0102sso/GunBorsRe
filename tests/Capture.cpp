@@ -10,6 +10,7 @@
  * the image.
  */
 bool Capture::SaveFrame(const CWindow &window, const std::string &path) {
+    window.DrawPresentationOverlay();
     int width = 0;
     int height = 0;
     window.GetDrawableSize(width, height);

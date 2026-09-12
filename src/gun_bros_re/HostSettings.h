@@ -6,6 +6,9 @@
 #include <cstdint>
 
 struct HostSettings {
+    bool drawFPS = true;
+    // Session-only information toggle; DebugMode remains the master switch.
+    bool drawDebugInfo = true;
 #if GB_ENABLE_CHEATS
     bool isConnected = false;
     bool debugMode = false;

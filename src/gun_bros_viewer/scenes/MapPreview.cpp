@@ -522,8 +522,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         }
 
         if (showCollisions) {
-            BuildCollisionMarkers(loaded, markers);
-            markers.Draw(markerProgram, mvp, 0.15f, 0.85f, 1.0f, 0.9f);
+            DrawCollisionOverlay(markers, markerProgram, mvp, 1 / camera.zoom, &loaded, nullptr, nullptr, weaponEffects.get());
         }
 
         if (clipping) {

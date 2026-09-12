@@ -12,6 +12,23 @@
 #include "engine/graphics/CMeshCamera.h"
 
 #include <cstdio>
+#include <cmath>
+
+void EnemyCollisionCircle(const CEnemy &enemy, float gameScale, int part,
+    float &x, float &y, float &radius) {
+    const EnemyCombat &state = enemy.combat;
+    radius = enemy.GetPart(part).radius * state.scaleFactor;
+    const CMesh *mesh = enemy.GetPart(0).controller.GetAnimation().GetMesh();
+    if (mesh == nullptr) { return; }
+    // CMesh::GetRotationOffset shifts the circular hurtbox with the root mesh.
+    const MeshBounds &bounds = mesh->GetBounds();
+    constexpr float radians = 3.14159265f / 180;
+    const float cosine = std::cos(state.facing * radians);
+    const float sine = std::sin(state.facing * radians);
+    const float scale = bounds.inverseExtent * gameScale * state.scaleFactor;
+    x += (bounds.centerX * cosine + bounds.centerY * sine) * scale;
+    y += ((bounds.centerY * cosine - bounds.centerX * sine) * 0.8660254f - bounds.centerZ * 0.5f) * scale;
+}
 
 namespace {
 

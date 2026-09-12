@@ -1,3 +1,4 @@
+#include "gun_bros_re/debug/SurvivalDebug.h"
 /** @file SurvivalHud.cpp
  * @brief CInputPad::Base::Bind (:88320) binds meters to regions 0/1 and guns to 2/3.
  */
@@ -216,31 +217,8 @@ bool SurvivalHud::Draw(const SurvivalHudState &state) {
         if (icon != 255) { m_movies.DrawSprite(1, icon, elapsed, x, y, 1, indicator.Alpha()); }
     }
     if (!DrawOriginalControls(state)) { return false; }
-    const unsigned visibleWave = std::min(state.wave, 499u);
-    std::string waveTitle = "WAVE " + std::to_string(visibleWave % 50 + 1);
-    std::string waveSubtitle = "REVOLUTION " + std::to_string(visibleWave / 50 + 1) + " / 10";
-    if (state.horde) {
-        waveTitle = "HORDE " + std::to_string(state.wave + 1);
-        char stopwatch[32];
-        std::snprintf(stopwatch, sizeof(stopwatch), "%02u:%02u.%u", state.stopwatchMs / 60000,
-            state.stopwatchMs / 1000 % 60, state.stopwatchMs / 100 % 10);
-        waveSubtitle = std::string("BOKOR  ") + stopwatch;
-    }
-    std::string reward = "XPLODIUM " + std::to_string(state.xplodium);
-    if (state.horde) { reward = "POINTS " + std::to_string(state.score); }
-    if (GameHostSettings().debugMode) {
-        m_movies.Rectangle(80, 0, 784, 71, 0, 0, 0, 0.65f);
-        Centre(waveTitle + "  " + waveSubtitle, 8, 0, 0.68f);
-        Centre("ENEMIES " + std::to_string(state.enemies) + "  KILLS " + std::to_string(state.kills) + "  " + reward, 35, 0, 0.68f);
-        m_movies.Text(state.buffs, 16, 126, 0, 0.62f, 950);
-        char debug[240];
-        std::snprintf(debug, sizeof(debug), "FPS %.1f / %.2f MS / XY %.1f %.1f / DAMAGE %.1f / BONUS %llu / XP %llu",
-            1000.0f / std::max(0.1f, state.frameMs), state.frameMs, state.playerX, state.playerY, state.damageDealt,
-            state.perfectBonus, state.experience);
-        m_movies.Rectangle(8, 93, 1008, 25, 0, 0, 0, 0.75f);
-        m_movies.Text(debug, 12, 98, 0, 0.62f);
-    }
     DrawNotice();
+    DrawSurvivalDebugInfo(m_movies, state);
     if (state.shopOpen) { return DrawOriginalSelector(state); }
     if (state.paused && !state.dead && !state.cleared) { return DrawOriginalPause(state); }
     // End-of-run navigation is owned by the original postgame menu in the shell.

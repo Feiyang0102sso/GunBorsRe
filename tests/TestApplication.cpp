@@ -6,7 +6,7 @@
 #include "research/ResearchDefaults.h"
 #include "gun_bros_viewer/scenes/MapPreview.h"
 #include "tests/research/SurvivalStudyHost.h"
-#include "gun_bros_re/DebugKeys.h"
+#include "gun_bros_re/debug/DebugKeys.h"
 #include "engine/core/Paths.h"
 /**
  * @file main.cpp
@@ -147,6 +147,7 @@ int RunTestApplication(int argc, char **argv) {
     bool introStudy = false;
     bool checkMedia = false;
     bool checkMovies = false;
+    bool checkFontBitmap = false;
     bool checkHud = false;
     bool movieStudy = false;
     bool movieGallery = false;
@@ -276,6 +277,7 @@ else if (std::strcmp(argument, "--hud-check") == 0) { checkHud = true; }
 else if (std::strcmp(argument, "--movie-check") == 0) {
             checkMovies = true;
         }
+else if (std::strcmp(argument, "--fontbitmap") == 0) { checkFontBitmap = true; }
 #endif
  else if (std::strcmp(argument, "--intro") == 0) {
             introStudy = true;
@@ -824,6 +826,7 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
 #endif
 #if GB_ENABLE_TESTS
     if (checkMovies) { return RunMovieCheck(bigDirectory); }
+    if (checkFontBitmap) { return RunFontBitmapCheck(bigDirectory); }
 #endif
     if (movieStudy) { return RunMovieStudy(bigDirectory, movieOrdinal, screenshotPath, advanceMs, movieGallery, movieRegions); }
     if (introStudy) { return RunStartupSequence(screenshotPath, advanceMs); }

@@ -34,6 +34,29 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
             rewardProbe.GetPerfectWaves() != 2 || rewardProbe.GetClearedWaves() != 3) { ++checkFailures; }
         rewardProbe.OnWaveCleared(10);
         if (rewardProbe.GetLastWaveBonus() != 1 || rewardProbe.GetXplodium() != 3) { ++checkFailures; }
+        // Render an actual credited reward, not a percentage estimate or a made-up HUD bonus.
+        SurvivalHudState rewardState;
+        rewardState.health = rewardState.maximumHealth = vitals.maximum;
+        rewardState.debugMap = "REWARD REGRESSION";
+        rewardState.xplodium = rewardProbe.GetXplodium();
+        rewardState.perfectBonus = rewardProbe.GetLastWaveBonus();
+        rewardState.perfectWaves = rewardProbe.GetPerfectWaves();
+        rewardState.clearedWaves = rewardProbe.GetClearedWaves();
+        rewardState.lastWavePerfect = rewardProbe.GetWavePerfectResults().back();
+        const HostSettings previousSettings = GameHostSettings();
+        GameHostSettings().debugMode = true;
+        GameHostSettings().drawDebugInfo = true;
+        survivalHud.ResetNotices();
+        survivalHud.OnOriginalWaveClear(4, true, 10, false);
+        // Reach the second authored movie, then capture its readable middle.
+        for (unsigned tick = 0; tick < 2000 && survivalHud.NoticeCount() == 2; ++tick) { survivalHud.Advance(16); }
+        survivalHud.Advance(500);
+        if (survivalHud.NoticeCount() != 1) { ++checkFailures; }
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!survivalHud.Draw(rewardState) ||
+            !GB_SAVE_FRAME(window, TestOutput::Path("perfect-wave-credited-bonus.png"))) { ++checkFailures; }
+        survivalHud.ResetNotices();
+        GameHostSettings() = previousSettings;
         std::printf("[survival-check] minimum/previous-bonus/damage/next-wave failures=%u\n", checkFailures);
         CPlayerProgress pickupProgress;
         pickupProgress.Bind(progressData);
@@ -157,9 +180,10 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
             }
             glClearColor(0, 0, 0, 1);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            if (!survivalHud.DrawExperienceTexts(rewardProbe.GetExperienceTexts(), false) ||
-                !GB_SAVE_FRAME(window, TestOutput::Path("xp-text-") + std::to_string(stage * 1000) + ".png")) { ++checkFailures; }
+            if (!survivalHud.DrawExperienceTexts(rewardProbe.GetExperienceTexts(), false)) { ++checkFailures; }
+            // Inspect the isolated text before Capture adds the global presentation overlay.
             glReadPixels(0, 0, frameWidth, frameHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            if (!GB_SAVE_FRAME(window, TestOutput::Path("xp-text-") + std::to_string(stage * 1000) + ".png")) { ++checkFailures; }
             std::uint64_t light = 0;
             for (std::size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
                 light += pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2];

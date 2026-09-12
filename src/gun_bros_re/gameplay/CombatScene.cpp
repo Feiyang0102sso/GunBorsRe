@@ -666,16 +666,7 @@ void CombatScene::EnemyCircle(const CombatEnemy &actor, int part, float &x, floa
     const EnemyCombat &state = enemy.combat;
     x = state.x;
     y = state.y;
-    radius = enemy.GetPart(part).radius * state.scaleFactor;
-    const CMesh *mesh = enemy.GetPart(0).controller.GetAnimation().GetMesh();
-    if (mesh == nullptr) { return; }
-    // CMesh::GetRotationOffset shifts the circular hurtbox with the root mesh.
-    const MeshBounds &bounds = mesh->GetBounds();
-    const float cosine = std::cos(state.facing * kRadians);
-    const float sine = std::sin(state.facing * kRadians);
-    const float scale = bounds.inverseExtent * actor.data->gameScale * state.scaleFactor;
-    x += (bounds.centerX * cosine + bounds.centerY * sine) * scale;
-    y += ((bounds.centerY * cosine - bounds.centerX * sine) * 0.8660254f - bounds.centerZ * 0.5f) * scale;
+    EnemyCollisionCircle(enemy, actor.data->gameScale, part, x, y, radius);
 }
 
 CombatTrace CombatScene::Trace(const CombatHit &hit, float x, float y, float dx, float dy,

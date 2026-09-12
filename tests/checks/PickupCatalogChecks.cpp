@@ -6,7 +6,7 @@
 #include "gun_bros_re/data/PickupCatalog.h"
 #include "gun_bros_re/data/StoreCatalog.h"
 #include "gun_bros_re/gameplay/PickupScene.h"
-#include "gun_bros_re/ui/HudText.h"
+#include "engine/graphics/CBitmapFont.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 #include "gun_bros_re/gameplay/WeaponEffects.h"
 #include "engine/platform/CWindow.h"
@@ -73,24 +73,24 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
     PackTables tables(toc);
-    CShaderProgram program, textProgram;
+    CShaderProgram program;
     const char *directory = Paths::Shaders().c_str();
-    if (!program.Load(directory, "ogles_vs_mvp_tex0", "ogles_ps_tex0") ||
-        !textProgram.Load(directory, "ogles_vs_mvp_constcolor", "ogles_ps_constcolor")) { return 1; }
+    if (!program.Load(directory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
     PickupScene pickups(toc, tables, program);
     WeaponEffects effects(toc, tables, program);
-    CMarkerBatch labels;
-    if (!pickups.Init() || !labels.Create(textProgram)) { return 1; }
+    CQuadBatch labels;
+    CBitmapFont font;
+    if (!pickups.Init() || !labels.Create(program) || !font.Init(*toc.GetPack(toc.GetCorePackIndex()), 0)) { return 1; }
     std::vector<PickupEntry> catalog;
     if (!LoadPickupCatalog(toc, tables, catalog)) { return 1; }
     labels.Begin();
-    DrawHudText(labels, 26, 18, "ORIGINAL PICKUPS - ALL NINE TEMPLATES", 2);
+    font.Draw(labels, "ORIGINAL PICKUPS - ALL NINE TEMPLATES", 26, 18, 0.7f);
     for (unsigned index = 0; index < catalog.size(); ++index) {
         const float x = 133 + (index % 3) * 267.0f;
         const float y = 130 + (index / 3) * 165.0f;
         if (!pickups.Spawn(catalog[index].ref, x, y)) { return 1; }
-        DrawHudText(labels, x - 100, y + 42, catalog[index].owner, 1.8f);
-        if (!catalog[index].name.empty()) { DrawHudText(labels, x - 100, y + 62, catalog[index].name, 1.6f); }
+        font.Draw(labels, catalog[index].owner, x - 100, y + 42, 0.6f);
+        if (!catalog[index].name.empty()) { font.Draw(labels, catalog[index].name, x - 100, y + 62, 0.55f); }
     }
     // All five authored infinite emitters must still be alive after two seconds.
     for (int elapsed = 0; elapsed < 2000; elapsed += 16) {
@@ -108,7 +108,8 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
     Matrix4dOrthoTopLeft(800, 600, 100, projection);
     pickups.Draw(projection, 1.5f);
     effects.Draw(projection);
-    labels.Draw(textProgram, projection, 0.85f, 0.93f, 1, 1);
+    labels.Upload();
+    labels.Draw(program, projection);
     std::filesystem::create_directories(TestOutput::Path(""));
     if (glGetError() != 0 || !GB_SAVE_FRAME(window, TestOutput::Path("pickup-render-check.png"))) { return 1; }
     window.Present();

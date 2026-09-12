@@ -413,6 +413,33 @@ int RunOriginalHudCheck(const std::string &bigDirectory) {
     if (hud.NoticeCount() != 1 || !hud.m_notices.front().title.empty()) { ++failures; }
     if (hud.m_movies.Failures() != 0) { ++failures; }
     std::printf("[original-overlay-check] timelines=%u failures=%u\n", noticeChecks, failures);
+    // Sidebar visibility is independent of the FPS overlay and never takes input.
+    hud.ResetNotices();
+    const HostSettings originalSettings = GameHostSettings();
+    GameHostSettings().debugMode = true;
+    state.debugMap = "PACK2 / MAP 7";
+    state.weapon = "WHIPPERSNAPPERS";
+    state.showCollisions = true;
+    state.buffs = "SHIELD 20S ATTACK 10S DEFENSE 10S SPEED 10S AUTO AIM 10S TANTRUM 10S";
+    std::vector<unsigned char> sidebarPixels(idlePixels.size());
+    std::vector<unsigned char> hiddenPixels(idlePixels.size());
+    for (unsigned visible = 0; visible < 2; ++visible) {
+        GameHostSettings().drawDebugInfo = visible != 0;
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (!hud.Draw(state)) { ++failures; }
+        if (visible != 0) {
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, sidebarPixels.data());
+        } else { glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, hiddenPixels.data()); }
+        if (!GB_SAVE_FRAME(window, TestOutput::Path("debug-sidebar-") + std::to_string(visible) + ".png")) { ++failures; }
+    }
+    if (sidebarPixels == hiddenPixels) { ++failures; }
+    GameHostSettings().debugMode = false;
+    GameHostSettings().drawDebugInfo = true;
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (!hud.Draw(state)) { ++failures; }
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, sidebarPixels.data());
+    if (sidebarPixels != hiddenPixels) { ++failures; }
+    GameHostSettings() = originalSettings;
     const unsigned errors = glGetError();
     if (errors != 0) { ++failures; }
     std::printf("[original-hud-check] hits=%u alternate-icons=%u region-mutation=%d meter-interpolation=3 gl=%u failures=%u\n", hits, icons, mutated, errors, failures);

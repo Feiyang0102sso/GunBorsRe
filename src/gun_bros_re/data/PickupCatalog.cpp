@@ -4,7 +4,6 @@
 #include "gun_bros_re/data/PickupCatalog.h"
 #include "gun_bros_re/data/StoreCatalog.h"
 #include "gun_bros_re/gameplay/PickupScene.h"
-#include "gun_bros_re/ui/HudText.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 #include "gun_bros_re/gameplay/WeaponEffects.h"
 #include "engine/platform/CWindow.h"

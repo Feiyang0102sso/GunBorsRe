@@ -48,25 +48,6 @@ void BuildMarkers(const LoadedMap &loaded, CMarkerBatch &markers,
     }
 }
 
-/** Collect the exact collision scene used by player movement. */
-void BuildCollisionMarkers(const LoadedMap &loaded, CMarkerBatch &markers) {
-    markers.Begin();
-
-    const std::vector<CollisionPoint> &vertices =
-        loaded.collisionScene.GetVertices();
-    const std::vector<CollisionEdge> &edges = loaded.collisionScene.GetEdges();
-    for (std::size_t edgeIndex = 0; edgeIndex < edges.size(); ++edgeIndex) {
-        const CollisionEdge &edge = edges[edgeIndex];
-        if (!edge.enabled) {
-            continue;
-        }
-        const CollisionPoint &first = vertices[edge.firstVertex];
-        const CollisionPoint &second = vertices[edge.secondVertex];
-        markers.AddSegment(first.x, first.y, second.x, second.y,
-                           kMarkerThickness);
-    }
-}
-
 /** Convert world anchors and native pixel sizes to the HUD's logical canvas. */
 void ProjectEnemyHealthBars(std::vector<CombatScene::HealthBar> &bars,
     float cameraX, float cameraY, float zoom, int width, int height) {

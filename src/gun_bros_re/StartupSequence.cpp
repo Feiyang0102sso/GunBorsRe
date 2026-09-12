@@ -1,9 +1,11 @@
+#include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "engine/core/Paths.h"
 /** @file StartupSequence.cpp
  * @brief Read original intro video/audio directly; never substitute a still logo.
  */
 #define NOMINMAX
 #include "gun_bros_re/StartupSequence.h"
+#include "gun_bros_re/HostSettings.h"
 #include "engine/platform/CMediaDecoder.h"
 #include "engine/platform/CWindow.h"
 #include "engine/graphics/CQuadBatch.h"
@@ -28,6 +30,7 @@ int RunStartupSequence(const std::string &screenshotPath, unsigned advanceMs, CW
     CWindow ownedWindow;
     CWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    if (!SetDebugFPS(window, GameHostSettings().drawFPS)) { return 1; }
     CMediaVideo video;
     MediaAudio decoded;
     CAudioPlayer audio;

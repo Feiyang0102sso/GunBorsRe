@@ -33,6 +33,9 @@ typedef std::ptrdiff_t GLintptr;
 // ---------------------------------------------------------------------------
 
 #define GL_ARRAY_BUFFER            0x8892
+#define GL_ARRAY_BUFFER_BINDING    0x8894
+#define GL_VERTEX_ARRAY_BINDING    0x85B5
+#define GL_CURRENT_PROGRAM         0x8B8D
 #define GL_ELEMENT_ARRAY_BUFFER    0x8893
 #define GL_STATIC_DRAW             0x88E4
 #define GL_DYNAMIC_DRAW            0x88E8
@@ -44,6 +47,7 @@ typedef std::ptrdiff_t GLintptr;
 #define GL_INFO_LOG_LENGTH         0x8B84
 
 #define GL_TEXTURE0                0x84C0
+#define GL_ACTIVE_TEXTURE          0x84E0
 #define GL_CLAMP_TO_EDGE           0x812F
 
 #define GL_MAJOR_VERSION           0x821B

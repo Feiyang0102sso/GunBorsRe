@@ -6,7 +6,7 @@
 #include "gun_bros_viewer/scenes/EnemyPreview.h"
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
 #include "gun_bros_viewer/scenes/ResourceInfo.h"
-#include "gun_bros_re/DebugKeys.h"
+#include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "engine/core/Paths.h"
 #include "engine/platform/CAudioPlayer.h"

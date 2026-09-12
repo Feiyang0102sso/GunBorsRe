@@ -3,7 +3,7 @@
  */
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/DebugMaps.h"
+#include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 
