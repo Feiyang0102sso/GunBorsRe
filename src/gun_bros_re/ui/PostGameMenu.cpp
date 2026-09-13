@@ -126,7 +126,7 @@ bool DrawUpgradeButton(GameMenu &view, unsigned index, const MovieRegion &area,
 }
 
 bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, const MovieRegion &area,
-    const std::string &label, unsigned font, bool interactive, bool &pressed, unsigned chapter, unsigned elapsed, unsigned timeOverride) {
+    const std::string &label, unsigned font, bool interactive, bool &pressed, unsigned chapter, unsigned elapsed, unsigned timeOverride, bool stateArtwork) {
     pressed = false;
     const unsigned ordinal = view.movies.Ordinal(entry.movies[0]);
     const CMovie *movie = view.movies.GetMovie(ordinal);
@@ -135,6 +135,10 @@ bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, con
     unsigned time = end;
     if (chapter == 2 || chapter == 3) { time = start + elapsed % (end - start + 1); }
     if (timeOverride != UINT32_MAX) { time = timeOverride; }
+    // CMenuMovieButton::ButtonCallback :144426 selects sprite1 while idle,
+    // sprite0 while focused/selected. The Movie chapter only owns the glow.
+    unsigned sprite = entry.sprites[0];
+    if (stateArtwork && chapter != 1 && chapter != 3) { sprite = entry.sprites[1]; }
     std::string text = label;
     // CMenuMovieButton::Init :144942: optional resource-authored ^fN font prefix.
     if (text.size() >= 4 && text.compare(0, 2, "^f") == 0 && text[2] >= '0' && text[2] <= '9') {
@@ -145,12 +149,11 @@ bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, con
     class ButtonCallback : public IMovieRegionCallback {
     public:
         ButtonCallback(GameMenu &menu, const OriginalMenuEntry &data, const std::string &caption, unsigned face,
-            bool enabled, bool &hit, bool &graphic, bool &touch) : view(menu), entry(data), text(caption), font(face),
+            unsigned artwork, bool enabled, bool &hit, bool &graphic, bool &touch) : view(menu), entry(data), text(caption), font(face), sprite(artwork),
             interactive(enabled), pressed(hit), foundGraphic(graphic), foundTouch(touch) {}
         bool DrawMovieRegion(const MovieRegion &region) override {
             if (region.index == 1) {
                 foundGraphic = true;
-                const unsigned sprite = entry.sprites[0];
                 if (sprite != UINT32_MAX && !view.movies.DrawSprite(sprite >> 16, sprite & 255, 0,
                     region.x, region.y, 1, region.alpha)) { return false; }
                 if (!text.empty()) {
@@ -168,9 +171,10 @@ bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, con
         const OriginalMenuEntry &entry;
         const std::string &text;
         unsigned font;
+        unsigned sprite;
         bool interactive;
         bool &pressed, &foundGraphic, &foundTouch;
-    } callback(view, entry, text, font, interactive, pressed, foundGraphic, foundTouch);
+    } callback(view, entry, text, font, sprite, interactive, pressed, foundGraphic, foundTouch);
     // Place the content in its original type-6 layer so later glow layers cover it.
     if (!view.movies.Draw(ordinal, time, area.x, area.y, kMenuWidth, kMenuHeight, 0, area.alpha, &callback)) { return false; }
     // BACK_BUTTON has only an invisible logical region0. Input is updated
@@ -497,7 +501,7 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
                         }
                     }
                     if (!DrawOriginalMovieButton(view, *entry, origin, view.movies.NamedString(entry->strings[0]), 5,
-                        interactive, pressed, chapter, state.postGame.postGameItemTime, time)) { return false; }
+                        interactive, pressed, chapter, state.postGame.postGameItemTime, time, true)) { return false; }
                     if (pressed) { state.page = 27 + index; }
                     x += bounds.width + 2;
                 }

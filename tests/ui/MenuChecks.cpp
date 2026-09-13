@@ -5,6 +5,47 @@
 #include "ui/MenuChecks.h"
 using namespace MenuDetail;
 
+/** Compare the real button callback with the native unselected artwork. */
+static bool CheckUnselectedTabArtwork(GameMenu &view, const char *table) {
+    for (unsigned index = 0; index < 2; ++index) {
+        const auto *entry = OriginalMenuData(table, index);
+        if (entry == nullptr) { return false; }
+        MovieRegion origin;
+        origin.x = 320;
+        origin.y = 300;
+        origin.alpha = 1;
+        bool pressed = false;
+        GLint viewport[4]{};
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        std::vector<std::uint8_t> actual(viewport[2] * viewport[3] * 4);
+        std::vector<std::uint8_t> expected(actual.size());
+        view.Begin(3);
+        if (!DrawOriginalMovieButton(view, *entry, origin, {}, 5, false, pressed, 2, 1000, UINT32_MAX, true)) { return false; }
+        glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, actual.data());
+        OriginalMenuEntry reference = *entry;
+        reference.sprites[0] = entry->sprites[1];
+        view.Begin(3);
+        if (!DrawOriginalMovieButton(view, reference, origin, {}, 5, false, pressed, 2, 1000)) { return false; }
+        glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, expected.data());
+        if (actual != expected) {
+            std::printf("[tab-artwork-check] table=%s index=%u expected unselected sprite=%u failures=1\n", table, index, entry->sprites[1]);
+            return false;
+        }
+        view.Begin(3);
+        if (!DrawOriginalMovieButton(view, *entry, origin, {}, 5, false, pressed, 3, 1000, UINT32_MAX, true)) { return false; }
+        glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, actual.data());
+        if (actual == expected) {
+            std::printf("[tab-artwork-check] table=%s index=%u missing selected color/glow\n", table, index);
+            return false;
+        }
+        view.Begin(3);
+        if (!DrawOriginalMovieButton(view, *entry, origin, {}, 5, false, pressed, 3, 1000)) { return false; }
+        glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, expected.data());
+        if (actual != expected) { return false; }
+    }
+    return true;
+}
+
 /** Native save fixtures and real greeting callbacks; no original saves change. */
 int RunPostGameMenuCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
@@ -46,6 +87,7 @@ int RunPostGameMenuCheck(const std::string &bigDirectory) {
             GameMenu view;
             if (!view.Open(toc, tables)) { return 1; }
             view.scripted = true;
+            if (!CheckUnselectedTabArtwork(view, "MDS_BUTTON_POSTGAME_INFO")) { return 1; }
             const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN");
             const auto *movie = view.movies.GetMovie(ordinal);
             unsigned start = 0, end = 0;
@@ -354,6 +396,7 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = true;
+    if (!CheckUnselectedTabArtwork(view, "MDS_BUTTON_REFINE_SLOT_CATEGORY")) { return 1; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
@@ -436,6 +479,7 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     view.clock += 187;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.xplodium != 250 ||
+        view.RefineryParticleCount(6) == 0 || !DrawRefineryOverlay(view, state) ||
         !profile.SaveToDisk(path) || !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-transfer.png"))) { return 1; }
     CProfileManager restored;
     if (!LoadNativeProfile(toc, tables, restored, path) || restored.xplodium != 250 || restored.coins != coins) { return 1; }
@@ -456,7 +500,13 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     view.Begin(3);
     view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
     if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != 6 || profile.coins != coins) { return 1; }
-    view.clock += 375;
+    view.clock += 187;
+    view.Begin(3);
+    if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.coins != coins ||
+        view.RefineryParticleCount(6) == 0 || view.Header(profile, progress, 3) == -3 ||
+        !DrawRefineryOverlay(view, state) ||
+        !GB_SAVE_FRAME(view.window, TestOutput::Path("refinery-coin-flight.png"))) { return 1; }
+    view.clock += 188;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.coins != coins + yield ||
         state.refinementRequired || profile.refinery.slots[6].state != 1 || profile.warbucks != warbucks ||
@@ -465,6 +515,34 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
         std::printf("[refinery-check] collection must wait for navigation: expected page=3 actual=%u\n", state.page);
         return 1;
     }
+    // Read the real header before/after the overlay: live arrival particles
+    // must still be visible above its artwork after the coin sprite is gone.
+    if (view.RefineryParticleCount(6) == 0 || view.Header(profile, progress, 3) == -3) { return 1; }
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    const int headerHeight = viewport[3] / 4;
+    std::vector<std::uint8_t> headerOnly(viewport[2] * headerHeight * 4);
+    std::vector<std::uint8_t> arrival(headerOnly.size());
+    glReadPixels(0, viewport[3] - headerHeight, viewport[2], headerHeight, GL_RGBA, GL_UNSIGNED_BYTE, headerOnly.data());
+    if (!DrawRefineryOverlay(view, state)) { return 1; }
+    glReadPixels(0, viewport[3] - headerHeight, viewport[2], headerHeight, GL_RGBA, GL_UNSIGNED_BYTE, arrival.data());
+    if (headerOnly == arrival) {
+        std::printf("[refinery-check] coin arrival particles hidden by header\n");
+        return 1;
+    }
+    if (!GB_SAVE_FRAME(view.window, TestOutput::Path("refinery-coin-arrival.png"))) { return 1; }
+    view.clock += 100;
+    view.Begin(3);
+    if (!DrawRefinery(view, state, profile, refinement, path, now) || view.Header(profile, progress, 3) == -3 ||
+        !DrawRefineryOverlay(view, state) || profile.coins != coins + yield) { return 1; }
+    glReadPixels(0, viewport[3] - headerHeight, viewport[2], headerHeight, GL_RGBA, GL_UNSIGNED_BYTE, headerOnly.data());
+    if (headerOnly == arrival) { return 1; }
+    if (!GB_SAVE_FRAME(view.window, TestOutput::Path("refinery-coin-dissipating.png"))) { return 1; }
+    view.clock += 5000;
+    view.Begin(3);
+    if (!DrawRefinery(view, state, profile, refinement, path, now) || view.RefineryParticleCount(6) != 0 ||
+        profile.coins != coins + yield) { return 1; }
+    std::printf("[refinery-particle-check] flight arrival-overlay animation drain single-payout failures=0\n");
     // Reopening an empty refinery manually must not repeat the postgame route.
     MenuState manualState;
     manualState.page = 3;

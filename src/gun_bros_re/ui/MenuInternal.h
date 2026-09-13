@@ -526,6 +526,19 @@ public:
         Matrix4dTranslate(transform, icon.x + icon.width / 2, icon.y + icon.height / 2);
         postGameEffects[index]->Draw(transform);
     }
+    /** Native refinery transfer players keep living particles after arrival. */
+    bool StartRefineryEffect(unsigned slot, unsigned icon, float x, float y);
+    void AdvanceRefineryEffects(unsigned elapsed);
+    void MoveRefineryEffect(unsigned slot, float x, float y);
+    void StopRefineryEffect(unsigned slot);
+    void DrawRefineryEffects();
+    void ResetRefineryEffects() {
+        for (auto &effect : refineryEffects) { effect = {}; }
+    }
+    std::size_t RefineryParticleCount(unsigned slot) const {
+        if (!refineryEffects[slot].player) { return 0; }
+        return refineryEffects[slot].player->GetParticleCount();
+    }
     void Scroll(MenuScrollMotion &motion, float &position, const MovieRegion &viewport,
         bool enabled, float maximum, float stride, unsigned duration);
     bool animateNavigation = true;
@@ -553,6 +566,12 @@ private:
     CShaderProgram imageProgram;
     std::array<std::unique_ptr<WeaponEffects>, 2> modeEffects;
     std::array<std::unique_ptr<WeaponEffects>, 7> postGameEffects;
+    struct RefineryEffect {
+        std::unique_ptr<WeaponEffects> player;
+        std::uint64_t handle = 0;
+        float x = 0, y = 0;
+    };
+    std::array<RefineryEffect, kRefinementSlotCount> refineryEffects;
     std::array<GameObjectRef, 2> modeEffectRefs;
     CMarkerBatch markers;
     CQuadBatch images;
@@ -781,7 +800,7 @@ void ShowStoreFundsPrompt(MenuState &state, const std::vector<StoreEntry> &store
 
 bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, const MovieRegion &area,
     const std::string &label, unsigned font, bool interactive, bool &pressed,
-    unsigned chapter = 0, unsigned elapsed = 0, unsigned timeOverride = UINT32_MAX);
+    unsigned chapter = 0, unsigned elapsed = 0, unsigned timeOverride = UINT32_MAX, bool stateArtwork = false);
 
 /** CMenuStore::GunSwapCallback :178863; button size comes from Movie region 1. */
 bool StoreGunSwapOrigin(GameMenu &view, const MovieRegion &parent, MovieRegion &origin);
@@ -892,7 +911,7 @@ bool DrawUpgradeButton(GameMenu &view, unsigned index, const MovieRegion &area,
     const std::string &label, unsigned font, bool interactive, bool &pressed);
 
 bool DrawOriginalMovieButton(GameMenu &view, const OriginalMenuEntry &entry, const MovieRegion &area,
-    const std::string &label, unsigned font, bool interactive, bool &pressed, unsigned chapter, unsigned elapsed, unsigned timeOverride);
+    const std::string &label, unsigned font, bool interactive, bool &pressed, unsigned chapter, unsigned elapsed, unsigned timeOverride, bool stateArtwork);
 
 /** Which navigation branch a host page sits in, named by that branch's own page.
  *
@@ -947,6 +966,8 @@ bool SetRefineryStatus(GameMenu &view, MenuState &state, unsigned slot, unsigned
 
 bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
     const CRefinementManager::Template &data, const std::filesystem::path &savePath, std::int64_t now);
+/** CMenuGameResources::DrawOverlay :173407 runs above the navigation bar. */
+bool DrawRefineryOverlay(GameMenu &view, const MenuState &state);
 
 /** CMenuFriends::Bind :197028 and CMenuChallenges::Bind :236612 select
  * chapter 1 while profile validity is false. Region 0 owns button 165/0,

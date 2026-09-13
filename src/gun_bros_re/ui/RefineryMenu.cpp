@@ -36,7 +36,7 @@ public:
             unsigned chapter = 2;
             if (state.refinery.refineryTab == entry->index) { chapter = 3; }
             if (!DrawOriginalMovieButton(view, *entry, area, view.movies.NamedString(entry->strings[0]), 5,
-                interactive && state.refinery.refineryTransfer < 0, pressed, chapter, state.refinery.refineryElapsed)) { return false; }
+                interactive && state.refinery.refineryTransfer < 0, pressed, chapter, state.refinery.refineryElapsed, UINT32_MAX, true)) { return false; }
             if (pressed && state.refinery.refineryTab != entry->index) {
                 // DoAction :95106 forwards argument4 (entry index), not the
                 // table's parameter. Refresh(76) changes the category only.
@@ -139,6 +139,7 @@ public:
                     }
                     const auto *image = OriginalMenuData("MDS_ICON_STANDARD", icon);
                     if (image == nullptr) { return false; }
+                    if (!view.StartRefineryEffect(slot, icon, source.x, source.y)) { return false; }
                     state.refinery.refineryTransfer = static_cast<int>(slot);
                     state.refinery.refineryTransferTime = 0;
                     state.refinery.refineryTransferSprite = image->sprites[0];
@@ -203,6 +204,7 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
     const unsigned count = static_cast<unsigned>((regions.size() - 5) / 2);
     if (count * 2 != data.minutes.size()) { return false; }
     if (!state.refinery.refineryBound) {
+        view.ResetRefineryEffects();
         state.refinery.refineryBound = true;
         state.refinery.refineryTab = 1;
         state.refinery.refineryTime = 0;
@@ -217,6 +219,7 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
     }
     const unsigned delta = static_cast<unsigned>(view.clock - state.refinery.refineryLastTick);
     state.refinery.refineryLastTick = view.clock;
+    view.AdvanceRefineryEffects(delta);
     state.refinery.refineryElapsed += delta;
     const std::uint64_t next = static_cast<std::uint64_t>(state.refinery.refineryTime) + delta;
     state.refinery.refineryTime = static_cast<unsigned>(next);
@@ -224,9 +227,14 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
     if (!view.animateNavigation) { state.refinery.refineryTime = idleStart; }
     if (state.refinery.refineryTransfer >= 0) {
         state.refinery.refineryTransferTime += delta;
+        const float fraction = std::min(1.0f, state.refinery.refineryTransferTime / 375.0f);
+        view.MoveRefineryEffect(static_cast<unsigned>(state.refinery.refineryTransfer),
+            std::trunc(state.refinery.refineryTransferX + (state.refinery.refineryTargetX - state.refinery.refineryTransferX) * fraction),
+            std::trunc(state.refinery.refineryTransferY + (state.refinery.refineryTargetY - state.refinery.refineryTransferY) * fraction));
         // CTransferEffect::Setup :174380: original linear x/y duration375ms.
         if (state.refinery.refineryTransferTime >= 375) {
             const unsigned slot = static_cast<unsigned>(state.refinery.refineryTransfer);
+            view.StopRefineryEffect(slot);
             const unsigned status = profile.refinery.slots[slot].state;
             bool changed = false;
             if (status == 1) {
@@ -272,6 +280,12 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
     if (!view.movies.DrawNamed("GLU_MOVIE_EXPLODIUM_BG", state.refinery.refineryElapsed)) { return false; }
     RefineryCallbacks callbacks(view, state, profile, data, count, state.refinery.refineryTime >= idleStart);
     if (!view.movies.Draw(ordinal, state.refinery.refineryTime, 512, 384, 1024, 768, 0, 1, &callbacks)) { return false; }
+    return true;
+}
+
+bool DrawRefineryOverlay(GameMenu &view, const MenuState &state) {
+    // CMenuSystem::Draw :96837 calls the current menu overlay after the header.
+    view.DrawRefineryEffects();
     if (state.refinery.refineryTransfer >= 0) {
         const float fraction = std::min(1.0f, state.refinery.refineryTransferTime / 375.0f);
         const float x = std::trunc(state.refinery.refineryTransferX + (state.refinery.refineryTargetX - state.refinery.refineryTransferX) * fraction);

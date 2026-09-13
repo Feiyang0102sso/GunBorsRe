@@ -249,6 +249,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             if (navigation == -3) { return -3; }
         }
         constexpr unsigned navigationPages[] = {0, 4, 5, 2, 3, 6, 7};
+        if (state.page == 3 && !DrawRefineryOverlay(view, state)) { return -3; }
         if (navigation >= 7) {
             state.currencyTab = static_cast<unsigned>(navigation - 7);
             state.currencyPage = 0;

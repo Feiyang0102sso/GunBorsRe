@@ -332,6 +332,55 @@ if (scripted) {
         return true;
     }
 
+    bool GameMenu::StartRefineryEffect(unsigned slot, unsigned icon, float x, float y) {
+        static const struct { const char *pack; int ordinals[4]; } binding =
+#include "gun_bros_re/ui/OriginalRefineryParticleData.inc"
+        ;
+        if (slot >= refineryEffects.size() || icon >= std::size(binding.ordinals)) { return false; }
+        const int pack = resourceToc->GetPackIndexFromName(binding.pack);
+        if (pack < 0 || binding.ordinals[icon] < 0) { return false; }
+        GameObjectRef resource;
+        resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
+        resource.localIndex = static_cast<std::uint8_t>(binding.ordinals[icon]);
+        auto &effect = refineryEffects[slot];
+        effect.player = std::make_unique<WeaponEffects>(*resourceToc, *resourceTables, imageProgram);
+        // SetupTransfer :174510/:174534 uses the original ICON_STANDARD particle.
+        // Positions are local to CTransferEffect::Draw, including living particles.
+        effect.handle = effect.player->StartPersistentEffect(resource, 0, 0, true);
+        effect.x = x;
+        effect.y = y;
+        return effect.handle != 0;
+    }
+
+    void GameMenu::AdvanceRefineryEffects(unsigned elapsed) {
+        for (auto &effect : refineryEffects) {
+            if (effect.player) { effect.player->AdvanceAmbientEffects(elapsed); }
+        }
+    }
+
+    void GameMenu::MoveRefineryEffect(unsigned slot, float x, float y) {
+        refineryEffects[slot].x = x;
+        refineryEffects[slot].y = y;
+    }
+
+    void GameMenu::StopRefineryEffect(unsigned slot) {
+        auto &effect = refineryEffects[slot];
+        // CTransferEffect::Update :174361 calls StopSpawning, not Clear.
+        // StopEffect detaches the emitter while its living particles expire.
+        if (effect.player) { effect.player->StopEffect(effect.handle); }
+        effect.handle = 0;
+    }
+
+    void GameMenu::DrawRefineryEffects() {
+        for (auto &effect : refineryEffects) {
+            if (!effect.player) { continue; }
+            float transform[16];
+            std::copy(movies.CurrentProjection(), movies.CurrentProjection() + 16, transform);
+            Matrix4dTranslate(transform, effect.x, effect.y);
+            effect.player->Draw(transform);
+        }
+    }
+
     void GameMenu::Scroll(MenuScrollMotion &motion, float &position, const MovieRegion &viewport,
         bool enabled, float maximum, float stride, unsigned duration) {
         const bool inside = MouseIn(viewport.x, viewport.y, viewport.width, viewport.height);
