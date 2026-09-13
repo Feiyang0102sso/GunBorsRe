@@ -1,11 +1,65 @@
 #include "gun_bros_re/ui/StoreRegionClip.h"
 #include "gun_bros_re/ui/MenuInternal.h"
 namespace MenuDetail {
+bool SetRefineryStatus(GameMenu &view, MenuState &state, unsigned slot, unsigned chapter);
+
+bool IsRefinerySlotEnabled(const CRefinementManager::Template &data, unsigned slot) {
+    // CResourceMeter::Enabled :173669 ORs connectivity with zero duration.
+    return GameHostSettings().isConnected || data.minutes[slot] == 0;
+}
+
+/** Original Select completes its Movie before action73 starts the transfer. */
+bool StartRefineryTransfer(GameMenu &view, MenuState &state, CProfileManager &profile,
+    unsigned slot, unsigned count) {
+    if (state.refinery.refineryTransfer >= 0) { return true; }
+    const auto &record = profile.refinery.slots[slot];
+    MovieRegion region;
+    if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_EXPLODIUM"), slot % count,
+        state.refinery.refineryTime, region)) { return false; }
+    const float x = region.x + region.width / 2, y = region.y + region.height / 2;
+    if ((record.state == 1 || (record.state == 3 && state.refinery.refineryStatusChapter[slot] == 3))) {
+        if (record.state == 3 || profile.xplodium != 0) {
+            const unsigned main = view.movies.Ordinal("GLU_MOVIE_EXPLODIUM");
+            MovieRegion source, destination;
+            unsigned icon = 0;
+            if (record.state == 3) {
+                source.x = x;
+                source.y = y;
+                if (!view.movies.Region(main, count * 2 + 2, state.refinery.refineryTime, destination)) { return false; }
+                icon = 2;
+                state.refinery.refineryTransferAmount = profile.refinery.GetRefinementSlotYield(slot);
+            } else {
+                if (!view.movies.Region(main, count * 2, state.refinery.refineryTime, source)) { return false; }
+                const auto *image = OriginalMenuData("MDS_ICON_STANDARD", 0);
+                MovieRegion bounds;
+                if (image == nullptr || !view.movies.SpriteBounds(image->sprites[0] >> 16, image->sprites[0] & 255, bounds)) { return false; }
+                source.x += bounds.width / 2;
+                source.y += bounds.height / 2;
+                destination.x = x;
+                destination.y = y;
+                state.refinery.refineryTransferAmount = profile.xplodium;
+            }
+            const auto *image = OriginalMenuData("MDS_ICON_STANDARD", icon);
+            if (image == nullptr) { return false; }
+            if (!view.StartRefineryEffect(slot, icon, source.x, source.y)) { return false; }
+            state.refinery.refineryTransfer = static_cast<int>(slot);
+            state.refinery.refineryTransferTime = 0;
+            state.refinery.refineryTransferSprite = image->sprites[0];
+            state.refinery.refineryTransferX = source.x;
+            state.refinery.refineryTransferY = source.y;
+            state.refinery.refineryTargetX = destination.x;
+            state.refinery.refineryTargetY = destination.y;
+        }
+    }
+    return true;
+}
+
 class RefineryCallbacks : public IMovieRegionCallback {
 public:
     RefineryCallbacks(GameMenu &menu, MenuState &selection, CProfileManager &account,
-        const CRefinementManager::Template &resources, unsigned cells, bool ready)
-        : view(menu), state(selection), profile(account), data(resources), count(cells), interactive(ready) {}
+        const CRefinementManager::Template &resources, unsigned cells, bool ready,
+        const std::filesystem::path &path, std::int64_t seconds)
+        : view(menu), state(selection), profile(account), data(resources), count(cells), interactive(ready), savePath(path), now(seconds) {}
 
     bool DrawMovieRegion(const MovieRegion &region) override {
         if (region.index < count) { return Meter(region); }
@@ -77,9 +131,9 @@ public:
         const auto &record = profile.refinery.slots[slot];
         std::uint64_t amount = profile.xplodium;
         if (record.state == 2 || record.state == 3) { amount = record.amount; }
-        // Native offline profile has no validated friend power. Provider 69/3
+        // The local service has no validated friend power. Provider 69/3
         // alternates only on enabled meters, and only for a nonzero payout.
-        if (data.minutes[slot] == 0 && amount != 0 && (state.refinery.refineryElapsed / 2000) % 2 != 0) {
+        if (IsRefinerySlotEnabled(data, slot) && amount != 0 && (state.refinery.refineryElapsed / 2000) % 2 != 0) {
             const auto payout = static_cast<std::uint64_t>(std::floor(static_cast<float>(amount) * data.efficiencyPercent[slot] / 100.0f + 0.5f));
             detail = RefineryNumber(view, "IDS_SHOP_COMMON", payout);
             font = 0;
@@ -94,14 +148,15 @@ public:
     bool Meter(const MovieRegion &region) {
         const unsigned slot = state.refinery.refineryTab * count + region.index;
         const auto &record = profile.refinery.slots[slot];
+        auto &chamber = state.refinery.chambers[slot];
         const auto *entry = OriginalMenuData("MDS_BUTTON_XPLODIUM_METER", slot);
         if (entry == nullptr) { return false; }
         const float x = region.x + region.width / 2, y = region.y + region.height / 2;
-        const bool enabled = data.minutes[slot] == 0;
+        const bool enabled = IsRefinerySlotEnabled(data, slot);
         const unsigned fill = view.movies.Ordinal("GLU_MOVIE_BUCKET_FILL");
         const unsigned status = view.movies.Ordinal(entry->movies[1]);
         if (!view.movies.Draw(fill, state.refinery.refineryFillTime[slot], x, y)) { return false; }
-        {
+        if (!chamber.opening) {
             // The native button movie is centered on the meter. Its own hit
             // region owns interaction; the 220px parent is not a click target.
             MovieRegion button = region;
@@ -110,65 +165,90 @@ public:
             bool pressed = false;
             unsigned chapter = 0;
             if (record.state != 0 && enabled) { chapter = 2; }
+            unsigned timeOverride = UINT32_MAX;
+            if (chamber.clickPlaying) { chapter = 1; timeOverride = chamber.clickTime; }
             // Enabled(false) sets button state6, which still draws; Draw skips
             // only state8 (:144707). Keep the original circle behind the lock.
             if (!DrawOriginalMovieButton(view, *entry, button, {}, 0,
-                enabled && record.state != 0 && interactive && state.refinery.refineryTransfer < 0,
-                pressed, chapter, state.refinery.refineryElapsed * 2)) { return false; }
-            if (pressed && (record.state == 1 || (record.state == 3 && state.refinery.refineryStatusChapter[slot] == 3))) {
-                if (record.state == 3 || profile.xplodium != 0) {
-                    const unsigned main = view.movies.Ordinal("GLU_MOVIE_EXPLODIUM");
-                    MovieRegion source, destination;
-                    unsigned icon = 0;
-                    if (record.state == 3) {
-                        source.x = x;
-                        source.y = y;
-                        if (!view.movies.Region(main, count * 2 + 2, state.refinery.refineryTime, destination)) { return false; }
-                        icon = 2;
-                        state.refinery.refineryTransferAmount = profile.refinery.GetRefinementSlotYield(slot);
-                    } else {
-                        if (!view.movies.Region(main, count * 2, state.refinery.refineryTime, source)) { return false; }
-                        const auto *image = OriginalMenuData("MDS_ICON_STANDARD", 0);
-                        MovieRegion bounds;
-                        if (image == nullptr || !view.movies.SpriteBounds(image->sprites[0] >> 16, image->sprites[0] & 255, bounds)) { return false; }
-                        source.x += bounds.width / 2;
-                        source.y += bounds.height / 2;
-                        destination.x = x;
-                        destination.y = y;
-                        state.refinery.refineryTransferAmount = profile.xplodium;
-                    }
-                    const auto *image = OriginalMenuData("MDS_ICON_STANDARD", icon);
-                    if (image == nullptr) { return false; }
-                    if (!view.StartRefineryEffect(slot, icon, source.x, source.y)) { return false; }
-                    state.refinery.refineryTransfer = static_cast<int>(slot);
-                    state.refinery.refineryTransferTime = 0;
-                    state.refinery.refineryTransferSprite = image->sprites[0];
-                    state.refinery.refineryTransferX = source.x;
-                    state.refinery.refineryTransferY = source.y;
-                    state.refinery.refineryTargetX = destination.x;
-                    state.refinery.refineryTargetY = destination.y;
-                }
+                enabled && record.state != 0 && !chamber.clickPlaying && interactive && state.refinery.refineryTransfer < 0,
+                pressed, chapter, state.refinery.refineryElapsed * 2, timeOverride)) { return false; }
+            if (pressed) {
+                // CMenuMovieButton::Select :144661 plays chapter1 once even
+                // for every enabled slot, regardless of ore or state. Geometry comes from BIG.
+                const auto *movie = view.movies.GetMovie(view.movies.Ordinal(entry->movies[0]));
+                unsigned end = 0;
+                if (movie == nullptr || !movie->GetChapterRange(1, chamber.clickTime, end)) { return false; }
+                chamber.clickPlaying = true;
             }
+
         }
         if (!view.movies.Draw(status, state.refinery.refineryStatusTime[slot], x, y)) { return false; }
-        if (record.state == 0) {
+        if (record.state == 0 || chamber.opening) {
             // CreateContentSprite(69,0) :149780, original SG constants:
             // archetype4, first animation24, count6. Index chooses lock art.
             // CResourceMeter::Update advances this sprite only AFTER unlock.
             // Its initial colored chamber stays frozen while state==0.
-            if (!view.movies.DrawSprite(4, 24 + slot % 6, 0, x, y, 1, region.alpha)) { return false; }
+            if (!view.movies.DrawSpritePlayer(4, 24 + slot % 6, chamber.eye, x, y, region.alpha)) { return false; }
             const unsigned overlay = view.movies.Ordinal("GLU_MOVIE_CHAMBER_OVERLAY");
             const CMovie *movie = view.movies.GetMovie(overlay);
             unsigned start = 0, end = 0;
-            if (movie == nullptr || !movie->GetChapterRange(0, start, end) ||
-                !view.movies.Draw(overlay, start + state.refinery.refineryElapsed % (end - start + 1), x, y)) { return false; }
+            unsigned chapter = 0;
+            if (chamber.opening) { chapter = 1; }
+            if (movie == nullptr || !movie->GetChapterRange(chapter, start, end)) { return false; }
+            unsigned time = start + state.refinery.refineryElapsed % (end - start + 1);
+            if (chamber.opening) { time = start + std::min(chamber.overlayTime, end - start); }
+            if (!view.movies.Draw(overlay, time, x, y)) { return false; }
         }
         std::string text;
         if (!enabled) { text = view.movies.NamedString("IDS_FRIEND_OFFLINE"); }
+        else if (record.state == 2) {
+            // GetRemainingTimeString :177971 -> TimeToString, hours/minutes/seconds.
+            const auto seconds = std::max<std::int64_t>(0, record.finishTime - now);
+            char remaining[32];
+            std::snprintf(remaining, sizeof(remaining), "%02lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60);
+            text = remaining;
+        }
         else if (record.state == 3) { text = view.movies.NamedString("IDS_RESMAN_COLLECT"); }
         else if (record.state == 1 && profile.xplodium != 0) { text = view.movies.NamedString("IDS_RESMAN_READY"); }
-        if (!text.empty()) {
+        if (!text.empty() && !chamber.opening) {
             view.movies.Text(text, x - view.movies.TextWidth(text, 0) / 2, y - view.movies.TextHeight(0) / 2, 0, 1, 0, region.alpha);
+        }
+        if (record.state == 0 && !profile.refinery.IsGated(slot)) {
+            // Dynamic provider158: CreateContentMovie :149176, Sprite0:64,
+            // GetElementAction :153522 -> UnlockSlot action74. Draw centers it.
+            const OriginalMenuEntry unlock{"MDC_REFINE_UNLOCK", slot, {"", "", "", ""},
+                {64, UINT32_MAX, 0, 0}, {"GLU_MOVIE_BUTTON_SMALL", ""}, 74, 0};
+            MovieRegion graphic;
+            if (!view.movies.Region(view.movies.Ordinal(unlock.movies[0]), 1, 0, graphic)) { return false; }
+            MovieRegion button = region;
+            button.x = x - graphic.width / 2;
+            button.y = y;
+            std::string price = view.movies.NamedString("IDS_SHOP_FREE");
+            if (data.commonPrice[slot]) { price = RefineryNumber(view, "IDS_SHOP_COMMON", data.commonPrice[slot]); }
+            else if (data.rarePrice[slot]) { price = RefineryNumber(view, "IDS_SHOP_RARE", data.rarePrice[slot]); }
+            // MeterCallback :173873 draws the currency in font0 BELOW the
+            // button; provider158's button caption itself is IDS_SHOP_BUY.
+            if (!view.movies.Text(price, x - view.movies.TextWidth(price, 0) / 2,
+                y + graphic.height + view.movies.TextHeight(0) / 2, 0, 1, 0, region.alpha)) { return false; }
+            if (!enabled) { return true; }
+            bool pressed = false;
+            if (!DrawOriginalMovieButton(view, unlock, button, view.movies.NamedString("IDS_SHOP_BUY"), 5, interactive && state.refinery.refineryTransfer < 0,
+                pressed, 2, state.refinery.refineryElapsed)) { return false; }
+            if (pressed) {
+                if (profile.refinery.UnlockSlot(slot, profile.coins, profile.warbucks)) {
+                    if (!profile.SaveToDisk(savePath) || !SetRefineryStatus(view, state, slot, 1)) { return false; }
+                    std::printf("[refinery] unlocked slot=%u coins=%u warbucks=%u\n", slot, data.commonPrice[slot], data.rarePrice[slot]);
+                } else {
+                    // Original action74 opens the insufficient-funds prompt.
+                    std::vector<StoreEntry> store;
+                    if (!profile.nativeArchive || !LoadStoreCatalog(*profile.nativeArchive->toc, *profile.nativeArchive->tables, store)) { return false; }
+                    unsigned currency = 0;
+                    unsigned cost = data.commonPrice[slot];
+                    if (cost == 0) { currency = 1; cost = data.rarePrice[slot]; }
+                    ShowStoreFundsPrompt(state, store, profile, currency, cost, false);
+                    state.storePromptTable = "MDS_REFINE_PROMPT_MOMONEY";
+                }
+            }
         }
         return true;
     }
@@ -178,6 +258,8 @@ public:
     const CRefinementManager::Template &data;
     unsigned count;
     bool interactive;
+    const std::filesystem::path &savePath;
+    std::int64_t now;
 };
 // Page callback implementations.
 
@@ -212,9 +294,15 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
         state.refinery.refineryLastTick = view.clock;
         for (unsigned slot = 0; slot < count * 2; ++slot) {
             unsigned chapter = 0;
-            if (data.minutes[slot] == 0) { chapter = profile.refinery.slots[slot].state; }
+            if (IsRefinerySlotEnabled(data, slot)) { chapter = profile.refinery.slots[slot].state; }
             if (!SetRefineryStatus(view, state, slot, chapter)) { return false; }
             state.refinery.refineryFillTime[slot] = 0;
+            auto &chamber = state.refinery.chambers[slot];
+            chamber.locked = profile.refinery.slots[slot].state == 0;
+            chamber.opening = false;
+            chamber.overlayTime = 0;
+            chamber.clickPlaying = false;
+            if (!view.movies.BindSpritePlayer(4, 24 + slot % count, chamber.eye)) { return false; }
         }
     }
     const unsigned delta = static_cast<unsigned>(view.clock - state.refinery.refineryLastTick);
@@ -225,6 +313,12 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
     state.refinery.refineryTime = static_cast<unsigned>(next);
     if (next > idleEnd) { state.refinery.refineryTime = idleStart + static_cast<unsigned>((next - idleStart) % (idleEnd - idleStart + 1)); }
     if (!view.animateNavigation) { state.refinery.refineryTime = idleStart; }
+    if (state.refinery.refineryCancelTransfer) {
+        // A lock cheat can cancel a pending 375ms transfer before it commits.
+        view.ResetRefineryEffects();
+        state.refinery.refineryTransfer = -1;
+        state.refinery.refineryCancelTransfer = false;
+    }
     if (state.refinery.refineryTransfer >= 0) {
         state.refinery.refineryTransferTime += delta;
         const float fraction = std::min(1.0f, state.refinery.refineryTransferTime / 375.0f);
@@ -249,7 +343,7 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
             state.refinery.refineryTransfer = -1;
             bool hasReady = false;
             for (unsigned index = 0; index < count * 2; ++index) {
-                if (data.minutes[index] == 0 && profile.refinery.slots[index].state == 3) { hasReady = true; }
+                if (IsRefinerySlotEnabled(data, index) && profile.refinery.slots[index].state == 3) { hasReady = true; }
             }
             if (profile.xplodium == 0 && !hasReady && state.refinementRequired) {
                 // TransferComplete :174075 calls Dismiss :172275 after collection.
@@ -261,8 +355,50 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
         }
     }
     for (unsigned slot = 0; slot < count * 2; ++slot) {
+        const auto &record = profile.refinery.slots[slot];
+        auto &chamber = state.refinery.chambers[slot];
+        // CResourceMeter::Update :173928 keeps the eye alive after state 0 -> 1.
+        // Its native player signals completion; only then is the main button shown.
+        if (chamber.locked && record.state != 0) {
+            chamber.opening = true;
+            chamber.overlayTime = 0;
+            state.refinery.refineryFillTime[slot] = 0;
+        }
+        if (!chamber.locked && record.state == 0) {
+            chamber.opening = false;
+            chamber.overlayTime = 0;
+            state.refinery.refineryFillTime[slot] = 0;
+            if (!view.movies.BindSpritePlayer(4, 24 + slot % count, chamber.eye)) { return false; }
+        }
+        chamber.locked = record.state == 0;
+        if (chamber.opening) {
+            chamber.overlayTime += delta;
+            chamber.eye.Update(static_cast<std::uint16_t>(std::min(delta, unsigned(UINT16_MAX))));
+            if (chamber.eye.HasFinished()) { chamber.opening = false; }
+        }
+        unsigned desired = record.state;
+        if (!IsRefinerySlotEnabled(data, slot)) { desired = 0; }
+        const unsigned previousChapter = state.refinery.refineryStatusChapter[slot];
+        // A newly completed transfer finishes its fill animation before COLLECT.
+        if (desired != previousChapter && !(desired == 3 && previousChapter == 2)) {
+            if (!SetRefineryStatus(view, state, slot, desired)) { return false; }
+        }
         const auto *entry = OriginalMenuData("MDS_BUTTON_XPLODIUM_METER", slot);
         if (entry == nullptr) { return false; }
+        if (record.state == 0 || !IsRefinerySlotEnabled(data, slot)) { chamber.clickPlaying = false; }
+        if (chamber.clickPlaying) {
+            const auto *button = view.movies.GetMovie(view.movies.Ordinal(entry->movies[0]));
+            unsigned start = 0, end = 0;
+            if (button == nullptr || !button->GetChapterRange(1, start, end)) { return false; }
+            // CResourceMeter::Update :173945 advances its main button at 2x.
+            chamber.clickTime += std::min(delta * 2, end - chamber.clickTime);
+            if (chamber.clickTime == end) {
+                chamber.clickPlaying = false;
+                // CMenuMovieButton::Update :144715 dispatches action73 here.
+                // Empty and unfinished chambers animate but have no transfer.
+                if (!StartRefineryTransfer(view, state, profile, slot, count)) { return false; }
+            }
+        }
         const auto *status = view.movies.GetMovie(view.movies.Ordinal(entry->movies[1]));
         unsigned start = 0, end = 0;
         const unsigned chapter = state.refinery.refineryStatusChapter[slot];
@@ -271,6 +407,11 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
         if (chapter >= 2) { time = start + (time - start + delta) % (end - start + 1); }
         else { time += std::min(delta, end - time); }
         state.refinery.refineryStatusTime[slot] = time;
+        if (record.state == 2 && record.totalDurationMs > 0) {
+            const auto remaining = std::max<std::int64_t>(0, record.finishTimeMs - now * 1000);
+            const auto elapsed = record.totalDurationMs - std::min<std::int64_t>(record.totalDurationMs, remaining);
+            state.refinery.refineryFillTime[slot] = static_cast<unsigned>(fill->duration * elapsed / record.totalDurationMs);
+        }
         if (profile.refinery.slots[slot].state == 3) {
             state.refinery.refineryFillTime[slot] += std::min(delta * 2, fill->duration - state.refinery.refineryFillTime[slot]);
             if (chapter == 2 && state.refinery.refineryFillTime[slot] == fill->duration &&
@@ -278,7 +419,8 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
         }
     }
     if (!view.movies.DrawNamed("GLU_MOVIE_EXPLODIUM_BG", state.refinery.refineryElapsed)) { return false; }
-    RefineryCallbacks callbacks(view, state, profile, data, count, state.refinery.refineryTime >= idleStart);
+    RefineryCallbacks callbacks(view, state, profile, data, count,
+        state.refinery.refineryTime >= idleStart && !state.storePromptRequested && !state.storePopup.IsActive(), savePath, now);
     if (!view.movies.Draw(ordinal, state.refinery.refineryTime, 512, 384, 1024, 768, 0, 1, &callbacks)) { return false; }
     return true;
 }

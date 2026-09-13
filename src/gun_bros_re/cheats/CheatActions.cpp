@@ -8,6 +8,44 @@
 #include <ctime>
 
 namespace GameCheats {
+bool ApplyRefineryCheat(const std::string &command, CProfileManager &profile, std::int64_t now) {
+    if (command == Xplodium) { profile.xplodium += XplodiumAmount; }
+    if (command == AdvanceRefinery) {
+        // Native record 1008 saves remaining time against a current checkpoint.
+        // Keep the original start and total duration; only advance remaining work.
+        for (auto &slot : profile.refinery.slots) {
+            if (slot.state != 2) { continue; }
+            slot.finishTime -= RefinerySkipSeconds;
+            slot.finishTimeMs -= RefinerySkipSeconds * 1000;
+        }
+        profile.refinery.UpdateRefinement(now);
+    }
+    if (command != ToggleRefineryLocks) { return true; }
+    if (!profile.nativeArchive) { return false; }
+    CRefinementManager::Template data;
+    auto &archive = *profile.nativeArchive;
+    if (!LoadRefinementTemplate(*archive.toc, *archive.tables, data)) { return false; }
+    bool unlock = false;
+    for (unsigned index = 0; index < data.minutes.size(); ++index) {
+        if (data.minutes[index] != 0 && profile.refinery.slots[index].state == 0) { unlock = true; }
+    }
+    for (unsigned index = 0; index < data.minutes.size(); ++index) {
+        // Previously only paid chambers participated. The user extended this to
+        // standard chambers too; BIG's zero-duration first slots remain intact.
+        if (data.minutes[index] == 0) { continue; }
+        auto &slot = profile.refinery.slots[index];
+        if (unlock) {
+            if (slot.state == 0) { slot.state = 1; }
+        } else {
+            // Cancelling a chamber returns its input, never its unclaimed yield.
+            profile.xplodium += slot.amount;
+            slot = CRefinementManager::CRefinementSlot{};
+        }
+    }
+    std::printf("[cheat] refinery unlocked=%d\n", unlock);
+    return true;
+}
+
 bool AdvanceChallenges(CProfileManager &profile, CChallengeManager &challenges, std::uint32_t now) {
     if (!profile.nativeArchive) {
         std::printf("[cheat] chupdate requires a native profile\n");
@@ -78,6 +116,11 @@ bool ProcessMenuCheats(CWindow &window, CProfileManager &profile, MenuDetail::Me
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
 #if GB_ENABLE_CHEATS
     for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
+        if (!GameCheats::ApplyRefineryCheat(cheat, profile, MenuDetail::CurrentSeconds())) { return false; }
+        if (cheat == GameCheats::ToggleRefineryLocks && state.refinery.refineryTransfer >= 0 &&
+            profile.refinery.slots[state.refinery.refineryTransfer].state == 0) {
+            state.refinery.refineryCancelTransfer = true;
+        }
         if (cheat == GameCheats::Money) {
             profile.coins += GameCheats::Coins;
             profile.warbucks += GameCheats::Warbucks;
@@ -140,6 +183,7 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
         if (context != nullptr) { context->profile.experience = progress.GetExperience(); }
     }
     if (context != nullptr) {
+        if (!GameCheats::ApplyRefineryCheat(cheat, context->profile, static_cast<std::int64_t>(std::time(nullptr)))) { return false; }
         if (cheat == GameCheats::UpdateChallenges) {
             context->profile.experience = progress.GetExperience();
             CChallengeManager challenges;

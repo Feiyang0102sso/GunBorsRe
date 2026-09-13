@@ -96,3 +96,20 @@ std::string MovieRenderer::NamedString(const char *name, unsigned offset) {
     m_strings[key] = result;
     return result;
 }
+
+bool MovieRenderer::BindSpritePlayer(unsigned archetype, unsigned animationIndex, CSpritePlayer &player) {
+    Animation *animation = GetAnimation(archetype, animationIndex);
+    if (animation == nullptr || animation->steps.empty()) { return false; }
+    player.SetAnimation(&animation->durations);
+    player.SetLooping(false);
+    return true;
+}
+
+bool MovieRenderer::DrawSpritePlayer(unsigned archetype, unsigned animationIndex, const CSpritePlayer &player,
+    float x, float y, float alpha) {
+    Animation *animation = GetAnimation(archetype, animationIndex);
+    if (animation == nullptr || player.GetStep() >= animation->steps.size()) { return false; }
+    unsigned time = 0;
+    for (unsigned step = 0; step < player.GetStep(); ++step) { time += animation->durations[step]; }
+    return DrawSprite(archetype, animationIndex, time, x, y, 1, alpha);
+}

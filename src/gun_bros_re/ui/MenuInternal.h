@@ -177,6 +177,16 @@ struct PostGameMenuState {
 
 };
 struct RefineryMenuState {
+    struct Chamber {
+        CSpritePlayer eye;
+        bool locked = false;
+        bool opening = false;
+        unsigned overlayTime = 0;
+        bool clickPlaying = false;
+        unsigned clickTime = 0;
+    };
+    std::array<Chamber, kRefinementSlotCount> chambers;
+    bool refineryCancelTransfer = false;
     unsigned refineryTab = 0, casualtyPage = 0;
     bool refineryBound = false;
     bool refineryExitPending = false;

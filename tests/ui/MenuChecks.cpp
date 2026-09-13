@@ -301,9 +301,14 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, PackTables &tables, GameMe
         !header->GetChapterRange(1, showStart, showEnd) || !header->GetChapterRange(2, headerIdle, end) ||
         !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_EXPLODIUM"), 0, idle, meter)) { return 1; }
     const unsigned entrance = headerIdle - showStart;
+    const auto *meterButton = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_BUCKET_BUTTON"));
+    unsigned clickStart = 0, clickEnd = 0;
+    if (!meterButton || !meterButton->GetChapterRange(1, clickStart, clickEnd)) { return 1; }
+    const unsigned clickDuration = (clickEnd - clickStart + 1) / 2;
     const std::vector<MenuTestClick> clicks{
         {-100, -100, 1}, {-100, -100, idle + fill->duration + 1},
         {meter.x + meter.width / 2, meter.y + meter.height / 2, 1},
+        {-100, -100, clickDuration},
         {-100, -100, 374}, {-100, -100, 1},
         {-100, -100, entrance / 2}, {-100, -100, entrance - entrance / 2},
         {-100, -100, 1, wipe->duration * 2},
@@ -317,12 +322,12 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, PackTables &tables, GameMe
         const auto &frame = trace.frames[index];
         std::printf("[refinery-transition-check] frame=%u page=%u header=%u ready=%d pending=%d wipe=%u active=%d\n",
             index, frame.page, frame.headerTime, frame.navigationReady, frame.refineryExitPending, frame.wipeTime, frame.wipeActive);
-        if (index <= 6 && (frame.page != 3 || frame.wipeActive)) { return 1; }
-        if ((index == 4 || index == 5) && (!frame.refineryExitPending || frame.navigationReady)) { return 1; }
-        if (index == 4 && frame.headerTime != showStart) { return 1; }
-        if (index == 6 && !frame.navigationReady) { return 1; }
-        if (index == 7 && (frame.page != 2 || !frame.wipeActive || frame.wipeTime != 0)) { return 1; }
-        if (index == 8 && (!frame.wipeActive || frame.wipeTime != wipe->duration / 2)) { return 1; }
+        if (index <= 7 && (frame.page != 3 || frame.wipeActive)) { return 1; }
+        if ((index == 5 || index == 6) && (!frame.refineryExitPending || frame.navigationReady)) { return 1; }
+        if (index == 5 && frame.headerTime != showStart) { return 1; }
+        if (index == 7 && !frame.navigationReady) { return 1; }
+        if (index == 8 && (frame.page != 2 || !frame.wipeActive || frame.wipeTime != 0)) { return 1; }
+        if (index == 9 && (!frame.wipeActive || frame.wipeTime != wipe->duration / 2)) { return 1; }
     }
     if (trace.starts != 1 || trace.active || state.page != 2 || !state.history.empty() ||
         state.refinery.refineryExitPending || profile.coins != coins + yield || profile.xplodium != 0) { return 1; }
@@ -470,7 +475,8 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != -1) { return 1; }
     view.Begin(3);
     view.SetTestClick({moved.x + moved.width / 2, moved.y + moved.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != 6 || profile.xplodium != 250) {
+    if (!DrawRefinery(view, state, profile, refinement, path, now) ||
+        !FinishRefineryClick(view, state, profile, refinement, path, now, 6) || state.refinery.refineryTransfer != 6 || profile.xplodium != 250) {
         std::printf("[refinery-check] moved meter click failed transfer=%d\n", state.refinery.refineryTransfer);
         return 1;
     }
@@ -499,7 +505,8 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     const auto yield = profile.refinery.GetRefinementSlotYield(6);
     view.Begin(3);
     view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != 6 || profile.coins != coins) { return 1; }
+    if (!DrawRefinery(view, state, profile, refinement, path, now) ||
+        !FinishRefineryClick(view, state, profile, refinement, path, now, 6) || state.refinery.refineryTransfer != 6 || profile.coins != coins) { return 1; }
     view.clock += 187;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.coins != coins ||
@@ -555,6 +562,7 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     for (unsigned category = 0; category < 4; ++category) {
         if (CheckRefineryStoreTransition(toc, tables, view, refinement, category) != 0) { return 1; }
     }
+    if (CheckOnlineRefinery(toc, tables, view, refinement) != 0) { return 1; }
     return 0;
 }
 

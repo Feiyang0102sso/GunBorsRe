@@ -21,6 +21,11 @@ int RunPlayerSelectCheck(const std::string &bigDirectory);
 int RunGreetingCheck(const std::string &bigDirectory);
 
 int RunRefineryMenuCheck(const std::string &bigDirectory);
+/** Advance the actual button Movie to action dispatch, checking no early transfer. */
+bool FinishRefineryClick(GameMenu &view, MenuState &state, CProfileManager &profile,
+    const CRefinementManager::Template &data, const std::filesystem::path &path, std::int64_t now, unsigned slot);
+int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
+    const CRefinementManager::Template &data);
 
 int RunNavigationBarCheck(const std::string &bigDirectory);
 

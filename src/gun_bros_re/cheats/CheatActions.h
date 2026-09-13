@@ -27,6 +27,8 @@ bool ProcessMenuCheats(CWindow &window, CProfileManager &profile, MenuDetail::Me
     const CDailyBonusTracking &daily, const std::filesystem::path &savePath,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
 namespace GameCheats {
+/** Local resource shortcuts share the menu/combat path and original save records. */
+bool ApplyRefineryCheat(const std::string &command, CProfileManager &profile, std::int64_t now);
 /** Host targets use the original BIG progression and LEVEL tables, never copied resource values. */
 std::uint64_t ExperienceTarget(const std::string &command,
     const CPlayerProgress::Template &data, const CPlayerProgress &progress);

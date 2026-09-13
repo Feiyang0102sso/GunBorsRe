@@ -23,6 +23,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     const auto savePath = TestOutput::Path("cheat-profile");
     const auto initialCoins = profile.coins;
     const auto initialWarbucks = profile.warbucks;
+    const auto initialXplodium = profile.xplodium;
     if (!menu.social.challenges.InitProgressData(toc, tables, profile, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return 1; }
     const unsigned initialChallengeDay = menu.social.challenges.cycleDay;
     menu.social.challenges.current.front().counters.kills = 1;
@@ -33,7 +34,8 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     const auto initialDailySeconds = profile.dailyConsecutiveSeconds;
     // The same SDL input and menu consumer used by the game also save each action.
     for (const char *command : {GameCheats::Money, GameCheats::LevelUp, GameCheats::UnlockWaves,
-        GameCheats::UpdateChallenges, GameCheats::UpdateChallenges}) {
+        GameCheats::UpdateChallenges, GameCheats::UpdateChallenges, GameCheats::Xplodium,
+        GameCheats::ToggleRefineryLocks, GameCheats::AdvanceRefinery}) {
         for (const char *letter = command; *letter != '\0'; ++letter) {
             SDL_Event event{};
             event.type = SDL_EVENT_KEY_DOWN;
@@ -47,6 +49,33 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     if (profile.coins != initialCoins + 500000 || profile.warbucks != initialWarbucks + 500 || progress.GetLevel() != 2) { ++failures; }
     for (unsigned cleared : profile.clearedWaves) { if (cleared != 500) { ++failures; } }
     if (!ReloadNativeProfile(profile, savePath) || profile.experience != progress.GetExperience()) { ++failures; }
+    if (profile.xplodium != initialXplodium + GameCheats::XplodiumAmount) { ++failures; }
+    CRefinementManager::Template refinement;
+    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
+        if (profile.refinery.slots[slot].state != 1) { ++failures; }
+    }
+    // Lock during an uncommitted paid-chamber transfer, then unlock again.
+    // Only the lock cancels that transfer; the UI consumes this cancellation flag.
+    unsigned paidSlot = 0;
+    while (paidSlot < refinement.minutes.size() && !refinement.commonPrice[paidSlot] && !refinement.rarePrice[paidSlot]) { ++paidSlot; }
+    if (paidSlot == refinement.minutes.size()) { return 1; }
+    for (unsigned toggle = 0; toggle < 2; ++toggle) {
+        menu.refinery.refineryTransfer = static_cast<int>(paidSlot);
+        menu.refinery.refineryCancelTransfer = false;
+        for (const char *letter = GameCheats::ToggleRefineryLocks; *letter; ++letter) {
+            SDL_Event event{};
+            event.type = SDL_EVENT_KEY_DOWN;
+            event.key.key = *letter;
+            SDL_PushEvent(&event);
+            event.type = SDL_EVENT_KEY_UP;
+            SDL_PushEvent(&event);
+        }
+        if (!window.PumpEvents() || !ProcessMenuCheats(window, profile, menu, daily, savePath, data, progress) ||
+            !ReloadNativeProfile(profile, savePath)) { return 1; }
+        if (menu.refinery.refineryCancelTransfer != (toggle == 0) || profile.xplodium != initialXplodium + GameCheats::XplodiumAmount) { ++failures; }
+    }
+    menu.refinery.refineryTransfer = -1;
     CChallengeManager restoredChallenges;
     if (!restoredChallenges.Bind(toc, tables, profile, 0)) { return 1; }
     if (restoredChallenges.cycleDay != initialChallengeDay + 2 || menu.social.contentBound ||
@@ -74,6 +103,40 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     PowerupScene powerups(toc, tables, player, vitals, scene, effects, profile);
     SurvivalGameContext context{profile, savePath};
     CombatCheatResult result;
+    // Start real BIG intervals, including >24h standard work, then advance only refinery time.
+    profile.refinery.Bind(refinement);
+    const auto refineryNow = MenuDetail::CurrentSeconds();
+    for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
+        if (refinement.minutes[slot] == 0) { continue; }
+        profile.refinery.slots[slot].state = 1;
+        if (!profile.refinery.BeginRefinement(slot, slot, 10, profile.xplodium, refineryNow)) { return 1; }
+    }
+    const auto refineryCoins = profile.coins;
+    if (!ApplyCombatCheat(GameCheats::AdvanceRefinery, scene, vitals, powerups, session, &context, result, data, progress) ||
+        !ReloadNativeProfile(profile, savePath)) { return 1; }
+    for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
+        const auto &record = profile.refinery.slots[slot];
+        if (refinement.minutes[slot] == 0) { if (record.state != 1) { ++failures; } continue; }
+        if (refinement.minutes[slot] <= 24 * 60) { if (record.state != 3) { ++failures; } }
+        else if (record.state != 2 || record.finishTime != refineryNow + refinement.minutes[slot] * 60 - 86400) { ++failures; }
+        if (record.amount != 10 || record.totalDurationMs != refinement.minutes[slot] * 60000 ||
+            record.startTimeSeconds != refineryNow) { ++failures; }
+    }
+    std::uint64_t returnedOre = 0;
+    for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
+        if (refinement.minutes[slot] != 0) { returnedOre += profile.refinery.slots[slot].amount; }
+    }
+    const auto beforeLock = profile.xplodium;
+    if (!ApplyCombatCheat(GameCheats::ToggleRefineryLocks, scene, vitals, powerups, session, &context, result, data, progress) ||
+        !ReloadNativeProfile(profile, savePath) || profile.xplodium != beforeLock + returnedOre || profile.coins != refineryCoins) { return 1; }
+    for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
+        if (refinement.minutes[slot] != 0 &&
+            (profile.refinery.slots[slot].state != 0 || profile.refinery.slots[slot].amount)) { ++failures; }
+        if (refinement.minutes[slot] == 0 && profile.refinery.slots[slot].state != 1) { ++failures; }
+    }
+    if (!ApplyCombatCheat(GameCheats::Xplodium, scene, vitals, powerups, session, &context, result, data, progress) ||
+        !ReloadNativeProfile(profile, savePath) || profile.xplodium != beforeLock + returnedOre + GameCheats::XplodiumAmount) { return 1; }
+    std::printf("[cheat-check] refinery skip-24h=1 long-interval=1 lock-refund=1 ore=1 reload=1 failures=%u\n", failures);
     if (!ApplyCombatCheat(GameCheats::LevelUp, scene, vitals, powerups, session, &context, result, data, progress) ||
         progress.GetLevel() != 3 || std::abs(vitals.health / vitals.maximum - 0.5f) > 0.001f) { ++failures; }
     if (!ApplyCombatCheat(GameCheats::MaximumLevel, scene, vitals, powerups, session, &context, result, data, progress) ||

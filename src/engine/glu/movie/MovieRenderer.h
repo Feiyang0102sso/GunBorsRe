@@ -6,6 +6,7 @@
 #include "engine/glu/movie/CMovie.h"
 #include "engine/glu/sprite/CSpriteGlu.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
+#include "engine/glu/sprite/CSpritePlayer.h"
 #include "engine/graphics/CBitmapFont.h"
 #include "engine/graphics/CMarkerBatch.h"
 #include <map>
@@ -48,6 +49,10 @@ public:
     bool DrawSpriteFitted(unsigned archetype, unsigned animation, unsigned time, float x, float y, float width, float height, float alpha = 1);
     bool ButtonBackground(float x, float y, float width, float height, bool selected, bool hovered);
     unsigned SpriteDuration(unsigned archetype, unsigned animation);
+    /** Bind native step playback to cached BIG durations; cache outlives menu state. */
+    bool BindSpritePlayer(unsigned archetype, unsigned animation, CSpritePlayer &player);
+    bool DrawSpritePlayer(unsigned archetype, unsigned animation, const CSpritePlayer &player,
+        float x, float y, float alpha = 1);
     /** Original sprite geometry, for callbacks that align without scaling. */
     bool SpriteBounds(unsigned archetype, unsigned animation, MovieRegion &bounds);
     void Image(const CTexture &texture, float x, float y, float width, float height, bool flipVertical = false);
@@ -66,7 +71,7 @@ private:
     struct Metrics { float x = 0, y = 0, left = 0, top = 0, width = 0, height = 0; };
     struct Animation {
         std::vector<std::vector<SpriteQuad>> steps;
-        std::vector<unsigned> durations;
+        std::vector<std::uint16_t> durations;
         Metrics bounds;
         unsigned duration = 0;
     };
