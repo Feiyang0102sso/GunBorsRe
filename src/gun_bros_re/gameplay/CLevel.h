@@ -165,6 +165,7 @@ public:
     /** CEnemy::SetCameraTarget :68799 switches mode before setting world XY. */
     void FocusCameraOnEnemy(float x, float y);
     int GetRespawnPathLayer() const { return m_respawnPathLayer; }
+    unsigned GetStatisticsGroup() const { return m_statisticsGroup; }
     unsigned GetKillsInStatisticsGroup(unsigned group) const { return m_statisticsKills[group & 255]; }
     unsigned GetStat42Bits() const { return m_stat42Bits; }
     bool IsCleared() const { return m_cleared; }

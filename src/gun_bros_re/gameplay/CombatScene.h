@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/CChallengeManager.h"
 /** @file CombatScene.h
  * @brief Shared actor world. The Arena harness supplies inputs and draws it.
  */
@@ -116,6 +117,7 @@ public:
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPlayerProgress(CPlayerProgress *progress);
     void AddExperience(unsigned amount);
+    std::uint64_t GetExperience() const { if (m_progress) { return m_progress->GetExperience(); } return 0; }
     void AddXplodium(unsigned amount);
     void AddHealth(unsigned amount);
     bool TouchesPickup(float x, float y) const;
@@ -143,6 +145,9 @@ public:
     unsigned GetTotalKills() const;
     const EnemyModelCache &GetEnemyModelCache() const { return m_enemyModelCache; }
     const std::vector<WeaponCombatProgress> &GetWeaponProgress() const { return m_weaponProgress; }
+    std::vector<CChallengeManager::Kill> TakeChallengeKills() { auto result = std::move(m_challengeKills); m_challengeKills.clear(); return result; }
+    std::vector<GameObjectRef> TakeChallengePowerups() { auto result = std::move(m_challengePowerups); m_challengePowerups.clear(); return result; }
+    void RecordChallengePowerup(const GameObjectRef &ref) { m_challengePowerups.push_back(ref); }
     const std::vector<EnemyCasualty> &GetCasualties() const { return m_casualties; }
     void SetViewCenter(float x, float y) { m_viewCenterX = x; m_viewCenterY = y; m_hasViewCenter = true; }
     /** The camera rectangle projectile culling tests against; see CBullet::CanBeCulled :60583. */
@@ -179,6 +184,8 @@ private:
     void RewardEnemy(const CombatEnemy &actor);
     std::vector<WeaponCombatProgress> m_weaponProgress;
     std::vector<EnemyCasualty> m_casualties;
+    std::vector<CChallengeManager::Kill> m_challengeKills;
+    std::vector<GameObjectRef> m_challengePowerups;
     std::vector<ExperienceText> m_experienceTexts;
     float m_textViewX = 0, m_textViewY = 0, m_textScaleX = 1, m_textScaleY = 1;
     CPlayerProgress *m_progress = nullptr;

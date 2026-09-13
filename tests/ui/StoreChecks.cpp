@@ -702,6 +702,10 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
 int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Template &progress,
     const CRefinementManager::Template &refinement, const std::vector<StoreEntry> &store,
     const std::vector<WeaponEntry> &weapons, const std::vector<ArmorEntry> &armor) {
+    struct ConnectionRestore {
+        bool previous = GameHostSettings().isConnected;
+        ~ConnectionRestore() { GameHostSettings().isConnected = previous; }
+    } connectionRestore;
     MenuTestClick buyClick;
     MenuTestClick dismissClick;
     float columnPitch = 0, rowPitch = 0;
@@ -741,6 +745,9 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
     }
     const auto root = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("bank-check-" + std::to_string(GetTickCount64()));
     for (unsigned phase = 0; phase < 9 + currencies.size(); ++phase) {
+        // Exercise both the legacy demonstration and local validated callbacks
+        // through real card clicks, funds prompts and native save reloads.
+        GameHostSettings().isConnected = phase % 2 != 0;
         CProfileManager profile;
         profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
         const auto path = root / std::to_string(phase);

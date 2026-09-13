@@ -6,6 +6,8 @@
 #define NOMINMAX
 #include "TestOutput.h"
 #include "gun_bros_re/data/NativeProfile.h"
+#include "gun_bros_re/HostSettings.h"
+#include "gun_bros_re/data/CChallengeManager.h"
 #include "gun_bros_re/data/OriginalProfile.h"
 #include "gun_bros_re/data/StoreCatalog.h"
 #include "gun_bros_re/gameplay/MapScene.h"
@@ -226,6 +228,11 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
 }
 
 int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
+    struct RestoreConnection {
+        bool previous = GameHostSettings().isConnected;
+        ~RestoreConnection() { GameHostSettings().isConnected = previous; }
+    } restoreConnection;
+    GameHostSettings().isConnected = true;
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
     PackTables tables(toc);
@@ -259,6 +266,8 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
         for (unsigned slot = 0; slot < 4; ++slot) {
             if (!SameRef(profile.configuration.armor[slot], before.configuration.armor[slot])) { return 1; }
         }
+        CChallengeManager challenges;
+        if (!challenges.Bind(toc, tables, profile, 0) || challenges.current.empty() || challenges.cycleDay == 0) { return 1; }
         std::printf("[native-profile-play-check] planet=%u original-equipment active-slot=%u kills=%u waves=2 saved-reloaded failures=0\n",
             planet, profile.activeWeaponSlot, context.result.kills);
     }

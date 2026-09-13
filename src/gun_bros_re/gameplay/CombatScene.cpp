@@ -88,6 +88,18 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
     }
     if (!counted) { m_casualties.push_back({ref, 1, actor.data->owner}); }
     const CombatHit &hit = actor.model.enemy.combat.pendingHit;
+    // Original CLevel::OnEnemyKilled :119912, six-byte statistic key.
+    if (playerKill || hit.owner == kBrotherCombatId) {
+        bool recorded = false;
+        for (auto &kill : m_challengeKills) {
+            if (kill.enemy.packHash == ref.packHash && kill.enemy.localIndex == ref.localIndex &&
+                kill.bullet.packHash == hit.bullet.packHash && kill.bullet.localIndex == hit.bullet.localIndex &&
+                kill.group == m_level->GetStatisticsGroup() && kill.critical == hit.critical && kill.player == playerKill) {
+                ++kill.count; recorded = true; break;
+            }
+        }
+        if (!recorded) { m_challengeKills.push_back({ref, hit.bullet, m_level->GetStatisticsGroup(), 1, hit.critical, playerKill}); }
+    }
     if (playerKill && !hit.weapon.IsNull()) {
         bool credited = false;
         for (auto &entry : m_weaponProgress) {
@@ -311,6 +323,8 @@ void CombatScene::Reset() {
     m_experienceTexts.clear();
     m_weaponProgress.clear();
     m_casualties.clear();
+    m_challengeKills.clear();
+    m_challengePowerups.clear();
     m_xplodiumRemainder = 0;
     m_hasViewCenter = false;
     m_score = 0;

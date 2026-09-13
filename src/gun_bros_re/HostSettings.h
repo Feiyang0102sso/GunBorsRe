@@ -10,6 +10,7 @@ struct HostSettings {
     // Session-only information toggle; DebugMode remains the master switch.
     bool drawDebugInfo = true;
 #if GB_ENABLE_CHEATS
+    // Enables the local NGS/StoreKit/Game Center adapter for reconstructed menus.
     bool isConnected = false;
     bool debugMode = false;
 #else

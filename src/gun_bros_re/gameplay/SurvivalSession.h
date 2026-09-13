@@ -21,6 +21,10 @@ public:
     void SetHorde(bool enabled) { m_horde = enabled; m_archive = false; m_scene.SetHorde(enabled); }
     void SetStartWave(int wave) { m_startWave = wave; }
     void SetDialogHud(SurvivalHud *hud) { m_dialogHud = hud; }
+    void SetChallenges(CChallengeManager *manager, CProfileManager *profile, const std::vector<WeaponEntry> *weapons) {
+        m_challenges = manager; m_challengeProfile = profile; m_challengeWeapons = weapons;
+    }
+    bool SubmitChallenges(bool ended, bool waveCleared = false);
     void SetOriginalHud(SurvivalHud *hud) { m_originalHud = hud; }
     bool HasOriginalHud() const { return m_originalHud != nullptr; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
@@ -85,6 +89,11 @@ private:
     void UpdateCamera(int deltaMs = 0);
     /** CEnemySpawner::GetSpawnPoint :146098; -1 when no node qualifies. */
     int ChooseSpawnNode(const ILayerPath &path);
+    CChallengeManager *m_challenges = nullptr;
+    CProfileManager *m_challengeProfile = nullptr;
+    const std::vector<WeaponEntry> *m_challengeWeapons = nullptr;
+    GameObjectRef m_levelReference;
+    bool m_challengeSessionEnded = false;
     CLevel::Template m_template;
     CLevel m_level;
     CombatScene &m_scene;

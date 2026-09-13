@@ -6,6 +6,7 @@
 class CWindow;
 class CProfileManager;
 class CDailyBonusTracking;
+class CChallengeManager;
 class CombatScene;
 class SurvivalSession;
 class PowerupScene;
@@ -17,6 +18,7 @@ namespace MenuDetail { struct MenuState; }
 struct CombatCheatResult {
     bool resume = false;
     bool resetClock = false;
+    bool challengesUpdated = false;
 };
 bool ApplyCombatCheat(const std::string &command, CombatScene &scene, PlayerVitals &vitals,
     PowerupScene &powerups, SurvivalSession &session, SurvivalGameContext *context, CombatCheatResult &result,
@@ -29,6 +31,8 @@ namespace GameCheats {
 std::uint64_t ExperienceTarget(const std::string &command,
     const CPlayerProgress::Template &data, const CPlayerProgress &progress);
 bool UnlockAllWaves(CProfileManager &profile);
+/** Advance only the saved challenge day, using the original rollover and selection. */
+bool AdvanceChallenges(CProfileManager &profile, CChallengeManager &challenges, std::uint32_t now);
 }
 namespace MenuDetail {
 void AdvanceDailyDebugDay(CProfileManager &profile, const CDailyBonusTracking &daily, std::uint32_t now);

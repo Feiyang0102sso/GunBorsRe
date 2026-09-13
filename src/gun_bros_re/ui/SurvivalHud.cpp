@@ -125,6 +125,14 @@ SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, f
         }
         if (m_selectorPressArmed) { clicked = !down && m_previousDown && !m_selectorDragged; }
     }
+    if (!down || !HasChallenges() || state.paused || state.shopOpen || state.dead || state.cleared) { m_challengeHeld = false; }
+    if (clicked && !HasInterstitial()) {
+        MovieRegion button;
+        if (FindActionRegion(state, SurvivalHudAction::BroOps, button) && button.Contains(x, y)) {
+            m_challengeHeld = true;
+            m_challengeTime = 0;
+        }
+    }
     m_previousDown = down;
     if (!clicked) { return SurvivalHudAction::None; }
     if (state.shopOpen) {
@@ -222,6 +230,15 @@ bool SurvivalHud::Draw(const SurvivalHudState &state) {
         if (icon != 255) { m_movies.DrawSprite(1, icon, elapsed, x, y, 1, indicator.Alpha()); }
     }
     if (!DrawOriginalControls(state)) { return false; }
+    m_challengeRows = 0;
+    if ((m_challengeHeld || m_challengeTime != 0) && !state.paused && !state.shopOpen && !state.dead && !state.cleared) {
+        // ShowChallengeInfoOverlay uses HUD region2's bottom-center as origin.
+        MovieRegion origin;
+        const auto peripheral = m_movies.Ordinal("GLU_MOVIE_HUD_PAUSE");
+        unsigned start = 0, end = 0;
+        if (!m_movies.GetMovie(peripheral)->GetChapterRange(5, start, end) || !m_movies.Region(peripheral, 2, start, origin)) { return false; }
+        if (!DrawChallengeOverlay(origin.x + origin.width / 2, origin.y + origin.height, m_challengeTime)) { return false; }
+    }
     DrawNotice();
     DrawSurvivalDebugInfo(m_movies, state);
     if (state.shopOpen) { return DrawOriginalSelector(state); }
@@ -310,8 +327,12 @@ std::vector<SurvivalHud::Button> SurvivalHud::OriginalControlButtons(const Survi
     const unsigned base = m_movies.Ordinal("GLU_MOVIE_HUD_PAD_IPAD");
     const unsigned peripheral = m_movies.Ordinal("GLU_MOVIE_HUD_PAUSE");
     unsigned idle = 0, end = 0;
-    if (!m_movies.GetMovie(peripheral)->GetChapterRange(3, idle, end)) { return buttons; }
+    unsigned chapter = 3;
+    if (HasChallenges()) { chapter = 5; }
+    if (!m_movies.GetMovie(peripheral)->GetChapterRange(chapter, idle, end)) { return buttons; }
+    if (HasChallenges()) { idle = end; }
     MovieRegion region;
+    if (HasChallenges() && m_movies.Region(peripheral, 4, idle, region)) { buttons.push_back({region, SurvivalHudAction::BroOps, ""}); }
     if (m_movies.Region(peripheral, 3, idle, region)) { buttons.push_back({region, SurvivalHudAction::Pause, ""}); }
     if (m_movies.Region(base, 2, 0, region)) { buttons.push_back({region, SurvivalHudAction::OpenShop, ""}); }
     if (m_movies.Region(base, 3, 0, region)) { buttons.push_back({region, SurvivalHudAction::SwapWeapon, ""}); }

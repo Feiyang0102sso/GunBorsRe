@@ -95,12 +95,14 @@ unsigned CGun::GetFireRateMs() const {
     return m_template->GetMasteryModifier(5, m_mastery, m_template->GetFireIntervalMs());
 }
 
-float CGun::GetMasteryDamageMultiplier(float randomUnit) const {
+float CGun::GetMasteryDamageMultiplier(float randomUnit, bool *critical) const {
     // CGun::GetMasteryDamageMultiplier :128469, normal damage table at +200.
     float multiplier = m_template->GetMasteryModifier(4, m_mastery, 100) * 0.01f;
     const unsigned range = m_template->GetMasteryModifier(1, m_mastery, 0);
     // Utility::Random(0, range) is inclusive; zero is the critical outcome.
-    if (range != 0 && randomUnit < 1.0f / (range + 1.0f)) { multiplier *= m_template->GetCriticalDamageScale(); }
+    const bool rolledCritical = range != 0 && randomUnit < 1.0f / (range + 1.0f);
+    if (critical != nullptr) { *critical = rolledCritical; }
+    if (rolledCritical) { multiplier *= m_template->GetCriticalDamageScale(); }
     return multiplier;
 }
 

@@ -118,6 +118,7 @@ struct Shot {
     GameObjectRef weapon;
     unsigned weaponMasteryLimit = 0;
     float masteryDamageMultiplier = 1;
+    bool critical = false;
     int ownerType = 0;
     float damageMultiplier = 1;
     float powerupMultiplier = 1;
@@ -610,6 +611,8 @@ struct WeaponEffects::Impl {
             hit.projectile = owner->id;
             hit.owner = owner->owner;
             hit.weapon = owner->weapon;
+            hit.bullet = owner->source.resource;
+            hit.critical = owner->critical;
             hit.weaponMasteryLimit = owner->weaponMasteryLimit;
             hit.ownerType = owner->ownerType;
             hit.flags = owner->script.flags;
@@ -835,6 +838,7 @@ CombatId WeaponEffects::SpawnProjectile(const GameObjectRef &resource, float x, 
     if (scene.world != nullptr) { shot->powerupMultiplier = scene.world->GetProjectilePowerupMultiplier(owner); }
     shot->part = part;
     shot->source.node = node;
+    shot->source.resource = resource;
     shot->visual = visual;
     shot->x = x;
     shot->y = y;
@@ -1015,7 +1019,7 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             shot->weaponMasteryLimit = player.ActiveWeapon().data.GetMasteryLimit();
             float masteryRoll = 1;
             if (player.ActiveWeapon().gun.GetMasteryLevel() > 0) { masteryRoll = scene.Random(0, 1); }
-            shot->masteryDamageMultiplier = player.ActiveWeapon().gun.GetMasteryDamageMultiplier(masteryRoll);
+            shot->masteryDamageMultiplier = player.ActiveWeapon().gun.GetMasteryDamageMultiplier(masteryRoll, &shot->critical);
             if (scene.world != nullptr) { shot->powerupMultiplier = scene.world->GetProjectilePowerupMultiplier(owner); }
             shot->part = hand;
             shot->visual = visual;
@@ -1093,6 +1097,8 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         hit.projectile = shot->id;
         hit.owner = shot->owner;
         hit.weapon = shot->weapon;
+        hit.bullet = shot->source.resource;
+        hit.critical = shot->critical;
         hit.weaponMasteryLimit = shot->weaponMasteryLimit;
         hit.ownerType = shot->ownerType;
         hit.flags = shot->script.flags;

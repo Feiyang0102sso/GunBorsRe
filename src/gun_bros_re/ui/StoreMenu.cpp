@@ -471,6 +471,8 @@ void ShowStoreFundsPrompt(MenuState &state, const std::vector<StoreEntry> &store
     state.failedMissing = 0;
     if (price > balance) { state.failedMissing = static_cast<unsigned>(price - balance); }
     state.currencyOffer = FindCurrencyOffer(store, currency, state.failedMissing);
+    state.currencyOfferProduct.clear();
+    if (state.currencyOffer >= 0) { state.currencyOfferProduct = store[state.currencyOffer].productId; }
 }
 
 /** CMenuStore::GunSwapCallback :178863; button size comes from Movie region 1. */
@@ -551,13 +553,49 @@ bool DrawStoreGunSwap(GameMenu &view, MenuState &state, const MovieRegion &paren
 
 bool CompleteOfflineIAP(std::uint64_t clock, MenuState &state, CProfileManager &profile,
     const std::vector<StoreEntry> &store, const std::filesystem::path &savePath) {
-    if (!state.currencyPending || clock < state.currencyReadyAt) { return true; }
+    if (!state.currencyPending) { return true; }
+    int itemIndex = state.currencyItem;
+    if (state.currencySimulated) {
+        state.online.SetConnected(GameHostSettings().isConnected);
+        state.online.UpdatePurchase(clock);
+        const auto status = state.online.GetPurchaseState();
+        if (status == LocalOnlineServices::PurchaseState::Cancelled) {
+            state.currencyPending = false;
+            state.online.FinishPurchase();
+            state.ShowStorePrompt("MDS_STORE_PROMPT_UNAVAILABLE", false, true);
+            std::printf("[local-iap] cancelled before delivery\n");
+            return true;
+        }
+        if (status != LocalOnlineServices::PurchaseState::Completed) { return true; }
+        // AcquireIAP :158280 resolves the callback product ID against the store,
+        // independently of the selected card or the current catalog order.
+        itemIndex = -1;
+        for (unsigned index = 0; index < store.size(); ++index) {
+            if (store[index].data.value32 == 1 && store[index].productId == state.online.GetProduct()) {
+                itemIndex = static_cast<int>(index);
+                break;
+            }
+        }
+        state.online.FinishPurchase();
+    } else if (clock < state.currencyReadyAt) { return true; }
     state.currencyPending = false;
+    state.storePromptRequested = false;
     state.storePopup.Hide();
-    if (state.currencyItem < 0 || state.currencyItem >= static_cast<int>(store.size())) { return false; }
-    const PurchaseResult result = profile.AcquireCurrency(store[state.currencyItem].data);
-    if (result == PurchaseResult::Purchased && !profile.SaveToDisk(savePath)) { return false; }
-    std::printf("[offline-iap] completed result=%u\n", static_cast<unsigned>(result));
+    if (itemIndex < 0 || itemIndex >= static_cast<int>(store.size())) {
+        state.ShowStorePrompt("MDS_STORE_PROMPT_UNAVAILABLE", false, true);
+        std::printf("[local-iap] product not found; no delivery\n");
+        return true;
+    }
+    const auto previousCoins = profile.coins;
+    const auto previousBucks = profile.warbucks;
+    const PurchaseResult result = profile.AcquireCurrency(store[itemIndex].data);
+    if (result == PurchaseResult::Purchased && !profile.SaveToDisk(savePath)) {
+        profile.coins = previousCoins;
+        profile.warbucks = previousBucks;
+        return false;
+    }
+    if (result != PurchaseResult::Purchased) { state.ShowStorePrompt("MDS_STORE_PROMPT_UNAVAILABLE", false, true); }
+    std::printf("[offline-iap] completed result=%u simulated-validation=%u\n", static_cast<unsigned>(result), state.currencySimulated);
     return true;
 }
 
@@ -576,9 +614,16 @@ bool DrawStorePrompt(GameMenu &view, MenuState &state) {
         !view.movies.Region(ordinal, 1, smallStart, compactRegion) || !view.movies.Region(ordinal, 1, largeStart, expandedRegion)) { return false; }
     const bool hasVisual = entry->sprites[0] != UINT32_MAX;
     if (hasVisual && !view.movies.SpriteBounds(entry->sprites[0] >> 16, entry->sprites[0] & 255, visual)) { return false; }
-    const std::string title = view.movies.NamedString(entry->strings[1]);
+    std::string title = view.movies.NamedString(entry->strings[1]);
     std::string body = view.movies.NamedString(entry->strings[0]);
-    if (state.storePromptButtons != nullptr && !StoreFailureText(view, state, body)) { return false; }
+    if (!state.challengeRewardTitle.empty()) { title = state.challengeRewardTitle; body = state.challengeRewardBody; }
+    if (state.matchingPrompt) {
+        // The original uses GKMatchmakerViewController (:260057), not BIG.
+        // This labelled desktop adapter borrows only the native popup geometry.
+        title = "LOCAL MATCHMAKING";
+        body = "Waiting for another player.\nLocal simulation has no peer connected.";
+    }
+    if (!state.matchingPrompt && state.storePromptButtons != nullptr && !StoreFailureText(view, state, body)) { return false; }
     const float bodyHeight = view.movies.TextHeight(0);
     float titleSpace = view.movies.TextHeight(0) + bodyHeight;
     if (!state.storePromptSideVisual) { titleSpace = view.movies.TextHeight(0) + static_cast<unsigned>(bodyHeight) / 2; }
@@ -659,7 +704,9 @@ bool DrawStorePrompt(GameMenu &view, MenuState &state) {
     if (state.storePromptButtons != nullptr) {
         unsigned first = 1;
         if (std::strcmp(state.storePromptButtons, "MDS_BUTTON_STORE_PROMPT") == 0) { first = 0; }
-        for (unsigned index = first; index <= 2; ++index) {
+        unsigned last = 2;
+        if (state.matchingPrompt) { first = 0; last = 0; }
+        for (unsigned index = first; index <= last; ++index) {
             MovieRegion region, buttonBounds, popupBounds;
             const auto *button = OriginalMenuData(state.storePromptButtons, index);
             if (button == nullptr) { return false; }
@@ -683,13 +730,17 @@ bool DrawStorePrompt(GameMenu &view, MenuState &state) {
                 state.storePopup.IsReady(), pressed)) { return false; }
             view.inputEnabled = previousInput;
             if (pressed) {
+                if (button->action == 139 && state.matchingPrompt) {
+                    state.online.CancelMatch();
+                    state.storePopup.Hide();
+                }
                 if (button->action == 45) { state.storePopup.Hide(); }
                 if (button->action == 70) {
                     state.storePopup.Hide();
                     std::printf("[store] Tapjoy offers unavailable on host; no reward issued\n");
                 }
                 if (button->action == 71 && state.currencyOffer >= 0) {
-                    state.BeginOfflineIAP(state.currencyOffer, view.clock);
+                    state.BeginOfflineIAP(state.currencyOffer, view.clock, state.currencyOfferProduct);
                 }
                 return true;
             }
@@ -729,7 +780,7 @@ bool DrawCurrencyCard(GameMenu &view, CResTOCManager &toc, PackTables &tables,
             // CMenuAction 0x38 :94519 displays IAP wait before LaunchIAP.
             // Four seconds is the user's requested Windows offline simulation,
             // not a retail payment timer. Product ID and amounts stay in BIG.
-            state.BeginOfflineIAP(static_cast<int>(index), view.clock);
+            state.BeginOfflineIAP(static_cast<int>(index), view.clock, item.productId);
             std::printf("[offline-iap] pending product=%s common=%u rare=%u\n",
                 ReadGameString(toc, item.data.assets[0]).c_str(), item.data.commonPrice, item.data.rarePrice);
         } else {
@@ -1276,6 +1327,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
 /** CMenuMovieMultiplayerOverlay :250020..250880, region callbacks 0..5,
  * font 0 and MDS_BUTTON_MP_TOGGLE. No locally fabricated online mode. */
 bool DrawOriginalModeOverlay(GameMenu &view, MenuState &state) {
+    UpdateLocalConnection(state);
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP");
     const CMovie *movie = view.movies.GetMovie(ordinal);
     unsigned openStart = 0, openEnd = 0, foldStart = 0, foldEnd = 0, unfoldStart = 0, unfoldEnd = 0;
@@ -1320,7 +1372,7 @@ bool DrawOriginalModeOverlay(GameMenu &view, MenuState &state) {
         if (state.mode.modePhase == 2) {
             state.mode.modeTime = unfoldStart;
             state.mode.modePhase = 3;
-        } else if (mode == 0) {
+        } else if (mode == 0 || state.online.IsConnected()) {
             state.gameMode = mode;
             state.mode.modeSelected = true;
             state.mode.modeTime = foldStart;

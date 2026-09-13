@@ -23,7 +23,9 @@
 #include "gun_bros_re/ui/MenuWipe.h"
 #include "gun_bros_re/gameplay/SurvivalGameContext.h"
 #include "gun_bros_re/HostSettings.h"
+#include "gun_bros_re/LocalOnlineServices.h"
 #include "gun_bros_re/data/CDailyBonusTracking.h"
+#include "gun_bros_re/data/CChallengeManager.h"
 #include "gun_bros_re/ui/CMenuUpgradePopup.h"
 #include "gun_bros_re/ui/CMenuMesh.h"
 #include "gun_bros_re/ui/CMenuPopupPrompt.h"
@@ -217,6 +219,19 @@ struct SettingsMenuState {
 
 };
 struct SocialMenuState {
+    CChallengeManager challenges;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armors;
+    CProfileManager defaultBrother;
+    CGameAssetRef avatar;
+    std::string brotherName;
+    bool contentBound = false;
+    unsigned contentPage = 0;
+    unsigned selectedChallenge = 0;
+    float scrollPosition = 0;
+    MenuScrollMotion scrollMotion;
+    unsigned renderedEntries = 0; // Actual local content cards drawn this frame.
+    bool onlinePage = false;
     unsigned socialTab = 0;
     bool socialBound = false;
     unsigned socialTime = 0;
@@ -225,6 +240,10 @@ struct SocialMenuState {
 };
 
 struct MenuState {
+    LocalOnlineServices online;
+    bool matchingPrompt = false;
+    bool currencySimulated = false;
+    std::string currencyOfferProduct;
     bool resumeAfterDebugTutorial = false; // Returning from a no-save replay must not trigger a menu checkpoint.
     DebugMapSelection debugMap;
 
@@ -249,6 +268,7 @@ struct MenuState {
     CMenuPopupPrompt storePopup;
     std::uint64_t storePopupLastTick = 0;
     unsigned storePromptSpriteTime = 0;
+    std::string challengeRewardTitle, challengeRewardBody;
     const char *storePromptTable = "MDS_IAP_PLEASE_WAIT";
     unsigned storePromptIndex = 0;
     bool storePromptRequested = false;
@@ -277,6 +297,8 @@ struct MenuState {
     SocialMenuState social;
 
     void ShowStorePrompt(const char *table, bool sideVisual, bool dismissible, unsigned index = 0) {
+        challengeRewardTitle.clear();
+        challengeRewardBody.clear();
         storePromptTable = table;
         storePromptIndex = index;
         storePromptSideVisual = sideVisual;
@@ -286,7 +308,14 @@ struct MenuState {
         storePopup = CMenuPopupPrompt();
     }
 
-    void BeginOfflineIAP(int item, std::uint64_t clock) {
+    void BeginOfflineIAP(int item, std::uint64_t clock, const std::string &product = {}) {
+        if (currencyPending) { return; }
+        online.SetConnected(GameHostSettings().isConnected);
+        currencySimulated = online.IsConnected();
+        if (currencySimulated && !online.BeginPurchase(product, clock)) {
+            ShowStorePrompt("MDS_STORE_PROMPT_UNAVAILABLE", false, true);
+            return;
+        }
         currencyItem = item;
         currencyPending = true;
         currencyReadyAt = clock + 4000; // User-authorized offline wait, UI_sample/ui.md.
@@ -972,6 +1001,12 @@ bool DrawRefineryOverlay(GameMenu &view, const MenuState &state);
  * region 1 owns centered font-0 text. No host flag can validate an NGS user.
  * ui_movie.bt and MENU_CHALLENGES VA 0x402eb0 identify the original Movie. */
 bool DrawOriginalSocialOffline(GameMenu &view, MenuState &state, bool hasCredentials);
+bool DrawOriginalSocialMenu(GameMenu &view, MenuState &state, const CProfileManager &profile, bool hasCredentials);
+bool BindOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileManager &profile);
+bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileManager &profile, const MovieRegion &region);
+bool DrawOriginalSocialModel(GameMenu &view, MenuState &state, const CProfileManager &profile);
+bool BeginLocalMatch(MenuState &state);
+void UpdateLocalConnection(MenuState &state);
 
 /** CMenuDataProvider::CreateContentString :151507 resolves the action only
  * when the corresponding original MDS string slot is null. */
@@ -988,7 +1023,7 @@ bool DrawOriginalPlayerSelect(GameMenu &view, MenuState &state, CProfileManager 
     const std::filesystem::path &savePath, bool &launchTutorial);
 
 /** CMenuGreeting callbacks :207876..208207. Local daily rewards are the
- * user-authorized clock adapter; social data keeps the native offline branch. */
+ * user-authorized clock adapter; social entry follows the service availability. */
 
 bool DrawOriginalGreeting(GameMenu &view, MenuState &state, CResTOCManager &toc, PackTables &tables,
     CProfileManager &profile, const CDailyBonusTracking &daily, const std::vector<StoreEntry> &store,

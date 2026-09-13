@@ -7,13 +7,14 @@ inline constexpr const char *Money = "chm";
 inline constexpr const char *NextDay = "cht";
 inline constexpr const char *ToggleDebug = "chd";
 inline constexpr const char *ToggleConnection = "chc";
+inline constexpr const char *UpdateChallenges = "chupdate";
 inline constexpr const char *UnlockWaves = "chw";
 inline constexpr const char *LevelUp = "chxp";
 inline constexpr const char *MaximumLevel = "chlvmax";
 inline constexpr const char *Boss = "stboss";
 inline constexpr const char *Suicide = "stsuicide";
 inline constexpr const char *BrotherWeapon = "stbrow";
-inline constexpr const char *Commands[] = {Money, NextDay, ToggleDebug, ToggleConnection,
+inline constexpr const char *Commands[] = {Money, NextDay, ToggleDebug, ToggleConnection, UpdateChallenges,
     UnlockWaves, LevelUp, MaximumLevel,
     Boss, Suicide, BrotherWeapon};
 // Host cheat bounds, not resource timings. Normal gameplay never uses these.

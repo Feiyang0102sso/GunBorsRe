@@ -14,7 +14,7 @@
 #include "gun_bros_re/gameplay/CombatScene.h"
 
 enum class SurvivalHudAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
-    SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks };
+    BroOps, SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks };
 
 struct SurvivalHudState {
     float health = 0, maximumHealth = 1, brotherHealth = 0, brotherMaximumHealth = 1;
@@ -61,6 +61,11 @@ public:
     void ClearDialog(bool immediate) { m_dialog.Clear(immediate); }
     bool IsDialogDone() const { return m_dialog.IsDone(); }
     bool Init(CResTOCManager &toc, PackTables &tables);
+    void SetChallenges(const CChallengeManager *challenges) { m_challenges = challenges; }
+    bool HasChallenges() const;
+    bool IsChallengeHeld() const { return m_challengeHeld; }
+    unsigned ChallengeRowsDrawn() const { return m_challengeRows; }
+    bool DrawChallengeOverlay(float x, float y, unsigned elapsed, float alpha = 1);
     bool Draw(const SurvivalHudState &state);
     bool DrawTutorialDebugNotice(std::uint64_t ticks);
     /** Original level effect pass, also callable by the permanent death check. */
@@ -86,6 +91,9 @@ public:
     // Research/accessibility queries use the same authored hit regions as input.
     bool FindActionRegion(const SurvivalHudState &state, SurvivalHudAction action, MovieRegion &region) const;
 private:
+    const CChallengeManager *m_challenges = nullptr;
+    bool m_challengeHeld = false;
+    unsigned m_challengeTime = 0, m_challengeRows = 0;
     CDialogPopup m_dialog;
     struct Button;
 #if GB_ENABLE_TESTS

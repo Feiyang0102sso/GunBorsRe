@@ -56,6 +56,7 @@ bool LoadStoreCatalog(CResTOCManager &toc, PackTables &tables, std::vector<Store
                 return false;
             }
             entry.name = ReadGameString(toc, entry.data.assets[2]);
+            if (entry.data.value32 == 1) { entry.productId = ReadGameString(toc, entry.data.assets[0]); }
             if (entry.name.empty()) { entry.name = entry.owner; }
             catalog.push_back(std::move(entry));
         }

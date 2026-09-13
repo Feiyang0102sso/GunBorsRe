@@ -14,6 +14,7 @@
 #include "gameplay/DebugMapChecks.h"
 #endif
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include <ctime>
 #if GB_ENABLE_TESTS
 #include "TestOutput.h"
 #endif
@@ -263,6 +264,13 @@ if (check) {
     }
     scene.SetPlayerProgress(&progress);
     SurvivalSession session(scene, loaded.map, enemies);
+    CChallengeManager challenges;
+    if (gameContext != nullptr && gameContext->profile.nativeArchive && GameHostSettings().isConnected && !gameContext->tutorial) {
+        if (!challenges.InitProgressData(toc, tables, gameContext->profile, static_cast<unsigned>(std::time(nullptr)))) { return 1; }
+        session.SetChallenges(&challenges, &gameContext->profile, &weapons);
+        survivalHud.SetChallenges(&challenges);
+        if (!gameContext->SaveProfile()) { return 1; }
+    }
     CProfileManager researchProfile;
     CProfileManager *pickupProfile = nullptr;
     if (gameContext != nullptr) { pickupProfile = &gameContext->profile; }
@@ -327,6 +335,7 @@ if (check) {
     session.SetProps(&props);
     scene.SetProps(&props);
     session.Restart(startX, startY, startFacing);
+    if (!session.SubmitChallenges(false)) { return 1; }
     loading.Finish();
 #if GB_ENABLE_TESTS
     if (development->debugMapProfileCheck) {
@@ -629,6 +638,15 @@ if (performanceStudy) {
         for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
             CombatCheatResult result;
             if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result, progressData, progress)) { return 1; }
+            if (result.challengesUpdated && !gameContext->tutorial) {
+                // Discard the old day's pending wave deltas before binding the new list.
+                scene.TakeChallengeKills();
+                scene.TakeChallengePowerups();
+                if (!challenges.Bind(toc, tables, gameContext->profile, static_cast<unsigned>(std::time(nullptr)))) { return 1; }
+                session.SetChallenges(&challenges, &gameContext->profile, &weapons);
+                survivalHud.SetChallenges(&challenges);
+                if (!session.SubmitChallenges(false)) { return 1; }
+            }
             if (result.resume) { paused = false; shopOpen = false; itemChoice = false; }
             if (result.resetClock) {
                 effects.SetPaused(paused || shopOpen);
@@ -637,6 +655,17 @@ if (performanceStudy) {
             }
         }
 #endif
+
+        if (gameContext && gameContext->profile.nativeArchive && !gameContext->tutorial &&
+            GameHostSettings().isConnected && challenges.current.empty()) {
+            // Enabling the connection during combat establishes the same local clock.
+            scene.TakeChallengeKills();
+            scene.TakeChallengePowerups();
+            if (!challenges.InitProgressData(toc, tables, gameContext->profile, static_cast<unsigned>(std::time(nullptr)))) { return 1; }
+            session.SetChallenges(&challenges, &gameContext->profile, &weapons);
+            survivalHud.SetChallenges(&challenges);
+            if (!session.SubmitChallenges(false) || !gameContext->SaveProfile()) { return 1; }
+        }
 
         int inputWidth = 0, inputHeight = 0;
         window.GetDrawableSize(inputWidth, inputHeight);
@@ -750,6 +779,7 @@ if (checkControls && controlFrame < controlClickCount) {
                 accumulator = 0;
                 inputs.clear();
                 if (selected) {
+                    if (!session.SubmitChallenges(true)) { return 1; }
                     if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
                     return kDebugMapSessionChoice;
                 }
@@ -818,6 +848,7 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
             if (key == KeyCode::R) {
                 pendingWeapon = weapons.size();
                 swapEventAccepted = false;
+                if (!session.SubmitChallenges(true)) { return 1; }
                 if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
                 session.Restart(startX, startY, startFacing);
                 if (gameContext != nullptr) { gameContext->accountedKills = 0; gameContext->accountedWeaponExperience.clear(); }
@@ -1263,6 +1294,7 @@ if (performanceStudy) {
     PerformanceProbe::uncachedPaths = false;
     if (!performancePassed) { return 1; }
 #endif
+    if (!session.SubmitChallenges(true)) { return 1; }
     if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
     return 0;
 }

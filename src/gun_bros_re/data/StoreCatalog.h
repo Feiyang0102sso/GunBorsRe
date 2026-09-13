@@ -12,6 +12,8 @@ struct StoreEntry {
     GameObjectRef ref;
     std::string owner;
     std::string name;
+    // CStoreItem::GetIapName: resolved from BIG asset[0], not a host SKU table.
+    std::string productId;
     CStoreItem data;
 };
 

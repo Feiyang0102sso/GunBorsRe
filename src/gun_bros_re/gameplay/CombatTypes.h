@@ -66,6 +66,8 @@ struct CombatHit {
     CombatId owner = 0;
     GameObjectRef weapon;
     unsigned weaponMasteryLimit = 0;
+    GameObjectRef bullet;
+    bool critical = false;
     int ownerType = 0;
     float damage = 0;
     float x = 0;

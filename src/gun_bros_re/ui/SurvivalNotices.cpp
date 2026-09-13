@@ -17,6 +17,8 @@
 
 void SurvivalHud::ResetNotices() {
     m_notices.clear();
+    m_challengeHeld = false;
+    m_challengeTime = 0;
     m_observedProgress = false;
     m_interstitialCompleted = false;
 }
@@ -66,6 +68,8 @@ void SurvivalHud::BeginOriginalLevel(unsigned wave, bool horde, bool boss) {
 void SurvivalHud::OnOriginalWaveClear(unsigned wave, bool perfect, unsigned rewardPercent, bool boss) {
     // OnWaveClear :89760 discards previous notices before its new sequence.
     m_notices.clear();
+    m_challengeHeld = false;
+    m_challengeTime = 0;
     m_interstitialCompleted = false;
     std::string text = OriginalNoticeNumber("IDS_HUD_WAVE_CLEAR", wave);
     // Original ARM 0x626A0..0x6271C loads the boss string but never copies it
@@ -75,6 +79,10 @@ void SurvivalHud::OnOriginalWaveClear(unsigned wave, bool perfect, unsigned rewa
     if (perfect) {
         QueueOriginalNotice("GLU_MOVIE_PERFECT_WAVE", m_movies.NamedString("IDS_HUD_WAVE_PERFECT"),
             OriginalNoticeNumber("IDS_HUD_WAVE_PERFECT_SUMMARY", rewardPercent), true);
+    }
+    if (HasChallenges()) {
+        for (auto &notice : m_notices) { notice.releaseLevel = false; }
+        QueueOriginalNotice("GLU_MOVIE_BRO_OPS_OVERLAY_INTERSITIAL", m_movies.NamedString("IDS_HUD_CHALLENGE_UPDATE"), "", true);
     }
     std::printf("[hud-overlay] clear wave=%u perfect=%d reward=%u boss=%d\n", wave, perfect, rewardPercent, boss);
 }
@@ -93,6 +101,14 @@ void SurvivalHud::ObserveProgress(const SurvivalHudState &state) {
 void SurvivalHud::Advance(int deltaMs) {
     if (deltaMs > 0) {
         m_controlTime += deltaMs;
+        if (HasChallenges()) {
+            const auto *scroll = m_movies.GetMovie(m_movies.Ordinal("GLU_MOVIE_BRO_OPS_OVERLAY_SCROLL"));
+            unsigned start = 0, end = 0;
+            if (scroll && scroll->GetChapterRange(0, start, end)) {
+                if (m_challengeHeld) { m_challengeTime = std::min(end - start, m_challengeTime + static_cast<unsigned>(deltaMs)); }
+                else { m_challengeTime -= std::min(m_challengeTime, static_cast<unsigned>(deltaMs)); }
+            }
+        }
         for (auto &meter : m_meters) { meter.Update(deltaMs); }
     }
     if (deltaMs <= 0 || m_notices.empty()) { return; }
@@ -113,8 +129,11 @@ void SurvivalHud::DrawNotice() {
         // the Movie region. Drawing as a callback preserves authored layering.
         class OverlayCallback : public IMovieRegionCallback {
         public:
-            OverlayCallback(MovieRenderer &renderer, const Notice &current) : movies(renderer), notice(current) {}
+            OverlayCallback(SurvivalHud &owner, MovieRenderer &renderer, const Notice &current) : hud(owner), movies(renderer), notice(current) {}
             bool DrawMovieRegion(const MovieRegion &area) override {
+                if (notice.movie == movies.Ordinal("GLU_MOVIE_BRO_OPS_OVERLAY_INTERSITIAL") && area.index == 1) {
+                    return hud.DrawChallengeOverlay(area.x, area.y, notice.elapsed, area.alpha);
+                }
                 if (area.index > 1) { return true; }
                 const std::string *text = &notice.title;
                 if (area.index == 1) { text = &notice.footer; }
@@ -123,9 +142,10 @@ void SurvivalHud::DrawNotice() {
                 const float y = area.y + int(area.height) / 2 - int(movies.TextHeight(11)) / 2;
                 return movies.Text(*text, x, y, 11, 1, 0, area.alpha);
             }
+            SurvivalHud &hud;
             MovieRenderer &movies;
             const Notice &notice;
-        } callback(m_movies, notice);
+        } callback(*this, m_movies, notice);
         m_movies.Draw(notice.movie, notice.elapsed, 512, 384, 1024, 768, 0, 1, &callback);
         return;
     }

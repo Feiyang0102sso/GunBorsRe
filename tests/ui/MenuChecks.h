@@ -32,6 +32,7 @@ int RunPlayInteractionCheck(const std::string &bigDirectory);
 int RunPlanetMenuCheck(const std::string &bigDirectory);
 
 int RunSocialOfflineCheck(const std::string &bigDirectory);
+int RunLocalOnlineCheck(const std::string &bigDirectory);
 
 int RunOptionsCheck(const std::string &bigDirectory);
 

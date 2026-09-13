@@ -149,7 +149,7 @@ public:
     void SetMasteryExperience(unsigned experience);
     unsigned GetMasteryLevel() const { return m_mastery; }
     unsigned GetFireRateMs() const;
-    float GetMasteryDamageMultiplier(float randomUnit = 1) const;
+    float GetMasteryDamageMultiplier(float randomUnit = 1, bool *critical = nullptr) const;
     unsigned GetMasterySpeedMod() const;
     float GetHeatIntensity() const { return m_heatIntensity; }
     std::vector<GunCue> TakeCues();

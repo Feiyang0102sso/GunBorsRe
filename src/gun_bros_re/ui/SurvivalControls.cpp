@@ -229,6 +229,18 @@ bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
     } peripheralCallback(m_movies, state);
     const unsigned peripheral = m_movies.Ordinal("GLU_MOVIE_HUD_PAUSE");
     unsigned start = 0, end = 0;
-    if (!m_movies.GetMovie(peripheral)->GetChapterRange(3, start, end)) { return false; }
-    return m_movies.Draw(peripheral, start, 512, 384, 1024, 768, 0, 1, &peripheralCallback);
+    unsigned chapter = 3;
+    if (HasChallenges()) { chapter = 5; }
+    if (!m_movies.GetMovie(peripheral)->GetChapterRange(chapter, start, end)) { return false; }
+    if (HasChallenges()) { start = end; }
+    if (!m_movies.Draw(peripheral, start, 512, 384, 1024, 768, 0, 1, &peripheralCallback)) { return false; }
+    if (HasChallenges()) {
+        MovieRegion area;
+        if (!m_movies.Region(peripheral, 4, start, area)) { return false; }
+        // PeripheralHUD::Bind :88876 uses core sprite0 animation170;
+        // Update :89028 positions its origin at region4's right and y + y/8.
+        if (!m_movies.DrawSprite(0, 170, m_controlTime, area.x + area.width,
+            area.y + (static_cast<int>(area.y) >> 3))) { return false; }
+    }
+    return true;
 }

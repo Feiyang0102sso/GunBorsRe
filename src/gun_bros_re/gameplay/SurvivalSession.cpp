@@ -56,6 +56,7 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
                     return false;
                 }
                 requested = level;
+                m_levelReference = level;
                 m_template = std::move(candidate);
                 if (selectedLevel != nullptr) {
                     std::printf("[survival] selected explicit LEVEL %u:%u for MAP %u:%u\n", level.packHash, level.localIndex, mapPack, mapIndex);
@@ -74,6 +75,7 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
 
 void SurvivalSession::Restart(float x, float y, float facingDegrees) {
     m_scene.Reset();
+    m_challengeSessionEnded = false;
     if (m_powerups != nullptr) { m_powerups->Reset(); }
     if (m_pickups != nullptr) { m_pickups->Reset(); }
     if (m_props != nullptr) { m_props->Reset(); }
@@ -283,6 +285,7 @@ void SurvivalSession::SendPropMessage(int objectId, int message) {
 void SurvivalSession::OnWaveCleared(unsigned perfectRewardPercent) {
     const unsigned previousPerfect = m_scene.GetPerfectWaves();
     m_scene.OnWaveCleared(perfectRewardPercent);
+    SubmitChallenges(false, true);
     // CGame::OnWaveCleared :76246 only shows this sequence for game type 1.
     if (m_originalHud != nullptr && !m_horde) {
         m_originalHud->OnOriginalWaveClear(m_level.GetRealWave() + 1,
@@ -585,4 +588,24 @@ void SurvivalSession::UpdateAfterDeath(int deltaMs) {
     m_scene.Update(deltaMs, 0, 0, false);
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
     UpdateCamera(deltaMs);
+}
+
+// CGame submits wave deltas before the HUD's common interstitial sequence.
+bool SurvivalSession::SubmitChallenges(bool ended, bool waveCleared) {
+    if (!m_challenges || m_challengeSessionEnded) { return true; }
+    m_challengeProfile->experience = m_scene.GetExperience();
+    CChallengeManager::Session data;
+    data.level = m_levelReference;
+    data.guns = m_challengeProfile->configuration.guns;
+    data.gameType = 1;
+    // Horde is a mission type, not the cooperative GameType=2 requirement.
+    data.wave = m_level.GetWave() + 1; // Original +0x4BEEC is the global wave, not modulo revolution.
+    data.waveCleared = waveCleared;
+    data.perfect = !m_scene.GetWavePerfectResults().empty() && m_scene.GetWavePerfectResults().back();
+    data.ended = ended;
+    data.kills = m_scene.TakeChallengeKills();
+    data.powerups = m_scene.TakeChallengePowerups();
+    m_challenges->UpdateFromLevelSession(data, *m_challengeWeapons, *m_challengeProfile);
+    m_challengeSessionEnded = ended;
+    return m_challenges->StoreProgress(*m_challengeProfile);
 }

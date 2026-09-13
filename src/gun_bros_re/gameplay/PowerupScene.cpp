@@ -126,6 +126,7 @@ bool PowerupScene::Use(bool fromSelector) {
         if (decrement) {
             if (!m_profile.ConsumePowerup(entry->resource)) { m_moviePlayer.Reset(); ++failures; return false; }
             ++consumed;
+            m_scene.RecordChallengePowerup(entry->resource);
         }
         return true;
     }
@@ -174,6 +175,7 @@ bool PowerupScene::Use(bool fromSelector) {
     if (requested && decrement) {
         if (!m_profile.ConsumePowerup(entry->resource)) { ++failures; return false; }
         ++consumed;
+        m_scene.RecordChallengePowerup(entry->resource);
     }
     return requested;
 }
@@ -185,6 +187,7 @@ void PowerupScene::Update(int deltaMs) {
     if (thrown > 0) {
         if (!m_profile.ConsumePowerup(m_equipped, thrown)) { ++failures; }
         consumed += thrown;
+        for (unsigned index = 0; index < thrown; ++index) { m_scene.RecordChallengePowerup(m_equipped); }
         std::printf("[powerup] thrown=%u remaining=%u\n", thrown, m_profile.GetPowerupCount(m_equipped));
         m_equipped = {};
     }

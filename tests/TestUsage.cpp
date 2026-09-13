@@ -71,7 +71,7 @@ void PrintTestUsage() {
         "  --options-check     original list, preferences and native save reload\n"
 #endif
 #if GB_ENABLE_TESTS
-        "  --social-check      original offline social UI; no invented native rewards\n"
+        "  --social-check      offline/local social UI, matchmaking and IAP callbacks\n"
 #endif
 #if GB_ENABLE_TESTS
         "  --planet-menu-check original map, mode overlay and four retail selections\n"

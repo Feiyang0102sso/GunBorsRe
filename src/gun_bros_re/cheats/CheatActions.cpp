@@ -5,8 +5,28 @@
 #include "gun_bros_re/gameplay/SurvivalSession.h"
 #include "gun_bros_re/gameplay/PowerupScene.h"
 #include "gun_bros_re/data/NativeProfile.h"
+#include <ctime>
 
 namespace GameCheats {
+bool AdvanceChallenges(CProfileManager &profile, CChallengeManager &challenges, std::uint32_t now) {
+    if (!profile.nativeArchive) {
+        std::printf("[cheat] chupdate requires a native profile\n");
+        return true;
+    }
+    auto &archive = *profile.nativeArchive;
+    if (!challenges.InitProgressData(*archive.toc, *archive.tables, profile, now)) { return false; }
+    // User-requested host shortcut. The original saved cycle remains the seed;
+    // changing it does not alter the system clock or the daily bonus tracker.
+    const std::uint64_t seconds = (std::uint64_t(challenges.cycleDay) + 1) * 86400 - 36000;
+    if (seconds > UINT32_MAX) {
+        std::printf("[cheat] chupdate exceeds the original timestamp range\n");
+        return true;
+    }
+    if (!challenges.InitProgressData(*archive.toc, *archive.tables, profile, static_cast<unsigned>(seconds))) { return false; }
+    std::printf("[cheat] chupdate day=%u count=%zu\n", challenges.cycleDay, challenges.current.size());
+    return true;
+}
+
 std::uint64_t ExperienceTarget(const std::string &command,
     const CPlayerProgress::Template &data, const CPlayerProgress &progress) {
     // player_progression.bt; CPlayer::AddExperience :101185 uses >= thresholds.
@@ -71,6 +91,11 @@ bool ProcessMenuCheats(CWindow &window, CProfileManager &profile, MenuDetail::Me
         }
         if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
         if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
+        if (cheat == GameCheats::UpdateChallenges) {
+            if (!GameCheats::AdvanceChallenges(profile, state.social.challenges, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return false; }
+            state.social.contentBound = false;
+            state.social.selectedChallenge = 0;
+        }
         if (cheat == GameCheats::UnlockWaves) {
             if (!GameCheats::UnlockAllWaves(profile)) { return false; }
             state.message = GameCheats::UnlockMessage;
@@ -115,6 +140,12 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
         if (context != nullptr) { context->profile.experience = progress.GetExperience(); }
     }
     if (context != nullptr) {
+        if (cheat == GameCheats::UpdateChallenges) {
+            context->profile.experience = progress.GetExperience();
+            CChallengeManager challenges;
+            if (!GameCheats::AdvanceChallenges(context->profile, challenges, static_cast<unsigned>(std::time(nullptr)))) { return false; }
+            result.challengesUpdated = !challenges.current.empty();
+        }
         if (cheat == GameCheats::Money) { context->profile.coins += GameCheats::Coins; context->profile.warbucks += GameCheats::Warbucks; }
         if (cheat == GameCheats::NextDay) { context->profile.dailyDayOffset += GameCheats::Days; }
         if (cheat == GameCheats::UnlockWaves) {

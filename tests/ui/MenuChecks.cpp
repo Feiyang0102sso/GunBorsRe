@@ -922,11 +922,27 @@ int RunSocialOfflineCheck(const std::string &bigDirectory) {
             std::printf("[social-check] page=%u credentials=%u original-regions retry-offline failures=0\n", page, credentials);
         }
     }
+    // The local connection must pass the same mode selection path as a click.
+    GameHostSettings().isConnected = true;
+    MenuState onlineMode;
+    view.animateNavigation = false;
+    view.Begin(0);
+    if (!DrawOriginalModeOverlay(view, onlineMode)) { return 1; }
+    MovieRegion multiplayer;
+    if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP"),
+        3, onlineMode.mode.modeTime, multiplayer)) { return 1; }
+    view.Begin(0);
+    view.SetTestClick({multiplayer.x + multiplayer.width / 2, multiplayer.y + multiplayer.height / 2});
+    if (!DrawOriginalModeOverlay(view, onlineMode) || onlineMode.gameMode != 1 ||
+        onlineMode.storePromptRequested) {
+        std::printf("[local-online-check] connected mode selection blocked\n");
+        return 1;
+    }
     GameHostSettings().isConnected = false;
     if (profile.coins != originalCoins || profile.warbucks != originalBucks || !profile.SaveToDisk(path) ||
         !ReloadNativeProfile(profile, path) || profile.coins != originalCoins || profile.warbucks != originalBucks) { return 1; }
     std::printf("[social-check] native-no-legacy-reward wallet-reload failures=0\n");
-    return 0;
+    return RunLocalOnlineCheck(bigDirectory);
 }
 
 int RunOptionsCheck(const std::string &bigDirectory) {

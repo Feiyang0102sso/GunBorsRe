@@ -35,6 +35,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     state.store.shopFilterBound = false;
     state.settings.optionsBound = false;
     state.social.socialBound = false;
+    state.social.contentBound = false;
     state.starMap.starBound = false;
     state.mode.modeBound = false;
     CPlayerProgress progress;
@@ -57,6 +58,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     }
     state.resumeAfterDebugTutorial = false;
     std::printf("[menu] ready page=%u\n", state.page);
+    unsigned challengeSecond = UINT32_MAX;
+    bool challengeConnected = false;
     while (view.window.PumpEvents()) {
         const auto ticks = view.window.GetTicksMs();
         frameTicks = ticks;
@@ -90,6 +93,45 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         }
         
         if (!ProcessMenuCheats(view.window, profile, state, daily, savePath, progressData, progress)) { return -3; }
+        UpdateLocalConnection(state);
+        const unsigned challengeNow = static_cast<unsigned>(CurrentSeconds());
+        if (state.online.IsConnected() && profile.nativeArchive &&
+            (challengeNow != challengeSecond || !challengeConnected) && !state.storePromptRequested && !state.storePopup.IsActive()) {
+            challengeSecond = challengeNow;
+            auto &challenges = state.social.challenges;
+            const auto previousRecord = profile.nativeArchive->records[17].payload;
+            const unsigned day = static_cast<unsigned>((std::uint64_t(challengeNow) + 36000) / 86400);
+            if (challenges.current.empty() || day > challenges.cycleDay || !challengeConnected) {
+                if (!challenges.InitProgressData(toc, tables, profile, challengeNow)) { return -3; }
+            }
+            challenges.UpdateChallengeStatusData(profile, false);
+            unsigned selected = 0;
+            for (; selected < challenges.current.size(); ++selected) {
+                const auto &challenge = challenges.current[selected];
+                const auto &definition = challenges.templates[challenge.templateIndex];
+                if (challenge.progress == 100 && challenge.rewardStatus < 3 &&
+                    challenge.completedFriends >= definition.participationRequired[challenge.rewardStatus]) { break; }
+            }
+            unsigned awarded = 0;
+            if (!challenges.AwardAvailableRewards(profile, store, awarded)) { return -3; }
+            if (previousRecord != profile.nativeArchive->records[17].payload || awarded) {
+                if (!profile.SaveToDisk(savePath)) { return -3; }
+            }
+            if (awarded) {
+                // CMenuAction 110 and CreateRewardDescString :240332.
+                const auto &challenge = challenges.current[selected];
+                state.ShowStorePrompt("MDS_CHALLENGE_MENU", false, true);
+                state.challengeRewardTitle = view.movies.NamedString("IDS_CHALLENGES_PROMPT_COMPLETE_TITLE");
+                const char *description = "IDS_CHALLENGES_PROMPT_COMPLETE_DESC1";
+                if (challenge.rewardStatus > 1) { description = "IDS_CHALLENGES_PROMPT_COMPLETE_DESC2"; }
+                state.challengeRewardBody = view.movies.NamedString(description);
+                const auto marker = state.challengeRewardBody.find("%s");
+                if (marker != std::string::npos) { state.challengeRewardBody.replace(marker, 2, challenge.name); }
+                if (challenge.rewardStatus < 3) { state.challengeRewardBody += view.movies.NamedString("IDS_CHALLENGES_PROMPT_COMPLETE_DESC3"); }
+                progress.SetExperience(profile.experience);
+            }
+        }
+        challengeConnected = state.online.IsConnected();
 
         for (KeyCode key = view.window.TakeKeyPress(); key != KeyCode::None; key = view.window.TakeKeyPress()) {
 #if GB_ENABLE_CHEATS
@@ -192,7 +234,10 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             if (!profile.nativeArchive) { return -3; }
             bool launch = false;
             if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return -3; }
-            if (launch) { return static_cast<int>(state.planet); }
+            if (launch) {
+                if (state.gameMode == 0) { return static_cast<int>(state.planet); }
+                if (!BeginLocalMatch(state)) { state.ShowStorePrompt("MDS_PROMPT_MP_UNAVAILABLE", false, true, 0); }
+            }
         }
 
         if (!CompleteOfflineIAP(menuClock, state, profile, store, savePath)) { return -3; }
@@ -210,7 +255,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             if (launchTutorial) { return 5; }
         } else if (state.page == 4 || state.page == 5 || state.page == 11 || state.page == 13) {
             const bool credentials = std::filesystem::exists(savePath / "Credentials.dat");
-            if (!DrawOriginalSocialOffline(view, state, credentials)) { return -3; }
+            if (!DrawOriginalSocialMenu(view, state, profile, credentials)) { return -3; }
         } else if (state.page == 6 || state.page == 8) {
             if (!DrawOptions(view, state, profile, saveChanged)) { return -3; }
         } else if (state.page == 14) {

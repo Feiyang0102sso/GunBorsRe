@@ -23,8 +23,17 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     const auto savePath = TestOutput::Path("cheat-profile");
     const auto initialCoins = profile.coins;
     const auto initialWarbucks = profile.warbucks;
+    if (!menu.social.challenges.InitProgressData(toc, tables, profile, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return 1; }
+    const unsigned initialChallengeDay = menu.social.challenges.cycleDay;
+    menu.social.challenges.current.front().counters.kills = 1;
+    menu.social.challenges.current.front().progress = 100;
+    menu.social.challenges.current.front().rewardStatus = 1;
+    if (!menu.social.challenges.StoreProgress(profile)) { return 1; }
+    const auto initialDailyLaunch = profile.dailyLastLaunchSeconds;
+    const auto initialDailySeconds = profile.dailyConsecutiveSeconds;
     // The same SDL input and menu consumer used by the game also save each action.
-    for (const char *command : {GameCheats::Money, GameCheats::LevelUp, GameCheats::UnlockWaves}) {
+    for (const char *command : {GameCheats::Money, GameCheats::LevelUp, GameCheats::UnlockWaves,
+        GameCheats::UpdateChallenges, GameCheats::UpdateChallenges}) {
         for (const char *letter = command; *letter != '\0'; ++letter) {
             SDL_Event event{};
             event.type = SDL_EVENT_KEY_DOWN;
@@ -38,6 +47,15 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     if (profile.coins != initialCoins + 500000 || profile.warbucks != initialWarbucks + 500 || progress.GetLevel() != 2) { ++failures; }
     for (unsigned cleared : profile.clearedWaves) { if (cleared != 500) { ++failures; } }
     if (!ReloadNativeProfile(profile, savePath) || profile.experience != progress.GetExperience()) { ++failures; }
+    CChallengeManager restoredChallenges;
+    if (!restoredChallenges.Bind(toc, tables, profile, 0)) { return 1; }
+    if (restoredChallenges.cycleDay != initialChallengeDay + 2 || menu.social.contentBound ||
+        profile.dailyLastLaunchSeconds != initialDailyLaunch || profile.dailyConsecutiveSeconds != initialDailySeconds) { ++failures; }
+    const auto expectedList = restoredChallenges.GenerateChallengeList(initialChallengeDay + 2);
+    for (unsigned index = 0; index < restoredChallenges.current.size(); ++index) {
+        const auto &challenge = restoredChallenges.current[index];
+        if (challenge.templateIndex != expectedList[index] || challenge.progress || challenge.rewardStatus || challenge.counters.kills) { ++failures; }
+    }
     for (const auto &ref : profile.nativeArchive->survivalLevels) {
         if (MenuDetail::NativeMissionProgress(profile, ref) != 500) { ++failures; }
     }
@@ -65,6 +83,12 @@ unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables,
     if (!ApplyCombatCheat(GameCheats::LevelUp, scene, vitals, powerups, session, &context, result, data, progress) ||
         progress.GetExperience() != maximumExperience) { ++failures; }
     if (!ReloadNativeProfile(profile, savePath) || profile.experience != maximumExperience) { ++failures; }
+    if (!ApplyCombatCheat(GameCheats::UpdateChallenges, scene, vitals, powerups, session, &context, result, data, progress) ||
+        !result.challengesUpdated || !ReloadNativeProfile(profile, savePath) ||
+        !restoredChallenges.Bind(toc, tables, profile, 0)) { return 1; }
+    if (restoredChallenges.cycleDay != initialChallengeDay + 3 ||
+        profile.dailyLastLaunchSeconds != initialDailyLaunch || profile.dailyConsecutiveSeconds != initialDailySeconds) { ++failures; }
+    std::printf("[cheat-check] chupdate menu=2 combat=1 reset=1 reload=1 daily-unchanged=1 failures=%u\n", failures);
     std::printf("[cheat-check] max-level=%u menu=combat=save-reload wave-slots=4 failures=%u\n", progress.GetLevel(), failures);
     return failures;
 }
