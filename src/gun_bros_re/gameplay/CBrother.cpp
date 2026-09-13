@@ -153,11 +153,16 @@ void CBrother::Update(std::int32_t deltaMs) {
             }
         }
     }
-    if (m_variables[3] > 0) {
+    // Update :135184-135235 bypasses UpdateNormal during force/stun. Its
+    // immunity and red-flash clocks resume after the forced action finishes.
+    bool normalUpdate = m_knockbackMs == 0;
+    if (m_vitals != nullptr && (m_vitals->stunMs > 0 || m_vitals->dead)) { normalUpdate = false; }
+    if (normalUpdate && m_variables[3] > 0) {
         m_variables[3] = static_cast<std::int16_t>(std::max(0, m_variables[3] - deltaMs));
+        if (m_variables[3] > 0) { m_immunityHidden = !m_immunityHidden; }
     }
     if (m_vitals != nullptr) {
-        m_vitals->flash = std::max(0.0f, m_vitals->flash - deltaMs * 0.004f);
+        if (normalUpdate) { m_vitals->flash = std::max(0.0f, m_vitals->flash - deltaMs * 0.002f); }
         if (m_vitals->stunMs > 0) {
             m_vitals->stunMs = std::max(0, m_vitals->stunMs - deltaMs);
             if (m_vitals->stunMs == 0) { m_interpreter.HandleEvent(5, 8); }

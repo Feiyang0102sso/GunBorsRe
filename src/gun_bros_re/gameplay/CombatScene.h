@@ -230,6 +230,7 @@ private:
     float m_right = kArenaWidth - 35;
     float m_bottom = kArenaHeight - 35;
     void ResolveMovement(float previousX, float previousY, float &x, float &y, float radius, bool player = true) const;
+    void ResolvePlayerMovement(float previousX, float previousY, float &x, float &y) const;
     void UpdateNavigation(CombatEnemy &actor, int deltaMs);
     int m_pathLayer = -1;
     CLevel *m_level = nullptr;

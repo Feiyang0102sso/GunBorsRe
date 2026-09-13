@@ -124,6 +124,8 @@ constexpr float kGameViewWorldHeight = 429.0f;
 constexpr float kPlayerMovementUnitsPerSecond = 240.0f;
 // CBrother::Bind stores 22.0 as the player diameter. CPlayer::Move passes half
 // of it to CLayerCollision, whose half-unit edge allowance makes 11.5.
+// Source correction: :139098 initializes a RADIUS of 22, not a diameter;
+// only wall collision halves it. Player/enemy circles must use GetRadius().
 constexpr float kPlayerCollisionRadius = 11.5f;
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
 

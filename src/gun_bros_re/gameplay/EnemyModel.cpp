@@ -14,10 +14,10 @@
 #include <cstdio>
 #include <cmath>
 
-void EnemyCollisionCircle(const CEnemy &enemy, float gameScale, int part,
-    float &x, float &y, float &radius) {
+void EnemyRotationOffset(const CEnemy &enemy, float gameScale, float &x, float &y) {
     const EnemyCombat &state = enemy.combat;
-    radius = enemy.GetPart(part).radius * state.scaleFactor;
+    x = 0;
+    y = 0;
     const CMesh *mesh = enemy.GetPart(0).controller.GetAnimation().GetMesh();
     if (mesh == nullptr) { return; }
     // CMesh::GetRotationOffset shifts the circular hurtbox with the root mesh.
@@ -25,9 +25,18 @@ void EnemyCollisionCircle(const CEnemy &enemy, float gameScale, int part,
     constexpr float radians = 3.14159265f / 180;
     const float cosine = std::cos(state.facing * radians);
     const float sine = std::sin(state.facing * radians);
-    const float scale = bounds.inverseExtent * gameScale * state.scaleFactor;
-    x += (bounds.centerX * cosine + bounds.centerY * sine) * scale;
-    y += ((bounds.centerY * cosine - bounds.centerX * sine) * 0.8660254f - bounds.centerZ * 0.5f) * scale;
+    const float scale = bounds.inverseExtent * gameScale;
+    x = (bounds.centerX * cosine + bounds.centerY * sine) * scale;
+    y = ((bounds.centerY * cosine - bounds.centerX * sine) * 0.8660254f - bounds.centerZ * 0.5f) * scale;
+}
+
+void EnemyCollisionCircle(const CEnemy &enemy, float gameScale, int part,
+    float &x, float &y, float &radius) {
+    float offsetX, offsetY;
+    EnemyRotationOffset(enemy, gameScale, offsetX, offsetY);
+    radius = enemy.GetPart(part).radius * enemy.combat.scaleFactor;
+    x += offsetX * enemy.combat.scaleFactor;
+    y += offsetY * enemy.combat.scaleFactor;
 }
 
 namespace {

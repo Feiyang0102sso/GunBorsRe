@@ -500,6 +500,35 @@ bool CombatScene::RequestBrotherWeaponSwap() {
     return m_brotherModel->weapon->brother.OnSwapGun();
 }
 
+void CombatScene::ResolvePlayerMovement(float previousX, float previousY, float &x, float &y) const {
+    // CPlayer::Move :100691-100862: bounds, enemy bodies, then map/prop edges.
+    x = std::clamp(x, m_left, m_right);
+    y = std::clamp(y, m_top, m_bottom);
+    const CBrother &player = m_player.weapon->brother;
+    if (!player.CanPassEnemies()) {
+        for (const auto &actor : enemies) {
+            const CEnemy &enemy = actor->model.enemy;
+            if (!enemy.CanCollideWithPlayer()) { continue; }
+            const EnemyCombat &state = enemy.combat;
+            float offsetX, offsetY;
+            EnemyRotationOffset(enemy, actor->data->gameScale, offsetX, offsetY);
+            const CollisionPoint enemyPrevious(state.previousX + offsetX, state.previousY + offsetY);
+            const CollisionPoint enemyCurrent(state.x + offsetX, state.y + offsetY);
+            const float moveX = x - previousX, moveY = y - previousY;
+            const float towardEnemy = moveX * (enemyPrevious.x - x) + moveY * (enemyPrevious.y - y);
+            if (towardEnemy <= 0) { continue; }
+            float fraction = 0;
+            // Native 0.8 is a body allowance, not a resource radius or model scale.
+            if (CombatGeometry::CircleCircle({previousX, previousY}, {x, y}, player.GetRadius(),
+                enemyPrevious, enemyCurrent, enemy.GetPart(0).radius * 0.8f, fraction)) {
+                x = previousX + moveX * fraction;
+                y = previousY + moveY * fraction;
+            }
+        }
+    }
+    ResolveMovement(previousX, previousY, x, y, m_playerRadius);
+}
+
 bool CombatScene::SwapBrotherWeapon() {
     if (m_brotherScript == nullptr || m_brotherModel == nullptr || m_brother->vitals.dead) { return true; }
     const unsigned next = 1 - m_brotherWeaponSlot;
@@ -1072,7 +1101,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         playerY += m_playerForceY * forceSeconds;
         m_playerForceMs = std::max(0, m_playerForceMs - deltaMs);
     }
-    ResolveMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY, m_playerRadius);
+    ResolvePlayerMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY);
     if (m_brotherModel != nullptr) {
         m_brotherModel->weapon->brother.SetLevelContext(m_level);
 #if GB_ENABLE_TESTS
@@ -1129,10 +1158,15 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
             enemy.GetPart(0).radius * m_cameraScale, false);
         actor->contactTimer = std::max(0, actor->contactTimer - enemyDeltaMs);
         actor->brotherContactTimer = std::max(0, actor->brotherContactTimer - enemyDeltaMs);
+        // TestCollisions :73178-73194 uses both location histories and the full
+        // 22-unit brother radius, not the smaller map-wall resolution radius.
+        float contactFraction = 0;
         if (m_brother != nullptr && !m_brother->vitals.dead && !state.dead &&
             state.variables[16] != 1 && state.targetType != 2 && state.variables[12] > 0 &&
             state.variables[13] > 0 && actor->brotherContactTimer == 0 &&
-            std::hypot(state.x - m_brother->x, state.y - m_brother->y) < enemy.GetPart(0).radius + m_playerRadius) {
+            CombatGeometry::CircleCircle({m_brother->previousX, m_brother->previousY},
+                {m_brother->x, m_brother->y}, m_brotherModel->weapon->brother.GetRadius(),
+                {state.previousX, state.previousY}, {state.x, state.y}, enemy.GetPart(0).radius, contactFraction)) {
             CombatHit contact;
             contact.owner = state.id;
             contact.ownerType = 1;
@@ -1146,7 +1180,9 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         }
         if (!state.dead && state.variables[16] != 1 && state.targetType != 2 && !m_vitals.dead &&
             state.variables[12] > 0 && state.variables[13] > 0 &&
-            actor->contactTimer == 0 && std::hypot(state.x - playerX, state.y - playerY) < enemy.GetPart(0).radius + m_playerRadius) {
+            actor->contactTimer == 0 && CombatGeometry::CircleCircle({m_previousPlayerX, m_previousPlayerY},
+                {playerX, playerY}, m_player.weapon->brother.GetRadius(),
+                {state.previousX, state.previousY}, {state.x, state.y}, enemy.GetPart(0).radius, contactFraction)) {
             if (state.variables[17] > 0) {
                 CombatHit contact;
                 contact.owner = state.id;

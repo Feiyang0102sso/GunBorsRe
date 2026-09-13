@@ -446,6 +446,7 @@ bool BuildPlayerUIMatrix(const PlayerModel &model, float centerX, float top, flo
 
 void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
                 const float *base) {
+    if (model.weapon && model.weapon->brother.IsImmunityHidden()) { return; }
     float flash = 0;
     if (model.vitals != nullptr) { flash = model.vitals->flash; }
     if (model.parts.empty()) {

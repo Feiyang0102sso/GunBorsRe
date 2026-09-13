@@ -104,6 +104,14 @@ public:
     float GetProjectilePowerupMultiplier() const;
     void SetHuman(bool human) { m_variables[2] = human; }
     bool CanMove() const { return m_variables[1] != 0; }
+    /** CPlayer::Move :100724 skips enemy bodies only for this Flow timer. */
+    bool CanPassEnemies() const { return m_variables[3] != 0; }
+    /** CBrother::Draw :134741 consumes the independent immunity blink flag. */
+    bool IsImmunityHidden() const {
+        return m_variables[3] > 0 && m_immunityHidden && m_vitals != nullptr && m_vitals->health > 0;
+    }
+    /** CBrother constructor :139098; wall resolution uses a separate half radius. */
+    float GetRadius() const { return 22.0f; }
     bool CanShoot() const { return m_variables[0] != 0; }
     HitResult ReceiveDamage(float damage);
     /** CBrother::SetForce :137709 starts export 4, including its authored sound. */
@@ -150,6 +158,7 @@ public:
     int GetStateId() const { return m_interpreter.GetStateId(); }
 
 private:
+    bool m_immunityHidden = false;
     bool m_weaponSwapRequested = false;
     int m_knockbackMs = 0;
     int m_knockbackDurationMs = 0;

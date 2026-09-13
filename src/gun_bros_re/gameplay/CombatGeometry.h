@@ -7,6 +7,28 @@
 #include <algorithm>
 #include <cmath>
 namespace CombatGeometry {
+/** Original Collision::CircleCircle :65444, verified against ARM 0x37710.
+ * Keep its discriminant limits and travel test; these are not standard CCD.
+ */
+inline bool CircleCircle(const CollisionPoint &previous, const CollisionPoint &current, float radius,
+    const CollisionPoint &otherPrevious, const CollisionPoint &otherCurrent, float otherRadius,
+    float &fraction) {
+    const float moveX = current.x - previous.x, moveY = current.y - previous.y;
+    const float relativeX = otherCurrent.x - otherPrevious.x - moveX;
+    const float relativeY = otherCurrent.y - otherPrevious.y - moveY;
+    const float offsetX = otherPrevious.x - previous.x, offsetY = otherPrevious.y - previous.y;
+    const float distanceSquared = offsetX * offsetX + offsetY * offsetY;
+    const float combinedRadius = radius + otherRadius;
+    const float radiusSquared = combinedRadius * combinedRadius;
+    if (distanceSquared <= radiusSquared) { fraction = 0; return true; }
+    const float a = relativeX * relativeX + relativeY * relativeY;
+    const float b = 2 * (relativeX * offsetX + relativeY * offsetY);
+    const float discriminant = b * b + 4 * a * (radiusSquared - distanceSquared);
+    if (!(discriminant >= 0.000001f && discriminant <= 1.0f)) { return false; }
+    fraction = (-b - std::sqrt(discriminant)) / (2 * a);
+    return fraction > 0 && fraction * fraction <= moveX * moveX + moveY * moveY;
+}
+
 // Earliest point where a moving circle overlaps a stationary one.
 inline float CircleFraction(float x, float y, float dx, float dy, float cx, float cy, float radius) {
     const float ox = x - cx, oy = y - cy;

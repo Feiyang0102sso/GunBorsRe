@@ -176,6 +176,8 @@ public:
     void SetTarget(CombatId id, float x, float y, bool alive);
     void SetPath(const ILayerPath *path);
     bool CanReceiveProjectile(int ownerType, CombatId owner) const;
+    /** CEnemy::CanCollide :67243, specialized for a player (object type 0). */
+    bool CanCollideWithPlayer() const;
     HitResult ReceiveHit(const CombatHit &hit);
     void Damage(float amount);
     bool TriggerEvent(std::uint8_t event);

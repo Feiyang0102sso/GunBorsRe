@@ -287,6 +287,12 @@ void CEnemy::UpdatePathFinder(float waypointX, float waypointY, float seconds) {
     combat.y += velocityY * seconds;
 }
 
+bool CEnemy::CanCollideWithPlayer() const {
+    // Enabled/removed represent membership in the original level's enemy list.
+    // Targeting type, visible parts and complex bullet edges do not filter bodies.
+    return combat.enabled && !combat.removed && combat.health != 0 && combat.variables[16] != 1;
+}
+
 void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
     combat.healthBarFlashMs = std::max(0, combat.healthBarFlashMs - deltaMs);
     combat.previousX = combat.x;

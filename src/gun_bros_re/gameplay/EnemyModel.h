@@ -109,6 +109,8 @@ struct EnemyModel {
 };
 
 /** Shared hurtbox calculation. x/y enter as the actor's world anchor. */
+/** CEnemy::GetRotationOffset :71429, before the optional hurtbox scale factor. */
+void EnemyRotationOffset(const CEnemy &enemy, float gameScale, float &x, float &y);
 void EnemyCollisionCircle(const CEnemy &enemy, float gameScale, int part,
     float &x, float &y, float &radius);
 

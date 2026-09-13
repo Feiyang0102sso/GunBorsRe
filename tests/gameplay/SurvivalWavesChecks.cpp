@@ -412,13 +412,16 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 blastScene.PlayerMatrix(matrix);
                 unsigned impactState = 255;
                 int maximumStunMs = 0;
+                int lastImpactMs = 0;
                 for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
                     enemy.combat.x = 600;
                     enemy.combat.y = 450;
                     enemy.combat.targetAlive = false;
+                    const int hitsBefore = enemy.combat.hitCount;
                     blastEffects.Update(player, matrix, 0, 16);
                     maximumStunMs = std::max(maximumStunMs, enemy.stun.GetRemainingMs());
                     enemy.Update(16);
+                    if (enemy.combat.hitCount != hitsBefore) { lastImpactMs = elapsed; }
                     if (enemy.combat.hitCount > 0 && impactState == 255) { impactState = enemy.GetStateId(); }
                 }
                 float expectedDamage = 100;
@@ -428,10 +431,20 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 int expectedStunMs = 0;
                 if (bulletIndex == 93) { expectedStunMs = 750; }
                 if (bulletIndex == 94) { expectedStunMs = 2000; }
+                // A late electrical pulse may outlive the 4-second damage probe.
+                // Verify its actual expiry boundary instead of assuming spawn+4s.
+                const int remainingStunMs = enemy.stun.GetRemainingMs();
+                if (remainingStunMs > 0) {
+                    if (remainingStunMs > expectedStunMs) { ++checkFailures; }
+                    enemy.Update(remainingStunMs - 1);
+                    if (!enemy.stun.IsActive() || enemy.stun.GetRemainingMs() != 1) { ++checkFailures; }
+                    enemy.Update(1);
+                }
                 if (maximumStunMs != expectedStunMs || enemy.stun.IsActive()) { ++checkFailures; }
                 std::printf("[powerup-impact-check] bullet=%u damage=%.3f expected=%.3f hits=%d state=%u failures=%u\n",
                     bulletIndex, enemy.combat.totalDamage, expectedDamage, enemy.combat.hitCount, impactState, checkFailures);
-                std::printf("[powerup-impact-check] stun=%d expected=%d expired=%d\n", maximumStunMs, expectedStunMs, !enemy.stun.IsActive());
+                std::printf("[powerup-impact-check] stun=%d expected=%d expired=%d last-impact=%d remaining=%d\n",
+                    maximumStunMs, expectedStunMs, !enemy.stun.IsActive(), lastImpactMs, remainingStunMs);
             }
             if (powerupStudy) {
                 std::ofstream attributeReport(TestOutput::Path("powerup-enemy-attributes.txt"));
