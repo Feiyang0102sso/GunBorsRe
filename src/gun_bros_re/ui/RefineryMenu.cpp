@@ -243,7 +243,12 @@ bool DrawRefinery(GameMenu &view, MenuState &state, CProfileManager &profile,
             for (unsigned index = 0; index < count * 2; ++index) {
                 if (data.minutes[index] == 0 && profile.refinery.slots[index].state == 3) { hasReady = true; }
             }
-            if (profile.xplodium == 0 && !hasReady) { state.refinementRequired = false; }
+            if (profile.xplodium == 0 && !hasReady && state.refinementRequired) {
+                // TransferComplete :174075 calls Dismiss :172275 after collection.
+                // Update :173392 waits for IsNavBarBusy before entering the store.
+                state.refinementRequired = false;
+                state.refinery.refineryExitPending = true;
+            }
             std::printf("[refinery] transfer complete slot=%u old-state=%u new-state=%u\n", slot, status, profile.refinery.slots[slot].state);
         }
     }

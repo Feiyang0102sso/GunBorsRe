@@ -81,7 +81,11 @@ void BeginPostGame(MenuState &state, const SurvivalGameContext &context, const s
     state.postGame.postGameBound = false;
     state.postGame.postGameClosing = false;
     state.postGame.postGameUpgradePending = false;
-    for (const auto &ref : context.profile.configuration.guns) {
+    // ShowForGuns :394260 prefers the active gun, then the other eligible gun.
+    const unsigned activeSlot = context.profile.activeWeaponSlot;
+    for (unsigned offset = 0; offset < context.profile.configuration.guns.size(); ++offset) {
+        const unsigned slot = (activeSlot + offset) % context.profile.configuration.guns.size();
+        const auto &ref = context.profile.configuration.guns[slot];
         const WeaponEntry *weapon = FindMasteryWeapon(weapons, ref);
         if (weapon != nullptr && weapon->data.GetMasteryLevel(context.profile.GetWeaponExperience(ref)) < 3) {
             state.masteryWeapon = ref;
@@ -325,7 +329,11 @@ bool DrawMastery(GameMenu &view, MenuState &state, CProfileManager &profile, CRe
                 MovieRegion center = region;
                 center.x += static_cast<int>(center.width) / 2;
                 center.y += static_cast<int>(center.height) / 2;
-                if (!DrawUpgradeButton(view, 1, center, "", 6, interactive, swapPressed)) { return false; }
+                // CreateContentString(155) :152944 supplies selected gun + 1;
+                // CMenuUpgradePopup::Bind :393792 uses the original font6.
+                unsigned gunNumber = 1;
+                if (SameObject(state.masteryWeapon, profile.configuration.guns[1])) { gunNumber = 2; }
+                if (!DrawUpgradeButton(view, 1, center, std::to_string(gunNumber), 6, interactive, swapPressed)) { return false; }
             }
             break;
         case kUpgradeNameRegion:

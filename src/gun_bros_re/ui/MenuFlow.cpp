@@ -27,6 +27,9 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
 #else
     view.animateNavigation = true;
 #endif
+    // CMenuMeshPlayer::BindPlayer copies the current equipment when binding a new menu.
+    // Combat may have changed the active gun while the previous menu state survived.
+    state.store.shopGunSlot = profile.activeWeaponSlot;
     // A new view has a new clock (including deterministic capture sessions).
     state.store.shopFilterBound = false;
     state.settings.optionsBound = false;
@@ -72,6 +75,17 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         const bool wasPostGameMusic = state.postGame.postGameMusic;
         const unsigned previousPage = state.page;
         const unsigned previousCategory = state.store.shopCategory;
+        // CMenuGameResources::Update :173392 resumes only after the header's
+        // authored entrance. Switch before drawing, so WIPE captures the store
+        // on its first frame instead of capturing the refinery a second time.
+        if (state.page == 3 && state.refinery.refineryExitPending && view.IsNavigationReady() && !wipe.IsActive()) {
+            state.refinery.refineryExitPending = false;
+            // CMenuStore::OnShow reinitializes category content. Postgame returns to GUNS.
+            state.store = StoreMenuState{};
+            state.store.shopGunSlot = profile.activeWeaponSlot;
+            state.selectedItem = -1;
+            state.Navigate(2, true);
+        }
         
         if (!ProcessMenuCheats(view.window, profile, state, daily, savePath)) { return -3; }
 
@@ -92,7 +106,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                 if (key == KeyCode::Space || key == KeyCode::Enter) { activate = true; }
                 continue;
             }
-            if (state.currencyPending || state.refinery.refineryTransfer >= 0) { continue; }
+            if (state.currencyPending || state.refinery.refineryTransfer >= 0 || state.refinery.refineryExitPending) { continue; }
             if (state.promotion.IsActive()) {
                 if (key == KeyCode::Escape) { state.promotion.Dismiss(); }
                 continue;
@@ -136,7 +150,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         const std::int64_t now = CurrentSeconds();
         profile.refinery.UpdateRefinement(now);
         view.Begin(state.page);
-        view.inputEnabled = !state.currencyPending && !state.storePromptRequested && !state.storePopup.IsActive() && !state.promotion.IsActive() && !wipe.IsActive();
+        view.inputEnabled = !state.currencyPending && !state.storePromptRequested && !state.storePopup.IsActive() &&
+            !state.promotion.IsActive() && !wipe.IsActive() && !state.refinery.refineryExitPending;
 #if GB_ENABLE_TESTS
         if (testClicks != nullptr && testFrame < testClicks->size()) { view.SetTestClick((*testClicks)[testFrame]); }
 #endif
@@ -290,7 +305,12 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             if (!wipe.IsActive() && !wipe.Remember()) { return -3; }
         }
 #if GB_ENABLE_TESTS
-        if (transitionTrace) { transitionTrace->active = wipe.IsActive(); transitionTrace->time = wipe.Time(); }
+        if (transitionTrace) {
+            transitionTrace->active = wipe.IsActive();
+            transitionTrace->time = wipe.Time();
+            transitionTrace->frames.push_back({state.page, view.HeaderTime(), wipe.Time(),
+                view.IsNavigationReady(), state.refinery.refineryExitPending, wipe.IsActive()});
+        }
 #endif
 #if GB_ENABLE_TESTS
         ++testFrame;

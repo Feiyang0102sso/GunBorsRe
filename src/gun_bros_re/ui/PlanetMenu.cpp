@@ -161,6 +161,12 @@ bool DrawOriginalStarMap(GameMenu &view, MenuState &state, const CProfileManager
             playerProgress.SetExperience(profile.experience);
             const unsigned requiredLevel = view.planetEntries[selected].data.requiredLevel;
             const bool locked = requiredLevel > playerProgress.GetLevel();
+            if (locked && region.index == 1) {
+                // CMenuMission::Bind :162952 selects core archetype0/animation139.
+                // LevelLockedCallback :161647 centers it in PLANET_FLAG region1.
+                if (!view.movies.DrawSprite(0, 139, 0, region.x + region.width / 2,
+                    region.y + region.height / 2, 1, region.alpha)) { return false; }
+            }
             unsigned titleRegion = 1;
             if (locked) { titleRegion = 2; }
             if (region.index != titleRegion && !(locked && region.index == 3)) { continue; }

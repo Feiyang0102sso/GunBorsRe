@@ -57,6 +57,9 @@ int GameMenu::Header(const CProfileManager &profile, const CPlayerProgress &prog
             if (!header->GetChapterRange(1, originalHeaderTime, end)) { return -3; }
             originalHeaderButtonTime = 0;
         } else { originalHeaderTime = hideStart; }
+        // ShowButtons :143763 starts this chapter now; the preceding frame's
+        // elapsed time belongs to the hidden bar, not the new entrance.
+        elapsed = 0;
     }
     originalHeaderTick = now;
     originalHeaderTime += elapsed;
@@ -69,6 +72,7 @@ int GameMenu::Header(const CProfileManager &profile, const CPlayerProgress &prog
         if (visible) { originalHeaderTime = idleStart; }
         originalHeaderButtonTime = idleStart;
     }
+    navigationReady = visible && originalHeaderTime >= idleStart;
     const unsigned activePage = MenuBranchPage(currentPage);
     // Host page routing only; order and branch IDs are original NAVBAR_MAIN.
     constexpr unsigned branchPages[] = {0, 0, 2, 4, 5, 3, 6, 7};
@@ -150,7 +154,7 @@ int GameMenu::Header(const CProfileManager &profile, const CPlayerProgress &prog
         bool enabled;
         int &choice;
     } callback(*this, profile, info, activePage, branchPages,
-        visible && originalHeaderTime >= idleStart, choice);
+        navigationReady, choice);
     if (!movies.Draw(ordinal, originalHeaderTime, 512, 384, kMenuWidth, kMenuHeight, 0, 1, &callback)) { return -3; }
     return choice;
 }

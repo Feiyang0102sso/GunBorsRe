@@ -222,6 +222,124 @@ int RunGreetingCheck(const std::string &bigDirectory) {
     return 0;
 }
 
+/** Run the actual shell through collection, header entrance and one cold store wipe. */
+int CheckRefineryStoreTransition(CResTOCManager &toc, PackTables &tables, GameMenu &probe,
+    const CRefinementManager::Template &refinement, unsigned previousCategory) {
+    CProfileManager profile;
+    profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+    const auto path = std::filesystem::path(TestOutput::Path("refinery-store-transition/profile-") + std::to_string(previousCategory));
+    if (!LoadNativeProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    std::vector<StoreEntry> store;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armor;
+    if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
+        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    // Isolated ready-to-collect fixture; the shell still owns the click and transfer.
+    profile.xplodium = 250;
+    if (!profile.refinery.BeginRefinement(6, 6, profile.xplodium, profile.xplodium, CurrentSeconds())) { return 1; }
+    const auto coins = profile.coins;
+    const auto yield = profile.refinery.GetRefinementSlotYield(6);
+    MenuState state;
+    state.page = 3;
+    state.store.shopCategory = previousCategory;
+    // Leave category-specific browsing state behind, as a previous store visit would.
+    state.store.shopFilter = 1;
+    state.store.shopExclusionFilter = 1;
+    state.store.shopScroll = 500;
+    state.store.shopDetailOpen = true;
+    state.selectedItem = 0;
+    state.refinementRequired = true;
+    MovieRegion meter;
+    unsigned idle = 0, end = 0, showStart = 0, showEnd = 0, headerIdle = 0;
+    const auto *main = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_EXPLODIUM"));
+    const auto *header = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_HEADER"));
+    const auto *fill = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_BUCKET_FILL"));
+    const auto *wipe = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_WIPE"));
+    if (!main || !header || !fill || !wipe || !main->GetChapterRange(1, idle, end) ||
+        !header->GetChapterRange(1, showStart, showEnd) || !header->GetChapterRange(2, headerIdle, end) ||
+        !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_EXPLODIUM"), 0, idle, meter)) { return 1; }
+    const unsigned entrance = headerIdle - showStart;
+    const std::vector<MenuTestClick> clicks{
+        {-100, -100, 1}, {-100, -100, idle + fill->duration + 1},
+        {meter.x + meter.width / 2, meter.y + meter.height / 2, 1},
+        {-100, -100, 374}, {-100, -100, 1},
+        {-100, -100, entrance / 2}, {-100, -100, entrance - entrance / 2},
+        {-100, -100, 1, wipe->duration * 2},
+        {-100, -100, wipe->duration / 2}, {-100, -100, wipe->duration - wipe->duration / 2}};
+    MenuTransitionTrace trace;
+    const CPlayerProgress::Template progress = profile.nativeArchive->progression;
+    if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
+        state, path, TestOutput::Path("refinery-store-transition/store.png"), &clicks, true, &probe.window, true, &trace) != -2 ||
+        trace.frames.size() < clicks.size()) { return 1; }
+    for (unsigned index = 0; index < clicks.size(); ++index) {
+        const auto &frame = trace.frames[index];
+        std::printf("[refinery-transition-check] frame=%u page=%u header=%u ready=%d pending=%d wipe=%u active=%d\n",
+            index, frame.page, frame.headerTime, frame.navigationReady, frame.refineryExitPending, frame.wipeTime, frame.wipeActive);
+        if (index <= 6 && (frame.page != 3 || frame.wipeActive)) { return 1; }
+        if ((index == 4 || index == 5) && (!frame.refineryExitPending || frame.navigationReady)) { return 1; }
+        if (index == 4 && frame.headerTime != showStart) { return 1; }
+        if (index == 6 && !frame.navigationReady) { return 1; }
+        if (index == 7 && (frame.page != 2 || !frame.wipeActive || frame.wipeTime != 0)) { return 1; }
+        if (index == 8 && (!frame.wipeActive || frame.wipeTime != wipe->duration / 2)) { return 1; }
+    }
+    if (trace.starts != 1 || trace.active || state.page != 2 || !state.history.empty() ||
+        state.refinery.refineryExitPending || profile.coins != coins + yield || profile.xplodium != 0) { return 1; }
+    if (state.store.shopCategory != 0) {
+        std::printf("[refinery-store-category-check] previous=%u actual=%u expected=0\n",
+            previousCategory, state.store.shopCategory);
+        return 1;
+    }
+    std::printf("[refinery-store-category-check] previous=%u guns=1 failures=0\n", previousCategory);
+    if (state.store.shopFilter != 0 || state.store.shopExclusionFilter != 0 || state.store.shopScroll != 0 ||
+        state.store.shopDetailOpen || state.selectedItem != -1) { return 1; }
+    if (state.store.shopGunSlot != profile.activeWeaponSlot) {
+        std::printf("[store-return-slot-check] active=%u store=%u\n", profile.activeWeaponSlot, state.store.shopGunSlot);
+        return 1;
+    }
+    std::printf("[refinery-transition-check] header-before-store cold-first-frame one-wipe collect-once failures=0\n");
+    if (previousCategory != 3) { return 0; }
+    // Simulate each completed combat swap while the old menu state survives.
+    for (unsigned slot : {0u, 1u}) {
+        profile.activeWeaponSlot = slot;
+        state.store.shopGunSlot = 1 - slot;
+        if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, path,
+            TestOutput::Path("refinery-store-transition/active-gun-") + std::to_string(slot + 1) + ".png",
+            nullptr, true, &probe.window) != -2 || state.store.shopGunSlot != slot || profile.activeWeaponSlot != slot) { return 1; }
+        CProfileManager restored;
+        if (!LoadNativeProfile(toc, tables, restored, path) || restored.activeWeaponSlot != slot) { return 1; }
+        std::printf("[store-return-slot-check] active=%u store=%u saved=%u failures=0\n",
+            slot, state.store.shopGunSlot, restored.activeWeaponSlot);
+    }
+    // A fresh binding must still allow the authored button and PLAYER Flow to swap guns.
+    const auto *swapEntry = OriginalMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+    MovieRegion swapParent, swapOrigin;
+    if (swapEntry == nullptr || !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"),
+        kStoreGunSwapRegion, 0, swapParent) || !StoreGunSwapOrigin(probe, swapParent, swapOrigin)) { return 1; }
+    const unsigned swapId = probe.movies.Ordinal(swapEntry->movies[0]);
+    const CMovie *swapMovie = probe.movies.GetMovie(swapId);
+    unsigned swapStart = 0, swapEnd = 0, pressStart = 0, pressEnd = 0;
+    if (swapMovie == nullptr || !swapMovie->GetChapterRange(0, swapStart, swapEnd) ||
+        !swapMovie->GetChapterRange(1, pressStart, pressEnd)) { return 1; }
+    bool foundSwap = false;
+    MenuTestClick swapClick;
+    for (const auto &region : probe.movies.Regions(swapId, swapEnd, swapOrigin.x, swapOrigin.y, true)) {
+        if (region.index != 0) { continue; }
+        swapClick = {region.x + region.width / 2, region.y + region.height / 2};
+        foundSwap = true;
+    }
+    if (!foundSwap) { return 1; }
+    std::vector<MenuTestClick> swapActions{{-100, -100, 1}, {-100, -100, swapEnd - swapStart + 1},
+        swapClick, {-100, -100, pressEnd - pressStart + 1}};
+    for (unsigned frame = 0; frame < 120; ++frame) { swapActions.push_back({-100, -100, 16}); }
+    if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, path,
+        TestOutput::Path("refinery-store-transition/store-swap.png"), &swapActions, true, &probe.window) != -2 ||
+        profile.activeWeaponSlot != 0 || state.store.shopGunSlot != 0) { return 1; }
+    CProfileManager swapped;
+    if (!LoadNativeProfile(toc, tables, swapped, path) || swapped.activeWeaponSlot != 0) { return 1; }
+    std::printf("[store-return-slot-check] real-button swap=1-to-0 saved=0 failures=0\n");
+    return 0;
+}
+
 int RunRefineryMenuCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
@@ -343,12 +461,22 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.coins != coins + yield ||
         state.refinementRequired || profile.refinery.slots[6].state != 1 || profile.warbucks != warbucks ||
         !ReloadNativeProfile(restored, path) || restored.coins != profile.coins || restored.refinery.slots[6].state != 1) { return 1; }
+    if (state.page != 3) {
+        std::printf("[refinery-check] collection must wait for navigation: expected page=3 actual=%u\n", state.page);
+        return 1;
+    }
+    // Reopening an empty refinery manually must not repeat the postgame route.
+    MenuState manualState;
+    manualState.page = 3;
     view.clock += 400;
     view.Begin(3);
     view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != -1 ||
-        profile.coins != coins + yield || glGetError() != 0) { return 1; }
+    if (!DrawRefinery(view, manualState, profile, refinement, path, now) || manualState.refinery.refineryTransfer != -1 ||
+        manualState.page != 3 || manualState.refinery.refineryExitPending || profile.coins != coins + yield || glGetError() != 0) { return 1; }
     std::printf("[refinery-check] categories=2 offline=10 region-mutation transfer=375 fill collect save-reload failures=0\n");
+    for (unsigned category = 0; category < 4; ++category) {
+        if (CheckRefineryStoreTransition(toc, tables, view, refinement, category) != 0) { return 1; }
+    }
     return 0;
 }
 
@@ -638,6 +766,19 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
         if (!DrawOriginalStarMap(view, state, profile) || !state.starMap.starLocked || !DrawOriginalModeOverlay(view, state)) { return 1; }
         const std::string screenshot = TestOutput::Path("ui-original-2026-09-09/planet-selected-") + std::to_string(index) + ".png";
         if (!GB_SAVE_FRAME(view.window, screenshot)) { return 1; }
+        if (planet.data.requiredLevel > 1) {
+            // Only the isolated profile changes; geometry and lock art stay in BIG.
+            const auto experience = profile.experience;
+            profile.experience = 0;
+            view.Begin(0);
+            if (!DrawOriginalStarMap(view, state, profile) ||
+                !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/planet-level-locked-") + std::to_string(index) + ".png")) { return 1; }
+            profile.experience = profile.nativeArchive->progression.GetExperienceForLevel(planet.data.requiredLevel) + 1;
+            view.Begin(0);
+            if (!DrawOriginalStarMap(view, state, profile) ||
+                !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/planet-level-unlocked-") + std::to_string(index) + ".png")) { return 1; }
+            profile.experience = experience;
+        }
         view.Begin(0);
         view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
         if (!DrawOriginalStarMap(view, state, profile) || !state.starMap.starEntering || state.page != 0) { return 1; }

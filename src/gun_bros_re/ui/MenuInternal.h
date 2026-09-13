@@ -177,6 +177,7 @@ struct PostGameMenuState {
 struct RefineryMenuState {
     unsigned refineryTab = 0, casualtyPage = 0;
     bool refineryBound = false;
+    bool refineryExitPending = false;
     unsigned refineryTime = 0, refineryElapsed = 0;
     std::uint64_t refineryLastTick = 0;
     std::array<unsigned, kRefinementSlotCount> refineryStatusTime{}, refineryFillTime{};
@@ -350,7 +351,17 @@ struct MenuState {
     }
 };
 
-struct MenuTransitionTrace { bool active = false; unsigned time = 0, starts = 0; };
+struct MenuTransitionTrace {
+    bool active = false;
+    unsigned time = 0, starts = 0;
+#if GB_ENABLE_TESTS
+    struct Frame {
+        unsigned page, headerTime, wipeTime;
+        bool navigationReady, refineryExitPending, wipeActive;
+    };
+    std::vector<Frame> frames;
+#endif
+};
 
 struct MenuTestClick { float x; float y; unsigned advanceMs = 0; unsigned renderDelayMs = 0; };
 
@@ -410,6 +421,10 @@ public:
     bool TitleImage();
 
     int Header(const CProfileManager &profile, const CPlayerProgress &progress, unsigned currentPage);
+    bool IsNavigationReady() const { return navigationReady; }
+#if GB_ENABLE_TESTS
+    unsigned HeaderTime() const { return originalHeaderTime; }
+#endif
 
     // Historical explicit .dat research UI; native profiles use Header below.
 
@@ -557,6 +572,7 @@ private:
     std::uint64_t previewTicks = 0;
     std::uint64_t navigationStart = 0;
     bool navigationVisible = false;
+    bool navigationReady = false;
     bool originalHeaderBound = false;
     unsigned originalHeaderTime = 0, originalHeaderButtonTime = 0;
     std::uint64_t originalHeaderTick = 0;

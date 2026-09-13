@@ -331,7 +331,11 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             if (category == 1 && (!buyer.Owns(object.type, object.object) ||
                 !SameObject(Equipped(buyer, purchase.slot), object.object))) { return 1; }
             // The first powerup is the byte-checked five-charge Speed Boost pack.
-            if (category == 2 && (buyer.GetPowerupCount(object.object) != 10 || buyer.warbucks != 0)) { return 1; }
+            if (category == 2 && (buyer.GetPowerupCount(object.object) != 10 || buyer.warbucks != 0)) {
+                std::printf("[store-card-check] powerup purchase count=%u expected=10 warbucks=%llu expected=0\n",
+                    buyer.GetPowerupCount(object.object), static_cast<unsigned long long>(buyer.warbucks));
+                return 1;
+            }
             CProfileManager reloaded = profile;
             if (!reloaded.LoadFromDisk(path) || reloaded.coins != buyer.coins || reloaded.warbucks != buyer.warbucks ||
                 reloaded.GetPowerupCount(object.object) != buyer.GetPowerupCount(object.object)) { return 1; }
@@ -619,6 +623,26 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     poorProfile.weaponMastery.clear();
     poorProfile.AddWeaponExperience(state.masteryWeapon, threshold, weapon->data.GetMasteryLimit());
     poorProfile.AddWeaponExperience(secondGun, secondWeapon->data.GetMasteryThreshold(0) / 2, secondWeapon->data.GetMasteryLimit());
+    for (unsigned slot : {1u, 0u}) {
+        poorProfile.activeWeaponSlot = slot;
+        SurvivalGameContext context{poorProfile, fundsPath, 0};
+        MenuState resultState;
+        BeginPostGame(resultState, context, weapons);
+        if (!SameObject(resultState.masteryWeapon, poorProfile.configuration.guns[slot])) {
+            std::printf("[upgrade-active-slot-check] expected-slot=%u selected=%u:%u\n", slot,
+                resultState.masteryWeapon.packHash, resultState.masteryWeapon.localIndex);
+            return 1;
+        }
+        resultState.Navigate(26);
+        view.Begin(26);
+        if (!DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath)) { return 1; }
+        view.clock += opening;
+        view.Begin(26);
+        if (!DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+            !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-postgame-active-") + std::to_string(slot + 1) + ".png")) { return 1; }
+        std::printf("[upgrade-active-slot-check] active=%u selected=%u:%u failures=0\n", slot,
+            resultState.masteryWeapon.packHash, resultState.masteryWeapon.localIndex);
+    }
     const auto fundsBeforeSwap = poorProfile.warbucks;
     MenuState swapState;
     swapState.page = 26;
@@ -643,6 +667,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     }
     if (!foundSwapTouch) { return 1; }
     const MenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
+    if (!GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-1.png"))) { return 1; }
     const unsigned beforeSwapTime = swapState.masteryPopup.MovieTime();
     std::printf("[upgrade-swap-check] click=%.1f/%.1f movie=%u state=%u alpha=%.3f input=%u xp=%u limit=%u\n", swapClick.x, swapClick.y, beforeSwapTime,
         static_cast<unsigned>(swapState.masteryPopup.GetState()), swapArea.alpha, view.inputEnabled,
@@ -661,6 +686,14 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
         swapState.masteryPopup.StarsTime() != std::min(100u, swapState.masteryPopup.TargetTime())) { return 1; }
     if (!GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap.png"))) { return 1; }
+    view.Begin(26);
+    view.SetTestClick(swapClick);
+    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+        !SameObject(swapState.masteryWeapon, poorProfile.configuration.guns[0]) ||
+        poorProfile.warbucks != fundsBeforeSwap) { return 1; }
+    view.Begin(26);
+    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+        !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-back-1.png"))) { return 1; }
     std::printf("[upgrade-swap-check] store-entry distinct-guns stars-reset no-reopen unchanged-loadout failures=0\n");
     return 0;
 }
