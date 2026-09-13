@@ -53,6 +53,8 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
                 fatal.ownerType = 1;
                 fatal.damage = 10000;
                 if (scene.ApplyHit(kPlayerCombatId, fatal) != HitResult::Killed) { ++checkFailures; }
+                if (vitals.flash != 1) { ++checkFailures; }
+                if (scene.ApplyHit(kPlayerCombatId, fatal) != HitResult::Ignored) { ++checkFailures; }
             } else {
                 // Includes an autorepeated last letter, which must not complete.
                 for (char letter : std::string("stsuicid")) {
@@ -94,6 +96,11 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
                 }
                 elapsed += 16;
                 animationElapsed += moveStep;
+                // Use scaled world time: death slow motion also slows the fade.
+                if (scenario == 0) {
+                    const float expectedFlash = std::max(0.0f, 1.0f - (elapsed / 16) * step * 0.002f);
+                    if (std::abs(vitals.flash - expectedFlash) > 0.0001f) { ++checkFailures; }
+                }
                 if (animationElapsed < duration && session.IsDeathComplete()) { ++checkFailures; }
                 if (!session.IsDeathComplete() && torso.GetAnimation().GetTimeMs() != startTime + animationElapsed) { ++checkFailures; }
                 if (!savedMiddle && animationElapsed >= duration / 2) {
@@ -103,6 +110,10 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
             }
             if (!session.IsDeathComplete() || elapsed <= duration || !savedMiddle ||
                 scene.playerX != deathX || scene.playerY != deathY) { ++checkFailures; }
+            // The original UpdateNormal fades hit red while the death Flow runs.
+            std::printf("[death-check] %s scenario=%u player-corpse-flash=%.3f\n",
+                packShortName.c_str(), scenario, vitals.flash);
+            if (vitals.flash != 0) { ++checkFailures; }
             if (scenario == 0 && !captureDeath("complete")) { ++checkFailures; }
             std::printf("[death-check] %s scenario=%u range-ms=%d speed=%.3f step=%d wall-ms=%d complete=%d failures=%u\n",
                 packShortName.c_str(), scenario, duration, move.speed, step, elapsed, session.IsDeathComplete(), checkFailures);
@@ -114,8 +125,14 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
         fatal.ownerType = 1;
         fatal.damage = 10000;
         scene.ApplyHit(kBrotherCombatId, fatal);
+        if (brother.vitals.flash != 1) { ++checkFailures; }
+        AdvancePlayer(brotherModel, 250);
+        if (std::abs(brother.vitals.flash - 0.5f) > 0.0001f) { ++checkFailures; }
         for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
         if (!brother.vitals.deathAnimationComplete || session.IsDeathComplete() || session.GetLevel().GetWorldTimeScale() != 1) { ++checkFailures; }
+        std::printf("[death-check] %s brother-corpse-flash=%.3f\n",
+            packShortName.c_str(), brother.vitals.flash);
+        if (brother.vitals.flash != 0) { ++checkFailures; }
         brotherModel.weapon->brother.OnWaveCleared();
         for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
         if (brother.vitals.dead || brother.vitals.deathAnimationComplete) { ++checkFailures; }

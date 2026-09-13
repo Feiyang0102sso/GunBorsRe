@@ -155,8 +155,10 @@ void CBrother::Update(std::int32_t deltaMs) {
     }
     // Update :135184-135235 bypasses UpdateNormal during force/stun. Its
     // immunity and red-flash clocks resume after the forced action finishes.
+    // Death still runs UpdateNormal (:135184-135189), so its hit red fades
+    // at mem+1988 (:138246-138258) while the original death Flow advances.
     bool normalUpdate = m_knockbackMs == 0;
-    if (m_vitals != nullptr && (m_vitals->stunMs > 0 || m_vitals->dead)) { normalUpdate = false; }
+    if (m_vitals != nullptr && m_vitals->stunMs > 0) { normalUpdate = false; }
     if (normalUpdate && m_variables[3] > 0) {
         m_variables[3] = static_cast<std::int16_t>(std::max(0, m_variables[3] - deltaMs));
         if (m_variables[3] > 0) { m_immunityHidden = !m_immunityHidden; }
