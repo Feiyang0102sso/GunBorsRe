@@ -260,6 +260,33 @@ void CEnemy::SetBehaviour(const std::int16_t *arguments, int count) {
     }
 }
 
+void CEnemy::UpdatePathFinder(float waypointX, float waypointY, float seconds) {
+    if (seconds <= 0) { return; }
+    const float dx = waypointX - combat.x;
+    const float dy = waypointY - combat.y;
+    const float distance = std::hypot(dx, dy);
+    const float speed = std::max(0.0f, static_cast<float>(combat.variables[0]));
+    float velocityX = 0;
+    float velocityY = 0;
+    if (distance > 0) {
+        const float pathSpeed = std::min(speed, distance / seconds);
+        velocityX = dx * (pathSpeed / distance);
+        velocityY = dy * (pathSpeed / distance);
+    }
+    // CEnemy::UpdatePathFinder :70068-70164; ARM 0x3d0c8-0x3d1bc.
+    // The loaded angle constants are +1 and pi. For finite vectors the
+    // clamped acos minus pi/2 is <= pi/2, selecting vector addition.
+    velocityX += combat.flockX;
+    velocityY += combat.flockY;
+    const float combinedSpeed = std::hypot(velocityX, velocityY);
+    if (combinedSpeed > speed) {
+        velocityX *= speed / combinedSpeed;
+        velocityY *= speed / combinedSpeed;
+    }
+    combat.x += velocityX * seconds;
+    combat.y += velocityY * seconds;
+}
+
 void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
     combat.healthBarFlashMs = std::max(0, combat.healthBarFlashMs - deltaMs);
     combat.previousX = combat.x;
@@ -284,19 +311,13 @@ void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
         const float distance = std::hypot(dx, dy);
         if (distance > combat.arrivalDistance && distance > 0) {
             combat.arrived = false;
-            float remaining = distance - combat.arrivalDistance;
+            float waypointX = combat.targetX;
+            float waypointY = combat.targetY;
             if (combat.hasNavigationTarget) {
-                dx = combat.navigationX - combat.x;
-                dy = combat.navigationY - combat.y;
-                remaining = std::hypot(dx, dy);
+                waypointX = combat.navigationX;
+                waypointY = combat.navigationY;
             }
-            const float directionLength = std::hypot(dx, dy);
-            const float travel = std::min(remaining,
-                std::max(0.0f, combat.variables[0] * seconds));
-            if (directionLength > 0) {
-                combat.x += dx / directionLength * travel;
-                combat.y += dy / directionLength * travel;
-            }
+            UpdatePathFinder(waypointX, waypointY, seconds);
         } else if (!combat.arrived) {
             combat.arrived = true;
             TriggerEvent(0);
@@ -309,15 +330,7 @@ void CEnemy::UpdateCombatBeforeAnimation(int deltaMs) {
         if (m_linkPathFinder.IsDone()) {
             if (!combat.arrived) { combat.arrived = true; TriggerEvent(0); }
         } else if (node != nullptr) {
-            const float dx = node->x - combat.x;
-            const float dy = node->y - combat.y;
-            const float distance = std::hypot(dx, dy);
-            const float travel = std::max(0.0f, combat.variables[0] * seconds);
-            if (travel >= distance) { combat.x = node->x; combat.y = node->y; }
-            else if (distance > 0) {
-                combat.x += dx * travel / distance;
-                combat.y += dy * travel / distance;
-            }
+            UpdatePathFinder(node->x, node->y, seconds);
         }
     } else if (combat.behaviour == 1 || combat.behaviour == 3) {
         const float dx = combat.destinationX - combat.x;

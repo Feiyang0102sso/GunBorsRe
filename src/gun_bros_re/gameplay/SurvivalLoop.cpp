@@ -6,6 +6,7 @@
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #if GB_ENABLE_TESTS
 #include "gameplay/SurvivalStudy.h"
+#include "gameplay/PerformanceProbe.h"
 #endif
 #if GB_ENABLE_TESTS
 #include "gameplay/SurvivalChecks.h"
@@ -307,7 +308,7 @@ if (check) {
     // The original seeds its one CRandGen from the clock (:370383), so a level
     // script's rolls differ every session. Real play does the same; research
     // runs keep the fixed default stream so their results stay comparable.
-    if (!check && !bossStudy && capturePath.empty()) {
+    if (!check && !bossStudy && !performanceStudy && capturePath.empty()) {
         session.SetScriptRandomSeed(static_cast<std::uint32_t>(
             std::chrono::steady_clock::now().time_since_epoch().count()));
     }
@@ -578,25 +579,49 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
 
 #if GB_ENABLE_TESTS
     // Deterministic 1,200 rendered frames, with real waves, AI and projectiles.
+    if (development != nullptr && development->flockCheck) {
+        vitals.invincible = true;
+        return CheckFlockMovement(scene);
+    }
     std::unique_ptr<ISurvivalInputDriver> performancePilot;
     std::ofstream performanceReport;
     std::vector<double> performanceCpu;
     unsigned performanceFrame = 0;
+    unsigned performanceSteps = 0;
+    std::size_t performancePeakAlive = 0;
+    bool performancePassed = true;
 #endif
     
 #if GB_ENABLE_TESTS
 if (performanceStudy) {
-        performancePilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
-        if (!performancePilot) { return 1; }
+        if (development->performanceSpawnStudy) {
+            // User screenshot coordinates are a test input, not map resource data.
+            scene.playerX = 454.8f;
+            scene.playerY = 688.7f;
+            brother.vitals.invincible = true;
+            if (development->performanceFlockStudy) {
+                scene.playerX = 733.6f;
+                scene.playerY = 284.1f;
+            }
+        } else {
+            performancePilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
+            if (!performancePilot) { return 1; }
+        }
+        PerformanceProbe::enabled = true;
+        PerformanceProbe::uncachedPaths = development->performanceUncachedPaths;
         vitals.invincible = true;
         if (!window.SetVSync(false)) { return 1; }
-        std::printf("[performance] vsync=0 fixed-step=16ms rendered-frames=1200\n");
+        std::printf("[performance] vsync=0 update-step=16ms realtime=%d uncached-paths=%d target=1200\n",
+            development->performanceRealtimeStudy, development->performanceUncachedPaths);
         performanceReport.open(TestOutput::Path("performance-frames.csv"));
-        performanceReport << "frame,update_ms,geometry_ms,world_ms,hud_ms,present_ms,alive,spawned\n";
+        performanceReport << "frame,update_ms,geometry_ms,world_ms,hud_ms,present_ms,alive,spawned,spawn_ms,brother_ms,navigation_ms,enemy_ms,effects_ms,new_spawns,brother_hp,player_x,player_y,path_ms,path_calls,path_nodes,update_steps,flock_ms,nearest_mean,minimum_gap,close_pairs\n";
     }
 #endif
 
     while (window.PumpEvents()) {
+#if GB_ENABLE_TESTS
+        PerformanceProbe::counters = {};
+#endif
         const auto performanceStart = std::chrono::steady_clock::now();
         const auto frameTicks = window.GetTicksMs();
         survivalHud.AdvanceMenu(static_cast<unsigned>(frameTicks - menuTicks));
@@ -879,8 +904,21 @@ if (checkControls && (controlFrame == controlClickCount + 3 || controlFrame == c
         
 #if GB_ENABLE_TESTS
 if (performanceStudy) {
-            accumulator = 16;
-            performancePilot->Update(16, moveX, moveY);
+            if (!development->performanceRealtimeStudy) { accumulator = 16; }
+            if (performancePilot) { performancePilot->Update(16, moveX, moveY); }
+            if (development->performanceSpawnStudy) {
+                moveX = 0;
+                moveY = 0;
+                if (development->performanceFlockStudy) {
+                    // Repeatable square movement through the reported map.
+                    switch ((performanceFrame / 300) % 4) {
+                    case 0: moveY = 1; break;
+                    case 1: moveX = -1; break;
+                    case 2: moveY = -1; break;
+                    case 3: moveX = 1; break;
+                    }
+                }
+            }
         }
 #endif
 
@@ -912,8 +950,14 @@ if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
 #endif
 
         const std::size_t shotsBeforeSwap = effects.GetShotCount();
+#if GB_ENABLE_TESTS
+        unsigned performanceUpdateSteps = 0;
+#endif
         const bool checkSwapFiring = checkControls && (controlFrame == 2 || controlFrame == controlClickCount + 2);
         while (accumulator >= 16) {
+#if GB_ENABLE_TESTS
+            ++performanceUpdateSteps;
+#endif
             if (powerups.IsMovieActive()) {
                 session.Update(16, 0, 0, false);
                 accumulator -= 16;
@@ -925,8 +969,11 @@ if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
                 swapEventAccepted = player.weapon->brother.OnSwapGun();
             }
             if (!vitals.dead) {
-                const bool shoot = pendingWeapon >= weapons.size() &&
+                bool shoot = pendingWeapon >= weapons.size() &&
                     (performanceStudy || firePreview || checkSwapFiring || (window.IsLeftMouseDown() && !hudOwnsPointer));
+#if GB_ENABLE_TESTS
+                if (development->performanceSpawnStudy) { shoot = false; }
+#endif
                 session.Update(16, moveX, moveY, shoot);
             }
             else {
@@ -1161,6 +1208,11 @@ if (!capturePath.empty()) {
 #endif
 
         const auto performanceHud = std::chrono::steady_clock::now();
+#if GB_ENABLE_TESTS
+        if (performanceStudy && development->performanceFlockStudy && (performanceFrame + 1) % 300 == 0) {
+            if (!GB_SAVE_FRAME(window, TestOutput::Path("flock-" + std::to_string(performanceFrame + 1) + ".png"))) { return 1; }
+        }
+#endif
         window.Present();
         
 #if GB_ENABLE_TESTS
@@ -1172,24 +1224,51 @@ if (performanceStudy) {
             const double hudMs = std::chrono::duration<double, std::milli>(performanceHud - performanceWorld).count();
             const double presentMs = std::chrono::duration<double, std::milli>(performanceEnd - performanceHud).count();
             performanceReport << performanceFrame << ',' << updateMs << ',' << geometryMs << ',' << worldMs << ',' << hudMs << ',' << presentMs
-                << ',' << scene.AliveCount() << ',' << scene.spawned << '\n';
+                << ',' << scene.AliveCount() << ',' << scene.spawned
+                << ',' << PerformanceProbe::counters.spawnMs << ',' << PerformanceProbe::counters.brotherMs
+                << ',' << PerformanceProbe::counters.navigationMs << ',' << PerformanceProbe::counters.enemyMs
+                << ',' << PerformanceProbe::counters.effectsMs << ',' << PerformanceProbe::counters.spawns
+                << ',' << brother.vitals.health << ',' << scene.playerX << ',' << scene.playerY
+                << ',' << PerformanceProbe::counters.pathSearchMs << ',' << PerformanceProbe::counters.pathSearches
+                << ',' << PerformanceProbe::counters.pathNodes << ',' << performanceUpdateSteps;
+            const auto flockMetrics = MeasureFlock(scene);
+            performanceReport << ',' << PerformanceProbe::counters.flockMs << ',' << flockMetrics.nearestMean
+                << ',' << flockMetrics.minimum << ',' << flockMetrics.closePairs << '\n';
             performanceCpu.push_back(updateMs + geometryMs + worldMs + hudMs);
+            performanceSteps += performanceUpdateSteps;
+            performancePeakAlive = std::max(performancePeakAlive, scene.AliveCount());
             if (++performanceFrame % 300 == 0) {
                 std::printf("[performance] frame=%u update=%.2f geometry=%.2f world=%.2f hud=%.2f present=%.2f alive=%zu\n",
                     performanceFrame, updateMs, geometryMs, worldMs, hudMs, presentMs, scene.AliveCount());
             }
-            if (performanceFrame >= 1200) {
+            bool finished = performanceFrame >= 1200;
+            if (development->performanceRealtimeStudy) { finished = performanceSteps >= 1200; }
+            if (finished) {
                 std::sort(performanceCpu.begin(), performanceCpu.end());
+                const std::size_t count = performanceCpu.size();
                 std::printf("[performance] cpu-p50=%.3f cpu-p95=%.3f cpu-p99=%.3f max=%.3f frames=%u kills=%u\n",
-                    performanceCpu[600], performanceCpu[1140], performanceCpu[1188], performanceCpu.back(), performanceFrame, scene.GetTotalKills());
+                    performanceCpu[count / 2], performanceCpu[count * 95 / 100], performanceCpu[count * 99 / 100],
+                    performanceCpu.back(), performanceFrame, scene.GetTotalKills());
                 std::printf("[performance] enemy-assets hits=%u misses=%u templates=%zu\n", scene.GetEnemyModelCache().hits,
                     scene.GetEnemyModelCache().misses, scene.GetEnemyModelCache().entries.size());
+                if (development->performanceSpawnStudy) {
+                    // Host acceptance budget: 60 Hz CPU work, with the reported crowd present.
+                    const unsigned enemyLimit = session.GetLevel().GetEnemyLimit();
+                    performancePassed = performancePeakAlive >= enemyLimit && performanceCpu[count * 95 / 100] <= 1000.0 / 60;
+                    std::printf("[spawn-performance] updates=%u peak-alive=%zu pool-limit=%u cpu-p95-budget=16.667 passed=%d\n",
+                        performanceSteps, performancePeakAlive, enemyLimit, performancePassed);
+                }
                 break;
             }
         }
 #endif
 
     }
+#if GB_ENABLE_TESTS
+    PerformanceProbe::enabled = false;
+    PerformanceProbe::uncachedPaths = false;
+    if (!performancePassed) { return 1; }
+#endif
     if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
     return 0;
 }

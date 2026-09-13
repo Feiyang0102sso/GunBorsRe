@@ -150,6 +150,11 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'scene-transition' @('--scene-transition-check')
         Add-Check 'dialog' @('--dialog-check')
         Add-Check 'performance' @('--performance-check')
+        Add-Check 'spawn-performance' @('--spawn-performance-check')
+        Add-Check 'spawn-performance-realtime' @('--spawn-performance-realtime-check')
+        Add-Check 'path-cache' @('--path-cache-check')
+        Add-Check 'flock' @('--flock-check')
+        Add-Check 'flock-performance' @('--flock-performance-check')
     } elseif ($suite -eq 'Smoke') {
         # The actual GUI entry uses explicit screenshot/profile arguments. Pipe
         # redirection keeps OpenGameLog from writing to the real userdata directory.

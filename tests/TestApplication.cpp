@@ -25,6 +25,8 @@
 #include "tests/research/ResourceSurvey.h"
 #if GB_ENABLE_TESTS
 #include "tests/gameplay/SurvivalPilot.h"
+#include "tests/gameplay/SurvivalStudy.h"
+#include "tests/gameplay/PerformanceProbe.h"
 #include "Checks.h"
 #include "ui/MenuChecks.h"
 #endif
@@ -186,6 +188,12 @@ int RunTestApplication(int argc, char **argv) {
     bool playSurvival = false;
     bool checkSurvival = false;
     bool withBrother = false;
+    bool checkSpawnPerformance = false;
+    bool checkRealtimePerformance = false;
+    bool performanceUncachedPaths = false;
+    bool checkPathCache = false;
+    bool checkFlock = false;
+    bool checkFlockPerformance = false;
     unsigned checkWaves = 2;
     unsigned startWave = 0;
     bool explicitMap = false;
@@ -634,6 +642,28 @@ else if (std::strcmp(argument, "--dialog-check") == 0) {
 else if (std::strcmp(argument, "--performance-check") == 0) {
             checkPerformance = true;
         }
+else if (std::strcmp(argument, "--spawn-performance-check") == 0) {
+            checkSpawnPerformance = true;
+        }
+else if (std::strcmp(argument, "--path-cache-check") == 0) {
+            checkPathCache = true;
+        }
+else if (std::strcmp(argument, "--flock-check") == 0) {
+            checkFlock = true;
+        }
+else if (std::strcmp(argument, "--flock-performance-check") == 0) {
+            checkFlockPerformance = true;
+        }
+else if (std::strcmp(argument, "--disable-flock") == 0) {
+            PerformanceProbe::disableFlock = true;
+        }
+else if (std::strcmp(argument, "--spawn-performance-realtime-check") == 0) {
+            checkSpawnPerformance = true;
+            checkRealtimePerformance = true;
+        }
+else if (std::strcmp(argument, "--uncached-paths") == 0) {
+            performanceUncachedPaths = true;
+        }
 #endif
  
 #if GB_ENABLE_TESTS
@@ -952,6 +982,11 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
 #if GB_ENABLE_TESTS
     if (checkTutorial) { return RunTutorialPlayCheck(bigDirectory); }
 #endif
+    PerformanceProbe::uncachedPaths = performanceUncachedPaths;
+    if (checkSpawnPerformance) { return RunSpawnPerformanceCheck(bigDirectory, checkRealtimePerformance, performanceUncachedPaths); }
+    if (checkPathCache) { return RunPathCacheCheck(); }
+    if (checkFlock) { return RunFlockCheck(bigDirectory); }
+    if (checkFlockPerformance) { return RunFlockPerformanceCheck(bigDirectory); }
     if (checkPerformance) {
         if (!explicitMap) { mapPackName = "pack2"; mapIndex = 7; }
         return RunViewerSurvival(bigDirectory, mapPackName, mapIndex, gunIndex, armorIndex, "", 0, false, false, false, 2, startWave, nullptr, true, false, nullptr, true);

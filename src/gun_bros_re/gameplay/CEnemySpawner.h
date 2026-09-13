@@ -17,6 +17,9 @@ public:
     virtual ~IEnemySpawnWorld() = default;
     virtual bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) = 0;
     virtual int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const = 0;
+    // Pool occupancy includes dead actors until Release. Worlds which retire
+    // actors immediately can use their ordinary count.
+    virtual int CountEnemySlots(const GameObjectRef *enemy = nullptr) const { return CountEnemies(enemy); }
     virtual void StartObjectLayer(int layer) {}
     virtual bool SpawnMapObject(const PlacedObject &object, int objectId) { return false; }
     virtual void SendEnemyMessage(int objectId, int message) {}

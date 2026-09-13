@@ -6,6 +6,7 @@
 #include <limits>
 
 bool CLayerPathLink::Init(CArrayInputStream &stream) {
+    InvalidateRoutes();
     const unsigned nodeCount = stream.ReadUInt8();
     const unsigned linkCount = stream.ReadUInt8();
     const unsigned regionCount = stream.ReadUInt8();

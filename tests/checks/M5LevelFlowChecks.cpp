@@ -15,6 +15,52 @@
 using namespace M5LevelFlowDetail;
 #include "Checks.h"
 
+namespace {
+class BudgetWorld : public LevelFlowWorld {
+public:
+    using LevelFlowWorld::LevelFlowWorld;
+    int retainedSlots = 0;
+    int CountEnemySlots(const GameObjectRef *enemy = nullptr) const override {
+        int count = CountEnemies(enemy);
+        if (enemy == nullptr) { count += retainedSlots; }
+        return count;
+    }
+};
+unsigned CheckSpawnBudget(const CLevel::Template &data, CMap &map, PackTables &tables) {
+    CLevel level;
+    LevelFlowWorld world(level, tables, map);
+    level.Bind(data, map, &world, 49);
+    level.HandleEvent(2);
+    // Real pack2 wave 50 rules, with no deaths or artificial callbacks.
+    for (int elapsed = 0; elapsed < 3000; elapsed += 16) { level.Update(16); }
+    const int initial = world.CountEnemies(nullptr);
+    unsigned failures = 0;
+    if (level.GetEnemyLimit() != 20 || initial != 20 || level.GetStateId() != 105) { ++failures; }
+    std::printf("[spawn-budget] wave=50 state=%u default-limit=%u alive=%d expected=20 failures=%u\n",
+        level.GetStateId(), level.GetEnemyLimit(), initial, failures);
+    // A script may explicitly raise the limit. This must resume pending rules.
+    const std::int16_t raised[] = {50};
+    level.FunctionResolver(59, raised, 1);
+    for (int elapsed = 0; elapsed < 3000; elapsed += 16) { level.Update(16); }
+    if (world.CountEnemies(nullptr) != 35 || level.GetStateId() != 105) { ++failures; }
+    std::printf("[spawn-budget] explicit-limit=%u alive=%d rule-cap=35 failures=%u\n",
+        level.GetEnemyLimit(), world.CountEnemies(nullptr), failures);
+    CLevel occupiedLevel;
+    BudgetWorld occupied(occupiedLevel, tables, map);
+    occupied.retainedSlots = 20;
+    occupiedLevel.Bind(data, map, &occupied, 49);
+    occupiedLevel.HandleEvent(2);
+    for (int elapsed = 0; elapsed < 3000; elapsed += 16) { occupiedLevel.Update(16); }
+    if (occupied.CountEnemies(nullptr) != 0) { ++failures; }
+    occupied.retainedSlots = 0;
+    for (int elapsed = 0; elapsed < 3000; elapsed += 16) { occupiedLevel.Update(16); }
+    if (occupied.CountEnemies(nullptr) != 20) { ++failures; }
+    std::printf("[spawn-budget] retained-slots-block=20 released-alive=%d failures=%u\n",
+        occupied.CountEnemies(nullptr), failures);
+    return failures;
+}
+}
+
 int RunLevelFlowCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
@@ -54,6 +100,9 @@ int RunLevelFlowCheck(const std::string &bigDirectory) {
                 return 1;
             }
             CLevel level;
+            if (pack->GetShortName() == "pack2" && index == 6) {
+                failures += CheckSpawnBudget(data, map, tables);
+            }
             LevelFlowWorld world(level, tables, map);
             if (data.script.IsPresent()) {
                 std::ofstream bytecode(TestOutput::Path("level-flow-") + pack->GetShortName() + "-" + std::to_string(index) + ".txt");

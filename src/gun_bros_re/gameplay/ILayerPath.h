@@ -7,6 +7,8 @@
 #include "engine/resources/CArrayInputStream.h"
 #include "gun_bros_re/gameplay/CLayerCamera.h"
 #include <vector>
+#include <map>
+#include <utility>
 
 class ILayerPath {
 public:
@@ -25,7 +27,7 @@ public:
     virtual void PropogateNodeLock(int boundary, int origin, bool locked) {}
     virtual void UnlockNodesBetween(int first, int origin, int last) {}
     void SetAllNodesLocked(bool locked) {
-        for (Node &node : m_nodes) { node.locked = locked; }
+        for (unsigned index = 0; index < m_nodes.size(); ++index) { SetNodeLocked(index, locked); }
     }
     /** Return nearest unlocked node, or -1 for an empty graph. */
     int FindNearest(float x, float y) const;
@@ -38,8 +40,15 @@ public:
     /** Dijkstra over original links; next node from start towards destination. */
     int FindNext(int start, int destination) const;
 protected:
+    /** Runtime query results depend only on topology and node locks. */
+    void InvalidateRoutes() { m_nextRoutes.clear(); }
     unsigned m_layerIndex = 0;
     std::vector<Node> m_nodes;
-
+private:
+    int FindNextUncached(int start, int destination) const;
+    // Host query cache: retain the existing Dijkstra tie order exactly.
+    // iOS CFlock::RefreshDistanceMaps :170441 and CalculateDistanceMap :167955
+    // also reuse navigation work; this is not a copy of their distance-map layout.
+    mutable std::map<std::pair<int, int>, int> m_nextRoutes;
 };
 #endif

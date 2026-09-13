@@ -3,6 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/CombatScene.h"
+#include "gun_bros_re/gameplay/CFlock.h"
 #include "gun_bros_re/gameplay/CombatGeometry.h"
 #include "engine/core/CMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
@@ -11,6 +12,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#if GB_ENABLE_TESTS
+#include "gameplay/PerformanceProbe.h"
+#endif
 
 namespace {
 constexpr float kRadians = 3.14159265f / 180;
@@ -263,6 +267,9 @@ void CombatScene::ResolveBrotherForce(float previousX, float previousY, float &x
 }
 
 void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
+#if GB_ENABLE_TESTS
+    PerformanceProbe::Scope timing(PerformanceProbe::counters.navigationMs);
+#endif
     EnemyCombat &state = actor.model.enemy.combat;
     if (m_map == nullptr || state.behaviour != 0 || state.dead) {
         state.hasNavigationTarget = false;
@@ -300,6 +307,7 @@ void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
 }
 
 void CombatScene::Reset() {
+    m_flockEnemies.clear();
     m_experienceTexts.clear();
     m_weaponProgress.clear();
     m_casualties.clear();
@@ -393,6 +401,10 @@ bool CombatScene::PreloadEnemies(const RequirementList &requirements, const CScr
 }
 
 CombatEnemy *CombatScene::Spawn(std::size_t entry, float x, float y) {
+#if GB_ENABLE_TESTS
+    PerformanceProbe::Scope timing(PerformanceProbe::counters.spawnMs);
+    if (PerformanceProbe::enabled) { ++PerformanceProbe::counters.spawns; }
+#endif
     if (entry >= m_catalog.size()) { return nullptr; }
     std::unique_ptr<CombatEnemy> actor(new CombatEnemy());
     actor->data = &m_catalog[entry];
@@ -1063,6 +1075,9 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     ResolveMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY, m_playerRadius);
     if (m_brotherModel != nullptr) {
         m_brotherModel->weapon->brother.SetLevelContext(m_level);
+#if GB_ENABLE_TESTS
+        PerformanceProbe::Scope timing(PerformanceProbe::counters.brotherMs);
+#endif
         m_brother->SetShootingAllowed(m_level == nullptr || m_level->CanBrotherShoot());
         m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
             playerX, playerY, PlayerArmorMultiplier(*m_brotherModel, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2));
@@ -1070,10 +1085,29 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         AdvancePlayer(*m_brotherModel, deltaMs);
         if (m_brotherModel->weapon->brother.TakeWeaponSwap() && !SwapBrotherWeapon()) { ++invalidSpawns; }
     }
+    // CLevel::Update :121318 refreshes CFlock before object movement.
+    // AddObject/RemoveObject maintain membership, including unremoved corpses.
+    m_flockEnemies.clear();
+    for (auto &actor : enemies) {
+        auto &state = actor->model.enemy.combat;
+        if (state.enabled && !state.removed) { m_flockEnemies.push_back(&state); }
+    }
+    {
+#if GB_ENABLE_TESTS
+        PerformanceProbe::Scope timing(PerformanceProbe::counters.flockMs);
+        if (PerformanceProbe::disableFlock) {
+            for (auto *state : m_flockEnemies) { state->flockX = 0; state->flockY = 0; }
+        } else
+#endif
+        { CFlock::RefreshFlock(m_flockEnemies); }
+    }
     for (auto &actor : enemies) {
         CEnemy &enemy = actor->model.enemy;
         EnemyCombat &state = enemy.combat;
         if (!state.enabled || state.removed) { continue; }
+#if GB_ENABLE_TESTS
+        PerformanceProbe::Scope timing(PerformanceProbe::counters.enemyMs);
+#endif
         int enemyDeltaMs = deltaMs;
         // TransformObjectElapseMS :114279 leaves dead actors and player shots
         // at normal speed; live enemies use the script's Q8 time multiplier.
@@ -1134,7 +1168,12 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         m_effects.EmitBrother(*m_brotherModel, matrix, m_brother->facing, kBrotherCombatId, m_weaponCollision);
     }
     PlayerMatrix(matrix);
-    m_effects.Update(m_player, matrix, facing, deltaMs, m_weaponCollision);
+    {
+#if GB_ENABLE_TESTS
+        PerformanceProbe::Scope timing(PerformanceProbe::counters.effectsMs);
+#endif
+        m_effects.Update(m_player, matrix, facing, deltaMs, m_weaponCollision);
+    }
     for (auto &actor : enemies) {
         Actions(*actor);
         EnemyCombat &state = actor->model.enemy.combat;

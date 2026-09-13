@@ -29,7 +29,8 @@ bool CEnemySpawner::Spawn(int resource, int layer, int node, int objectId) {
     if (m_level == nullptr || m_world == nullptr || !m_level->GetResource(resource, enemy)) {
         return false;
     }
-    if (m_world->CountEnemies() >= static_cast<int>(m_level->GetEnemyLimit())) { return false; }
+    // GetNumFreeEnemies/GetEnemy :147230/:145509 count allocated pool slots.
+    if (m_world->CountEnemySlots() >= static_cast<int>(m_level->GetEnemyLimit())) { return false; }
     if (layer < 0) {
         layer = m_layer;
     }
@@ -65,7 +66,9 @@ void CEnemySpawner::Update(int deltaMs) {
             if (!m_level->GetResource(rule.resource, enemy)) {
                 break;
             }
-            if (rule.maximum >= 0 && m_world->CountEnemies(&enemy) >= rule.maximum) {
+            // The resource-specific GetEnemyCount :146595 visits unremoved
+            // objects, unlike the global living-enemy maximum above.
+            if (rule.maximum >= 0 && m_world->CountEnemySlots(&enemy) >= rule.maximum) {
                 break;
             }
             if (!Spawn(rule.resource, rule.layer, -1, -1)) {

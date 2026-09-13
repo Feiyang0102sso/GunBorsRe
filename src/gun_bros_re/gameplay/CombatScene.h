@@ -173,6 +173,7 @@ public:
     unsigned invalidSpawns = 0;
 
 private:
+    std::vector<EnemyCombat *> m_flockEnemies;
     EnemyModelCache m_enemyModelCache;
     CTargetingController m_autoAim;
     void RewardEnemy(const CombatEnemy &actor);

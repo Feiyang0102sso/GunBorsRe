@@ -69,6 +69,9 @@ struct EnemyCombat {
     bool hasNavigationTarget = false;
     float navigationX = 0;
     float navigationY = 0;
+    // CFlock snapshot for this logical tick; independent of script state.
+    float flockX = 0;
+    float flockY = 0;
     bool targetAlive = false;
     float targetRange = 100000;
     int behaviour = 7;

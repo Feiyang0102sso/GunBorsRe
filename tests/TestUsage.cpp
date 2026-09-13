@@ -150,6 +150,13 @@ void PrintTestUsage() {
 #endif
 #if GB_ENABLE_TESTS
         "  --performance-check       record 1200 real gameplay frames to CSV\n"
+        "  --spawn-performance-check profile wave 50 at the reported slow position\n"
+        "  --spawn-performance-realtime-check use the normal catch-up loop for 1200 updates\n"
+        "  --path-cache-check        check repeated routes, locks and graph reload\n"
+        "  --flock-check             check separation using real BIG enemies\n"
+        "  --flock-performance-check replay pack7 wave 50 crowd movement\n"
+        "  --disable-flock           disable separation for a test-only A/B replay\n"
+        "  --uncached-paths          use the old search in a spawn performance A/B replay\n"
 #endif
 #if GB_ENABLE_TESTS
         "  --pickup-check            pickup templates and collection scripts\n"

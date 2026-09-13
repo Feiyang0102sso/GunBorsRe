@@ -377,6 +377,15 @@ bool SurvivalSession::GetObjectPosition(int objectId, float &x, float &y) const 
     return m_props != nullptr && m_props->GetObjectPosition(objectId, x, y);
 }
 
+int SurvivalSession::CountEnemySlots(const GameObjectRef *enemy) const {
+    int count = 0;
+    for (const auto &actor : m_scene.enemies) {
+        if (actor->model.enemy.combat.removed) { continue; }
+        if (enemy == nullptr || (actor->data->packHash == enemy->packHash && actor->data->ordinal == enemy->localIndex)) { ++count; }
+    }
+    return count;
+}
+
 int SurvivalSession::CountEnemies(const GameObjectRef *enemy, int objectId) const {
     int count = 0;
     for (const auto &actor : m_scene.enemies) {

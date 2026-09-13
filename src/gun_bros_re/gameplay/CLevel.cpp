@@ -112,7 +112,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_stopwatchRunning = false;
     m_brotherLabelVisible = false;
     m_brotherLabelAlpha = 0;
-    m_enemyLimit = 50;
+    // CLevelObjectPool::Clear :145780 preserves the configured capacity.
     m_xplodiumMultiplierPercent = 100;
     m_playerCanMove = true;
     m_playerCanShoot = true;

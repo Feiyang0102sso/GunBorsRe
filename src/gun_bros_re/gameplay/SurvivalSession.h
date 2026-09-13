@@ -37,6 +37,7 @@ public:
     bool SkipToBoss();
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const override;
+    int CountEnemySlots(const GameObjectRef *enemy = nullptr) const override;
     void StartObjectLayer(int layer) override;
     bool SpawnMapObject(const PlacedObject &object, int objectId) override;
     void SendEnemyMessage(int objectId, int message) override;

@@ -224,6 +224,7 @@ private:
     bool ResolveCombatFunction(std::uint8_t function, const std::int16_t *arguments,
         std::uint8_t argumentCount, std::int16_t &result);
     void UpdateCombatBeforeAnimation(int deltaMs);
+    void UpdatePathFinder(float waypointX, float waypointY, float seconds);
     void UpdateCombatAfterAnimation(int deltaMs);
     void UpdateCombatTimers(int deltaMs);
     void SetBehaviour(const std::int16_t *arguments, int count);

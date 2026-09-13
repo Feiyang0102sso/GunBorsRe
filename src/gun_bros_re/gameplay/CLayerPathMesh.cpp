@@ -15,7 +15,7 @@ void CLayerPathMesh::PropogateNodeLock(int boundary, int origin, bool locked) {
         pending.pop_back();
         for (unsigned neighbour : m_nodes[current].neighbours) {
             if (m_nodes[neighbour].locked == locked) { continue; }
-            m_nodes[neighbour].locked = locked;
+            SetNodeLocked(static_cast<int>(neighbour), locked);
             pending.push_back(static_cast<int>(neighbour));
         }
     }
@@ -69,6 +69,7 @@ int CLayerPathMesh::FindNode(float x, float y) const {
 }
 
 bool CLayerPathMesh::Init(CArrayInputStream &stream) {
+    InvalidateRoutes();
     const unsigned vertexCount = stream.ReadUInt16();
     const unsigned nodeCount = stream.ReadUInt16();
     const unsigned neighbourRefCount = stream.ReadUInt16();

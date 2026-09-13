@@ -20,6 +20,11 @@ struct SurvivalDevelopment {
     bool campaignRescueCheck = false;
     bool campaignPortalCheck = false;
     bool campaignCacheCheck = false;
+    bool performanceSpawnStudy = false;
+    bool performanceRealtimeStudy = false;
+    bool performanceUncachedPaths = false;
+    bool flockCheck = false;
+    bool performanceFlockStudy = false;
 };
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
@@ -33,4 +38,17 @@ int RunPlayerDeathCheck(const std::string &bigDirectory);
 int RunBossCheck(const std::string &bigDirectory);
 /** Real BIG scenery/player pixel checks above and below an obstacle. */
 int RunMapOcclusionCheck(const std::string &bigDirectory);
+/** Wave 50 at the reported slow position, with both brothers alive. */
+int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime = false, bool uncachedPaths = false);
+int RunPathCacheCheck();
+class CombatScene;
+int RunFlockCheck(const std::string &bigDirectory);
+int CheckFlockMovement(CombatScene &scene);
+int RunFlockPerformanceCheck(const std::string &bigDirectory);
+struct FlockMetrics {
+    float nearestMean = 0;
+    float minimum = 0;
+    unsigned closePairs = 0;
+};
+FlockMetrics MeasureFlock(const CombatScene &scene);
 

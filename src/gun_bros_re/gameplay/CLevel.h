@@ -243,7 +243,8 @@ private:
     bool m_stopwatchRunning = false;
     bool m_brotherLabelVisible = false;
     float m_brotherLabelAlpha = 0;
-    unsigned m_enemyLimit = 50;
+    // CLevelObjectPool constructor :145400; native 59 may raise this to 50.
+    unsigned m_enemyLimit = 20;
     int m_xplodiumMultiplierPercent = 100;
     bool m_playerCanMove = true, m_playerCanShoot = true;
     unsigned m_bossIntroSerial = 0;
