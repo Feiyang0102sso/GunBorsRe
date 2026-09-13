@@ -60,6 +60,8 @@ public:
     void PlayerMatrix(float *matrix) const;
     void SetBrother(PlayerModel *model, CBrotherAI *brother);
     void SetBrotherWeapons(const CScript &script, const CGun::Template &pistol, const CGun::Template &rifle);
+    /** AI and desktop cheats enter the original swap script before changing guns. */
+    bool RequestBrotherWeaponSwap();
     bool SwapBrotherWeapon();
     unsigned GetBrotherWeaponSlot() const { return m_brotherWeaponSlot; }
     /** facingDegrees comes from the map PLAYER object, as the player's does. */
@@ -235,6 +237,7 @@ private:
     float m_playerForceX = 0;
     float m_playerForceY = 0;
     int m_playerForceMs = 0;
+    void ApplyBrotherForce(CombatId target, float x, float y, int durationMs);
     float m_previousPlayerX = 600;
     float m_previousPlayerY = 650;
 };

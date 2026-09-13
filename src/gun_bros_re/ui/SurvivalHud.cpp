@@ -168,6 +168,11 @@ void SurvivalHud::Centre(const std::string &text, float y, unsigned font, float 
     m_movies.Text(text, 512 - width * 0.5f, y, font, scale);
 }
 
+bool SurvivalHud::DrawTutorialDebugNotice(std::uint64_t ticks) {
+    ::DrawTutorialDebugNotice(m_movies, ticks);
+    return m_movies.Failures() == 0;
+}
+
 bool SurvivalHud::Draw(const SurvivalHudState &state) {
     for (const auto &bar : state.enemyHealthBars) {
         // Original Utility::DrawRect border 0xFF7F8C98 and red fill.

@@ -225,6 +225,7 @@ struct SocialMenuState {
 };
 
 struct MenuState {
+    bool resumeAfterDebugTutorial = false; // Returning from a no-save replay must not trigger a menu checkpoint.
 #if GB_ENABLE_TESTS
     DebugMapSelection debugMap;
 #endif

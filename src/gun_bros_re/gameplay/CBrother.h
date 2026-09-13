@@ -106,6 +106,10 @@ public:
     bool CanMove() const { return m_variables[1] != 0; }
     bool CanShoot() const { return m_variables[0] != 0; }
     HitResult ReceiveDamage(float damage);
+    /** CBrother::SetForce :137709 starts export 4, including its authored sound. */
+    bool BeginKnockback(int durationMs);
+    /** Sample the original force envelope before advancing this frame's timers. */
+    float GetKnockbackStepSeconds(int deltaMs) const;
     /** Shared fatal transition; desktop suicide bypasses damage protection. */
     bool StartDeath();
     void Stun(int durationMs);
@@ -147,6 +151,8 @@ public:
 
 private:
     bool m_weaponSwapRequested = false;
+    int m_knockbackMs = 0;
+    int m_knockbackDurationMs = 0;
     PlayerVitals *m_vitals = nullptr;
     PowerupState *m_powerups = nullptr;
     void PowerupEffect(const GameObjectRef &effect, int slot, bool active);

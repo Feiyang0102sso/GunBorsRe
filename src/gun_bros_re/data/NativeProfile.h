@@ -44,6 +44,8 @@ struct NativeProfileArchive {
 bool ReadNativeProfileRecord(const std::filesystem::path &path, unsigned id, NativeProfileRecord &record);
 bool WriteNativeProfileArchive(const std::filesystem::path &directory, const NativeProfileArchive &archive);
 bool CreateNativeProfileArchive(CResTOCManager &toc, PackTables &tables, NativeProfileArchive &archive);
+/** Original new-account defaults and gear, entirely in memory for debug sessions. */
+bool CreateTransientNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile);
 bool LoadNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile,
     const std::filesystem::path &directory, const std::filesystem::path &sourceDirectory = {});
 bool ReloadNativeProfile(CProfileManager &profile, const std::filesystem::path &directory);

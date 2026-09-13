@@ -1,5 +1,6 @@
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/debug/CheatActions.h"
+#include "gun_bros_re/debug/DebugTutorial.h"
 #include "gun_bros_re/ui/MenuInternal.h"
 namespace MenuDetail {
 
@@ -50,10 +51,11 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     std::uint64_t frameTicks = view.window.GetTicksMs();
     CDailyBonusTracking daily;
     if (!daily.Load(toc, tables)) { return -3; }
-    if (profile.nativeArchive) {
+    if (profile.nativeArchive && !state.resumeAfterDebugTutorial) {
         daily.RefreshUsageData(profile, static_cast<std::uint32_t>(CurrentSeconds()));
         if (!profile.SaveToDisk(savePath)) { return -3; }
     }
+    state.resumeAfterDebugTutorial = false;
     std::printf("[menu] ready page=%u\n", state.page);
     while (view.window.PumpEvents()) {
         const auto ticks = view.window.GetTicksMs();
@@ -90,6 +92,9 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         if (!ProcessMenuCheats(view.window, profile, state, daily, savePath)) { return -3; }
 
         for (KeyCode key = view.window.TakeKeyPress(); key != KeyCode::None; key = view.window.TakeKeyPress()) {
+#if GB_ENABLE_CHEATS
+            if (GameDebugKeys::StartsTutorial(key, view.window)) { return kDebugTutorialMenuChoice; }
+#endif
 #if GB_ENABLE_TESTS
             if (GameDebugKeys::OpensMapBrowser(key, view.window)) {
                 music.SetPaused(true);

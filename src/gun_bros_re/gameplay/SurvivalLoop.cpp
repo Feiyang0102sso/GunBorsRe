@@ -712,6 +712,11 @@ if (checkControls && controlFrame < controlClickCount) {
         std::vector<KeyCode> inputs;
         if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+            // Replay escape bypasses pause, dialogs, death and powerup movies.
+            if (gameContext != nullptr && gameContext->debugTutorial && key == KeyCode::Escape) {
+                std::printf("[debug-tutorial] escape no-save=1\n");
+                return 0;
+            }
             if (HandleDebugKey(key, window, showCollisions)) { continue; }
 #if GB_ENABLE_TESTS
             if (launch.debugSelection != nullptr && GameDebugKeys::OpensMapBrowser(key, window)) {
@@ -983,6 +988,11 @@ if (checkSwapFiring) {
         // The archive browser owns preview wrap-up instead of the retail menu.
         if (launch.debugMap != nullptr && session.GetLevel().IsCleared()) { return kDebugMapSessionComplete; }
 #endif
+        if (gameContext != nullptr && gameContext->debugTutorial && !check && capturePath.empty() &&
+            session.GetLevel().GetTutorialStep() == -1) {
+            std::printf("[debug-tutorial] completed no-save=1\n");
+            return 0;
+        }
         if (session.IsFinished() && gameContext != nullptr && !check && capturePath.empty()) { break; }
         loaded.players[0].x = scene.playerX;
         loaded.players[0].y = scene.playerY;
@@ -1064,6 +1074,8 @@ if (check) {
         }
         if (!survivalHud.DrawExperienceTexts(scene.GetExperienceTexts(), horde) || !survivalHud.Draw(hudState)) { return 1; }
         if (!powerups.DrawMovies()) { return 1; }
+        if (gameContext != nullptr && gameContext->debugTutorial &&
+            !survivalHud.DrawTutorialDebugNotice(window.GetTicksMs())) { return 1; }
         
 #if GB_ENABLE_TESTS
 if (checkControls && controlFrame < controlClickCount) {

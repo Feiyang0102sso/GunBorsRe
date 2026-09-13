@@ -34,6 +34,17 @@ bool HandleDebugKey(KeyCode key, const CWindow &window, bool &showCollisions) {
     return false;
 }
 
+void DrawTutorialDebugNotice(MovieRenderer &movies, std::uint64_t ticks) {
+    const auto &style = DebugConfig::Sidebar;
+    const float titleX = (DebugConfig::CanvasWidth - movies.TextWidth(DebugConfig::Tutorial::Notice, style.font, style.scale)) * 0.5f;
+    const float exitX = (DebugConfig::CanvasWidth - movies.TextWidth(DebugConfig::Tutorial::Exit, style.font, style.scale)) * 0.5f;
+    if ((ticks / DebugConfig::Tutorial::BlinkMs) % 2 == 0) {
+        movies.Text(DebugConfig::Tutorial::Notice, titleX, DebugConfig::Tutorial::Top, style.font, style.scale);
+    }
+    const float nextLine = DebugConfig::Tutorial::Top + movies.TextHeight(style.font, style.scale) + style.rowGap;
+    movies.Text(DebugConfig::Tutorial::Exit, exitX, nextLine, style.font, style.scale);
+}
+
 void PopulateSurvivalDebugInfo(SurvivalHudState &state, const CombatScene &scene,
     const WeaponEffects &effects, const std::string &pack, unsigned map, bool collisions) {
     char label[128];

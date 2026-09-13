@@ -3,6 +3,10 @@
 #include "gun_bros_re/ui/MenuInternal.h"
 #include "TestOutput.h"
 #include "ui/MenuChecks.h"
+#include "gun_bros_re/debug/DebugTutorial.h"
+#include "gun_bros_re/debug/SurvivalDebug.h"
+#include "gun_bros_re/debug/DebugConfig.h"
+#include <SDL3/SDL.h>
 using namespace MenuDetail;
 
 int RunTutorialPlayCheck(const std::string &bigDirectory) {
@@ -45,6 +49,69 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
         !SameObject(native.configuration.guns[1], earnedRifle) || !native.Owns(6, earnedRifle)) { return 1; }
     // Tutorial steps are a host execution trace, not an invented original flag.
     std::printf("[tutorial-profile-check] native created-without-source original-HUD completed=1 steps=255 earned-rifle-restored=1\n");
+    CProfileManager debugProfile;
+    debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+    SurvivalGameContext debugContext{debugProfile, {}};
+    SurvivalLaunch debugLaunch;
+    debugLaunch.bigDirectory = bigDirectory;
+    if (!PrepareDebugTutorial(toc, tables, debugContext, debugLaunch) ||
+        !debugContext.tutorial || !debugContext.debugTutorial || debugContext.persistProgress ||
+        debugProfile.experience != 0) { return 1; }
+    // A non-empty sentinel catches accidental writes through either save path.
+    debugContext.savePath = TestOutput::Path("tutorial-must-not-save");
+    if (std::filesystem::exists(debugContext.savePath)) { return 1; }
+    if (RunSurvivalStudy(bigDirectory, debugLaunch.packShortName, debugLaunch.mapIndex,
+        0, -1, "", 0, false, false, true, 2, 0, &debugContext, true) != 0 ||
+        !debugContext.SaveProfile() || std::filesystem::exists(debugContext.savePath)) { return 1; }
+    std::printf("[tutorial-profile-check] debug full-tutorial=1 no-save=1\n");
+
+    // Exercise ESC through the production key dispatcher with a fresh replay.
+    if (!PrepareDebugTutorial(toc, tables, debugContext, debugLaunch)) { return 1; }
+    debugContext.savePath = TestOutput::Path("tutorial-must-not-save");
+    CWindow debugWindow;
+    if (!debugWindow.Open("Debug tutorial checks", 1024, 768)) { return 1; }
+    debugWindow.SetEscapeCloses(false);
+    SDL_Event escape{};
+    escape.type = SDL_EVENT_KEY_DOWN;
+    escape.key.key = SDLK_ESCAPE;
+    if (!SDL_PushEvent(&escape)) { return 1; }
+    escape.type = SDL_EVENT_KEY_UP;
+    if (!SDL_PushEvent(&escape)) { return 1; }
+    debugLaunch.window = &debugWindow;
+    if (RunSurvival(debugLaunch) != 0 || !debugWindow.IsOpen() ||
+        std::filesystem::exists(debugContext.savePath)) { return 1; }
+    MovieRenderer debugMovies;
+    auto &core = *toc.GetPack(toc.GetCorePackIndex());
+    if (!debugMovies.Init(core, core)) { return 1; }
+    for (unsigned phase = 0; phase < 2; ++phase) {
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        DrawTutorialDebugNotice(debugMovies, phase * DebugConfig::Tutorial::BlinkMs);
+        if (debugMovies.Failures() != 0 || !Capture::SaveFrame(debugWindow,
+            TestOutput::Path("tutorial-notice-" + std::to_string(phase) + ".png"))) { return 1; }
+    }
+    std::printf("[tutorial-profile-check] debug escape=1 window-open=1 no-save=1 notice-phases=2\n");
+    CPlayerProgress::Template progressData;
+    std::vector<StoreEntry> store;
+    std::vector<WeaponEntry> weapons;
+    std::vector<ArmorEntry> armor;
+    if (!LoadPlayerProgress(toc, tables, progressData) || !LoadStoreCatalog(toc, tables, store) ||
+        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    MenuState menuState;
+    menuState.resumeAfterDebugTutorial = true;
+    SDL_Event replay{};
+    replay.type = SDL_EVENT_KEY_DOWN;
+    replay.key.key = SDLK_T;
+    replay.key.mod = SDL_KMOD_LSHIFT;
+    if (!SDL_PushEvent(&replay)) { return 1; }
+    replay.type = SDL_EVENT_KEY_UP;
+    replay.key.mod = SDL_KMOD_NONE;
+    if (!SDL_PushEvent(&replay)) { return 1; }
+    const int menuResult = ShowGameMenu(toc, tables, debugProfile, progressData, refinement,
+        store, weapons, armor, menuState, debugContext.savePath, "", nullptr, false, &debugWindow);
+    if (menuResult != kDebugTutorialMenuChoice || std::filesystem::exists(debugContext.savePath)) { return 1; }
+    std::printf("[tutorial-profile-check] menu shift-T=1 return-checkpoint-skipped=1 no-save=1\n");
     return 0;
 }
 

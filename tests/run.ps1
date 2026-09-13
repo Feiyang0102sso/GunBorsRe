@@ -92,6 +92,8 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'map-occlusion' @('--map-occlusion-check')
         Add-Check 'pickups' @('--pickup-check')
         Add-Check 'props' @('--prop-check') 1
+        Add-Check 'prop-combat' @('--prop-combat-check')
+        Add-Check 'actor-feedback' @('--actor-feedback-check')
         Add-Check 'powerups' @('--powerup-check')
         Add-Check 'missions' @('--mission-check')
         Add-Check 'level-flow' @('--level-flow-check')

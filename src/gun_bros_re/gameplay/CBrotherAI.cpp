@@ -89,7 +89,7 @@ void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
     previousX = x;
     previousY = y;
     if (!vitals.dead && m_forceMs > 0) {
-        const float seconds = std::min(deltaMs, m_forceMs) * 0.001f;
+        const float seconds = brother.GetKnockbackStepSeconds(deltaMs);
         x += m_forceX * seconds;
         y += m_forceY * seconds;
         m_forceMs = std::max(0, m_forceMs - deltaMs);
@@ -103,6 +103,7 @@ void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
     // CBrotherAI::Update :139423 chooses an occasional weapon swap with the
     // original inclusive 0..10000 <= 3 roll. The host applies it after Update
     // returns, so replacing the gun cannot invalidate this CBrother reference.
+    // The host now sends OnSwapGun first; only script native 3 switches banks.
     if (Random(0, 10000) <= 3) { m_weaponSwapRequested = true; }
     const float distance = std::hypot(playerX - x, playerY - y);
     if (distance < kFollowStopDistance || !brother.CanMove()) { m_moving = false; }

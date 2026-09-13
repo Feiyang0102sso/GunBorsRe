@@ -25,6 +25,8 @@ int RunPickupRenderCheck(const std::string &bigDirectory);
 int RunPowerupCheck(const std::string &bigDirectory);
 
 int RunPropCheck(const std::string &bigDirectory);
+int RunPropCombatCheck(const std::string &bigDirectory);
+int RunActorFeedbackCheck(const std::string &bigDirectory);
 
 int RunProgressCheck(const std::string &bigDirectory);
 

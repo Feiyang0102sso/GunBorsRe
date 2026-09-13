@@ -50,6 +50,7 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
     if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
     if (cheat == GameCheats::Invincible) { vitals.invincible = !vitals.invincible; }
     if (cheat == GameCheats::HealthOrGreeting && !vitals.dead) { vitals.health = vitals.maximum; }
+    if (cheat == GameCheats::BrotherWeapon) { scene.RequestBrotherWeaponSwap(); }
     if (cheat == GameCheats::Suicide && !powerups.IsMovieActive() && scene.Suicide()) {
         result.resume = true;
         std::printf("[death] suicide started\n");

@@ -10,6 +10,9 @@ inline void Bind() {
 }
 
 namespace GameDebugKeys {
+inline bool StartsTutorial(KeyCode key, const CWindow &window) {
+    return key == DebugConfig::Keys::Tutorial && window.WasShiftPressed();
+}
 // In-game collision overlay; one action per key press.
 inline constexpr KeyCode ToggleCollision = DebugConfig::Keys::Collision;
 inline constexpr KeyCode ToggleInfo = DebugConfig::Keys::Info;

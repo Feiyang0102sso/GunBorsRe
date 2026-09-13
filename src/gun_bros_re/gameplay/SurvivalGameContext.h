@@ -31,6 +31,7 @@ struct SurvivalGameContext {
     bool checkControls = false;
 #endif
     bool tutorial = false;
+    bool debugTutorial = false; // Menu-only replay: ESC returns directly, with a no-save notice.
     std::uint64_t startingExperience = 0;
     std::map<std::uint64_t, unsigned> accountedWeaponExperience;
     SurvivalResult result;

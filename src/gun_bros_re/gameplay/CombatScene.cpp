@@ -164,11 +164,10 @@ float CombatScene::GetEnemyTimeScale() const {
 
 bool CombatScene::TouchesPickup(float x, float y) const {
     // CPickup::Bind :99937 sets its fixed collision radius to 10.
-    if (!m_vitals.dead && CircleFraction(playerX, playerY,
-        m_previousPlayerX - playerX, m_previousPlayerY - playerY, x, y, m_playerRadius + 10) <= 1) { return true; }
-    return m_brother != nullptr && !m_brother->vitals.dead &&
-        CircleFraction(m_brother->x, m_brother->y, m_brother->previousX - m_brother->x,
-            m_brother->previousY - m_brother->y, x, y, m_playerRadius + 10) <= 1;
+    // CBrother::TestCollisions :138154 excludes GetBrotherType() == 1;
+    // CBrotherAI::GetBrotherType :139638 returns 1 for the AI companion.
+    return !m_vitals.dead && CircleFraction(playerX, playerY,
+        m_previousPlayerX - playerX, m_previousPlayerY - playerY, x, y, m_playerRadius + 10) <= 1;
 }
 
 void CombatScene::OnWaveCleared(unsigned perfectRewardPercent) {
@@ -340,6 +339,7 @@ void CombatScene::Reset() {
         if (EquipPlayerWeapon(m_tables, m_brotherModel->weapon->playerScript,
             m_brotherModel->weapon->data, "brother reset", *m_brotherModel)) {
             CreatePlayerBuffers(*m_brotherModel, m_program);
+            m_brotherWeaponSlot = 0;
         }
     }
     playerX = 600;
@@ -483,12 +483,22 @@ void CombatScene::SetBrotherWeapons(const CScript &script, const CGun::Template 
     m_brotherWeaponSlot = 0;
 }
 
+bool CombatScene::RequestBrotherWeaponSwap() {
+    if (m_brother == nullptr || m_brotherModel == nullptr || m_brotherScript == nullptr || m_brother->vitals.dead) { return false; }
+    return m_brotherModel->weapon->brother.OnSwapGun();
+}
+
 bool CombatScene::SwapBrotherWeapon() {
     if (m_brotherScript == nullptr || m_brotherModel == nullptr || m_brother->vitals.dead) { return true; }
     const unsigned next = 1 - m_brotherWeaponSlot;
     m_effects.RetireOwner(kBrotherCombatId);
-    if (!EquipPlayerWeapon(m_tables, *m_brotherScript, *m_brotherWeapons[next], "AI brother swap", *m_brotherModel) ||
-        !CreatePlayerBuffers(*m_brotherModel, m_program)) { return false; }
+    // CBrother native 3 changes the gun while the same body/script continues
+    // the swap sequence. Reuse the two stable banks used by the local player.
+    if (m_brotherModel->uiOtherWeapon == nullptr) {
+        if (!PreparePlayerUIWeapon(m_tables, *m_brotherWeapons[1], "AI brother swap", *m_brotherModel) ||
+            !CreatePlayerBuffers(*m_brotherModel, m_program)) { return false; }
+    }
+    SelectPlayerUIWeapon(*m_brotherModel, next == 0);
     m_brotherWeaponSlot = next;
     std::printf("[brother] weapon-slot=%u\n", next);
     return true;
@@ -910,13 +920,21 @@ void CombatScene::Splash(const CombatHit &hit, float radius, float coneDegrees, 
             // CBrother::OnSplashDamage :135359 uses SetForce over time.
             // CEnemy::OnSplashDamage :67945 does not apply positional force.
             // In particular, a full-size map must never clamp to Arena bounds.
-            if (id == kBrotherCombatId && !m_brother->vitals.dead) {
-                m_brother->SetForce(dx / distance * force, dy / distance * force, forceMs);
-            } else if (id == kPlayerCombatId && !m_vitals.dead) {
-                m_playerForceX = dx / distance * force;
-                m_playerForceY = dy / distance * force;
-                m_playerForceMs = forceMs;
-            }
+            ApplyBrotherForce(id, dx / distance * force, dy / distance * force, forceMs);
+        }
+    }
+}
+
+void CombatScene::ApplyBrotherForce(CombatId target, float x, float y, int durationMs) {
+    if (target == kBrotherCombatId && m_brotherModel != nullptr) {
+        if (m_brotherModel->weapon->brother.BeginKnockback(durationMs)) {
+            m_brother->SetForce(x, y, durationMs);
+        }
+    } else if (target == kPlayerCombatId) {
+        if (m_player.weapon != nullptr && m_player.weapon->brother.BeginKnockback(durationMs)) {
+            m_playerForceX = x;
+            m_playerForceY = y;
+            m_playerForceMs = durationMs;
         }
     }
 }
@@ -1035,20 +1053,22 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         } else if (m_autoAim.GetTarget() != 0) { m_autoAim.ClearTarget(facing); }
         SetPlayerInput(m_player, length > 0, shoot);
     }
+    const float forceSeconds = m_player.weapon->brother.GetKnockbackStepSeconds(deltaMs);
     AdvancePlayer(m_player, deltaMs);
     if (m_playerForceMs > 0 && !m_vitals.dead) {
-        const float seconds = std::min(deltaMs, m_playerForceMs) * 0.001f;
-        playerX += m_playerForceX * seconds;
-        playerY += m_playerForceY * seconds;
+        playerX += m_playerForceX * forceSeconds;
+        playerY += m_playerForceY * forceSeconds;
         m_playerForceMs = std::max(0, m_playerForceMs - deltaMs);
     }
     ResolveMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY, m_playerRadius);
     if (m_brotherModel != nullptr) {
+        m_brotherModel->weapon->brother.SetLevelContext(m_level);
         m_brother->SetShootingAllowed(m_level == nullptr || m_level->CanBrotherShoot());
         m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
             playerX, playerY, PlayerArmorMultiplier(*m_brotherModel, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2));
-        if (m_brother->TakeWeaponSwapRequest() && !SwapBrotherWeapon()) { ++invalidSpawns; }
+        if (m_brother->TakeWeaponSwapRequest()) { RequestBrotherWeaponSwap(); }
         AdvancePlayer(*m_brotherModel, deltaMs);
+        if (m_brotherModel->weapon->brother.TakeWeaponSwap() && !SwapBrotherWeapon()) { ++invalidSpawns; }
     }
     for (auto &actor : enemies) {
         CEnemy &enemy = actor->model.enemy;
@@ -1084,6 +1104,9 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
             contact.ownerType = 1;
             contact.damage = state.variables[17] * GetDamageMultiplier(state.id);
             ApplyHit(kBrotherCombatId, contact);
+            const float angle = (state.facing - 90) * kRadians;
+            ApplyBrotherForce(kBrotherCombatId, std::cos(angle) * state.variables[12],
+                std::sin(angle) * state.variables[12], state.variables[13]);
             actor->brotherContactTimer = state.variables[13];
             enemy.TriggerEvent(8);
         }
@@ -1098,9 +1121,8 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
                 ApplyHit(kPlayerCombatId, contact);
             }
             const float angle = (state.facing - 90) * kRadians;
-            m_playerForceX = std::cos(angle) * state.variables[12];
-            m_playerForceY = std::sin(angle) * state.variables[12];
-            m_playerForceMs = state.variables[13];
+            ApplyBrotherForce(kPlayerCombatId, std::cos(angle) * state.variables[12],
+                std::sin(angle) * state.variables[12], state.variables[13]);
             actor->contactTimer = state.variables[13];
             enemy.TriggerEvent(8);
         }

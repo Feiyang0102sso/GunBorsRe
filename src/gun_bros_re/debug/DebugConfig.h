@@ -27,6 +27,12 @@ inline constexpr TextStyle FPS{710, 2, 0.75f, 100, 0, FpsFont, 1};
 // Example: Sidebar x 16 -> 30 moves all rows right; scale changes all rows together.
 inline constexpr TextStyle Sidebar{16, 184, 0.42f, 168, 5, SidebarFont, 1};
 inline constexpr unsigned FpsSampleMs = 500;
+namespace Tutorial {
+inline constexpr float Top = 16;
+inline constexpr unsigned BlinkMs = 500;
+inline constexpr const char *Notice = "debug Mode Tutorial checking  no save";
+inline constexpr const char *Exit = "ESC to exit";
+}
 inline constexpr unsigned CircleSegments = 48;
 // Each category is {stroke width, {red, green, blue, alpha}}.
 // Example: Enemy{3, {1, 1, 0, 1}} gives yellow enemy outlines of width 3.
@@ -41,6 +47,7 @@ inline constexpr LineStyle Disabled{1, {0.55f, 0.55f, 0.55f, 1}};
 namespace Keys {
 // Pair each action key with its Shift flag; false means Shift is not required.
 inline constexpr KeyCode Collision = KeyCode::C, Info = KeyCode::I, MapBrowser = KeyCode::F3;
+inline constexpr KeyCode Tutorial = KeyCode::T;
 inline constexpr bool CollisionShift = true, InfoShift = true, MapBrowserShift = true;
 inline constexpr KeyCode Previous = KeyCode::Up, Next = KeyCode::Down;
 inline constexpr KeyCode PreviousPage = KeyCode::Left, NextPage = KeyCode::Right;

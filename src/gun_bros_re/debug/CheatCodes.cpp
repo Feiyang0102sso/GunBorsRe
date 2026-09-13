@@ -7,15 +7,17 @@ bool GameCheats::Consume(std::string &prefix, std::vector<std::string> &commands
     // Desktop Boss shortcut is six letters. A lone S still reaches
     // movement; only an established ST prefix consumes its suffix.
     // The same prefix also accepts the desktop suicide shortcut.
+    // STBROW requests the brother's normal weapon swap animation.
     if (prefix.size() >= 2 && prefix.compare(0, 2, "st") == 0) {
         prefix += letter;
-        if (prefix == Boss || prefix == Suicide) {
+        if (prefix == Boss || prefix == Suicide || prefix == BrotherWeapon) {
             commands.push_back(prefix);
             prefix.clear();
             return true;
         }
         if (std::string(Boss).compare(0, prefix.size(), prefix) == 0 ||
-            std::string(Suicide).compare(0, prefix.size(), prefix) == 0) { return true; }
+            std::string(Suicide).compare(0, prefix.size(), prefix) == 0 ||
+            std::string(BrotherWeapon).compare(0, prefix.size(), prefix) == 0) { return true; }
         prefix.clear();
     }
     if (prefix == "s" && letter == 't') { prefix = "st"; return true; }

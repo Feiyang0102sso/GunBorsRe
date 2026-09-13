@@ -149,6 +149,11 @@ namespace MapDetail {
             if (!prop.active || kPropIdBase + prop.objectId != target || prop.runtime == nullptr || prop.runtime->IsRemoved()) { continue; }
             prop.lastDamager = hit.owner;
             prop.runtime->Damage(hit.damage, hit.flags);
+            // CProp::Damage -> Flow -> native 7 (:124595) dispatches the blast
+            // synchronously. Finish its nested damage before the outer grenade
+            // visits the enemy; delaying until Update lets that grenade remove
+            // armor first and incorrectly exposes it to the barrel's blast.
+            for (const PropAction &action : prop.runtime->TakeActions()) { ApplyAction(prop, action); }
             SyncPlayers(prop);
             ++m_hitCount;
             return HitResult::Hit;
@@ -158,9 +163,15 @@ namespace MapDetail {
 
     void MapPropWorld::Splash(const CombatHit &hit, float radius) {
         // CProp::CanCollide accepts human/AI gun ownership, not enemy shots.
-        if (hit.ownerType != 0) { return; }
+        // :123423 also accepts PROP sources (type 2), but rejects a brother
+        // source (type 0). A player-owned barrel blast has no bullet object;
+        // its allegiance alone must not turn it into a human bullet (type 5).
+        if (hit.projectile != 0) {
+            if (hit.ownerType != 0) { return; }
+        } else if ((hit.owner & kPropIdBase) == 0 || hit.owner == kBrotherCombatId) { return; }
         for (PlacedProp &prop : m_map.props) {
             if (!prop.active || prop.runtime == nullptr || prop.runtime->IsRemoved() || prop.runtime->GetHealth() <= 0) { continue; }
+            if (hit.owner == kPropIdBase + prop.objectId) { continue; }
             const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
             if (vertices.empty()) { continue; }
             float left = vertices[0].x, right = left, top = vertices[0].y, bottom = top;
@@ -205,7 +216,10 @@ namespace MapDetail {
             hit.x = prop.x;
             hit.y = prop.y;
             hit.damage = static_cast<float>(action.damage);
-            hit.owner = kPlayerCombatId;
+            // CProp::FunctionResolver case 7 :124571 resolves self / last
+            // damager / local player. Preserve that object identity for CanCollide.
+            hit.owner = kPropIdBase + prop.objectId;
+            if (action.damageOwner == 2) { hit.owner = kPlayerCombatId; }
             if (action.damageOwner == 1 && prop.lastDamager != 0) { hit.owner = prop.lastDamager; }
             // Self-owned environmental explosions can hurt both sides; the
             // original knockback native explicitly visits only the brothers.

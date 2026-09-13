@@ -7,6 +7,7 @@
 
 #include <cstdio>
 #include <algorithm>
+#include <cmath>
 
 CBrother::Template::Template() : m_gameScale(0.0f) {}
 
@@ -166,6 +167,11 @@ void CBrother::Update(std::int32_t deltaMs) {
     m_torso.Update(deltaMs);
     m_legs.Update(deltaMs);
     m_gun->Update(deltaMs);
+    if (m_knockbackMs > 0) {
+        m_knockbackMs = std::max(0, m_knockbackMs - deltaMs);
+        // CBrother::Update :135233 releases the forced state with event 7.
+        if (m_knockbackMs == 0) { m_interpreter.HandleEvent(5, 7); }
+    }
     if (m_timer > 0) {
         m_timer -= deltaMs;
         if (m_timer <= 0) { m_interpreter.HandleEvent(5, 7); }
@@ -381,12 +387,36 @@ bool CBrother::StartDeath() {
     m_vitals->deathAnimationComplete = false;
     m_vitals->stunMs = 0;
     m_weaponSwapRequested = false;
+    m_knockbackMs = 0;
     for (bool &pending : m_grenadePending) { pending = false; }
     for (bool &animating : m_grenadeAnimating) { animating = false; }
     ++m_vitals->deaths;
     // HandleDamage :136779. BIG selects moves, timing and the completion native.
     m_interpreter.CallExportFunction(2);
     return true;
+}
+
+bool CBrother::BeginKnockback(int durationMs) {
+    // Original SetForce rejects a second force, death, immunity and shield.
+    if (m_vitals == nullptr || m_vitals->dead || m_knockbackMs > 0 ||
+        m_variables[3] > 0 || IsShield() || durationMs <= 0) { return false; }
+    SetInput(false, false);
+    m_knockbackMs = durationMs;
+    m_knockbackDurationMs = durationMs;
+    m_interpreter.CallExportFunction(4);
+    return true;
+}
+
+float CBrother::GetKnockbackStepSeconds(int deltaMs) const {
+    if (m_knockbackMs <= 0 || deltaMs <= 0) { return 0; }
+    const int elapsedMs = m_knockbackDurationMs - m_knockbackMs + deltaMs;
+    // CBrother::Update :135201-135236 samples elapsed time after adding delta,
+    // applies (1 + cos(pi * elapsed / duration)) / 2, and skips the final step.
+    if (elapsedMs >= m_knockbackDurationMs) { return 0; }
+    constexpr float kPi = 3.14159265f;
+    const float progress = static_cast<float>(elapsedMs) / m_knockbackDurationMs;
+    const float speedScale = (1.0f + std::cos(kPi * progress)) * 0.5f;
+    return speedScale * deltaMs * 0.001f;
 }
 
 void CBrother::Stun(int durationMs) {

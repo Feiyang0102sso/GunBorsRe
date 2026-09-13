@@ -145,6 +145,8 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
         int previousStep = -2;
         int grenadeWaitMs = 0;
         bool grenadeGateChecked = false;
+        bool barrelGateChecked = false;
+        bool armorBreakChecked = false;
         // Exercise the original script with actual movement and projectiles.
         for (int elapsed = 0; elapsed < 180000; elapsed += 16) {
             const int step = session.GetLevel().GetTutorialStep();
@@ -178,6 +180,43 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                         std::printf("[tutorial-check] grenade-gate gunfire-ms=%d kills=%u alive=%d failures=%u\n",
                             grenadeWaitMs, session.GetKills(), session.CountEnemies(), checkFailures);
                     }
+                    if (!barrelGateChecked) {
+                        for (const auto &actor : scene.enemies) {
+                            CEnemy &enemy = actor->model.enemy;
+                            if (enemy.combat.dead || !enemy.combat.enabled) { continue; }
+                            const float originalX = enemy.combat.x;
+                            const float originalY = enemy.combat.y;
+                            const float healthBefore = enemy.combat.health;
+                            const CombatId enemyId = enemy.combat.id;
+                            unsigned barrels = 0;
+                            for (PlacedProp &prop : loaded.props) {
+                                if (!prop.active || !prop.runtime || prop.runtime->GetHealth() <= 0 ||
+                                    prop.sprite->interactiveKind != InteractivePropKind::Barrel) { continue; }
+                                // Trigger the real barrel Flow and its scene damage dispatch.
+                                enemy.combat.x = prop.x + 30;
+                                enemy.combat.y = prop.y;
+                                prop.runtime->Damage(prop.runtime->GetHealth(), 0);
+                                for (unsigned tick = 0; tick < 8; ++tick) {
+                                    session.Update(16, 0, 0, false);
+                                    // A regression may kill and retire the actor during Update.
+                                    const CombatEnemy *target = scene.Find(enemyId);
+                                    if (!target || target->model.enemy.combat.health != healthBefore) {
+                                        std::printf("[tutorial-check] armored barrel damaged enemy object=%d\n", prop.objectId);
+                                        return 1;
+                                    }
+                                }
+                                ++barrels;
+                                if (enemy.combat.dead) { break; }
+                            }
+                            std::printf("[tutorial-check] barrel-gate enemy=%08x:%u barrels=%u hp=%.0f->%.0f state=%d\n",
+                                actor->data->packHash, actor->data->ordinal, barrels, healthBefore,
+                                enemy.combat.health, enemy.GetStateId());
+                            enemy.combat.x = originalX;
+                            enemy.combat.y = originalY;
+                            if (barrels == 0 || enemy.combat.health != healthBefore) { return 1; }
+                        }
+                        barrelGateChecked = true;
+                    }
                     bool inGrenadeRange = false;
                     for (const auto &actor : scene.enemies) {
                         const auto &enemy = actor->model.enemy.combat;
@@ -192,6 +231,20 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
             vitals.invincible = true;
             const bool fireGun = step != 2 && (step != 5 || grenadeWaitMs < 5000);
             session.Update(16, moveX, moveY, fireGun);
+            if (barrelGateChecked && !armorBreakChecked && powerups.GetCount(13) == 0) {
+                for (const auto &actor : scene.enemies) {
+                    CEnemy &enemy = actor->model.enemy;
+                    if (enemy.combat.dead || !enemy.combat.enabled || enemy.GetPartCount() != 1) { continue; }
+                    // ENEMY27 Flow @0xA9..0xB9 removes armor and rejects the
+                    // first grenade. Later hits use @0x86 without a grace timer.
+                    const float healthBefore = enemy.combat.health;
+                    std::printf("[tutorial-check] armor-break hp=%.0f parts=%u hits=%u\n",
+                        healthBefore, enemy.GetPartCount(), enemy.combat.hitCount);
+                    if (healthBefore != enemy.combat.maxHealth || enemy.combat.hitCount != 0) { return 1; }
+                    armorBreakChecked = true;
+                    break;
+                }
+            }
             if (player.weapon->brother.TakeWeaponSwap()) {
                 const GameObjectRef &rifle = pickupProfile->configuration.guns[1];
                 for (std::size_t index = 0; index < weapons.size(); ++index) {
@@ -203,7 +256,8 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                 }
             }
         }
-        if (session.GetLevel().GetTutorialStep() != -1 || !grenadeGateChecked) { ++checkFailures; }
+        if (session.GetLevel().GetTutorialStep() != -1 || !grenadeGateChecked ||
+            !barrelGateChecked || !armorBreakChecked) { ++checkFailures; }
         std::printf("[tutorial-check] final-step=%d failures=%d\n", session.GetLevel().GetTutorialStep(), checkFailures);
         capturePath = TestOutput::Path("tutorial-check.png");
     }

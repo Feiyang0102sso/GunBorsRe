@@ -159,6 +159,8 @@ void PrintTestUsage() {
 #endif
 #if GB_ENABLE_TESTS
         "  --prop-check              complete prop templates and native callbacks\n"
+        "  --prop-combat-check       isolated barrel explosions on both maps\n"
+        "  --actor-feedback-check    knockback audio and animated AI weapon swaps\n"
 #endif
 #if GB_ENABLE_TESTS
         "  --powerup-check           consumable templates, queries and actions\n"

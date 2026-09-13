@@ -62,6 +62,7 @@ public:
     bool IsDialogDone() const { return m_dialog.IsDone(); }
     bool Init(CResTOCManager &toc, PackTables &tables);
     bool Draw(const SurvivalHudState &state);
+    bool DrawTutorialDebugNotice(std::uint64_t ticks);
     /** Original level effect pass, also callable by the permanent death check. */
     bool DrawExperienceTexts(const std::vector<CombatScene::ExperienceText> &texts, bool horde);
     void Advance(int deltaMs);

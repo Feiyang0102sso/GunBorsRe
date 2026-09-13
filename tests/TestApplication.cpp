@@ -159,6 +159,8 @@ int RunTestApplication(int argc, char **argv) {
     bool checkProgress = false;
     bool checkPickups = false;
     bool checkProps = false;
+    bool checkPropCombat = false;
+    bool checkActorFeedback = false;
     bool checkPowerups = false;
     bool powerupStudy = false;
     bool checkPickupRendering = false;
@@ -344,6 +346,12 @@ else if ((std::strcmp(argument, "--campaign") == 0 || std::strcmp(argument, "--c
 #if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--prop-check") == 0) {
             checkProps = true;
+        }
+else if (std::strcmp(argument, "--prop-combat-check") == 0) {
+            checkPropCombat = true;
+        }
+else if (std::strcmp(argument, "--actor-feedback-check") == 0) {
+            checkActorFeedback = true;
         }
 #endif
  
@@ -848,6 +856,8 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
 #endif
 #if GB_ENABLE_TESTS
     if (checkProps) { return RunPropCheck(bigDirectory); }
+    if (checkPropCombat) { return RunPropCombatCheck(bigDirectory); }
+    if (checkActorFeedback) { return RunActorFeedbackCheck(bigDirectory); }
 #endif
 #if GB_ENABLE_TESTS
     if (checkPowerups) { return RunPowerupCheck(bigDirectory); }

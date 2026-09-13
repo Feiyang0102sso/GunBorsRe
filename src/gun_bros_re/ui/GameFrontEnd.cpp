@@ -1,4 +1,5 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
+#include "gun_bros_re/debug/DebugTutorial.h"
 #include "gun_bros_re/ui/GameFrontEndInternal.h"
 #include "engine/core/Paths.h"
 #include "gun_bros_re/ui/MenuInternal.h"
@@ -84,6 +85,19 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         }
 #endif
         const int choice = ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, savePath, screenshotPath, nullptr, originalProfile, &window, false, nullptr, &music);
+        if (choice == kDebugTutorialMenuChoice) {
+            CProfileManager debugProfile;
+            debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
+            SurvivalGameContext context{debugProfile, {}};
+            context.music = &music;
+            SurvivalLaunch launch;
+            launch.bigDirectory = bigDirectory;
+            launch.window = &window;
+            if (!PrepareDebugTutorial(toc, tables, context, launch) || RunSurvival(launch) != 0) { return 1; }
+            std::printf("[debug-tutorial] return to menu no-save=1\n");
+            state.resumeAfterDebugTutorial = true;
+            continue;
+        }
 #if GB_ENABLE_TESTS
         if (choice == kDebugMapMenuChoice) { continue; }
 #endif

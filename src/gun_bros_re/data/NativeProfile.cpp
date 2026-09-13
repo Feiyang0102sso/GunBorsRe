@@ -693,17 +693,8 @@ bool ReloadNativeProfile(CProfileManager &profile, const std::filesystem::path &
     return ApplyArchive(profile, std::move(archive));
 }
 
-bool LoadNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile,
-    const std::filesystem::path &directory, const std::filesystem::path &sourceDirectory) {
-    NativeProfileArchive archive;
-    if (!CreateNativeProfileArchive(toc, tables, archive)) { return false; }
-    if (std::filesystem::exists(directory)) {
-        if (!ReadArchive(directory, archive)) { return false; }
-    } else if (!sourceDirectory.empty() && std::filesystem::exists(sourceDirectory)) {
-        if (!ReadArchive(sourceDirectory, archive)) { return false; }
-        archive.importDirectory = std::filesystem::weakly_canonical(sourceDirectory);
-        std::printf("[native-profile] import source=%s destination=%s\n", sourceDirectory.string().c_str(), directory.string().c_str());
-    } else { std::printf("[native-profile] new offline profile from original constructors\n"); }
+namespace {
+bool InitializeNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile, NativeProfileArchive archive) {
     if (!ApplyArchive(profile, std::move(archive))) { return false; }
     if (!InitializeContentSeen(*profile.nativeArchive)) { return false; }
     if (profile.firstLaunch) {
@@ -729,6 +720,28 @@ bool LoadNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager 
         }
         for (const auto &gun : profile.configuration.guns) { profile.Grant(6, gun); }
     }
+    return true;
+}
+}
+
+bool CreateTransientNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile) {
+    NativeProfileArchive archive;
+    if (!CreateNativeProfileArchive(toc, tables, archive)) { return false; }
+    return InitializeNativeProfile(toc, tables, profile, std::move(archive));
+}
+
+bool LoadNativeProfile(CResTOCManager &toc, PackTables &tables, CProfileManager &profile,
+    const std::filesystem::path &directory, const std::filesystem::path &sourceDirectory) {
+    NativeProfileArchive archive;
+    if (!CreateNativeProfileArchive(toc, tables, archive)) { return false; }
+    if (std::filesystem::exists(directory)) {
+        if (!ReadArchive(directory, archive)) { return false; }
+    } else if (!sourceDirectory.empty() && std::filesystem::exists(sourceDirectory)) {
+        if (!ReadArchive(sourceDirectory, archive)) { return false; }
+        archive.importDirectory = std::filesystem::weakly_canonical(sourceDirectory);
+        std::printf("[native-profile] import source=%s destination=%s\n", sourceDirectory.string().c_str(), directory.string().c_str());
+    } else { std::printf("[native-profile] new offline profile from original constructors\n"); }
+    if (!InitializeNativeProfile(toc, tables, profile, std::move(archive))) { return false; }
     return SaveNativeProfile(profile, directory);
 }
 

@@ -62,6 +62,14 @@ int CheckDebugInput() {
     // Both Shift sides must survive release before the consumer drains the queue.
     const SDL_Keymod modifiers[] = {SDL_KMOD_LSHIFT, SDL_KMOD_RSHIFT, SDL_KMOD_NONE};
     for (SDL_Keymod modifier : modifiers) {
+        if (!PushKey(SDL_EVENT_KEY_DOWN, SDLK_T, modifier) ||
+            !PushKey(SDL_EVENT_KEY_DOWN, SDLK_T, modifier, true) ||
+            !PushKey(SDL_EVENT_KEY_UP, SDLK_T, SDL_KMOD_NONE) || !window.PumpEvents()) { return 1; }
+        const KeyCode key = window.TakeKeyPress();
+        if (key != KeyCode::T || GameDebugKeys::StartsTutorial(key, window) != (modifier != SDL_KMOD_NONE) ||
+            window.TakeKeyPress() != KeyCode::None || !window.TakeCheatCode().empty()) { ++failures; }
+    }
+    for (SDL_Keymod modifier : modifiers) {
         if (!PushKey(SDL_EVENT_KEY_DOWN, SDLK_F3, modifier) ||
             !PushKey(SDL_EVENT_KEY_DOWN, SDLK_F3, modifier, true) ||
             !PushKey(SDL_EVENT_KEY_UP, SDLK_F3, SDL_KMOD_NONE) ||

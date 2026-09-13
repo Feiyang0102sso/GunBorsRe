@@ -12,6 +12,7 @@ inline constexpr const char *UnlockWaves = "chw";
 inline constexpr const char *Invincible = "chi";
 inline constexpr const char *Boss = "stboss";
 inline constexpr const char *Suicide = "stsuicide";
+inline constexpr const char *BrotherWeapon = "stbrow";
 // Host cheat values and feedback are kept next to their editable commands.
 inline constexpr unsigned Coins = 5000, Warbucks = 500, ClearedWaves = 500;
 inline constexpr const char *MoneyMessage = "COINS +5000 / WARBUCKS +500";
