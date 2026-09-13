@@ -11,6 +11,8 @@
 #include <iomanip>
 #include "Checks.h"
 
+unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Template &data);
+
 int RunProgressCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
@@ -23,6 +25,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
     std::ofstream storeReport(TestOutput::Path("store-check.txt"));
     if (!report || !storeReport) { return 1; }
     int failures = 0;
+    failures += CheckCheatActions(toc, tables, data);
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC *pack = toc.GetPack(packIndex);
         const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Planet);

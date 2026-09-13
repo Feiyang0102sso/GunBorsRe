@@ -27,10 +27,10 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         // Placed map mechanisms (Haven's two turrets) participate in LEVEL
         // counts. The production shortcut now owns preservation and draining.
         if (!PushBossCheckKey(window, 's', false, true)) { return 1; }
-        for (char letter : std::string("wasdchi")) {
+        for (char letter : std::string("wasdchd")) {
             if (!PushBossCheckKey(window, letter)) { return 1; }
         }
-        if (window.TakeCheatCode() != "chi") { ++checkFailures; }
+        if (window.TakeCheatCode() != "chd") { ++checkFailures; }
         for (char letter : std::string("stbos")) {
             if (!PushBossCheckKey(window, letter)) { return 1; }
         }

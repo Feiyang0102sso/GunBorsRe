@@ -1,5 +1,5 @@
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "gun_bros_re/debug/CheatActions.h"
+#include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/debug/DebugTutorial.h"
 #include "gun_bros_re/ui/MenuInternal.h"
 namespace MenuDetail {
@@ -89,13 +89,12 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             state.Navigate(2, true);
         }
         
-        if (!ProcessMenuCheats(view.window, profile, state, daily, savePath)) { return -3; }
+        if (!ProcessMenuCheats(view.window, profile, state, daily, savePath, progressData, progress)) { return -3; }
 
         for (KeyCode key = view.window.TakeKeyPress(); key != KeyCode::None; key = view.window.TakeKeyPress()) {
 #if GB_ENABLE_CHEATS
             if (GameDebugKeys::StartsTutorial(key, view.window)) { return kDebugTutorialMenuChoice; }
 #endif
-#if GB_ENABLE_TESTS
             if (GameDebugKeys::OpensMapBrowser(key, view.window)) {
                 music.SetPaused(true);
                 const bool selected = ShowDebugMapPicker(toc, tables, view.window, state.debugMap);
@@ -105,7 +104,6 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
                 wipeLastTick = frameTicks;
                 continue;
             }
-#endif
             if (wipe.IsActive()) { continue; }
             if (state.page == 14) {
                 if (key == KeyCode::Space || key == KeyCode::Enter) { activate = true; }

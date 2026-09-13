@@ -1,6 +1,6 @@
 #include "engine/core/Paths.h"
 #pragma once
-#include "gun_bros_re/debug/CheatActions.h"
+#include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 /** @file GameFrontEnd.cpp
  * @brief Connect the rebuilt offline account to actual gameplay.
@@ -226,9 +226,7 @@ struct SocialMenuState {
 
 struct MenuState {
     bool resumeAfterDebugTutorial = false; // Returning from a no-save replay must not trigger a menu checkpoint.
-#if GB_ENABLE_TESTS
     DebugMapSelection debugMap;
-#endif
 
     unsigned page = 0;
     unsigned planet = 0;

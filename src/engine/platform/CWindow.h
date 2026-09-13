@@ -168,7 +168,7 @@ public:
     void SetTitle(const std::string &title);
 #if GB_ENABLE_CHEATS
     using CommandMatcher = bool (*)(std::string &, std::vector<std::string> &, char, bool);
-    static void SetCommandMatcher(CommandMatcher matcher);
+    static void SetCommandMatcher(CommandMatcher matcher, std::uint64_t timeoutMs);
     void EnableCheats(bool enabled) { m_cheatsEnabled = enabled; }
     std::string TakeCheatCode();
 #endif

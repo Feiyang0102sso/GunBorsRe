@@ -31,6 +31,8 @@ int CheckDebugInput() {
     if (!window.PumpEvents()) { return 1; }
     while (window.TakeKeyPress() != KeyCode::None) {}
     unsigned failures = 0;
+    const bool previousDebugMode = GameHostSettings().debugMode;
+    GameHostSettings().debugMode = true;
     // Use SDL's real modifier-aware translation, with the retail cheat recognizer enabled.
     GameCheats::Bind();
     window.EnableCheats(true);
@@ -59,6 +61,27 @@ int CheckDebugInput() {
     }
     window.PumpEvents();
     if (window.TakeCheatCode() != GameCheats::Money || window.TakeKeyPress() != KeyCode::None) { ++failures; }
+    // Every configured sequence completes once, with repeated key-downs ignored.
+    for (const char *command : GameCheats::Commands) {
+        for (const char *letter = command; *letter != '\0'; ++letter) {
+            PushKey(SDL_EVENT_KEY_DOWN, *letter, SDL_KMOD_NONE);
+            PushKey(SDL_EVENT_KEY_DOWN, *letter, SDL_KMOD_NONE, true);
+            PushKey(SDL_EVENT_KEY_UP, *letter, SDL_KMOD_NONE);
+        }
+        window.PumpEvents();
+        if (window.TakeCheatCode() != command || !window.TakeCheatCode().empty()) { ++failures; }
+        while (window.TakeKeyPress() != KeyCode::None) {}
+    }
+    // Removed commands must no longer produce actions.
+    for (const char *command : {"chh", "chi", "chunlock"}) {
+        for (const char *letter = command; *letter != '\0'; ++letter) {
+            PushKey(SDL_EVENT_KEY_DOWN, *letter, SDL_KMOD_NONE);
+            PushKey(SDL_EVENT_KEY_UP, *letter, SDL_KMOD_NONE);
+        }
+        window.PumpEvents();
+        if (!window.TakeCheatCode().empty()) { ++failures; }
+        while (window.TakeKeyPress() != KeyCode::None) {}
+    }
     // Both Shift sides must survive release before the consumer drains the queue.
     const SDL_Keymod modifiers[] = {SDL_KMOD_LSHIFT, SDL_KMOD_RSHIFT, SDL_KMOD_NONE};
     for (SDL_Keymod modifier : modifiers) {
@@ -70,15 +93,38 @@ int CheckDebugInput() {
             window.TakeKeyPress() != KeyCode::None || !window.TakeCheatCode().empty()) { ++failures; }
     }
     for (SDL_Keymod modifier : modifiers) {
-        if (!PushKey(SDL_EVENT_KEY_DOWN, SDLK_F3, modifier) ||
-            !PushKey(SDL_EVENT_KEY_DOWN, SDLK_F3, modifier, true) ||
-            !PushKey(SDL_EVENT_KEY_UP, SDLK_F3, SDL_KMOD_NONE) ||
+        if (!PushKey(SDL_EVENT_KEY_DOWN, SDLK_M, modifier) ||
+            !PushKey(SDL_EVENT_KEY_DOWN, SDLK_M, modifier, true) ||
+            !PushKey(SDL_EVENT_KEY_UP, SDLK_M, SDL_KMOD_NONE) ||
             !window.PumpEvents()) { return 1; }
         const KeyCode key = window.TakeKeyPress();
         const bool expected = modifier != SDL_KMOD_NONE;
         if (key != GameDebugKeys::MapBrowser || GameDebugKeys::OpensMapBrowser(key, window) != expected ||
-            window.IsKeyDown(KeyCode::F3) || window.TakeKeyPress() != KeyCode::None) { ++failures; }
+            window.IsKeyDown(KeyCode::M) || window.TakeKeyPress() != KeyCode::None) { ++failures; }
     }
+    // The configuration is the only availability gate for all debug shortcuts.
+    const auto debugConfigPath = TestOutput::Path("debug-key-gate.cfg");
+    for (unsigned enabled = 0; enabled < 2; ++enabled) {
+        { std::ofstream config(debugConfigPath); config << "DebugMode=" << enabled << '\n'; }
+        HostSettings settings;
+        if (!settings.Load(debugConfigPath)) { return 1; }
+        GameHostSettings().debugMode = settings.debugMode;
+        for (SDL_Keycode letter : {SDLK_C, SDLK_I, SDLK_M, SDLK_T, SDLK_F3}) {
+            PushKey(SDL_EVENT_KEY_DOWN, letter, SDL_KMOD_LSHIFT);
+            PushKey(SDL_EVENT_KEY_UP, letter, SDL_KMOD_NONE);
+            if (!window.PumpEvents()) { return 1; }
+            const KeyCode key = window.TakeKeyPress();
+            bool active = false;
+            if (letter == SDLK_C) { active = GameDebugKeys::TogglesCollision(key, window); }
+            if (letter == SDLK_I) { active = GameDebugKeys::TogglesInfo(key, window); }
+            if (letter == SDLK_M || letter == SDLK_F3) { active = GameDebugKeys::OpensMapBrowser(key, window); }
+            if (letter == SDLK_T) { active = GameDebugKeys::StartsTutorial(key, window); }
+            const bool expected = enabled == 1 && letter != SDLK_F3;
+            if (active != expected) { ++failures; }
+            std::printf("[debug-key-gate] enabled=%u key=%u active=%d expected=%d\n", enabled, letter, active, expected);
+        }
+    }
+    GameHostSettings().debugMode = true;
     const SDL_Keycode arrows[] = {SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT};
     const KeyCode actions[] = {GameDebugKeys::MapPrevious, GameDebugKeys::MapNext,
         GameDebugKeys::MapPreviousPage, GameDebugKeys::MapNextPage};
@@ -140,5 +186,6 @@ int CheckDebugInput() {
         }
     }
     std::printf("[debug-input-check] modifiers/repeat/shift-C-I/FPS-flags/GL-state failures=%u\n", failures);
+    GameHostSettings().debugMode = previousDebugMode;
     return failures != 0;
 }

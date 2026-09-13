@@ -1,7 +1,7 @@
 #include "gun_bros_re/debug/SurvivalDebug.h"
 #include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "gun_bros_re/debug/CheatActions.h"
+#include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #if GB_ENABLE_TESTS
@@ -288,9 +288,7 @@ if (check) {
         archiveLevel = &gameContext->profile.nativeArchive->survivalLevels[gameContext->planet];
     }
     session.SetDialogHud(&survivalHud);
-#if GB_ENABLE_TESTS
     if (launch.debugMap != nullptr) { archiveLevel = &launch.debugMap->level; }
-#endif
     if (!session.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
     const bool horde = archiveMission != nullptr && archiveMission->data.type == 2;
     if (horde && gameContext != nullptr) {
@@ -630,7 +628,7 @@ if (performanceStudy) {
 #if GB_ENABLE_CHEATS
         for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
             CombatCheatResult result;
-            if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result)) { return 1; }
+            if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result, progressData, progress)) { return 1; }
             if (result.resume) { paused = false; shopOpen = false; itemChoice = false; }
             if (result.resetClock) {
                 effects.SetPaused(paused || shopOpen);
@@ -743,7 +741,6 @@ if (checkControls && controlFrame < controlClickCount) {
                 return 0;
             }
             if (HandleDebugKey(key, window, showCollisions)) { continue; }
-#if GB_ENABLE_TESTS
             if (launch.debugSelection != nullptr && GameDebugKeys::OpensMapBrowser(key, window)) {
                 music.SetPaused(true);
                 const bool selected = ShowDebugMapPicker(toc, tables, window, *launch.debugSelection);
@@ -759,7 +756,6 @@ if (checkControls && controlFrame < controlClickCount) {
                 continue;
             }
             if (launch.debugMap != nullptr && key == GameDebugKeys::MapBack) { return 0; }
-#endif
             AppendSurvivalShortcut(inputs, key);
         }
         const int controlsWaveBeforeInput = session.GetLevel().GetWave();
@@ -1031,10 +1027,8 @@ if (checkSwapFiring) {
         }
         // Gameplay death opens the original postgame flow; research keeps its
         // death/restart controls so existing isolated checks remain available.
-#if GB_ENABLE_TESTS
         // The archive browser owns preview wrap-up instead of the retail menu.
         if (launch.debugMap != nullptr && session.GetLevel().IsCleared()) { return kDebugMapSessionComplete; }
-#endif
         if (gameContext != nullptr && gameContext->debugTutorial && !check && capturePath.empty() &&
             session.GetLevel().GetTutorialStep() == -1) {
             std::printf("[debug-tutorial] completed no-save=1\n");

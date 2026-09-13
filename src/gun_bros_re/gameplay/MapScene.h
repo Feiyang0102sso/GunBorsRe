@@ -8,9 +8,7 @@ class CWindow;
 enum class MapViewMode { Preview, GameView };
 struct SurvivalGameContext;
 struct MissionEntry;
-#if GB_ENABLE_TESTS
 struct DebugMapSelection;
-#endif
 
 /** Production session configuration: map, equipment, progress, and an existing window, without validation modes. */
 struct SurvivalLaunch {
@@ -24,10 +22,8 @@ struct SurvivalLaunch {
     bool withBrother = false;
     const MissionEntry *archiveMission = nullptr;
     CWindow *window = nullptr;
-#if GB_ENABLE_TESTS
     DebugMapSelection *debugSelection = nullptr;
     const DebugMapSelection *debugMap = nullptr;
-#endif
 };
 int RunSurvival(const SurvivalLaunch &launch);
 

@@ -20,6 +20,7 @@
 namespace {
 #if GB_ENABLE_CHEATS
 CWindow::CommandMatcher commandMatcher = nullptr;
+std::uint64_t commandTimeoutMs = 0;
 #endif
 
 constexpr int kUsableDisplayPercent = 90;
@@ -233,7 +234,7 @@ bool CWindow::PumpEvents() {
             if (modified) { m_cheatPrefix.clear(); }
             if (!modified && m_cheatsEnabled && commandMatcher != nullptr && event.key.key >= SDLK_A && event.key.key <= SDLK_Z) {
                 const auto now = SDL_GetTicks();
-                if (now - m_cheatKeyTime > 2500) { m_cheatPrefix.clear(); }
+                if (now - m_cheatKeyTime > commandTimeoutMs) { m_cheatPrefix.clear(); }
                 m_cheatKeyTime = now;
                 if (commandMatcher(m_cheatPrefix, m_cheatCodes, static_cast<char>(event.key.key), event.key.repeat)) { continue; }
             }
@@ -335,7 +336,10 @@ bool CWindow::SetVSync(bool enabled) {
 }
 
 #if GB_ENABLE_CHEATS
-void CWindow::SetCommandMatcher(CommandMatcher matcher) { commandMatcher = matcher; }
+void CWindow::SetCommandMatcher(CommandMatcher matcher, std::uint64_t timeoutMs) {
+    commandMatcher = matcher;
+    commandTimeoutMs = timeoutMs;
+}
 std::string CWindow::TakeCheatCode() {
     if (m_cheatCodes.empty()) { return {}; }
     const std::string code = m_cheatCodes.front();

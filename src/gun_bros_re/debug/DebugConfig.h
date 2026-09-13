@@ -44,15 +44,7 @@ inline constexpr LineStyle Enemy{2, {1, 0.2f, 0.3f, 1}};
 inline constexpr LineStyle Projectile{2, {0.85f, 0.25f, 1, 1}};
 inline constexpr LineStyle Disabled{1, {0.55f, 0.55f, 0.55f, 1}};
 
-namespace Keys {
-// Pair each action key with its Shift flag; false means Shift is not required.
-inline constexpr KeyCode Collision = KeyCode::C, Info = KeyCode::I, MapBrowser = KeyCode::F3;
-inline constexpr KeyCode Tutorial = KeyCode::T;
-inline constexpr bool CollisionShift = true, InfoShift = true, MapBrowserShift = true;
-inline constexpr KeyCode Previous = KeyCode::Up, Next = KeyCode::Down;
-inline constexpr KeyCode PreviousPage = KeyCode::Left, NextPage = KeyCode::Right;
-inline constexpr KeyCode Load = KeyCode::Enter, Back = KeyCode::Escape;
-}
+
 
 // Desktop-only map browser: these are host layout values, never resource data.
 namespace Maps {

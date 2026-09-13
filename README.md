@@ -23,9 +23,9 @@ Debug 和 Release 均启用已有作弊码。VS 的 F5／Ctrl+F5 默认有声音
 
 战斗中 `Shift+C` 一次切换全部碰撞类别，与信息栏独立：青色为身体阻挡，黄色为子弹阻挡，橙色为弹体地形检测，绿色为兄弟，红色为敌人，紫色为弹体，灰色为禁用边/暂不参与碰撞的弹体。重合的地图边用不同线宽叠画。地图 Viewer 和 Arena 共用同一绘制实现；Viewer 保留自己的 C 键/操作栏入口。圆按运行时部件/弹体半径绘制，复杂敌人使用实际边集合，激光使用零半径射线，不使用模型外框代替碰撞。
 
-Debug 主程序在菜单或战斗中按 **Shift+F3** 打开 BIG 地图浏览器。上下选择、左右翻页、滚轮或鼠标选择条目，Enter 或 LOAD MAP 载入；Esc 取消。试玩中 Shift+F3 可换图，Esc 返回菜单，R 重开，Space 暂停。
+Debug 和 Release 均保留调试快捷键；主程序 EXE 同目录的 `GunBrosRe.cfg` 中 `DebugMode=1` 启用，`DebugMode=0` 禁用，修改配置后重启生效。菜单或战斗中按 **Shift+M** 打开 BIG 地图浏览器；上下选择、左右翻页，Enter 或 LOAD MAP 载入，Esc 取消。试玩中 Shift+M 可换图，Esc 返回菜单，R 重开，Space 暂停。Shift+C、Shift+I、Shift+T 也使用同一个 DebugMode 开关，分别控制碰撞显示、信息显示和菜单教程重放。文字作弊码保持原样；`chd` 仍可切换运行时的同一 DebugMode 状态。
 
-调试显示、地图浏览、快捷键和作弊码实现集中在 `src/gun_bros_re/debug`。修改 `DebugConfig.h` 可调整按键、文字、字体编号、透明度、文字坐标/大小/行距/换行宽度，以及各类碰撞线的颜色、粗细和圆形分段数；坐标使用 1024×768 逻辑画布，字体颜色来自原 BIG 图集。地图浏览器的布局和文案也在此文件，作弊命令及反馈在 `CheatCodes.h`。Viewer 复用碰撞显示；引擎仅提供通用窗口叠加接口，不包含游戏诊断逻辑。
+作弊码集中在 `src/gun_bros_re/cheats`：`CheatConfig.h` 配置指令、奖励数值、输入超时和 Boss 跳转参数，`CheatKeys.h` 配置调试快捷键；修改后重新构建。完整指令见 [作弊码说明](src/gun_bros_re/cheats/README.md)。调试显示与地图浏览仍在 `src/gun_bros_re/debug`，`DebugConfig.h` 配置文字、字体、透明度、布局和碰撞线样式；坐标使用 1024×768 逻辑画布，字体颜色来自原 BIG 图集。Viewer 复用碰撞显示；引擎仅提供通用窗口叠加及输入接口。
 
 Shift+C 原先被 `ch...` 作弊码前缀识别吞掉；现在带 Shift/Ctrl/Alt/GUI 的按键不进入文字作弊识别。`debug-input` 覆盖启用作弊码时的真实 SDL Shift+C/I、重复按键、原 `chm` 命令、FPS/DebugMode 四种组合、透明背景及 GL 状态恢复。
 

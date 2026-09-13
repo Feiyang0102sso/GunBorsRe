@@ -2,7 +2,6 @@
 /** @file DebugMaps.h
  * @brief Desktop-only BIG map selection; no retail progress is written by previews.
  */
-#if GB_ENABLE_TESTS
 #include "gun_bros_re/data/MissionCatalog.h"
 class CWindow;
 class CProfileManager;
@@ -25,4 +24,3 @@ SurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMa
     SurvivalGameContext &context);
 void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSelection &selection,
     const CProfileManager &profile);
-#endif

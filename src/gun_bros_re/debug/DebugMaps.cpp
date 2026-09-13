@@ -4,7 +4,6 @@
  * level_template.bt / CLevel::Template::Init :114770, map.bt / CMap::Init :92498.
  */
 #include "gun_bros_re/debug/DebugMaps.h"
-#if GB_ENABLE_TESTS
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
@@ -266,4 +265,3 @@ void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSele
         }
     }
 }
-#endif
