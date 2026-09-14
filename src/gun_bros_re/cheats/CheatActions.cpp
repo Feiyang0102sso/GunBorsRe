@@ -175,7 +175,7 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
         std::printf("[death] suicide started\n");
     }
     if (cheat == GameCheats::Boss) {
-        result.resume = session.SkipToBoss();
+        result.resume = session.StartBossSkip();
         result.resetClock = true;
     }
     if (cheat == GameCheats::LevelUp || cheat == GameCheats::MaximumLevel) {
@@ -201,7 +201,15 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
         if (cheat == GameCheats::UnlockWaves) {
             if (!GameCheats::UnlockAllWaves(context->profile)) { return false; }
         }
-        if (!context->SaveProfile()) { return false; }
+        // Runtime-only cheats must not serialize every native account record
+        // on the input thread. Wave/death progress has its normal save boundary.
+        bool profileChanged = false;
+        for (const char *command : {GameCheats::Money, GameCheats::NextDay, GameCheats::Xplodium,
+            GameCheats::AdvanceRefinery, GameCheats::ToggleRefineryLocks, GameCheats::UpdateChallenges,
+            GameCheats::UnlockWaves, GameCheats::LevelUp, GameCheats::MaximumLevel}) {
+            if (cheat == command) { profileChanged = true; break; }
+        }
+        if (profileChanged && !context->SaveProfile()) { return false; }
     }
     std::printf("[cheat] %s invincible=%d\n", cheat.c_str(), vitals.invincible);
 #endif

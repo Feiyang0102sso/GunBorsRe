@@ -20,6 +20,8 @@ struct HostSettings {
     /** Sound effect loudness on the original's own 0..10 media-player dial;
      *  see CAudioPlayer::SetEffectsGain for where that scale comes from. */
     int effectsVolume = GameConfig::DefaultEffectsVolume;
+    // Local deathmatch only: 1=Easy, 2=Normal, 3=Hard; Easy keeps the life budget.
+    int dmBotLevel = GameConfig::DefaultDMBotLevel;
     bool Load(const std::filesystem::path &path);
 };
 

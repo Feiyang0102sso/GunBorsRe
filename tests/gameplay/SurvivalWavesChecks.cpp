@@ -1,6 +1,90 @@
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
+#include "gun_bros_re/gameplay/CMPMatch.h"
 using namespace MapDetail;
+
+/** Exercise mode changes with real BIG items and isolated inventory. */
+static unsigned CheckPowerupModes(CResTOCManager &toc, PackTables &tables, PowerupScene &powerups,
+    CProfileManager &profile, CombatScene &scene) {
+    std::vector<StoreEntry> stores;
+    std::vector<PowerupEntry> catalog;
+    if (!LoadStoreCatalog(toc, tables, stores) || !LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
+    CMPMatch match;
+    unsigned failures = 0;
+    const bool wasLocalLive = scene.IsLocalLive();
+    for (unsigned mode = 0; mode < 3; ++mode) {
+        unsigned allowedCount = 0, blockedCount = 0;
+        for (const auto &store : stores) {
+            const auto &item = store.data;
+            if (item.type < 10 || item.type > 13 || item.objects.empty() || item.objects.front().type != 17) { continue; }
+            const auto &reference = item.objects.front().object;
+            if (!IsPlayablePowerup(reference)) { continue; }
+            const PowerupEntry *entry = nullptr;
+            for (const auto &candidate : catalog) {
+                if (candidate.resource.packHash == reference.packHash && candidate.resource.localIndex == reference.localIndex) { entry = &candidate; break; }
+            }
+            if (entry == nullptr) { ++failures; continue; }
+            profile.AddPowerup(reference, 2);
+            const auto stock = profile.GetPowerupCount(reference);
+            const bool allowed = (item.excludedGameModes & (1u << mode)) == 0;
+            if (!allowed) {
+                // Select while allowed, then change mode: Use must recheck too.
+                for (unsigned previousMode = 0; previousMode < 3; ++previousMode) {
+                    if ((item.excludedGameModes & (1u << previousMode)) != 0) { continue; }
+                    scene.SetLocalLive(previousMode == 1);
+                    powerups.SetDeathmatch(nullptr);
+                    if (previousMode == 2) { powerups.SetDeathmatch(&match); }
+                    if (!powerups.SelectResource(reference)) { ++failures; }
+                    break;
+                }
+            }
+            scene.SetLocalLive(mode == 1);
+            powerups.SetDeathmatch(nullptr);
+            if (mode == 2) { powerups.SetDeathmatch(&match); }
+            if (powerups.SelectResource(reference) != allowed) { ++failures; }
+            CPowerup query;
+            query.SetDeathmatch(mode == 2);
+            query.Bind(entry->data);
+            const bool equipable = allowed && query.Query(0);
+            if (powerups.Equip(0, reference) != equipable) { ++failures; }
+            if (allowed) { ++allowedCount; continue; }
+            ++blockedCount;
+            const unsigned consumed = powerups.consumed;
+            if (powerups.Use() || powerups.Use(true) || powerups.consumed != consumed ||
+                profile.GetPowerupCount(reference) != stock || powerups.IsMovieActive()) { ++failures; }
+            // A saved forbidden ordinal must be replaced by the original default.
+            for (unsigned slot = 0; slot < 2; ++slot) {
+                profile.configuration.powerups[slot] = reference.localIndex;
+                const auto replacement = powerups.GetEquipped(slot);
+                const PowerupEntry *defaultEntry = nullptr;
+                for (const auto &candidate : catalog) {
+                    if (candidate.resource.packHash == replacement.packHash && candidate.resource.localIndex == replacement.localIndex) { defaultEntry = &candidate; break; }
+                }
+                if (defaultEntry == nullptr || !powerups.SelectResource(replacement)) { ++failures; continue; }
+                query.Bind(defaultEntry->data);
+                if (!query.Query(4, slot) || profile.configuration.powerups[slot] != replacement.localIndex) { ++failures; }
+            }
+        }
+        // Cycling an owned catalogue must skip every mode-excluded entry.
+        for (unsigned index = 0; index < catalog.size(); ++index) {
+            powerups.Cycle();
+            const auto *selected = powerups.GetSelected();
+            if (selected == nullptr) { ++failures; continue; }
+            for (const auto &store : stores) {
+                const auto &item = store.data;
+                if (item.type < 10 || item.type > 13 || item.objects.empty()) { continue; }
+                const auto &reference = item.objects.front().object;
+                if (reference.packHash == selected->resource.packHash && reference.localIndex == selected->resource.localIndex &&
+                    (item.excludedGameModes & (1u << mode)) != 0) { ++failures; }
+            }
+        }
+        std::printf("[powerup-mode-host] mode=%u allowed=%u blocked=%u stock-preserved=1 default-restored=1 failures=%u\n",
+            mode, allowedCount, blockedCount, failures);
+    }
+    scene.SetLocalLive(wasLocalLive);
+    powerups.SetDeathmatch(nullptr);
+    return failures;
+}
 
 int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
     auto archiveLevel = fixture.archiveLevel;
@@ -49,6 +133,12 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         consumableProbe.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), consumableRefinement);
         PowerupScene powerupProbe(toc, tables, player, vitals, scene, effects, consumableProbe);
         if (!powerupProbe.Init()) { return 1; }
+        if (powerupStudy) {
+            CProfileManager modeProfile;
+            PowerupScene modeProbe(toc, tables, player, vitals, scene, effects, modeProfile);
+            if (!modeProbe.Init()) { return 1; }
+            checkFailures += CheckPowerupModes(toc, tables, modeProbe, modeProfile, scene);
+        }
         GameObjectRef consumable;
         consumable.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
         for (unsigned index = 13; index <= 15; ++index) {
@@ -331,6 +421,9 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         }
         session.Restart(startX, startY, startFacing);
         const unsigned boosts[] = {18, 17, 16};
+        // These BIG items are DM-only; effect research must use that mode too.
+        CMPMatch boostMatch;
+        powerupProbe.SetDeathmatch(&boostMatch);
         for (unsigned type = 0; type < 3; ++type) {
             consumable.localIndex = static_cast<std::uint8_t>(boosts[type]);
             consumableProbe.AddPowerup(consumable, 2);
@@ -344,7 +437,9 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         player.weapon->brother.ReceiveDamage(1);
         if (std::abs(vitals.health - (beforeDefense - 256.0f / 332)) > 0.001f) { ++checkFailures; }
         AdvancePlayer(player, 15000);
+        powerupProbe.Update(15000); // Advance the DM cooldown with the actor timers.
         if (scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1 || player.weapon->brother.IsFrenzyType(2)) { ++checkFailures; }
+        powerupProbe.SetDeathmatch(nullptr);
         consumable.localIndex = 6;
         consumableProbe.AddPowerup(consumable, 2);
         powerupProbe.Select(6);
@@ -353,8 +448,11 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) ||
             player.powerups.legacyFrenzyMs != 21000) { ++checkFailures; }
         AdvancePlayer(player, 20000);
+        // Isolate the legacy stop-all callback across explicit mode contexts.
+        powerupProbe.SetDeathmatch(&boostMatch);
         powerupProbe.Select(18);
         if (!powerupProbe.Use() || !player.weapon->brother.IsFrenzyType(0)) { ++checkFailures; }
+        powerupProbe.SetDeathmatch(nullptr);
         AdvancePlayer(player, 1000);
         if (player.weapon->brother.IsFrenzy() || player.weapon->brother.IsFrenzyType(0) ||
             player.powerups.legacyFrenzyMultiplier[0] != 1) { ++checkFailures; }

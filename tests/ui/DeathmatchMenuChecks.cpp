@@ -1,4 +1,4 @@
-/** Exercise offline matchmaking, original match HUD, results and replay input. */
+/** Exercise local matchmaking, original match HUD, results and replay input. */
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/ui/SurvivalHud.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
@@ -9,7 +9,7 @@ int CheckDeathmatchMenus(CResTOCManager &toc, PackTables &tables, CProfileManage
     if (!view.Open(toc, tables, &profile)) { return 1; }
     view.scripted = true; view.animateNavigation = false;
     const bool wasConnected = GameHostSettings().isConnected;
-    GameHostSettings().isConnected = false;
+    GameHostSettings().isConnected = true;
     MenuState match;
     view.Begin(0);
     if (!DrawOriginalModeOverlay(view, match)) { return 1; }
@@ -182,8 +182,13 @@ int CheckDeathmatchMenus(CResTOCManager &toc, PackTables &tables, CProfileManage
     if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN_MP"), 7, results.postGame.postGameTime, replay)) { return 1; }
     view.Begin(27);
     view.SetTestClick({replay.x + replay.width / 2, replay.y + replay.height / 2});
+    results.online.SetConnected(false);
+    if (!DrawOriginalPostGame(view, results, toc, tables, profile) || results.postGame.liveReplay) { return 1; }
+    results.online.SetConnected(true);
+    view.Begin(27);
+    view.SetTestClick({replay.x + replay.width / 2, replay.y + replay.height / 2});
     if (!DrawOriginalPostGame(view, results, toc, tables, profile) || !results.postGame.liveReplay) { return 1; }
     GameHostSettings().isConnected = wasConnected;
-    std::printf("[deathmatch-ui] offline-match=1 respawn-pause=1 gun-selector=1 results=1 replay=1\n");
+    std::printf("[deathmatch-ui] connected-match=1 respawn-pause=1 gun-selector=1 results=1 replay=1 offline-replay-blocked=1\n");
     return 0;
 }

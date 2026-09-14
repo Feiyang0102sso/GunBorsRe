@@ -73,6 +73,7 @@ public:
     bool StartDeathmatch();
     bool IsMatchSpawnPending(unsigned peer) const;
     void UpdateDeathmatch(unsigned deltaMs);
+    bool AdvanceDeathmatchEnding(int deltaMs);
     bool RespawnDeathmatch(unsigned peer, bool initial = false, bool resumeFromShop = false);
     bool EquipMatchGun(unsigned peer, const GameObjectRef &ref, bool resetActor = false);
     bool CollectMatchWeapon(unsigned peer, unsigned index);
@@ -123,6 +124,10 @@ public:
     bool BrotherIsCloser(float x, float y) const;
     bool IsPlayerDown() const override { return m_vitals.dead; }
     bool IsTeamDeathComplete() const;
+    /** A down teammate reserves the rescue attempt, including the approach. */
+    bool IsRescuePending() const {
+        return m_localLive && m_brother != nullptr && m_vitals.dead != m_brother->vitals.dead;
+    }
     float GetReviveProgress() const { return m_reviveProgress; }
     unsigned GetReviveCount() const { return m_reviveCount; }
     bool SetReviveResources(const CScript &script);

@@ -581,7 +581,7 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
                 UpgradeCenteredText(view, region, text, 0);
             } else if (state.result.live && region.index == 7) {
                 unsigned index = 0;
-                if (!state.online.IsConnected() && !state.result.deathmatch) { index = 1; }
+                if (!state.online.IsConnected()) { index = 1; }
                 const auto *entry = OriginalMenuData("MDS_BUTTON_POSTGAME_REPLAY_MP", index);
                 if (entry == nullptr) { return false; }
                 MovieRegion origin = region;
@@ -590,7 +590,7 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
                 std::string label = view.movies.NamedString(entry->strings[0]);
                 if (state.postGame.liveReplay) { label = view.movies.NamedString("IDS_WRAPUP_MP_REPLAY_REQUESTED"); }
                 if (!DrawOriginalMovieButton(view, *entry, origin, label, 1,
-                    interactive && (state.online.IsConnected() || state.result.deathmatch) && !state.postGame.liveReplay, pressed)) { return false; }
+                    interactive && state.online.IsConnected() && !state.postGame.liveReplay, pressed)) { return false; }
                 if (pressed) { state.postGame.liveReplay = true; state.postGame.liveReplayAt = view.clock; }
             } else if (state.result.live && (region.index == 5 || region.index == 6)) {
                 std::string name = "PLAYER";

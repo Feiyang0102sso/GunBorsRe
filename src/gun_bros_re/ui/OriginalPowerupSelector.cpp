@@ -134,7 +134,12 @@ bool SurvivalHud::DrawSelectorItem(const SurvivalHudState &state, unsigned index
 bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
     if (!m_selectorBound) {
         m_selectorEntries.clear();
+        unsigned gameType = 0;
+        if (state.localLive) { gameType = 1; }
+        if (state.deathmatch) { gameType = 2; }
         for (unsigned storeIndex : m_selectorAllEntries) {
+            // The STORE exclusion bits also drive the front-end mode labels.
+            if (m_store[storeIndex].data.IsExcludedFromGameType(gameType)) { continue; }
             const auto &ref = m_store[storeIndex].data.objects.front().object;
             if (state.deathmatch && state.remoteShop && ref.localIndex != 13 && ref.localIndex != 1 && ref.localIndex != 8 && ref.localIndex != 9) { continue; }
             for (const auto &powerup : m_powerups) {

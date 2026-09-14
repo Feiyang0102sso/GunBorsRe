@@ -4,6 +4,7 @@
 #ifndef GUN_BROS_RE_POWERUPSCENE_H
 #define GUN_BROS_RE_POWERUPSCENE_H
 #include "gun_bros_re/data/PowerupCatalog.h"
+#include "gun_bros_re/data/StoreCatalog.h"
 #include "gun_bros_re/gameplay/CombatScene.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/PowerupMoviePlayer.h"
@@ -23,6 +24,9 @@ public:
     void Cycle();
     bool Use(bool fromSelector = false);
     bool UseAny(bool grantTestCharge = false);
+    /** Host bot policy only; ordinary player and cheat input still use Use. */
+    bool CanBotUseSelected() const;
+    static constexpr float BotGrenadeRadius = 250.0f;
     bool HasAfterDeathPowerup() const;
     bool UseAfterDeathPowerup();
     void Update(int deltaMs);
@@ -42,8 +46,13 @@ public:
     unsigned consumed = 0;
     unsigned failures = 0;
 private:
+    struct BotUseRules { bool airstrike = false; bool grenade = false; };
+    std::vector<BotUseRules> m_botUseRules;
     bool IsSupported(const PowerupEntry &entry) const;
+    const CStoreItem *FindStoreItem(const PowerupEntry &entry) const;
+    bool ModeAllows(const PowerupEntry &entry) const;
     bool MatchAllows(const PowerupEntry &entry) const;
+    bool HasUnlimitedMatchInventory() const;
     void CommitMatchUse(const GameObjectRef &resource);
     CMPMatch *m_match = nullptr;
     std::map<unsigned, int> m_cooldowns;
@@ -59,6 +68,7 @@ private:
     CombatId m_owner;
     unsigned m_choice = 0;
     std::vector<PowerupEntry> m_catalog;
+    std::vector<StoreEntry> m_store;
     GameObjectRef m_equipped;
     unsigned m_selected = 13;
 };

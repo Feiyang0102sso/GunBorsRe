@@ -314,7 +314,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         if (state.page == 26 && !DrawMastery(view, state, profile, toc, tables, store, weapons, savePath, &progress)) { return -3; }
         if (!DrawStorePrompt(view, state)) { return -3; }
         if (TakeLocalMatch(state, menuClock)) { state.rematchingBot = false; return static_cast<int>(state.planet); }
-        if (!state.online.IsConnected() && !state.result.deathmatch) { state.postGame.liveReplay = false; }
+        if (!state.online.IsConnected()) { state.postGame.liveReplay = false; }
         if (state.result.live && state.postGame.liveReplay && menuClock >= state.postGame.liveReplayAt + 1500) {
             state.postGame.liveReplay = false;
             state.rematchingBot = true;

@@ -2,6 +2,7 @@
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/cheats/CheatConfig.h"
+#include "TestOutput.h"
 
 int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, PackTables &tables,
     PowerupScene &playerPowerups, PowerupScene &peerPowerups, CProfileManager &peerProfile) {
@@ -10,13 +11,19 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, Pack
     auto &bot = fixture.brother;
     CPlayerProgress::Template progressData;
     CPlayerProgress progress;
+    const auto cheatSavePath = std::filesystem::path(TestOutput::Path("runtime-cheat-save"));
+    SurvivalGameContext cheatContext{peerProfile, cheatSavePath};
     auto command = [&](const char *code, CombatCheatResult &result) {
-        return ApplyCombatCheat(code, scene, fixture.vitals, playerPowerups, session, nullptr, result, progressData, progress);
+        return ApplyCombatCheat(code, scene, fixture.vitals, playerPowerups, session, &cheatContext, result, progressData, progress);
     };
     scene.SetTestBot(false);
     CombatCheatResult result;
     for (const char *code : {"brow", "brok", "bror", "bros", "brop"}) {
         if (!command(code, result) || bot.vitals.dead || result.botShop || result.botPowerup) { return 1; }
+    }
+    if (std::filesystem::exists(cheatSavePath)) {
+        std::printf("[live-peer-actions] runtime cheat unexpectedly saved account\n");
+        return 1;
     }
     scene.SetTestBot(true);
     if (!command("bros", result) || result.botShop != scene.IsLocalLive()) { return 1; }
@@ -57,6 +64,9 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, Pack
         peerProfile.GetPowerupCount(revive) + 1 != before || peerPowerups.failures != 0 || session.IsDeathComplete()) {
         std::printf("[live-peer-actions] revive item failed dead=%d active=%d failures=%u\n", bot.vitals.dead, peerPowerups.IsMovieActive(), peerPowerups.failures); return 1;
     }
+    session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
+    if (!command("stsuicide", result) || !fixture.vitals.dead || std::filesystem::exists(cheatSavePath)) { return 1; }
+    std::printf("[live-peer-actions] runtime-cheats-no-account-save=1\n");
     std::printf("[live-peer-actions] live-cheats=1 real-peer-guard=1 powerup-owner=1 both-down-item-revive=1\n");
     return 0;
 }

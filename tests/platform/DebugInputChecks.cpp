@@ -149,6 +149,13 @@ int CheckDebugInput() {
     { std::ofstream config(configPath); config << "DebugMode=0\n"; }
     HostSettings defaults;
     if (!defaults.Load(configPath) || !defaults.drawFPS || !defaults.drawDebugInfo) { ++failures; }
+    if (defaults.dmBotLevel != 1) { ++failures; }
+    for (int level : {-1, 0, 1, 2, 3, 4}) {
+        { std::ofstream config(configPath); config << "DMBotLevel = " << level << " # DM only\n"; }
+        HostSettings settings;
+        const bool valid = level >= 1 && level <= 3;
+        if (settings.Load(configPath) != valid || (valid && settings.dmBotLevel != level)) { ++failures; }
+    }
     for (unsigned debug = 0; debug < 2; ++debug) {
         for (unsigned fps = 0; fps < 2; ++fps) {
             { std::ofstream config(configPath); config << "DebugMode=" << debug << "\nDrawFPS=" << fps << "\n"; }

@@ -30,6 +30,10 @@ public:
         bool dead = false;
     };
     enum class Result { Playing, PlayerWon, BotWon, Draw };
+    enum class BotLevel { Easy = 1, Normal = 2, Hard = 3 };
+    void SetBotLevel(BotLevel level) { m_botLevel = level; }
+    bool HasHardBot() const { return m_botLevel == BotLevel::Hard; }
+    bool HasUnlimitedBotPowerups() const { return m_botLevel != BotLevel::Easy; }
     void Bind(const Template &data, unsigned seed);
     void Restart();
     void Update(unsigned deltaMs);
@@ -49,6 +53,7 @@ public:
     static constexpr int PickupIdBase = 5678; // CLevel::GetMPMatchPickupId :114870.
 private:
     const Template *m_data = nullptr;
+    BotLevel m_botLevel = BotLevel::Easy;
     Life m_lives[2];
     unsigned m_scores[2]{};
     unsigned m_remainingMs = 0;

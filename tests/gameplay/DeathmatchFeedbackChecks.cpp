@@ -242,17 +242,46 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
     if (!scene.RespawnDeathmatch(1, false, true)) { ++failures; }
     std::printf("[dm-indicator] dead-peer-uses-avatar-not-help failures=%u\n", failures);
     // Match result stops combat immediately, but the host waits for the BIG fade.
-    match.Surrender(1);
+    // Exercise the final lethal hit: surrender alone cannot expose a cut-off death export.
+    while (match.Score(0) + 1 < match.Data().killLimit) {
+        if (!match.Kill(1, 0) || !match.Respawn(1, true)) { return 1; }
+    }
+    // Keep the final burst in the captured camera, independent of respawn distance.
+    scene.playerX = bot.x + 80; scene.playerY = bot.y;
+    fixture.brotherModel.weapon->brother.StartDeath();
+    session.Update(16, 0, 0, false);
     if (!session.IsFinished() || session.IsReadyForResults()) { ++failures; }
     const float frozenX = scene.playerX, frozenY = scene.playerY;
     const auto frozenShots = fixture.effects.GetShotCount();
     unsigned wrapUpMs = 0;
+    unsigned burstCompleteMs = 0, fadeStartedMs = 0;
+    bool capturedBurst = false;
     while (!session.IsReadyForResults() && wrapUpMs < 10000) {
         session.Update(16, 1, 1, true);
         wrapUpMs += 16;
+        const bool burstActive = fixture.effects.HasActorBurst(kBrotherCombatId);
+        if (burstActive && wrapUpMs >= 160 && !capturedBurst) {
+            bool CaptureRescueEffect(SurvivalDeathFixture &, const char *);
+            if (!CaptureRescueEffect(fixture, "deathmatch-final-burst.png")) { return 1; }
+            capturedBurst = true;
+        }
+        if (bot.vitals.deathAnimationComplete && !burstActive && burstCompleteMs == 0) { burstCompleteMs = wrapUpMs; }
+        if (session.IsDeathmatchFading() && fadeStartedMs == 0) {
+            fadeStartedMs = wrapUpMs;
+            // Keep the requested 800 ms hold within one simulation frame in either direction.
+            const unsigned holdMs = fadeStartedMs - burstCompleteMs;
+            if (burstCompleteMs == 0 || holdMs < 784 || holdMs > 816) { ++failures; }
+        }
         if (scene.playerX != frozenX || scene.playerY != frozenY || fixture.effects.GetShotCount() != frozenShots) { ++failures; break; }
     }
     if (!session.IsReadyForResults() || wrapUpMs <= 16 || powerups.Use()) { ++failures; }
+    if (!capturedBurst || fadeStartedMs == 0) { ++failures; }
+    std::printf("[dm-final-kill] burst-complete=%u fade-start=%u result=%u\n", burstCompleteMs, fadeStartedMs, wrapUpMs);
+    if (!bot.vitals.deathAnimationComplete || fixture.brotherModel.weapon->brother.IsVisible()) {
+        std::printf("[dm-final-kill] results cut off death animation complete=%d visible=%d\n",
+            bot.vitals.deathAnimationComplete, fixture.brotherModel.weapon->brother.IsVisible());
+        ++failures;
+    }
     std::printf("[dm-presentation] frozen-wrap-up=%u ms failures=%u\n", wrapUpMs, failures);
     if (maximumStepMs > 100) { std::printf("[dm-feedback] simulation stall\n"); ++failures; }
     std::printf("[dm-feedback] max-step-ms=%.3f failures=%u\n", maximumStepMs, failures);

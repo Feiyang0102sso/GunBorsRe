@@ -87,6 +87,19 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
         match.Update(16);
         if (match.GetResult() != CMPMatch::Result::Draw) { return 1; }
         std::printf("[deathmatch-check] tier=%u draws=10000 budgets=1 respawn=1 score=1 time=1\n", index);
+        for (const auto difficulty : {CMPMatch::BotLevel::Normal, CMPMatch::BotLevel::Hard}) {
+            match.Bind(entry.data, 42);
+            match.SetBotLevel(difficulty);
+            for (unsigned use = 0; use < 10; ++use) {
+                if (match.CanShop(1) || match.EnterShop(1) || !match.CanShop(0) ||
+                    !match.CanUse(1, true) || !match.CanUse(1, false)) { return 1; }
+                match.CommitUse(1, true); match.CommitUse(1, false);
+            }
+            if (!match.Kill(1, 0) || match.CanUse(1, false) || !match.Respawn(1, true)) { return 1; }
+            match.Restart();
+            if (!match.HasUnlimitedBotPowerups() || match.HasHardBot() != (difficulty == CMPMatch::BotLevel::Hard) ||
+                match.CanShop(1) || !match.CanUse(1, true)) { return 1; }
+        }
     }
     std::vector<PlanetEntry> planets;
     if (!LoadPlanetCatalog(toc, tables, planets)) { return 1; }

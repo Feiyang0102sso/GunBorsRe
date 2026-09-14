@@ -8,7 +8,7 @@ void UpdateLocalConnection(MenuState &state) {
     state.online.SetConnected(GameHostSettings().isConnected);
     // Offline sessions use the original default brother, including cold starts
     // with a previously selected local friend (CFriendManager::SetActiveFriend).
-    if (!state.online.IsConnected() && state.gameMode != 2) {
+    if (!state.online.IsConnected()) {
         if (state.botRoster != nullptr && state.botRoster->Selected() != 0 && !state.botRoster->Select(0)) {
             std::printf("[local-online] failed to save default brother selection\n");
         }
@@ -19,11 +19,11 @@ void UpdateLocalConnection(MenuState &state) {
     }
     if (wasConnected && !state.online.IsConnected()) {
         state.social.socialBound = false;
-        if (state.gameMode == 1) {
+        if (state.gameMode == 1 || state.gameMode == 2) {
             state.gameMode = 0;
             state.mode = ModeMenuState{};
         }
-        if (state.matchingPrompt && state.gameMode != 2) {
+        if (state.matchingPrompt) {
             state.matchingPrompt = false;
             state.ShowStorePrompt("MDS_PROMPT_MP_UNAVAILABLE", false, true, 0);
         }

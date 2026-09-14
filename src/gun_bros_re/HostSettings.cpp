@@ -14,6 +14,8 @@ bool HostSettings::Load(const std::filesystem::path &path) {
         std::ofstream output(path);
         output << GameConfig::EffectsVolume << "=" << effectsVolume << "\n";
         output << GameConfig::DrawFPS << "=1\n";
+        output << "# Deathmatch bot: 1=Easy, 2=Normal, 3=Hard\n";
+        output << GameConfig::DMBotLevel << "=" << dmBotLevel << "\n";
 #if GB_ENABLE_CHEATS
         output << GameConfig::DebugMode << "=0\n" << GameConfig::IsConnected << "=0\n";
 #endif
@@ -34,7 +36,15 @@ bool HostSettings::Load(const std::filesystem::path &path) {
             std::printf("[config] not a setting: %s\n", line.c_str());
             return false;
         }
-        // EffectsVolume runs 0..10; every other setting is a flag.
+        // EffectsVolume runs 0..10; DMBotLevel runs 1..3; other settings are flags.
+        if (name == GameConfig::DMBotLevel) {
+            if (value < 1 || value > 3) {
+                std::printf("[config] DMBotLevel must be 1, 2 or 3\n");
+                return false;
+            }
+            dmBotLevel = value;
+            continue;
+        }
         const bool ranged = name == GameConfig::EffectsVolume;
         if (!ranged && value != 0 && value != 1) {
             std::printf("[config] invalid boolean: %s\n", line.c_str());
@@ -54,6 +64,7 @@ bool HostSettings::Load(const std::filesystem::path &path) {
         else { std::printf("[config] unknown setting: %s\n", name.c_str()); }
     }
     std::printf("[config] connected=%d debug=%d draw-fps=%d effects-volume=%d\n", isConnected, debugMode, drawFPS, effectsVolume);
+    std::printf("[config] dm-bot-level=%d\n", dmBotLevel);
     return !input.bad();
 }
 

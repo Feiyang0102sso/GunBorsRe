@@ -36,6 +36,34 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
     state.coins = profile.coins; state.warbucks = profile.warbucks;
     state.inventory = profile.powerups;
     unsigned failures = 0, purchases = 0, iconHits = 0, choices = 0;
+    // Compare the real selector, including owned stock, with original STORE bits.
+    for (unsigned mode = 0; mode < 3; ++mode) {
+        for (bool afterDeath : {false, true}) {
+            state.localLive = mode == 1;
+            state.deathmatch = mode == 2;
+            state.afterDeathShop = afterDeath;
+            hud.ResetSelector();
+            if (!hud.DrawOriginalSelector(state)) { ++failures; }
+            unsigned expectedCount = 0;
+            for (unsigned storeIndex : hud.m_selectorAllEntries) {
+                const auto &store = hud.m_store[storeIndex].data;
+                const auto &reference = store.objects.front().object;
+                for (const auto &powerup : hud.m_powerups) {
+                    if (powerup.resource.packHash != reference.packHash || powerup.resource.localIndex != reference.localIndex) { continue; }
+                    const bool expected = (store.excludedGameModes & (1u << mode)) == 0 && (powerup.data.field112 != 0) == afterDeath;
+                    const bool listed = std::find(hud.m_selectorEntries.begin(), hud.m_selectorEntries.end(), storeIndex) != hud.m_selectorEntries.end();
+                    if (expected) { ++expectedCount; }
+                    if (listed != expected) { ++failures; }
+                }
+            }
+            std::printf("[powerup-mode-selector] mode=%u after-death=%d entries=%zu expected=%u failures=%u\n",
+                mode, afterDeath, hud.m_selectorEntries.size(), expectedCount, failures);
+        }
+    }
+    state.localLive = false;
+    state.deathmatch = false;
+    state.afterDeathShop = false;
+    hud.ResetSelector();
     if (!hud.DrawOriginalSelector(state) || !hud.m_selectorHits.empty()) { ++failures; }
     for (const char *name : {"GLU_MOVIE_POWERUP_MENU_NEW", "GLU_MOVIE_POWER_UP_LAYOUT", "GLU_MOVIE_POWERUP_MENU_NEW_COPY"}) {
         const auto *movie = hud.m_movies.GetMovie(hud.m_movies.Ordinal(name));

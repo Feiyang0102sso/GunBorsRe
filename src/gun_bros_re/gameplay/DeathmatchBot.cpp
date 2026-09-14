@@ -2,6 +2,7 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/DeathmatchBot.h"
 #include "gun_bros_re/gameplay/CombatScene.h"
+#include "gun_bros_re/gameplay/PowerupScene.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -10,6 +11,7 @@
 namespace {
 constexpr float Radians = 3.14159265f / 180;
 constexpr int DecisionMs = 220, ReactionMs = 240, MemoryMs = 3500;
+constexpr int PowerupDecisionMs = 500; // Host input cadence; BIG owns item cooldowns.
 constexpr float InputSpeed = 220; // CPlayer movement adapter, shared with CombatScene.
 float PreferredRange(const WeaponEntry &weapon) {
     // Tactical preferences derived from the resource's original category.
@@ -62,16 +64,37 @@ std::array<unsigned, 2> DeathmatchBot::ChooseLoadout(const CMPMatch::Entry &matc
     }
     return {first, second};
 }
-void DeathmatchBot::Configure(unsigned seed, const WeaponEntry &first, const WeaponEntry &second) {
+void DeathmatchBot::Configure(unsigned seed, const WeaponEntry &first, const WeaponEntry &second, CMPMatch::BotLevel level) {
+    m_level = level;
     m_random.seed(seed);
     m_ranges[0] = PreferredRange(first); m_ranges[1] = PreferredRange(second);
 }
+bool DeathmatchBot::TakePowerupRequest() {
+    if (m_level == CMPMatch::BotLevel::Easy || vitals.dead || m_powerupDecisionMs > 0 || (!m_visible && !WantsHealth())) { return false; }
+    m_powerupDecisionMs = PowerupDecisionMs;
+    return true;
+}
+
+void DeathmatchBot::UsePowerups(PowerupScene &powerups) {
+    if (m_level != CMPMatch::BotLevel::Easy) {
+        if (!TakePowerupRequest()) { return; }
+        if (WantsHealth() && powerups.UseMatchConsumable(false)) { return; }
+        if (m_level == CMPMatch::BotLevel::Hard) { powerups.UseAny(); }
+        // Normal retains Easy's standard grenade selection and tactical range.
+        else if (WantsGrenade()) { powerups.UseMatchConsumable(true); }
+        return;
+    }
+    if (WantsHealth()) { powerups.UseMatchConsumable(false); }
+    if (WantsGrenade()) { powerups.UseMatchConsumable(true); }
+}
+
 void DeathmatchBot::Reset(float startX, float startY, float startFacing) {
     CBrotherAI::Reset(startX, startY, startFacing);
     m_target = 0; m_visible = false; m_moving = false;
     m_ageMs = 0; m_decisionMs = 0; m_memoryMs = 0; m_shopDelayMs = 0; m_swapMs = 0;
     m_goalX = startX; m_goalY = startY; m_moveX = 0; m_moveY = 0;
     m_tactic = Tactic::Search;
+    m_powerupDecisionMs = 0;
     m_route.clear(); m_routeMs = 0;
 }
 void DeathmatchBot::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world, float, float, float speedMultiplier) {
@@ -81,6 +104,7 @@ void DeathmatchBot::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &worl
     m_moving = false;
     if (vitals.dead || vitals.stunMs > 0) { m_tactic = Tactic::Dead; brother.SetInput(false, false); return; }
     m_ageMs += deltaMs;
+    m_powerupDecisionMs = std::max(0, m_powerupDecisionMs - deltaMs);
     m_routeMs -= deltaMs;
     m_decisionMs -= deltaMs; m_reactionMs -= deltaMs; m_swapMs -= deltaMs;
     m_memoryMs -= deltaMs; m_shopDelayMs = std::max(0, m_shopDelayMs - deltaMs);

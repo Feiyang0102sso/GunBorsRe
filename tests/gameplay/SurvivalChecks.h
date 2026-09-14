@@ -194,6 +194,8 @@ struct SurvivalWavesFixture {
     const GameObjectRef *archiveLevel;
 };
 int CheckSurvivalWaves(SurvivalWavesFixture fixture);
+int CheckLiveCheatProgress(SurvivalDeathFixture fixture, SurvivalHud &hud);
+int CheckLivePolicies(SurvivalDeathFixture fixture, PowerupScene &powerups, CProfileManager &profile);
 
 struct SurvivalHordeFixture {
     unsigned & checkFailures;

@@ -116,6 +116,7 @@ void CMPMatch::Surrender(unsigned peer) {
 }
 bool CMPMatch::CanShop(unsigned peer) const {
     if (peer > 1 || m_result != Result::Playing || m_lives[peer].dead) { return false; }
+    if (peer == 1 && HasUnlimitedBotPowerups()) { return false; }
     return peer == 0 || m_lives[peer].shops < 2;
 }
 bool CMPMatch::EnterShop(unsigned peer) {
@@ -126,6 +127,7 @@ bool CMPMatch::EnterShop(unsigned peer) {
 bool CMPMatch::CanUse(unsigned peer, bool grenade) const {
     if (peer > 1 || m_result != Result::Playing || m_lives[peer].dead) { return false; }
     if (peer == 0) { return true; }
+    if (HasUnlimitedBotPowerups()) { return true; }
     if (grenade) { return m_lives[peer].grenades < 2; }
     return m_lives[peer].healthPacks < 2;
 }

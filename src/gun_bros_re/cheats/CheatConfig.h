@@ -28,6 +28,9 @@ inline constexpr const char *Commands[] = {Money, NextDay, ToggleDebug, ToggleCo
 // Host cheat bounds, not resource timings. Normal gameplay never uses these.
 inline constexpr int BossSkipStepMs = 16;
 inline constexpr int BossSkipLimitMs = 600000;
+inline constexpr int BossSkipFrameBudgetMs = 4;
+inline constexpr int BossSkipFrameSteps = 32;
+inline constexpr int BossSkipWallLimitMs = 15000;
 inline constexpr unsigned Coins = 500000;
 inline constexpr unsigned Warbucks = 500;
 inline constexpr unsigned XplodiumAmount = 500;

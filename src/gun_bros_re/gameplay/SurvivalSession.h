@@ -9,6 +9,7 @@
 #include "gun_bros_re/gameplay/IPropWorld.h"
 #include "gun_bros_re/gameplay/PowerupScene.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
+#include <chrono>
 
 class SurvivalHud;
 class SurvivalSession : public IEnemySpawnWorld {
@@ -45,8 +46,12 @@ public:
         return m_level.IsCleared() || IsDeathComplete();
     }
     bool IsReadyForResults() const;
+    bool IsDeathmatchFading() const { return m_matchFading; }
     /** Desktop cheat: drain the current wave through original Flow callbacks. */
     bool SkipToBoss();
+    bool StartBossSkip();
+    void AdvanceBossSkip();
+    bool IsBossSkipActive() const { return m_bossSkipActive; }
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const override;
     int CountEnemySlots(const GameObjectRef *enemy = nullptr) const override;
@@ -94,7 +99,17 @@ public:
     void CompleteDialog();
     unsigned GetPowerupCount(unsigned localIndex) const override;
 private:
+    void FinishBossSkip();
+    bool m_bossSkipActive = false;
+    unsigned m_bossSkipIntroSerial = 0, m_bossSkipDefeated = 0;
+    int m_bossSkipElapsedMs = 0;
+    std::int16_t m_bossSkipPreviousFlag = 0;
+    std::chrono::steady_clock::time_point m_bossSkipStarted;
     CMPMatch *m_match = nullptr;
+    // User-requested host hold after the original death animation and particles.
+    static constexpr int MatchEndingHoldMs = 100;
+    int m_matchEndingHoldMs = 0;
+    bool m_matchFading = false;
     bool m_suspended = false;
     void UpdateDialog(int deltaMs);
     void UpdateMapInteractions(float previousX, float previousY);

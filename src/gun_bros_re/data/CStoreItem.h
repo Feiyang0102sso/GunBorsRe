@@ -15,12 +15,19 @@ struct GameObjectTypeRef {
 class CStoreItem {
 public:
     bool Init(CArrayInputStream &stream);
+    /** STORE mode indices: single-player 0, multiplayer 1, deathmatch 2.
+     * CStoreAggregator::IsItemExcludedFromGameType :156283; store_entry.bt.
+     */
+    bool IsExcludedFromGameType(unsigned gameType) const {
+        return (excludedGameModes & (1u << gameType)) != 0;
+    }
     // Loader identity, corresponding to original cached pack/index at +356/+358.
     // This is not an extra field in the serialized STORE payload.
     GameObjectRef resource;
     std::uint8_t type = 0;
     std::uint8_t flags = 0;
-    std::uint32_t value8 = 0;
+    // Original member +8; serialized uint32 at file offset 2.
+    std::uint32_t excludedGameModes = 0;
     std::vector<GameObjectTypeRef> objects;
     // CStoreAggregator::AcquireItem (:158076) checks these exact fields.
     std::uint16_t requiredLevel = 0;

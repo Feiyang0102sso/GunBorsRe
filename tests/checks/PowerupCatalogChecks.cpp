@@ -99,7 +99,10 @@ int RunPowerupCheck(const std::string &bigDirectory) {
                             if (splashCount != 1 || firstSplashMs != 608 || maximumHeight < 0.99f || !projectile.removed) { ++failures; }
                         }
                         if (action.resource.localIndex == 93) {
-                            if (splashCount != 3 || firstSplashMs != 320 || projectile.GetTrajectoryEvents() != 1 || !projectile.removed) { ++failures; }
+                            // pack5 BULLET 93, 0097_0x61ab.bin: @0x97 emits three
+                            // timed pulses, then function 2 @0xB4 splashes once
+                            // more before native 5 removes the projectile.
+                            if (splashCount != 4 || firstSplashMs != 320 || projectile.GetTrajectoryEvents() != 1 || !projectile.removed) { ++failures; }
                             CBullet wallProbe;
                             wallProbe.Bind(bullet, false);
                             wallProbe.OnWallCollision();

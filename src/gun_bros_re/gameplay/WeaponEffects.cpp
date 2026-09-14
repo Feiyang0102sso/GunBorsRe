@@ -142,6 +142,7 @@ struct Shot {
 };
 
 struct EffectInstance {
+    CombatId burstActor = 0;
     std::uint64_t handle = 0;
     bool persistent = false;
     float loopDurationMs = 0;
@@ -168,6 +169,7 @@ struct RibbonInstance {
 };
 
 struct Particle {
+    CombatId burstActor = 0;
     const CParticleEffect *data = nullptr;
     std::size_t emitter = 0;
     float x = 0, y = 0, velocityX = 0, velocityY = 0;
@@ -653,6 +655,7 @@ struct WeaponEffects::Impl {
     void SpawnParticle(const EffectInstance &effect, std::size_t index) {
         const ParticleEmitterTemplate &emitter = effect.data->GetEmitters()[index];
         Particle particle;
+        particle.burstActor = effect.burstActor;
         particle.data = effect.data;
         particle.emitter = index;
         particle.lifetimeMs = static_cast<float>(emitter.GetParticleLifetimeMs());
@@ -925,7 +928,20 @@ void WeaponEffects::Emit(const GunCue &cue, float x, float y, float z, float dir
         }
         return;
     }
+    const auto previous = scene.activeEffects.size();
     scene.Cue(cue, x, y, z, direction);
+    // Keep attribution separate from the anchor: death bursts stay in place.
+    if (scene.activeEffects.size() > previous) { scene.activeEffects.back().burstActor = actor; }
+}
+
+bool WeaponEffects::HasActorBurst(CombatId actor) const {
+    for (const auto &effect : m_impl->activeEffects) {
+        if (effect.burstActor == actor) { return true; }
+    }
+    for (const auto &particle : m_impl->particles) {
+        if (particle.burstActor == actor) { return true; }
+    }
+    return false;
 }
 
 void WeaponEffects::Clear() {

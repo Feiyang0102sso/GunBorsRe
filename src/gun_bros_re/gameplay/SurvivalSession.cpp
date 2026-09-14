@@ -74,7 +74,10 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
 }
 
 void SurvivalSession::Restart(float x, float y, float facingDegrees) {
+    if (m_bossSkipActive) { FinishBossSkip(); }
     m_suspended = false;
+    m_matchEndingHoldMs = 0;
+    m_matchFading = false;
     m_scene.Reset();
     m_challengeSessionEnded = false;
     if (m_powerups != nullptr) { m_powerups->Reset(); }
@@ -501,7 +504,9 @@ void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
 
 bool SurvivalSession::IsReadyForResults() const {
     if (!IsFinished()) { return false; }
-    if (m_match == nullptr || m_originalHud == nullptr) { return true; }
+    if (m_match == nullptr) { return true; }
+    if (!m_matchFading) { return false; }
+    if (m_originalHud == nullptr) { return true; }
     return m_originalHud->IsDeathmatchWrapUpComplete();
 }
 
@@ -511,6 +516,13 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     }
     if (deltaMs <= 0 || m_suspended) { return; }
     if (m_match != nullptr && IsFinished()) {
+        if (!m_matchFading) {
+            if (!m_scene.AdvanceDeathmatchEnding(deltaMs)) { return; }
+            m_matchEndingHoldMs += deltaMs;
+            if (m_matchEndingHoldMs < MatchEndingHoldMs) { return; }
+            m_matchFading = true;
+            std::printf("[deathmatch] death presentation complete; starting result fade\n");
+        }
         if (m_originalHud != nullptr) { m_originalHud->AdvanceDeathmatchWrapUp(deltaMs); }
         return;
     }
@@ -530,19 +542,17 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     m_map.GetCamera().Update(worldDeltaMs);
     UpdateDialog(deltaMs);
     if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
-    if (m_originalHud != nullptr && m_originalHud->LiveWaveRemaining() != 0) {
-        // CLevel::Update :121325 keeps both player objects alive during the
-        // 15-second script wait. CInputPad does not block movement sticks.
-        m_scene.Update(worldDeltaMs, moveX, moveY, fire);
-        UpdateCamera(worldDeltaMs);
-        return;
-    }
+    // CLevel::Update :121325 keeps both player objects alive during the
+    // 15-second script wait. CInputPad does not block movement sticks.
+    // Continue through the shared actor/event path below. Returning after
+    // scene.Update lost deaths and callbacks when its next tick cleared them.
+    const bool waitingForLiveWave = m_originalHud != nullptr && m_originalHud->LiveWaveRemaining() != 0;
     if (m_level.IsCleared()) {
         m_scene.Update(worldDeltaMs, 0, 0, false);
         UpdateCamera(worldDeltaMs);
         return;
     }
-    if (m_originalHud != nullptr) {
+    if (m_originalHud != nullptr && !waitingForLiveWave) {
         // InterstitialSequenceCallback :86336 emits LEVEL event 2 only after
         // the last authored Movie completes. BOKOR keeps its script clock alive.
         if (m_originalHud->TakeInterstitialCompletion()) {
@@ -558,7 +568,7 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     }
     const int previousWave = m_level.GetWave();
     m_level.CheckForCameraChange(m_scene.playerX, m_scene.playerY);
-    m_level.Update(deltaMs);
+    if (!waitingForLiveWave) { m_level.Update(deltaMs); }
     m_scene.SetPathLayer(m_level.GetPathLayer());
     const float previousX = m_scene.playerX;
     const float previousY = m_scene.playerY;

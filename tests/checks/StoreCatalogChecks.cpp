@@ -176,7 +176,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
         storeReport << entry.owner << " name=" << std::quoted(entry.name) << " type=" << unsigned(item.type)
             << " flags=" << unsigned(item.flags) << " level=" << item.requiredLevel
             << " common=" << item.commonPrice << " rare=" << item.rarePrice
-            << " value8=" << item.value8 << " value32=" << unsigned(item.value32)
+            << " excludedGameModes=" << item.excludedGameModes << " value32=" << unsigned(item.value32)
             << " order=" << item.displayOrder << " value242=" << unsigned(item.value242)
             << " single=" << unsigned(item.singlePurchase) << " value244=" << unsigned(item.value244)
             << " refs=" << item.objects.size();

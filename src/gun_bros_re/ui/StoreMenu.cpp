@@ -284,7 +284,7 @@ bool DrawPowerupCompatibility(GameMenu &view, const CStoreItem &item, const Movi
         } else {
             // CreateContentSprite :150197 uses STORE value8 exclusion bits.
             unsigned sprite = 174;
-            if ((item.value8 & (1u << mode)) == 0) { sprite = 173; }
+            if (!item.IsExcludedFromGameType(mode)) { sprite = 173; }
             view.movies.DrawSprite(0, sprite, elapsed, region.x + region.width / 2,
                 region.y + region.height / 2, 1, area.alpha * region.alpha);
         }
@@ -900,7 +900,7 @@ bool DrawStore(GameMenu &view, CResTOCManager &toc, PackTables &tables, CProfile
         if (!matches) { continue; }
         // InitFilteredList :159135 uses STORE.type, never the model category.
         const unsigned category = store[index].data.type;
-        if ((state.store.shopExclusionFilter & store[index].data.value8) != 0) { continue; }
+        if ((state.store.shopExclusionFilter & store[index].data.excludedGameModes) != 0) { continue; }
         const unsigned categoryFilter = state.store.shopFilter & ~kOwnedFilterBit;
         if (categoryFilter != 0 && (categoryFilter & (1u << category)) == 0) { continue; }
         if ((state.store.shopFilter & kOwnedFilterBit) != 0) {
@@ -1377,7 +1377,7 @@ bool DrawOriginalModeOverlay(GameMenu &view, MenuState &state) {
         if (state.mode.modePhase == 2) {
             state.mode.modeTime = unfoldStart;
             state.mode.modePhase = 3;
-        } else if (mode == 0 || mode == 2 || state.online.IsConnected()) {
+        } else if (mode == 0 || state.online.IsConnected()) {
             state.gameMode = mode;
             state.mode.modeSelected = true;
             state.mode.modeTime = foldStart;

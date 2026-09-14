@@ -133,6 +133,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
         if (!LoadMPMatches(toc, tables, matches) || launch.matchIndex >= matches.size()) { return 1; }
         const auto &entry = matches[launch.matchIndex];
         match.Bind(entry.data, matchSeed);
+        match.SetBotLevel(static_cast<CMPMatch::BotLevel>(GameHostSettings().dmBotLevel));
         for (unsigned slot = 0; slot < 2; ++slot) {
             if (launch.loadout[slot] >= entry.guns.size()) { return 1; }
             matchConfiguration.guns[slot] = entry.guns[launch.loadout[slot]];
@@ -263,7 +264,8 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
             }
             if (chosen[slot] == nullptr) { return 1; }
         }
-        deathmatchBot->Configure(matchSeed, *chosen[0], *chosen[1]);
+        deathmatchBot->Configure(matchSeed, *chosen[0], *chosen[1],
+            static_cast<CMPMatch::BotLevel>(GameHostSettings().dmBotLevel));
     }
     if (withBrother) {
         brother.vitals.maximum = progress.GetHealth();
@@ -473,7 +475,11 @@ if (check) {
             loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing};
         if (development->deathmatchFeedbackCheck) {
             int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, PowerupScene &, CProfileManager &);
-            return CheckDeathmatchFeedback(fixture, match, powerups, gameContext->profile);
+            const int feedbackResult = CheckDeathmatchFeedback(fixture, match, powerups, gameContext->profile);
+            if (feedbackResult != 0) { return feedbackResult; }
+            int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, PackTables &,
+                CMPMatch &, PowerupScene &, CProfileManager &);
+            return CheckDeathmatchBotDifficulty(fixture, toc, tables, match, peerPowerups, *peerProfile);
         }
         return CheckDeathmatchCombat(fixture, match, pickups, peerPowerups, *peerProfile, *gameContext);
     }
@@ -490,6 +496,8 @@ if (check) {
     if (development->localLiveCheck) {
         SurvivalDeathFixture fixture{checkFailures, packShortName, false, vitals, window, program, batch,
             loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing};
+        if (launch.localLive && CheckLiveCheatProgress(fixture, survivalHud) != 0) { return 1; }
+        if (launch.localLive && CheckLivePolicies(fixture, peerPowerups, *peerProfile) != 0) { return 1; }
         if (CheckLocalLive(fixture, &survivalHud) != 0) { return 1; }
         session.Restart(startX, startY, startFacing);
         return CheckLivePeerActions(fixture, toc, tables, powerups, peerPowerups, *peerProfile);
@@ -632,20 +640,24 @@ if (check) {
     std::vector<StoreEntry> matchStore;
     if (launch.deathmatch && !LoadStoreCatalog(toc, tables, matchStore)) { return 1; }
     bool deathShop = false;
-    const auto openShop = [&](unsigned peer) {
-        if (launch.deathmatch && !match.CanShop(peer)) { return; }
+    const auto openShop = [&](unsigned peer, bool exempt = false) {
+        if (launch.deathmatch && !match.CanShop(peer)) { return false; }
         if (launch.deathmatch) {
             if (peer == 1) {
                 if (botShop.Request(1, window.GetTicksMs(), 0)) { matchShopCounted = false; matchShopPurchased = false; }
             } else if (liveShop.Request(0, window.GetTicksMs(), 0, UINT32_MAX)) { survivalHud.ResetSelector(scene.IsMatchSpawnPending(0)); }
             itemChoice = false;
-            return;
+            return true;
         }
-        if (launch.localLive || launch.deathmatch) {
-            if (liveShop.Request(peer, window.GetTicksMs())) {
+        if (launch.localLive) {
+            if (session.IsBossSkipActive()) { return false; }
+            if (liveShop.RequestForWave(peer, window.GetTicksMs(), session.GetLevel().GetWave(), scene.IsRescuePending(), exempt)) {
                 itemChoice = false; accumulator = 0; matchShopCounted = false; matchShopPurchased = false;
+                return true;
             }
+            return false;
         } else if (peer == 0) { shopOpen = true; itemChoice = false; accumulator = 0; }
+        return true;
     };
     const auto closeShop = [&]() {
         // ResumeActionCallback :94386 completes both first entry and respawn.
@@ -877,8 +889,7 @@ if (performanceStudy) {
             }
             if (botShop.Visible(frameTicks) && botShop.Remaining(frameTicks) < 7500) { botShop.Close(1); }
             if (!paused && !botShop.Active() && !brother.vitals.dead && !session.IsFinished()) {
-                if (deathmatchBot->WantsHealth()) { peerPowerups.UseMatchConsumable(false); }
-                if (deathmatchBot->WantsGrenade()) { peerPowerups.UseMatchConsumable(true); }
+                deathmatchBot->UsePowerups(peerPowerups);
                 if (deathmatchBot->WantsShop() && match.CanShop(1) &&
                     DeathmatchBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1)) != nullptr) {
                     openShop(1); deathmatchBot->OnShopAttempt();
@@ -887,6 +898,13 @@ if (performanceStudy) {
         }
         if (launch.localLive) {
             scene.SetAfterDeathAvailability(powerups.HasAfterDeathPowerup(), peerPowerups.HasAfterDeathPowerup());
+            if (scene.IsRescuePending() && liveShop.Active()) {
+                // A death can arrive during the request delay or from a cheat.
+                liveShop.Close(liveShop.Owner());
+                deathShop = false;
+                itemChoice = false;
+                survivalHud.ResetSelector();
+            }
             const bool wasActive = liveShop.Active();
             liveShop.Update(frameTicks);
             if (wasActive && !liveShop.Active() && deathShop) { scene.FinishDeathChoice(liveShop.Owner()); deathShop = false; }
@@ -895,7 +913,8 @@ if (performanceStudy) {
                     const PlayerVitals *down = &vitals;
                     if (peer == 1) { down = &brother.vitals; }
                     if (scene.NeedsDeathChoice(peer) && down->deathAnimationComplete) {
-                        openShop(peer); deathShop = true; break;
+                        if (openShop(peer, true)) { deathShop = true; }
+                        break;
                     }
                 }
             }
@@ -917,10 +936,11 @@ if (performanceStudy) {
                 }
             }
             if (!paused && !liveShop.Active() && !session.IsTransitioning() && !brother.vitals.dead &&
+                !scene.IsRescuePending() && !session.IsBossSkipActive() &&
                 !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) {
                 localBot->AdvanceActions(menuElapsed);
                 if (localBot->TakePowerupRequest()) { peerPowerups.UseAny(); }
-                if (localBot->TakeShopRequest()) { openShop(1); }
+                if (!peerPowerups.IsMovieActive() && localBot->TakeShopRequest()) { openShop(1); }
             }
         }
         survivalHud.AdvanceMenu(static_cast<unsigned>(frameTicks - menuTicks));
@@ -930,7 +950,7 @@ if (performanceStudy) {
         for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
             CombatCheatResult result;
             if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result, progressData, progress)) { return 1; }
-            if (result.botShop && !brother.vitals.dead && !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) { openShop(1); }
+            if (result.botShop && !brother.vitals.dead && !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) { openShop(1, true); }
             if (result.botPowerup && !liveShop.Active() && !powerups.IsMovieActive()) { peerPowerups.UseAny(true); }
             if (result.challengesUpdated && !gameContext->tutorial && !launch.deathmatch) {
                 // Discard the old day's pending wave deltas before binding the new list.
@@ -941,7 +961,10 @@ if (performanceStudy) {
                 survivalHud.SetChallenges(&challenges);
                 if (!session.SubmitChallenges(false)) { return 1; }
             }
-            if (result.resume) { paused = false; shopOpen = false; itemChoice = false; liveShop = {}; deathShop = false; }
+            if (result.resume) {
+                paused = false; shopOpen = false; itemChoice = false;
+                liveShop.Close(liveShop.Owner()); deathShop = false;
+            }
             if (result.resetClock) {
                 effects.SetPaused(paused || shopOpen);
                 accumulator = 0;
@@ -1276,7 +1299,12 @@ if (performanceStudy) {
 if (checkControls && !paused && !shopOpen) { accumulator = 960; }
 #endif
 
-        effects.SetPaused(worldPaused || (launch.deathmatch && session.IsFinished()));
+        effects.SetPaused(worldPaused || (launch.deathmatch && session.IsDeathmatchFading()));
+        if (session.IsBossSkipActive()) {
+            session.AdvanceBossSkip();
+            accumulator = 0;
+            previous = window.GetTicksMs();
+        }
         // CGunBros::OnSuspend :78263 lowers BGM to half without stopping it.
         // Gameplay and effects stay suspended; the music stream keeps advancing.
         float musicScale = 1.0f;

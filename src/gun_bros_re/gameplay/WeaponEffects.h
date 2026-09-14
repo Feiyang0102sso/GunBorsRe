@@ -69,6 +69,8 @@ public:
     void StopEffect(std::uint64_t handle);
     /** Standalone research scenes have no brother/projectile update. */
     void AdvanceAmbientEffects(int deltaMs);
+    /** Finite actor bursts include emitted particles after their emitter ends. */
+    bool HasActorBurst(CombatId actor) const;
     void SetPaused(bool paused);
     std::size_t GetBulletCount() const;
     std::size_t GetParticleCount() const;

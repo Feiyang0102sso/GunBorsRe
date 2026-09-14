@@ -44,6 +44,38 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = false;
+    // Both multiplayer modes use the original unavailable prompt before selection.
+    GameHostSettings().isConnected = false;
+    for (unsigned mode : {1u, 2u}) {
+        MenuState unavailable;
+        view.Begin(0);
+        if (!DrawOriginalModeOverlay(view, unavailable)) { return 1; }
+        MovieRegion button;
+        if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP"),
+            mode * 2 + 1, unavailable.mode.modeTime, button)) { return 1; }
+        view.Begin(0);
+        view.SetTestClick({button.x + button.width / 2, button.y + button.height / 2});
+        if (!DrawOriginalModeOverlay(view, unavailable) || unavailable.gameMode != 0 ||
+            unavailable.mode.modeSelected || !unavailable.storePromptRequested ||
+            std::string(unavailable.storePromptTable) != "MDS_PROMPT_MP_UNAVAILABLE" ||
+            unavailable.storePromptIndex != 2) {
+            std::printf("[local-online-check] FAILED: offline mode=%u must show unavailable prompt\n", mode);
+            return 1;
+        }
+        for (unsigned frame = 0; frame < 4; ++frame) {
+            view.clock += 1000;
+            view.Begin(0);
+            if (!DrawStorePrompt(view, unavailable)) { return 1; }
+        }
+        if (!unavailable.storePopup.IsReady() ||
+            !GB_SAVE_FRAME(view.window, (path / ("offline-mode-" + std::to_string(mode) + ".png")).string())) { return 1; }
+        unavailable.gameMode = mode;
+        if (BeginLocalMatch(unavailable) || unavailable.online.IsMatching()) { return 1; }
+        LocalOnlineServices service;
+        service.SetConnected(false);
+        if (service.BeginMatch(mode) || service.AdvanceMatch(view.clock + 5000)) { return 1; }
+    }
+    GameHostSettings().isConnected = true;
     if (CheckBroOps(view, toc, tables, profile) != 0) { std::printf("[bro-ops-check] FAILED\n"); return 1; }
     CChallengeManager catalog;
     if (!catalog.Load(toc, tables) || catalog.templates.size() != 238) { return 1; }
@@ -330,9 +362,12 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     if (!BeginLocalMatch(match)) { return 1; }
     GameHostSettings().isConnected = false;
     UpdateLocalConnection(match);
-    // The local PvP provider survives disconnect; cooperative Live retains its gate.
-    if (!match.online.IsMatching() || !match.matchingPrompt || match.gameMode != 2) { return 1; }
-    match.online.CancelMatch();
+    // Both local providers cancel matchmaking when the connection is lost.
+    if (match.online.IsMatching() || match.matchingPrompt || match.gameMode != 0 ||
+        !match.storePromptRequested || match.storePromptIndex != 0 ||
+        std::string(match.storePromptTable) != "MDS_PROMPT_MP_UNAVAILABLE" ||
+        TakeLocalMatch(match, view.clock + 5000)) { return 1; }
+    std::printf("[local-online-check] multiplayer-offline-prompts=2 dm-disconnect-cancel=1\n");
     GameHostSettings().isConnected = true;
 
     int product = -1;

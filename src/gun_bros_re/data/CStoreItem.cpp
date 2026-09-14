@@ -6,7 +6,7 @@
 bool CStoreItem::Init(CArrayInputStream &stream) {
     type = stream.ReadUInt8();
     flags = stream.ReadUInt8();
-    value8 = stream.ReadUInt32();
+    excludedGameModes = stream.ReadUInt32();
     objects.resize(stream.ReadUInt8());
     for (GameObjectTypeRef &reference : objects) {
         reference.type = stream.ReadUInt8();

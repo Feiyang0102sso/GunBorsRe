@@ -7,10 +7,12 @@
 #include "gun_bros_re/data/StoreCatalog.h"
 #include "gun_bros_re/data/CProfileManager.h"
 
+class PowerupScene;
 class DeathmatchBot final : public CBrotherAI {
 public:
     enum class Tactic { Search, Fight, Supply, Cover, Dead };
-    void Configure(unsigned seed, const WeaponEntry &first, const WeaponEntry &second);
+    void Configure(unsigned seed, const WeaponEntry &first, const WeaponEntry &second,
+        CMPMatch::BotLevel level = CMPMatch::BotLevel::Easy);
     static std::array<unsigned, 2> ChooseLoadout(const CMPMatch::Entry &match, const std::vector<WeaponEntry> &weapons, unsigned seed);
     static const StoreEntry *ChoosePurchase(const std::vector<StoreEntry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life);
     void Reset(float x, float y, float facing) override;
@@ -22,10 +24,14 @@ public:
     void PrintNavigation() const;
     bool WantsGrenade() const { return m_tactic == Tactic::Fight && m_visible && m_distance > 100 && m_distance < 300; }
     bool WantsHealth() const { return vitals.health < vitals.maximum * 0.65f; }
-    bool WantsShop() const { return m_ageMs > 12000 && m_shopDelayMs == 0 && (!m_visible || m_tactic == Tactic::Cover); }
+    bool WantsShop() const { return m_level == CMPMatch::BotLevel::Easy && m_ageMs > 12000 && m_shopDelayMs == 0 && (!m_visible || m_tactic == Tactic::Cover); }
+    void UsePowerups(PowerupScene &powerups);
     void OnShopAttempt() { m_shopDelayMs = 15000; }
 private:
+    bool TakePowerupRequest();
     Tactic m_tactic = Tactic::Search;
+    CMPMatch::BotLevel m_level = CMPMatch::BotLevel::Easy;
+    int m_powerupDecisionMs = 0;
     CombatId m_target = 0;
     bool m_visible = false, m_moving = false;
     unsigned m_sightings = 0, m_ageMs = 0;

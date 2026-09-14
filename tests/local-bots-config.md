@@ -1,5 +1,7 @@
 # 本地机器人配置
 
+DM 难度在 EXE 旁的 `GunBrosRe.cfg` 设置：`DMBotLevel=1` 为受限 Easy，`2` 为仅标准手雷与血包无限供应的 Normal，`3` 为全部 PvP 合法道具无限供应的 Hard。Normal/Hard 均不进商店，仅对 DM 生效，修改后重启程序。旧值 `2` 现对应 Normal。此字段不放入下述好友名单；Live 没有难度开关。详见 [结算与难度](../docs/deathmatch-ending-and-difficulty.md)。
+
 新增或调整好友只需编辑一个 `local-bots.cfg`，不需要制作完整存档。当前实现复用原版账户系统，后台自动生成编号存档保存游戏中产生的经验、货币和库存；这些文件不属于手工配置入口。
 
 游戏启动时读取当前玩家账户目录下的 `local-bots.cfg`。默认 Release 账户对应 `bin/Release/saves/local-bots.cfg`，Debug 对应 `bin/Debug/saves/local-bots.cfg`；使用 `--profile` 时跟随指定账户。不存在时，程序会从原有 LOCAL BOT 账户生成完整配置；没有旧 bot 时，首次复制当前玩家的装备和库存。

@@ -7,4 +7,6 @@ inline constexpr int DefaultEffectsVolume = 3;
 inline constexpr const char *DebugMode = "DebugMode";
 inline constexpr const char *DrawFPS = "DrawFPS";
 inline constexpr const char *IsConnected = "IsConnected";
+inline constexpr const char *DMBotLevel = "DMBotLevel";
+inline constexpr int DefaultDMBotLevel = 1;
 }

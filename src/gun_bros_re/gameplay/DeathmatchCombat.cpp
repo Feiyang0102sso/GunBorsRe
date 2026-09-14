@@ -179,6 +179,33 @@ void CombatScene::RecordMatchDeath(unsigned peer, int killer) {
     }
     else { AddPeerExperience(experience); }
 }
+bool CombatScene::AdvanceDeathmatchEnding(int deltaMs) {
+    // PLAYER export 2 emits the burst before state 7's move reaches native 1.
+    // Continue both dead actors, including simultaneous final kills, without AI or combat.
+    m_effects.BeginAudioFrame();
+    PlayerModel *models[] = {&m_player, m_brotherModel};
+    PlayerVitals *vitals[] = {&m_vitals, &m_brother->vitals};
+    const CombatId actors[] = {kPlayerCombatId, kBrotherCombatId};
+    bool complete = true;
+    for (unsigned peer = 0; peer < 2; ++peer) {
+        if (!vitals[peer]->dead) { continue; }
+        auto &model = *models[peer];
+        AdvancePlayer(model, deltaMs);
+        float x = playerX, y = playerY, direction = facing;
+        if (peer == 1) { x = m_brother->x; y = m_brother->y; direction = m_brother->facing; }
+        for (const auto &cue : model.weapon->brother.TakeCues()) {
+            if (cue.kind == GunCue::Kind::Grenade || cue.kind == GunCue::Kind::Splash) { continue; }
+            m_effects.Emit(cue, x, y, 0, direction - 90, actors[peer], cue.hand, -1, -1);
+        }
+        if (!vitals[peer]->deathAnimationComplete) { complete = false; }
+    }
+    m_effects.AdvanceAmbientEffects(deltaMs);
+    for (unsigned peer = 0; peer < 2; ++peer) {
+        if (vitals[peer]->dead && m_effects.HasActorBurst(actors[peer])) { complete = false; }
+    }
+    return complete;
+}
+
 void CombatScene::UpdateDeathmatch(unsigned deltaMs) {
     if (m_match == nullptr) { return; }
     PlayerVitals *vitals[] = {&m_vitals, &m_brother->vitals};
