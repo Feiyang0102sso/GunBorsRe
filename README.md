@@ -17,9 +17,13 @@
 
 Debug 和 Release 均启用已有作弊码。VS 的 F5／Ctrl+F5 默认有声音；自动测试通过 `--mute` 显式静音。
 
+**本地 Deathmatch**：在星图选择 **DEATH MATCH → 已解锁星球 → 进入对局**，不需要 `IsConnected`。五张地图、五套比赛的生命、武器池、三杀胜利、复活时间和随机补给均读取原 BIG，比赛枪组随机选择。进入后在原关内商店的 **GUNS** 页选择双枪，点击下方槽位指定装备位置，点击枪卡装备并自动切换到另一槽；右侧仅显示 POWER、数值及类别。战斗中可再次打开商店换枪，道具页使用 **POWER UPS**。死亡后爆裂隐藏身体并打开倒计时商店，RESUME 或倒计时结束后复活。战斗沿用移动、鼠标射击、2/N/M 换枪、Space 暂停、R 重开及原道具快捷键；结算可 REMATCH。
+
+新 `DeathmatchBot` 会选择互补双枪、发现和追踪对手、侧移射击、寻找掩体、绕障碍、争夺临时武器和按需购物。**只限制这个 Bot**：每条命成功进入商店最多两次，主动道具只允许标准手雷与血包；手雷两次，大小血包合计两次，实际复活才重置。成功使用才扣库存和次数，进店后取消仍占一次；购物按原价格和真实余额，次数上限不会赠送道具。双方沿用原盔甲和枪械熟练度，PvP 不应用 BRO BUFF。击杀、经验、矿石与消费写入各自账户，不推进生存波次，不覆盖账户双枪。详见 [Deathmatch 实现与验收](tests/deathmatch-plan.md)，专项为 `pwsh -File tests/run.ps1 -Case deathmatch-data,deathmatch`。当前是本地玩家对 Bot，真实联网仍未实现。
+
 `IsConnected=1`（或菜单输入 `chc` 切换）时，选择 **LIVE → 普通生存星球 → 任务 PLAY**，原匹配弹窗就绪后约 1.5 秒加入当前激活的本地 bot。进关使用原 KEYSET 的合作壁纸与 GLU_MOVIE_SPLASH 区域、每波双列统计、15 秒波间等待和多人最终结算。波间双方都可移动，最后阶段显示 5→1 倒计时；任何一方购物时双方与整个战场暂停。屏外队友有头像定位，倒地后显示原等待救援／正在救援粒子。玩家与 bot 分别保存经验、装备和道具；双方可救援，倒地时先处理原复活道具选择。机器人策略独立在 `BroAIDeathmatch.h/.cpp`，不跟随活着的玩家，会避敌、救援、每 3–6 秒请求换枪并使用库存道具。
 
-联网 BROS 列表循环读取账户目录的 local-bots.cfg，可配置多个 bot 的名字、等级、装备和道具；Live 匹配当前激活的 bot，选择跨启动保存；未激活 bot 时使用配置中的第一位。Solo 选中好友后读取独立配置，始终使用原 CBrotherAI；新 AI 仅在 Live 创建和执行。BROS 使用原三项滚动布局及选中高光，关闭 fake connection 后恢复默认兄弟。bot 账户位于玩家存档目录下的 `local-friends/windows-test-bot-1/`，原 `1006` 只记录好友 XP 礼物，`A` 记录选中好友凭据，均不是完整好友装备档案。`brow/brok/bror` 控制测试 bot 换枪、死亡、复活；`bros/brop` 在 Live 中打开 bot 的 10 秒商店或随机用道具，所有这些命令均不作用于真人队友。BOKOR 遵守原任务解锁和独立波间流程，最终展示连杀统计。Death Match 和真实网络互通尚未接通；本地名单启用原 BRO BOOST 档位和实际加成；好友 XP 礼物服务尚未模拟。配置说明见 [本地机器人配置](tests/local-bots-config.md)。专项命令：`pwsh -File tests/run.ps1 -Case local-live,offline-social`，验收见 [Live 阶段记录](tests/live-mode-plan.md)。
+联网 BROS 列表循环读取账户目录的 local-bots.cfg，可配置多个 bot 的名字、等级、装备和道具；Live 匹配当前激活的 bot，选择跨启动保存；未激活 bot 时使用配置中的第一位。Solo 选中好友后读取独立配置，始终使用原 CBrotherAI；合作策略 `BroAIDeathmatch` 仅在 Live 创建和执行，与新的 PvP 策略分开。BROS 使用原三项滚动布局及选中高光，关闭 fake connection 后恢复默认兄弟。bot 账户位于玩家存档目录下的 `local-friends/windows-test-bot-1/`，原 `1006` 只记录好友 XP 礼物，`A` 记录选中好友凭据，均不是完整好友装备档案。`brow/brok/bror` 控制测试 bot 换枪、死亡、复活；`bros/brop` 在 Live 中打开 bot 的 10 秒商店或随机用道具，所有这些命令均不作用于真人队友。Deathmatch 不允许 `bror` 绕过比赛复活。本地名单启用原 BRO BOOST 档位和实际加成；好友 XP 礼物服务尚未模拟。配置说明见 [本地机器人配置](tests/local-bots-config.md)。专项命令：`pwsh -File tests/run.ps1 -Case local-live,offline-social`，验收见 [Live 阶段记录](tests/live-mode-plan.md)。
 
 `GunBrosRe.cfg` 的 `DrawFPS=1` 默认开启，缺少该字段也默认显示；设为 `0` 可隐藏。FPS 使用原 BIG 游戏字体，位于顶部等级栏左侧，从启动视频、登录菜单到战斗持续显示，不受 `DebugMode` 影响。FPS 和战斗侧栏均无黑底，菜单左侧不再重复显示 FPS，侧栏不显示快捷键说明。
 

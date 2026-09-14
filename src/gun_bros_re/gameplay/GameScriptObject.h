@@ -37,6 +37,8 @@ public:
     CLevel *GetLevelContext() const { return m_levelContext; }
     void SetCooperative(bool enabled) { m_cooperative = enabled; }
     bool IsCooperative() const { return m_cooperative; }
+    void SetDeathmatch(bool enabled) { m_deathmatch = enabled; }
+    bool IsDeathmatch() const;
     /** Per-host deterministic random stream; independent spawns get own seeds. */
     void SetRandomSeed(std::uint32_t seed) { m_randomState = seed; }
     std::int16_t RandomInteger(std::int16_t minimum, std::int16_t maximum) {
@@ -57,7 +59,8 @@ public:
         // Single-player, not co-op.
         // The original zero above is now conditional: local Live is GameType 2.
         case 4: m_gameVariable = m_cooperative; break;
-        case 5: m_gameVariable = 0; break; // Not deathmatch.
+        // Previously fixed to zero; original CGame::VariableResolver tests GameType 3.
+        case 5: m_gameVariable = IsDeathmatch(); break;
         case 6: m_gameVariable = -1; break; // CGunBros menu :94113.
         default: return nullptr;
         }
@@ -75,6 +78,7 @@ public:
 private:
     std::uint32_t m_randomState = 1;
     bool m_cooperative = false;
+    bool m_deathmatch = false;
     std::int16_t m_gameVariable = 0;
     CLevel *m_levelContext = nullptr;
 };

@@ -14,7 +14,8 @@
 #include "gun_bros_re/gameplay/CombatScene.h"
 
 enum class SurvivalHudAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
-    BroOps, SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks };
+    BroOps, SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks,
+    ShowPowerups, ShowGuns, SelectMatchGun, MatchSlot1, MatchSlot2 };
 
 struct SurvivalHudState {
     float health = 0, maximumHealth = 1, brotherHealth = 0, brotherMaximumHealth = 1;
@@ -33,6 +34,9 @@ struct SurvivalHudState {
     bool showCollisions = false, lastWavePerfect = false;
     bool horde = false;
     bool localLive = false;
+    bool deathmatch = false;
+    unsigned matchScore[2]{}, matchLimit = 0, respawnMs = 0;
+    std::map<unsigned, int> powerupCooldowns;
     float reviveProgress = 0;
     MovieRegion reviveBar;
     float revivePaddingX = 1, revivePaddingY = 1;
@@ -81,6 +85,11 @@ public:
     void ResetNotices();
     // Original CInputPad interstitial callbacks release LEVEL event 2.
     void BeginOriginalLevel(unsigned wave, bool horde, bool boss);
+    void BeginDeathmatch(unsigned killLimit);
+    bool TakeDeathmatchIntroCompletion();
+    void OnDeathmatchPowerup(const std::string &name);
+    void AdvanceDeathmatchWrapUp(unsigned deltaMs);
+    bool IsDeathmatchWrapUpComplete() const;
     void OnOriginalWaveClear(unsigned wave, bool perfect, unsigned rewardPercent, bool boss);
     bool HasInterstitial() const;
     bool TakeInterstitialCompletion();
@@ -105,9 +114,36 @@ public:
     bool BackFromSelectorPrompt();
     void ReportSelectorPurchase(PurchaseResult result, const SurvivalHudState &state);
     const StoreEntry *SelectedItem() const;
+    bool ConfigureDeathmatch(const std::vector<GameObjectRef> &stores);
+    // Explicit Show also resets a selector replaced while it is still visible.
+    void ResetSelector(bool startOnGuns = false) {
+        m_selectorBound = false;
+        m_selectorHits.clear();
+        m_selectorStartOnGuns = startOnGuns;
+    }
+    unsigned MatchSelectionSlot() const { return m_matchSelectedSlot; }
+    void AdvanceMatchSelection();
     // Research/accessibility queries use the same authored hit regions as input.
     bool FindActionRegion(const SurvivalHudState &state, SurvivalHudAction action, MovieRegion &region) const;
 private:
+    bool m_matchIntro = false, m_matchIntroCompleted = false;
+    bool m_matchWrapUp = false;
+    unsigned m_matchWrapUpTime = 0, m_matchWrapUpDuration = 0;
+    void AddMatchMessage(const std::string &text);
+    bool DrawMatchGuns(const SurvivalHudState &state, const MovieRegion &area);
+    bool DrawMatchTabs(const MovieRegion &area);
+    bool DrawMatchGunCard(unsigned index, const MovieRegion &area);
+    bool DrawMatchGunIcon(const StoreEntry &entry, const MovieRegion &area);
+    bool DrawPowerupCooldown(const PowerupEntry &entry, int remaining, const MovieRegion &region, float scale = 0.5f);
+    struct MatchMessage { std::string text; unsigned remainingMs = 5000; };
+    std::vector<MatchMessage> m_matchMessages;
+    unsigned m_previousMatchScore[2]{};
+    CResTOCManager *m_toc = nullptr;
+    std::vector<unsigned> m_matchGunEntries;
+    bool m_matchGuns = false;
+    bool m_selectorStartOnGuns = false;
+    unsigned m_matchSelectedSlot = 0, m_matchSlotTime = 0, m_matchSlotChapter = 1;
+    float m_matchGunPosition = 0;
     std::string m_livePeerName = "LOCAL BOT";
     const CChallengeManager *m_challenges = nullptr;
     bool m_challengeHeld = false;
@@ -115,6 +151,7 @@ private:
     CDialogPopup m_dialog;
     struct Button;
 #if GB_ENABLE_TESTS
+    friend int CheckDeathmatchMenus(CResTOCManager &, PackTables &, CProfileManager &);
     friend int RunOriginalHudCheck(const std::string &bigDirectory);
     friend int RunOriginalDialogCheck(const std::string &bigDirectory);
     friend int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory);

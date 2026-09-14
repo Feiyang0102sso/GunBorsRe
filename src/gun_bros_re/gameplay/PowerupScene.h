@@ -13,6 +13,8 @@ public:
     PowerupScene(CResTOCManager &toc, PackTables &tables, PlayerModel &player,
         PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile, CombatId owner = kPlayerCombatId);
     bool Init();
+    void SetDeathmatch(CMPMatch *match) { m_match = match; }
+    bool UseMatchConsumable(bool grenade);
     bool Select(unsigned index);
     bool SelectResource(const GameObjectRef &resource);
     /** Resolve saved ordinals, or original export 4 for unselected slots. */
@@ -31,10 +33,21 @@ public:
     const PowerupEntry *GetSelected() const;
     unsigned GetCount() const;
     unsigned GetCount(unsigned localIndex) const;
+    const std::map<unsigned, int> &Cooldowns() const { return m_cooldowns; }
+    std::vector<std::string> TakeUseMessages() {
+        std::vector<std::string> messages;
+        messages.swap(m_useMessages);
+        return messages;
+    }
     unsigned consumed = 0;
     unsigned failures = 0;
 private:
     bool IsSupported(const PowerupEntry &entry) const;
+    bool MatchAllows(const PowerupEntry &entry) const;
+    void CommitMatchUse(const GameObjectRef &resource);
+    CMPMatch *m_match = nullptr;
+    std::map<unsigned, int> m_cooldowns;
+    std::vector<std::string> m_useMessages;
     CResTOCManager &m_toc;
     PackTables &m_tables;
     PlayerModel &m_player;

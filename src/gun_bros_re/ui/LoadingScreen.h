@@ -12,7 +12,7 @@
 
 class LoadingScreen : public IPackLoadProgress {
 public:
-    LoadingScreen(CWindow &window, MovieRenderer &movies, PackTables &tables, const CProfileManager *profile = nullptr, bool enteringGame = false, bool startup = false, CBGM *music = nullptr, bool multiplayer = false)
+    LoadingScreen(CWindow &window, MovieRenderer &movies, PackTables &tables, const CProfileManager *profile = nullptr, bool enteringGame = false, bool startup = false, CBGM *music = nullptr, bool multiplayer = false, bool deathmatch = false)
         : m_window(window), m_tables(tables), m_movies(movies), m_startup(startup), m_music(music) {
         m_start = window.GetTicksMs();
         if (startup) {
@@ -29,6 +29,7 @@ public:
         unsigned index = nextIndex;
         LoadingMode mode = LoadingMode::Solo;
         if (multiplayer) { index = nextMultiplayerIndex++; mode = LoadingMode::Live; }
+        if (deathmatch) { index = nextMultiplayerIndex++; mode = LoadingMode::Deathmatch; }
         m_valid = m_splash.Init(movies, index, profile, mode);
         if (!m_valid) { std::printf("[loading-splash] binding failed\n"); return; }
         nextIndex = (nextIndex + 1) % m_splash.Count();

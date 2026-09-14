@@ -62,12 +62,12 @@ void CombatScene::AddExperience(unsigned amount) {
     const auto before = m_progress->GetExperience();
     const float fraction = m_vitals.health / m_vitals.maximum;
     const bool leveled = m_progress->AddExperience(amount);
-    if (m_localLive) {
+    if (m_localLive || IsDeathmatch()) {
         const auto earned = m_progress->GetExperience() - before;
         m_multiplayer[0].wave.experience += earned;
         m_multiplayer[0].total.experience += earned;
     }
-    if (!leveled) { return; }
+    if (!leveled || IsDeathmatch()) { return; }
     // CPlayer::AddExperience (:101250) preserves the current health fraction.
     m_vitals.maximum = m_progress->GetHealth();
     m_vitals.health = m_vitals.maximum * fraction;
@@ -211,7 +211,7 @@ void CombatScene::AddXplodium(unsigned amount) {
     if (m_level != nullptr) { percent = static_cast<unsigned>(std::max(0, m_level->GetXplodiumMultiplierPercent())); }
     const std::uint64_t scaled = static_cast<std::uint64_t>(amount) * percent + m_xplodiumRemainder;
     m_xplodium += scaled / 100;
-    if (m_localLive) {
+    if (m_localLive || IsDeathmatch()) {
         m_multiplayer[0].wave.xplodium += scaled / 100;
         m_multiplayer[0].total.xplodium += scaled / 100;
     }
@@ -235,7 +235,7 @@ bool CombatScene::TouchesPickup(float x, float y) const {
     // CPickup::Bind :99937 sets its fixed collision radius to 10.
     // CBrother::TestCollisions :138154 excludes GetBrotherType() == 1;
     // CBrotherAI::GetBrotherType :139638 returns 1 for the AI companion.
-    return !m_vitals.dead && CircleFraction(playerX, playerY,
+    return !IsMatchSpawnPending(0) && !m_vitals.dead && CircleFraction(playerX, playerY,
         m_previousPlayerX - playerX, m_previousPlayerY - playerY, x, y, m_playerRadius + 10) <= 1;
 }
 
@@ -319,8 +319,14 @@ void CombatScene::ResolveMovement(float previousX, float previousY, float &x, fl
 bool CombatScene::HasClearPath(float x, float y, float targetX, float targetY, float radius) const {
     if (m_collision == nullptr) { return true; }
     const auto &vertices = m_collision->GetVertices();
+    const float left = std::min(x, targetX) - radius, right = std::max(x, targetX) + radius;
+    const float top = std::min(y, targetY) - radius, bottom = std::max(y, targetY) + radius;
     for (const CollisionEdge &edge : m_collision->GetEdges()) {
         if (!edge.enabled) { continue; }
+        // Broad phase only; the existing swept-circle narrow phase is unchanged.
+        const auto &first = vertices[edge.firstVertex], &second = vertices[edge.secondVertex];
+        if (std::max(first.x, second.x) < left || std::min(first.x, second.x) > right ||
+            std::max(first.y, second.y) < top || std::min(first.y, second.y) > bottom) { continue; }
         if (EdgeFraction(x, y, targetX - x, targetY - y, vertices[edge.firstVertex], vertices[edge.secondVertex], radius) < 1) {
             return false;
         }
@@ -409,6 +415,7 @@ void CombatScene::Reset() {
     m_bestKillStreak = 0;
     m_effects.Clear();
     enemies.clear();
+    m_summoners.clear();
     deaths.clear();
     teleports.clear();
     levelEvents.clear();
@@ -587,6 +594,7 @@ void CombatScene::SetBrotherWeapons(const CScript &script, const CGun::Template 
 }
 
 bool CombatScene::RequestBrotherWeaponSwap() {
+    if (IsDeathmatch()) { return RequestMatchWeaponSwap(1); }
     if (m_brother == nullptr || m_brotherModel == nullptr || m_brotherScript == nullptr || m_brother->vitals.dead) { return false; }
     return m_brotherModel->weapon->brother.OnSwapGun();
 }
@@ -621,6 +629,7 @@ void CombatScene::ResolvePlayerMovement(float previousX, float previousY, float 
 }
 
 bool CombatScene::SwapBrotherWeapon() {
+    if (IsDeathmatch()) { return FinishMatchWeaponSwap(1); }
     if (m_brotherScript == nullptr || m_brotherModel == nullptr || m_brother->vitals.dead) { return true; }
     const unsigned next = 1 - m_brotherWeaponSlot;
     m_effects.RetireOwner(kBrotherCombatId);
@@ -664,6 +673,10 @@ void CombatScene::BrotherMatrix(float *matrix) const {
 }
 
 CombatId CombatScene::FindBrotherTarget(float x, float y, float radius) {
+    if (IsDeathmatch()) {
+        if (!IsMatchSpawnPending(0) && !m_vitals.dead && std::hypot(x - playerX, y - playerY) <= radius && HasLineOfFire(x, y, playerX, playerY)) { return kPlayerCombatId; }
+        return 0;
+    }
     CombatId nearest = 0;
     for (const auto &actor : enemies) {
         float targetX = 0;
@@ -677,6 +690,7 @@ CombatId CombatScene::FindBrotherTarget(float x, float y, float radius) {
 }
 
 bool CombatScene::GetBrotherTarget(CombatId id, float &x, float &y) {
+    if (IsDeathmatch() && id == kPlayerCombatId && !IsMatchSpawnPending(0) && !m_vitals.dead) { x = playerX; y = playerY; return true; }
     CombatEnemy *actor = Find(id);
     if (actor == nullptr) { return false; }
     const CEnemy &enemy = actor->model.enemy;
@@ -741,6 +755,8 @@ void CombatScene::PartMatrix(const CombatEnemy &actor, int index, float *matrix)
 }
 
 bool CombatScene::Anchor(CombatId id, int part, int node, float &x, float &y, float &z, float &direction) {
+    if (id == kPlayerCombatId && IsMatchSpawnPending(0)) { return false; }
+    if (id == kBrotherCombatId && IsMatchSpawnPending(1)) { return false; }
     if (id == kPlayerCombatId && part < 0) {
         x = playerX; y = playerY; z = 0; direction = facing - 90;
         return !m_vitals.dead;
@@ -786,6 +802,12 @@ bool CombatScene::Anchor(CombatId id, int part, int node, float &x, float &y, fl
 
 void CombatScene::SelectTarget(CombatEnemy &actor) {
     CEnemy &enemy = actor.model.enemy;
+    if (IsDeathmatch() && enemy.combat.summoner != 0) {
+        if (enemy.combat.summoner == kPlayerCombatId && m_brother != nullptr) {
+            enemy.SetTarget(kBrotherCombatId, m_brother->x, m_brother->y, !IsMatchSpawnPending(1) && !m_brother->vitals.dead);
+        } else { enemy.SetTarget(kPlayerCombatId, playerX, playerY, !IsMatchSpawnPending(0) && !m_vitals.dead); }
+        return;
+    }
     if (enemy.combat.targetType != 2) {
         // Local peer has no network target packet: choose the nearest living
         // brother on this host, including while the human player is down.
@@ -829,7 +851,7 @@ CombatTrace CombatScene::Trace(const CombatHit &hit, float x, float y, float dx,
         result = m_props->Trace(hit, x, y, dx, dy, radius, skipTargets);
         if (result.target != 0) { nearest = result.fraction; }
     }
-    if (hit.ownerType == 1 && hit.owner != kPlayerCombatId && !m_vitals.dead && !Skipped(kPlayerCombatId, skipTargets)) {
+    if (CanHitBrother(hit, kPlayerCombatId) && !m_vitals.dead && !Skipped(kPlayerCombatId, skipTargets)) {
         float moveX = playerX - m_previousPlayerX, moveY = playerY - m_previousPlayerY;
         if ((hit.flags & 0x100) != 0) { moveX = 0; moveY = 0; }
         const float fraction = CircleFraction(x, y, dx - moveX, dy - moveY,
@@ -841,7 +863,7 @@ CombatTrace CombatScene::Trace(const CombatHit &hit, float x, float y, float dx,
             result.normalY = y + dy * nearest - playerY;
         }
     }
-    if (hit.ownerType == 1 && m_brother != nullptr && !m_brother->vitals.dead && !Skipped(kBrotherCombatId, skipTargets)) {
+    if (CanHitBrother(hit, kBrotherCombatId) && m_brother != nullptr && !m_brother->vitals.dead && !Skipped(kBrotherCombatId, skipTargets)) {
         float moveX = m_brother->x - m_brother->previousX;
         float moveY = m_brother->y - m_brother->previousY;
         if ((hit.flags & 0x100) != 0) { moveX = 0; moveY = 0; }
@@ -913,6 +935,15 @@ std::vector<CombatScene::HealthBar> CombatScene::EnemyHealthBars(float viewportS
     const float height = int(4 * viewportScale * waveScale);
     const float border = int(viewportScale * waveScale);
     std::vector<HealthBar> bars;
+    if (IsDeathmatch() && m_brother != nullptr && !m_brother->vitals.dead && m_brother->vitals.health > 0 &&
+        m_brotherModel->weapon->brother.IsVisible()) {
+        // CLevel::DrawBrotherHealthBar :120249 uses the original native 30x4.
+        const auto bounds = PlayerBounds(*m_brotherModel);
+        const float scale = PlayerModelWorldScale(*m_brotherModel, m_playerGameScale, m_cameraScale);
+        bars.push_back({m_brother->x, m_brother->y - bounds.maxZ * scale,
+            float(int(30 * viewportScale)), float(int(4 * viewportScale)), float(int(viewportScale)),
+            std::min(1.0f, m_brother->vitals.health / m_brother->vitals.maximum), 0, 199 / 255.0f, 8 / 255.0f});
+    }
     for (const auto &actor : enemies) {
         const CEnemy &enemy = actor->model.enemy;
         const EnemyCombat &state = enemy.combat;
@@ -955,16 +986,20 @@ bool CombatScene::Suicide() {
 
 HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
     if (target == kBrotherCombatId && m_brotherModel != nullptr) {
-        if (hit.ownerType != 1) { return HitResult::Ignored; }
+        if (!CanHitBrother(hit, target)) { return HitResult::Ignored; }
         m_brotherModel->weapon->brother.SetLevelContext(m_level);
         const float reduction = PlayerArmorMultiplier(*m_brotherModel, 0) - 1;
         float damage = hit.damage;
+        if (IsDeathmatch() && hit.applyArmorAttack && hit.owner == kPlayerCombatId) { damage *= PlayerArmorMultiplier(m_player, 1); }
         if (hit.splash && hit.percentDamage) { damage *= m_brother->vitals.maximum * 0.01f; }
-        return m_brotherModel->weapon->brother.ReceiveDamage(std::max(0.0f, damage * (1 - reduction)) /
+        const HitResult result = m_brotherModel->weapon->brother.ReceiveDamage(std::max(0.0f, damage * (1 - reduction)) /
             CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 1));
+        if (IsDeathmatch() && result != HitResult::Ignored) { m_matchStreaks[1] = 0; }
+        if (result == HitResult::Killed) { RecordMatchDeath(1, hit.owner == kPlayerCombatId ? 0 : -1); }
+        return result;
     }
     if (target == kPlayerCombatId) {
-        if (hit.ownerType != 1 || m_player.weapon == nullptr) { return HitResult::Ignored; }
+        if (!CanHitBrother(hit, target) || m_player.weapon == nullptr) { return HitResult::Ignored; }
         m_player.weapon->brother.SetLevelContext(m_level);
         // CBrother::Damage (:136667): add slot percentages, then reduce the
         // incoming amount. Defence does not increase the player's max health.
@@ -972,10 +1007,13 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
         // CBrother::OnSplashDamage :135359 interprets native 23 as a percent
         // of maximum health before the ordinary armor / frenzy reductions.
         float damage = hit.damage;
+        if (IsDeathmatch() && hit.applyArmorAttack && hit.owner == kBrotherCombatId) { damage *= PlayerArmorMultiplier(*m_brotherModel, 1); }
         if (hit.splash && hit.percentDamage) { damage *= m_vitals.maximum * 0.01f; }
         damage = std::max(0.0f, damage * (1.0f - reduction)) / CFriendPowerManager::Multiplier(m_player.friendCount, 1);
         const unsigned hitsBefore = m_vitals.hits;
         const HitResult result = m_player.weapon->brother.ReceiveDamage(damage);
+        if (IsDeathmatch() && result != HitResult::Ignored) { m_matchStreaks[0] = 0; }
+        if (result == HitResult::Killed) { RecordMatchDeath(0, hit.owner == kBrotherCombatId ? 1 : -1); }
         // OnPlayerDamaged :115914 resets the streak on accepted damage only.
         if (m_vitals.hits != hitsBefore) { m_killStreak = 0; }
         return result;
@@ -1018,6 +1056,14 @@ float CombatScene::GetProjectilePowerupMultiplier(CombatId owner) const {
 }
 
 bool CombatScene::FindTarget(const CombatHit &hit, float radius, float &x, float &y) {
+    if (IsDeathmatch()) {
+        const CombatId owner = ParticipantOwner(hit.owner);
+        if (owner == kPlayerCombatId && m_brother != nullptr && !IsMatchSpawnPending(1) && !m_brother->vitals.dead && std::hypot(hit.x - m_brother->x, hit.y - m_brother->y) <= radius) {
+            x = m_brother->x; y = m_brother->y; return true;
+        }
+        if (owner == kBrotherCombatId && !IsMatchSpawnPending(0) && !m_vitals.dead && std::hypot(hit.x - playerX, hit.y - playerY) <= radius) { x = playerX; y = playerY; return true; }
+        if (owner == kPlayerCombatId || owner == kBrotherCombatId) { return false; }
+    }
     bool found = false;
     if (hit.ownerType == 1 && !m_vitals.dead && std::hypot(hit.x - playerX, hit.y - playerY) < radius) {
         x = playerX; y = playerY; return true;
@@ -1034,8 +1080,8 @@ bool CombatScene::FindTarget(const CombatHit &hit, float radius, float &x, float
 void CombatScene::Splash(const CombatHit &hit, float radius, float coneDegrees, float force, int forceMs) {
     if (m_props != nullptr) { m_props->Splash(hit, radius); }
     std::vector<CombatId> targets;
-    if (hit.ownerType == 1 && !m_vitals.dead) { targets.push_back(kPlayerCombatId); }
-    if (hit.ownerType == 1 && m_brother != nullptr && !m_brother->vitals.dead) { targets.push_back(kBrotherCombatId); }
+    if (CanHitBrother(hit, kPlayerCombatId) && !m_vitals.dead) { targets.push_back(kPlayerCombatId); }
+    if (CanHitBrother(hit, kBrotherCombatId) && m_brother != nullptr && !m_brother->vitals.dead) { targets.push_back(kBrotherCombatId); }
     for (const auto &actor : enemies) {
         if (actor->model.enemy.CanReceiveProjectile(hit.ownerType, hit.owner)) { targets.push_back(actor->model.enemy.combat.id); }
     }
@@ -1072,6 +1118,27 @@ void CombatScene::Splash(const CombatHit &hit, float radius, float coneDegrees, 
     }
 }
 
+void CombatScene::SplashBrothers(float x, float y, float radius, float damage, float force, int forceMs) {
+    // CProp::FireSplashDamageKnockBack :123456 uses actor centres, without
+    // the collision-radius expansion of CLevel's general splash dispatcher.
+    CombatHit hit;
+    hit.ownerType = 1;
+    hit.x = x; hit.y = y; hit.damage = damage;
+    hit.splash = true; hit.applyArmorAttack = false;
+    for (unsigned peer = 0; peer < 2; ++peer) {
+        if (peer == 1 && m_brother == nullptr) { continue; }
+        CombatId target = kPlayerCombatId;
+        float dx = playerX - x, dy = playerY - y;
+        if (peer == 1) { target = kBrotherCombatId; dx = m_brother->x - x; dy = m_brother->y - y; }
+        const float distance = std::hypot(dx, dy);
+        if (distance > radius) { continue; }
+        ApplyHit(target, hit);
+        if (force > 0 && forceMs > 0 && distance > 0) {
+            ApplyBrotherForce(target, dx / distance * force, dy / distance * force, forceMs);
+        }
+    }
+}
+
 void CombatScene::ApplyBrotherForce(CombatId target, float x, float y, int durationMs) {
     if (target == kBrotherCombatId && m_brotherModel != nullptr) {
         if (m_brotherModel->weapon->brother.BeginKnockback(durationMs)) {
@@ -1089,7 +1156,9 @@ void CombatScene::ApplyBrotherForce(CombatId target, float x, float y, int durat
 void CombatScene::SpawnFromProjectile(const GameObjectRef &resource, const CombatHit &hit) {
     for (std::size_t i = 0; i < m_catalog.size(); ++i) {
         if (m_catalog[i].packHash == resource.packHash && m_catalog[i].ordinal == resource.localIndex) {
-            m_pendingSpawns.push_back({i, hit.x, hit.y, hit.spawnObjectId, hit.forceSpawn});
+            CombatId summoner = ParticipantOwner(hit.owner);
+            if (summoner != kPlayerCombatId && summoner != kBrotherCombatId) { summoner = 0; }
+            m_pendingSpawns.push_back({i, hit.x, hit.y, hit.spawnObjectId, hit.forceSpawn, summoner});
             return;
         }
     }
@@ -1102,7 +1171,12 @@ void CombatScene::FinishSpawns() {
     pending.swap(m_pendingSpawns);
     for (const PendingSpawn &spawn : pending) {
         CombatEnemy *actor = Spawn(spawn.entry, spawn.x, spawn.y);
-        if (actor != nullptr) { actor->objectId = spawn.objectId; }
+        if (actor != nullptr) {
+            actor->objectId = spawn.objectId;
+            actor->model.enemy.combat.summoner = spawn.summoner;
+            if (spawn.summoner != 0) { m_summoners[actor->model.enemy.combat.id] = spawn.summoner; }
+            SelectTarget(*actor);
+        }
     }
 }
 
@@ -1124,7 +1198,9 @@ void CombatScene::Actions(CombatEnemy &actor) {
             if (m_map != nullptr) { m_map->GetCamera().Shake(action.durationMs); }
         } else if (action.kind == EnemyAction::Kind::TurretActive) {
             // CEnemy native 71 :72744 selects the local player when offline.
-            m_player.weapon->brother.SetTurretIsActive(action.slot != 0);
+            PlayerModel *owner = &m_player;
+            if (state.summoner == kBrotherCombatId && m_brotherModel != nullptr) { owner = m_brotherModel; }
+            owner->weapon->brother.SetTurretIsActive(action.slot != 0);
             std::printf("[turret] actor=%llu active=%d\n", static_cast<unsigned long long>(state.id), action.slot != 0);
         } else if (action.kind == EnemyAction::Kind::SpawnPickup) {
             pickupSpawns.push_back({action.resource, x, y});
@@ -1182,6 +1258,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // Equipment changes create a new script host; reconnect before input.
     m_player.weapon->brother.SetLevelContext(m_level);
     if (deltaMs <= 0) { return; }
+    if (IsDeathmatch() && (m_matchShopping[0] || IsMatchSpawnPending(0))) { moveX = 0; moveY = 0; shoot = false; }
     m_effects.BeginAudioFrame();
     UpdateExperienceTexts(deltaMs);
     deaths.clear();
@@ -1208,24 +1285,27 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     }
     const float forceSeconds = m_player.weapon->brother.GetKnockbackStepSeconds(deltaMs);
     AdvancePlayer(m_player, deltaMs);
+    if (IsDeathmatch() && m_player.weapon->brother.TakeWeaponSwap() && !FinishMatchWeaponSwap(0)) { ++invalidSpawns; }
     if (m_playerForceMs > 0 && !m_vitals.dead) {
         playerX += m_playerForceX * forceSeconds;
         playerY += m_playerForceY * forceSeconds;
         m_playerForceMs = std::max(0, m_playerForceMs - deltaMs);
     }
-    ResolvePlayerMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY);
+    if (!IsMatchSpawnPending(0)) { ResolvePlayerMovement(m_previousPlayerX, m_previousPlayerY, playerX, playerY); }
     if (m_brotherModel != nullptr) {
         m_brotherModel->weapon->brother.SetLevelContext(m_level);
 #if GB_ENABLE_TESTS
         PerformanceProbe::Scope timing(PerformanceProbe::counters.brotherMs);
 #endif
         m_brother->SetShootingAllowed(m_level == nullptr || m_level->CanBrotherShoot());
+        // Retail DM disables the cooperative AI. This peer supplies player input.
+        if (IsDeathmatch()) { m_brother->SetShootingAllowed(m_level == nullptr || m_level->CanPlayerShoot()); }
         float speedMultiplier = PlayerArmorMultiplier(*m_brotherModel, 2) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2);
         // Live substitutes player input, so CPlayer::UpdateMovement :101437
         // also applies the equipped gun's native mastery movement modifier.
-        if (m_localLive) { speedMultiplier *= m_brotherModel->ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f; }
-        m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
-            playerX, playerY, speedMultiplier);
+        if (m_localLive || IsDeathmatch()) { speedMultiplier *= m_brotherModel->ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f; }
+        if (IsDeathmatch() && (m_matchShopping[1] || IsMatchSpawnPending(1))) { m_brotherModel->weapon->brother.SetInput(false, false); }
+        else { m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this, playerX, playerY, speedMultiplier); }
         if (m_brother->TakeWeaponSwapRequest()) { RequestBrotherWeaponSwap(); }
         AdvancePlayer(*m_brotherModel, deltaMs);
         if (m_brotherModel->weapon->brother.TakeWeaponSwap() && !SwapBrotherWeapon()) { ++invalidSpawns; }
@@ -1360,6 +1440,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
 }
 
 bool CombatScene::IsTeamDeathComplete() const {
+    if (IsDeathmatch()) { return false; }
     if (!m_vitals.dead || !m_vitals.deathAnimationComplete) { return false; }
     if (!m_localLive || m_brother == nullptr) { return true; }
     if (NeedsDeathChoice(0) || NeedsDeathChoice(1)) { return false; }
@@ -1391,6 +1472,7 @@ bool CombatScene::KillTestBot() {
 }
 
 bool CombatScene::ReviveTestBot() {
+    if (IsDeathmatch()) { return false; } // Match respawn owns the life boundary.
     if (!HasTestBot() || !m_brother->vitals.dead) { return false; }
     m_testBotReviveRequested = true;
     return true;
@@ -1412,6 +1494,7 @@ std::vector<IBrotherAIWorld::Threat> CombatScene::GetBrotherThreats() const {
 }
 
 void CombatScene::UpdateLocalRevive(int deltaMs) {
+    if (IsDeathmatch()) { return; }
     if (m_localLive && m_brother != nullptr) {
         const PlayerVitals *vitals[] = {&m_vitals, &m_brother->vitals};
         for (unsigned peer = 0; peer < 2; ++peer) {

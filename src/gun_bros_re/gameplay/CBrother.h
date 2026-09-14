@@ -103,7 +103,7 @@ public:
     float GetFrenzyMultiplier(unsigned type) const;
     float GetProjectilePowerupMultiplier() const;
     void SetHuman(bool human) { m_variables[2] = human; }
-    bool CanMove() const { return m_variables[1] != 0; }
+    bool CanMove() const { return m_spawned && m_variables[1] != 0; }
     /** CPlayer::Move :100724 skips enemy bodies only for this Flow timer. */
     bool CanPassEnemies() const { return m_variables[3] != 0; }
     /** CBrother::Draw :134741 consumes the independent immunity blink flag. */
@@ -112,7 +112,7 @@ public:
     }
     /** CBrother constructor :139098; wall resolution uses a separate half radius. */
     float GetRadius() const { return 22.0f; }
-    bool CanShoot() const { return m_variables[0] != 0; }
+    bool CanShoot() const { return m_spawned && m_variables[0] != 0; }
     HitResult ReceiveDamage(float damage);
     /** CBrother::SetForce :137709 starts export 4, including its authored sound. */
     bool BeginKnockback(int durationMs);
@@ -120,6 +120,13 @@ public:
     float GetKnockbackStepSeconds(int deltaMs) const;
     /** Shared fatal transition; desktop suicide bypasses damage protection. */
     bool StartDeath();
+    /** Native 18 controls the entire actor, independently of immunity blinking. */
+    bool IsVisible() const { return m_visible; }
+    /** CLevel::OnStart :120748 skips Spawn for DM until the selector completes. */
+    void WaitForSpawn();
+    bool HasSpawned() const { return m_spawned; }
+    /** CBrother::Respawn :135976 invokes PLAYER export 8, including its effect. */
+    bool Respawn();
     void Stun(int durationMs);
     /** Original CBrother::OnWaveCleared (:135964), including script recovery. */
     void OnWaveCleared();
@@ -160,6 +167,8 @@ public:
     int GetStateId() const { return m_interpreter.GetStateId(); }
 
 private:
+    bool m_visible = true;
+    bool m_spawned = true;
     bool m_immunityHidden = false;
     bool m_weaponSwapRequested = false;
     int m_knockbackMs = 0;

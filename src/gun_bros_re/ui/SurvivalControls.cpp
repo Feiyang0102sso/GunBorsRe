@@ -88,6 +88,19 @@ bool SurvivalHud::DrawOriginalMeter(const MovieRegion &area, unsigned slot) {
         m_movies.Gradient(x + 2 + filled, y + 2, interiorWidth - filled, interiorHeight, config[3], config[4], area.alpha);
 }
 
+bool SurvivalHud::DrawPowerupCooldown(const PowerupEntry &entry, int remaining, const MovieRegion &region, float scale) {
+    // CPowerUpSelector::DrawCoolDownTimer :184092, CInputPad sprite 1:94.
+    std::vector<unsigned> times;
+    if (!m_movies.SpriteFrameTimes(1, 94, times) || times.size() < 12 || entry.data.field124 == 0) { return false; }
+    const unsigned tail = 4 * (times[11] - times[10]);
+    unsigned frame = 0;
+    if (remaining >= static_cast<int>(tail)) {
+        frame = static_cast<unsigned>(std::max(0.0f, (1 - float(remaining) / (entry.data.field124 * 1000)) * 9));
+    } else if (tail > 0) { frame = 9 + static_cast<unsigned>((1 - float(remaining) / tail) * 4); }
+    frame = std::min(frame, static_cast<unsigned>(times.size() - 1));
+    return m_movies.DrawSprite(1, 94, times[frame], region.x + region.width / 2, region.y + region.height / 2, scale, region.alpha);
+}
+
 bool SurvivalHud::DrawOriginalPowerup(const SurvivalHudState &state, unsigned slot, float x, float y, unsigned movie, unsigned time) {
     const GameObjectRef *object = &state.leftPowerup;
     unsigned count = state.leftCount;
@@ -98,11 +111,15 @@ bool SurvivalHud::DrawOriginalPowerup(const SurvivalHudState &state, unsigned sl
     }
     class PowerupCallback : public IMovieRegionCallback {
     public:
-        PowerupCallback(SurvivalHud &owner, const PowerupEntry *item, unsigned quantity) : hud(owner), powerup(item), count(quantity) {}
+        PowerupCallback(SurvivalHud &owner, const PowerupEntry *item, unsigned quantity, const SurvivalHudState &snapshot) : hud(owner), powerup(item), count(quantity), state(snapshot) {}
         bool DrawMovieRegion(const MovieRegion &region) override {
             // Original binding: region1 = count, region2 = alternate input icon.
             if (powerup == nullptr) { return true; }
             if (region.index == 1) {
+                const auto cooldown = state.powerupCooldowns.find(powerup->resource.localIndex);
+                if (state.deathmatch && cooldown != state.powerupCooldowns.end() && cooldown->second > 0) {
+                    return hud.DrawPowerupCooldown(*powerup, cooldown->second, region);
+                }
                 unsigned animation = 87;
                 if (count > 9) { animation = 88; }
                 const int x = int(region.x) + int(region.width) / 2, y = int(region.y) + int(region.height) / 2;
@@ -126,7 +143,8 @@ bool SurvivalHud::DrawOriginalPowerup(const SurvivalHudState &state, unsigned sl
         SurvivalHud &hud;
         const PowerupEntry *powerup;
         unsigned count;
-    } callback(*this, powerup, count);
+        const SurvivalHudState &state;
+    } callback(*this, powerup, count, state);
     return m_movies.Draw(movie, time, x, y, 1024, 768, 0, 1, &callback);
 }
 
@@ -195,8 +213,23 @@ bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
     }
     class PeripheralCallback : public IMovieRegionCallback {
     public:
-        PeripheralCallback(MovieRenderer &renderer, const SurvivalHudState &snapshot) : movies(renderer), state(snapshot) {}
+        PeripheralCallback(SurvivalHud &owner, MovieRenderer &renderer, const SurvivalHudState &snapshot) : hud(owner), movies(renderer), state(snapshot) {}
         bool DrawMovieRegion(const MovieRegion &region) override {
+            if (region.index == 3 && state.deathmatch) {
+                float y = region.y;
+                for (const auto &message : hud.m_matchMessages) {
+                    if (!movies.Text(message.text, region.x + region.width + movies.TextWidth(" "), y, 0, 1, 0, region.alpha)) { return false; }
+                    y += movies.TextHeight();
+                }
+                return true;
+            }
+            if (region.index == 0 && state.deathmatch) {
+                // PeripheralHUD::DrawMPMatchScore :86733 uses two right-aligned rows.
+                const std::string score = std::to_string(state.matchScore[0]) + " " + movies.NamedString("IDS_HUD_KILLS");
+                const std::string opponent = std::to_string(state.matchScore[1]) + " " + movies.NamedString("IDS_HUD_DEATHS");
+                return movies.Text(score, region.x + region.width - movies.TextWidth(score), region.y, 0, 1, 0, region.alpha) &&
+                    movies.Text(opponent, region.x + region.width - movies.TextWidth(opponent), region.y + movies.TextHeight(), 0, 1, 0, region.alpha);
+            }
             if (region.index == 0) {
                 if (!state.horde) {
                     if (!movies.DrawSprite(1, 39, 0, region.x, region.y, 1, region.alpha)) { return false; }
@@ -226,7 +259,8 @@ bool SurvivalHud::DrawOriginalControls(const SurvivalHudState &state) {
         }
         MovieRenderer &movies;
         const SurvivalHudState &state;
-    } peripheralCallback(m_movies, state);
+        SurvivalHud &hud;
+    } peripheralCallback(*this, m_movies, state);
     const unsigned peripheral = m_movies.Ordinal("GLU_MOVIE_HUD_PAUSE");
     unsigned start = 0, end = 0;
     unsigned chapter = 3;

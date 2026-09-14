@@ -8,6 +8,7 @@
 #include "gun_bros_re/gameplay/PickupScene.h"
 #include "gun_bros_re/gameplay/IPropWorld.h"
 #include "gun_bros_re/gameplay/PowerupScene.h"
+#include "gun_bros_re/gameplay/CMPMatch.h"
 
 class SurvivalHud;
 class SurvivalSession : public IEnemySpawnWorld {
@@ -20,6 +21,7 @@ public:
     void Restart(float x, float y, float facingDegrees);
     void SetHorde(bool enabled) { m_horde = enabled; m_archive = false; m_scene.SetHorde(enabled); }
     void SetStartWave(int wave) { m_startWave = wave; }
+    void SetDeathmatch(CMPMatch *match) { m_match = match; m_level.SetDeathmatch(match != nullptr); }
     void SetDialogHud(SurvivalHud *hud) { m_dialogHud = hud; }
     void SetChallenges(CChallengeManager *manager, CProfileManager *profile, const std::vector<WeaponEntry> *weapons) {
         m_challenges = manager; m_challengeProfile = profile; m_challengeWeapons = weapons;
@@ -38,7 +40,11 @@ public:
     }
     /** Shared session exit decision used by the host loop and regression. */
     // CLevel::OnLevelCleared -> CGame::OnMissionSuccess starts mission wrap-up.
-    bool IsFinished() const { return m_level.IsCleared() || IsDeathComplete(); }
+    bool IsFinished() const {
+        if (m_match != nullptr) { return m_match->GetResult() != CMPMatch::Result::Playing; }
+        return m_level.IsCleared() || IsDeathComplete();
+    }
+    bool IsReadyForResults() const;
     /** Desktop cheat: drain the current wave through original Flow callbacks. */
     bool SkipToBoss();
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
@@ -68,6 +74,7 @@ public:
     void SetPickups(PickupScene *pickups, WeaponEffects *effects) { m_pickups = pickups; m_effects = effects; }
     bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) override;
     bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) override;
+    bool SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) override;
     bool GetObjectPosition(int objectId, float &x, float &y) const override;
     std::uint64_t ResolveIndicatorTarget(int objectId) const override;
     bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const override;
@@ -87,6 +94,7 @@ public:
     void CompleteDialog();
     unsigned GetPowerupCount(unsigned localIndex) const override;
 private:
+    CMPMatch *m_match = nullptr;
     bool m_suspended = false;
     void UpdateDialog(int deltaMs);
     void UpdateMapInteractions(float previousX, float previousY);

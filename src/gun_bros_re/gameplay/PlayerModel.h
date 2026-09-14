@@ -118,6 +118,9 @@ struct PlayerModel {
     CBrother::PowerupState powerups;
     bool human = true;
     bool cooperative = false;
+    bool deathmatch = false;
+    // Stable gun/mesh banks keep torso sequences valid across PvP swaps.
+    std::map<std::uint64_t, std::unique_ptr<PlayerWeaponState>> matchWeapons;
     GameObjectRef gunResource;
     unsigned gunSlot = 0; // Retained on projectiles after the player switches guns.
     unsigned masteryExperience = 0;
@@ -221,6 +224,8 @@ MeshBounds PlayerBounds(const PlayerModel &model);
  */
 void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
                 const float *base);
+/** Resolve the mesh used by the actual torso draw and pose passes. */
+PlayerPart *FindPlayerTorsoPart(PlayerModel &model);
 
 /** CBrother::DrawUI + CMeshCamera::OrientForUI, in full-menu pixel coordinates.
  * The region height scales the active torso's raw Z extent; weapons do not

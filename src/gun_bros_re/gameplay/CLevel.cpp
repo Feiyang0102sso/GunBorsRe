@@ -551,6 +551,13 @@ void CLevel::OnPickupCollected(int objectId, const GameObjectRef &pickup) {
     m_interpreter.CallExportFunction(4, static_cast<std::int16_t>(objectId), static_cast<std::int16_t>(resourceIndex));
 }
 
+void CLevel::OnDeathmatchKill(float x, float y) {
+    // OnPlayerKilled :118700 invokes export 11 with the victim's position.
+    if (m_template != nullptr && IsDeathmatch()) {
+        m_interpreter.CallExportFunction(11, static_cast<std::int16_t>(x), static_cast<std::int16_t>(y), 0);
+    }
+}
+
 void CLevel::OnPropEvent(int objectId, const GameObjectRef &prop, bool entered) {
     if (m_template == nullptr) { return; }
     int resourceIndex = -1;

@@ -57,6 +57,7 @@ enum class GameSection {
     StoreItem = 23,
     TileLayer = 24,
     TileSet = 25,
+    MPMatch = 28,
     Png = 29,
     Wav = 30,
     Mesh = 31,

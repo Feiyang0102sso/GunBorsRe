@@ -144,6 +144,12 @@ std::int16_t CEnemySpawner::FunctionResolver(std::uint8_t function,
     case 17:
         if (rule != nullptr) { rule->layer = second; }
         break;
+    case 20: {
+        // IEnemySpawnerScriptInterface::SpawnMPMatchPickup :147070.
+        GameObjectRef pickup;
+        if (argumentCount < 2 || m_world == nullptr || !m_level->GetResource(first, pickup)) { return false; }
+        return m_world->SpawnMPMatchPickup(pickup, second);
+    }
     case 18:
     case 19:
     case 21: {

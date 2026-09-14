@@ -28,6 +28,9 @@ struct SurvivalLaunch {
     bool localLive = false;
     bool localBot = false; // Selected from the persistent Windows BROS roster.
     LocalBotFriend *botFriend = nullptr;
+    bool deathmatch = false;
+    unsigned matchIndex = 0;
+    unsigned loadout[2]{0, 1};
 };
 int RunSurvival(const SurvivalLaunch &launch);
 

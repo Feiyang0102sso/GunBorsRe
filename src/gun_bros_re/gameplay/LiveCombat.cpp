@@ -8,14 +8,16 @@
 #include <cmath>
 
 void CombatScene::UpdatePeerIndicator(unsigned deltaMs, float left, float top, float width, float height) {
-    if (!m_localLive || m_brother == nullptr || m_brotherModel == nullptr) { m_peerIndicatorVisible = false; return; }
+    if ((!m_localLive && !IsDeathmatch()) || m_brother == nullptr || m_brotherModel == nullptr) { m_peerIndicatorVisible = false; return; }
+    if (IsMatchSpawnPending(1)) { m_peerIndicatorVisible = false; return; }
     // CRemotePlayer::Update :229709 compares CBrother's native bounds with
     // the camera. The existing CLevelIndicator renders the original sprites.
     const float x = std::trunc(m_brother->x), y = std::trunc(m_brother->y);
     const bool outside = x + 50 < left || y + 50 < top || x - 50 > left + width || y - 50 > top + height;
     if (outside) {
         unsigned type = 4 + m_brotherModel->brotherIndex;
-        if (m_brother->vitals.dead) { type = 6; }
+        // CRemotePlayer::Update :229788 explicitly excludes DM from HELP.
+        if (m_brother->vitals.dead && !IsDeathmatch()) { type = 6; }
         if (!m_peerIndicatorVisible || m_peerIndicator.type != type || m_peerIndicator.fade >= 0) { m_peerIndicator = {}; }
         m_peerIndicator.type = type;
         m_peerIndicator.x = m_brother->x; m_peerIndicator.y = m_brother->y;
@@ -61,8 +63,13 @@ void CombatScene::CreditAssistMastery(unsigned peer, unsigned slot, unsigned exp
     m_weaponProgress.push_back({ref, experience, limit});
 }
 
+bool CombatScene::BrotherIsCloser(float x, float y) const {
+    if (m_brother == nullptr || IsMatchSpawnPending(1)) { return false; }
+    if (IsMatchSpawnPending(0)) { return true; }
+    return std::hypot(m_brother->x - x, m_brother->y - y) < std::hypot(playerX - x, playerY - y);
+}
 bool CombatScene::BrotherTouchesPickup(float x, float y) const {
-    if (!m_localLive || m_brother == nullptr || m_brother->vitals.dead) { return false; }
+    if ((!m_localLive && !IsDeathmatch()) || m_brother == nullptr || IsMatchSpawnPending(1) || m_brother->vitals.dead) { return false; }
     return std::hypot(x - m_brother->x, y - m_brother->y) <= m_playerRadius + 10;
 }
 
@@ -71,10 +78,10 @@ void CombatScene::ClearWaveStatistics() {
 }
 
 void CombatScene::AddPeerExperience(unsigned amount) {
-    if (!m_localLive || m_peerProgress == nullptr || IsTeamDeathComplete()) { return; }
+    if ((!m_localLive && !IsDeathmatch()) || m_peerProgress == nullptr || IsTeamDeathComplete()) { return; }
     const auto before = m_peerProgress->GetExperience();
     const float fraction = m_brother->vitals.health / m_brother->vitals.maximum;
-    if (m_peerProgress->AddExperience(amount)) {
+    if (m_peerProgress->AddExperience(amount) && !IsDeathmatch()) {
         m_brother->vitals.maximum = m_peerProgress->GetHealth();
         m_brother->vitals.health = m_brother->vitals.maximum * fraction;
     }
@@ -84,7 +91,7 @@ void CombatScene::AddPeerExperience(unsigned amount) {
 }
 
 void CombatScene::AddPeerXplodium(unsigned amount) {
-    if (!m_localLive || IsTeamDeathComplete()) { return; }
+    if ((!m_localLive && !IsDeathmatch()) || IsTeamDeathComplete()) { return; }
     auto &stats = m_multiplayer[1];
     unsigned percent = 100;
     if (m_level != nullptr) { percent = static_cast<unsigned>(std::max(0, m_level->GetXplodiumMultiplierPercent())); }

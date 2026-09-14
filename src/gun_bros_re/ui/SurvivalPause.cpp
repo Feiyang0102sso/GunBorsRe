@@ -19,6 +19,10 @@ void SurvivalHud::Scroll(const SurvivalHudState &state, float amount) {
     if (state.remoteShop) { return; }
     if (amount == 0) { return; }
     if (state.shopOpen) {
+        if (state.deathmatch && m_matchGuns) {
+            m_matchGunPosition = std::clamp(m_matchGunPosition - amount, 0.0f, std::max(0.0f, float(m_matchGunEntries.size()) - 4));
+            return;
+        }
         if (!state.itemChoice) {
             const float maximum = std::max(0.0f, float(m_selectorEntries.size()) - 3);
             m_selectorTarget = std::clamp(m_selectorTarget - amount, std::min(2.0f, maximum), maximum);
@@ -45,7 +49,9 @@ void SurvivalHud::ScrollMenuInput(const SurvivalHudState &state, float wheel, fl
     if (state.shopOpen) {
         Scroll(state, wheel);
         if (state.itemChoice || m_selectorPromptRequested || m_selectorPrompt.IsActive() || dragX == 0) { return; }
-        const unsigned layout = m_movies.Ordinal("GLU_MOVIE_POWER_UP_LAYOUT");
+        const char *layoutName = "GLU_MOVIE_POWER_UP_LAYOUT";
+        if (state.deathmatch && m_matchGuns) { layoutName = "GLU_MOVIE_GUN_LAYOUT"; }
+        const unsigned layout = m_movies.Ordinal(layoutName);
         unsigned start = 0, end = 0;
         MovieRegion first, second;
         if (!m_movies.GetMovie(layout)->GetChapterRange(1, start, end) ||
@@ -79,6 +85,7 @@ void SurvivalHud::AdvanceMenu(unsigned deltaMs) {
     if (!m_selectorBound) { return; }
     m_selectorTime += deltaMs;
     m_selectorChoiceTime += deltaMs;
+    m_matchSlotTime += deltaMs;
     m_selectorPrompt.Update(deltaMs);
     unsigned start = 0, end = 0;
     if (m_movies.GetMovie(m_movies.Ordinal("GLU_MOVIE_POWER_UP_LAYOUT"))->GetChapterRange(1, start, end)) {

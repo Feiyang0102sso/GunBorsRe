@@ -625,7 +625,7 @@ bool DrawStorePrompt(GameMenu &view, MenuState &state) {
         if (state.gameMode == 1) {
             body = "Joining LOCAL BOT for Live co-op...";
         } else {
-            body = "Death Match is not implemented yet.\nChoose Live to play with LOCAL BOT.";
+            body = "Joining LOCAL BOT for Deathmatch...\nLocal player versus Bot.";
         }
     }
     if (!state.matchingPrompt && state.storePromptButtons != nullptr && !StoreFailureText(view, state, body)) { return false; }
@@ -1377,7 +1377,7 @@ bool DrawOriginalModeOverlay(GameMenu &view, MenuState &state) {
         if (state.mode.modePhase == 2) {
             state.mode.modeTime = unfoldStart;
             state.mode.modePhase = 3;
-        } else if (mode == 0 || state.online.IsConnected()) {
+        } else if (mode == 0 || mode == 2 || state.online.IsConnected()) {
             state.gameMode = mode;
             state.mode.modeSelected = true;
             state.mode.modeTime = foldStart;

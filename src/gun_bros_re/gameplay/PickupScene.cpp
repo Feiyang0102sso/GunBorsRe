@@ -120,8 +120,12 @@ void PickupScene::Update(int deltaMs, CombatScene &scene, WeaponEffects &effects
     collections.clear();
     for (std::size_t index = 0; index < m_instances.size();) {
         Instance &instance = *m_instances[index];
+        instance.pickup.SetLevelContext(scene.GetLevel());
         const bool playerTouch = scene.TouchesPickup(instance.x, instance.y);
-        const bool peerTouch = !playerTouch && scene.BrotherTouchesPickup(instance.x, instance.y);
+        bool peerTouch = scene.BrotherTouchesPickup(instance.x, instance.y);
+        if (playerTouch && peerTouch) {
+            peerTouch = scene.IsDeathmatch() && scene.BrotherIsCloser(instance.x, instance.y);
+        }
         if (!playerTouch && !peerTouch) { ++index; continue; }
         if (instance.pickup.Collect()) {
             effects.StopEffect(instance.effectHandle);
@@ -149,11 +153,24 @@ void PickupScene::Update(int deltaMs, CombatScene &scene, WeaponEffects &effects
                 }
             }
             failures += instance.pickup.GetUnsupportedCount();
-            collections.push_back({instance.visual->entry->ref, instance.objectId});
+            unsigned peer = 0;
+            if (peerTouch) { peer = 1; }
+            collections.push_back({instance.visual->entry->ref, instance.objectId, peer});
             std::printf("[pickup] collected %s id=%d\n", instance.visual->entry->owner.c_str(), instance.objectId);
         }
         m_instances.erase(m_instances.begin() + index);
     }
+}
+
+bool PickupScene::FindNearest(float x, float y, float &goalX, float &goalY) const {
+    float nearest = 1000000000.0f;
+    bool found = false;
+    for (const auto &item : m_instances) {
+        const float dx = item->x - x, dy = item->y - y;
+        const float distance = dx * dx + dy * dy;
+        if (distance < nearest) { nearest = distance; goalX = item->x; goalY = item->y; found = true; }
+    }
+    return found;
 }
 
 void PickupScene::Draw(const float *mvp, float scale) {

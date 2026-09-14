@@ -322,7 +322,7 @@ void AdvancePlayer(PlayerModel &model, std::int32_t deltaMs) {
 }
 
 /** Resolve the actual controller mesh, including an outgoing gun's torso. */
-static PlayerPart *FindPlayerTorsoPart(PlayerModel &model) {
+PlayerPart *FindPlayerTorsoPart(PlayerModel &model) {
     const CMesh *mesh = model.weapon->brother.GetTorso().GetAnimation().GetMesh();
     for (auto &part : model.parts) {
         if (&part->mesh == mesh) { return part.get(); }
@@ -331,6 +331,14 @@ static PlayerPart *FindPlayerTorsoPart(PlayerModel &model) {
     for (PlayerWeaponState *bank : banks) {
         if (bank == nullptr) { continue; }
         for (auto &part : bank->configs) {
+            if (&part->mesh == mesh) { return part.get(); }
+        }
+    }
+    for (auto &entry : model.matchWeapons) {
+        // EquipMatchGun reserves the destination while uploading its buffers;
+        // PosePlayer can still be evaluating the outgoing weapon at this point.
+        if (entry.second == nullptr) { continue; }
+        for (auto &part : entry.second->configs) {
             if (&part->mesh == mesh) { return part.get(); }
         }
     }
@@ -446,7 +454,7 @@ bool BuildPlayerUIMatrix(const PlayerModel &model, float centerX, float top, flo
 
 void DrawPlayer(PlayerModel &model, const CShaderProgram &program,
                 const float *base) {
-    if (model.weapon && model.weapon->brother.IsImmunityHidden()) { return; }
+    if (model.weapon && (!model.weapon->brother.IsVisible() || model.weapon->brother.IsImmunityHidden())) { return; }
     float flash = 0;
     if (model.vitals != nullptr) { flash = model.vitals->flash; }
     if (model.parts.empty()) {
@@ -635,6 +643,8 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
     for (auto &part : out.parts) { bodyMeshes.push_back(&part->mesh); }
     weapon->brother.SetHuman(out.human);
     weapon->brother.SetCooperative(out.cooperative);
+    weapon->brother.SetDeathmatch(out.deathmatch);
+    weapon->gun.SetDeathmatch(out.deathmatch);
     weapon->gun.SetMasteryExperience(out.masteryExperience);
     weapon->brother.Bind(weapon->playerScript, out.moveSet, bodyMeshes, weapon->gun, meshes);
     std::printf("[player] equipped %s: weaponTorso=%d move=%d legs=%d hand=%u state=%d\n",

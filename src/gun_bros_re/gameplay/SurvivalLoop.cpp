@@ -5,6 +5,7 @@
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #include "gun_bros_re/gameplay/BroAIDeathmatch.h"
+#include "gun_bros_re/gameplay/DeathmatchBot.h"
 #include "gun_bros_re/data/LocalBotFriend.h"
 #include "gun_bros_re/gameplay/LiveShopSession.h"
 #include "gun_bros_re/LocalOnlineServices.h"
@@ -37,7 +38,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     const int armorIndex = launch.armorIndex;
     const unsigned startWave = launch.startWave;
     auto *gameContext = launch.gameContext;
-    const bool withBrother = launch.withBrother || launch.localLive || launch.localBot;
+    const bool withBrother = launch.withBrother || launch.localLive || launch.localBot || launch.deathmatch;
     const auto *archiveMission = launch.archiveMission;
     auto *sharedWindow = launch.window;
 #if GB_ENABLE_TESTS
@@ -74,6 +75,9 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
         return 1;
     }
     std::vector<WeaponEntry> weapons;
+    std::vector<CMPMatch::Entry> matches;
+    CMPMatch match;
+    CPlayerConfiguration matchConfiguration;
     std::vector<EnemyTemplateData> enemies;
     PlayerVitals vitals;
     vitals.invincible = false;
@@ -84,6 +88,11 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     if (gameContext != nullptr) {
         progress.SetExperience(gameContext->profile.experience);
         gameContext->startingExperience = gameContext->profile.experience;
+        if (launch.deathmatch) {
+            gameContext->accountedKills = 0;
+            gameContext->accountedPeerKills = 0;
+            gameContext->accountedPeerXplodium = 0;
+        }
     }
     if (gameContext != nullptr && gameContext->tutorial) {
         // The zero-price level-one rifle is pack3 STORE 4 -> pack5 GUN 4.
@@ -112,10 +121,23 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     if (!loadingMovies.Init(*loadingCore, *loadingCore)) { return 1; }
     const CProfileManager *loadingProfile = nullptr;
     if (gameContext != nullptr) { loadingProfile = &gameContext->profile; }
-    LoadingScreen loading(window, loadingMovies, tables, loadingProfile, true, false, &music, launch.localLive);
+    LoadingScreen loading(window, loadingMovies, tables, loadingProfile, true, false, &music, launch.localLive, launch.deathmatch);
     if (!loading.IsValid()) { return 1; }
     if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
+    unsigned matchSeed = static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count());
+#if GB_ENABLE_TESTS
+    if (development->deathmatchCheck || !capturePath.empty()) { matchSeed = 42 + launch.matchIndex; }
+#endif
+    if (launch.deathmatch) {
+        if (!LoadMPMatches(toc, tables, matches) || launch.matchIndex >= matches.size()) { return 1; }
+        const auto &entry = matches[launch.matchIndex];
+        match.Bind(entry.data, matchSeed);
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            if (launch.loadout[slot] >= entry.guns.size()) { return 1; }
+            matchConfiguration.guns[slot] = entry.guns[launch.loadout[slot]];
+        }
+    }
     SurvivalHud survivalHud;
     if (!survivalHud.Init(toc, tables)) { return 1; }
     CShaderProgram program, markerProgram;
@@ -132,6 +154,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     loaded.players.resize(1);
     PlayerModel &player = *loaded.players[0].model;
     player.cooperative = launch.localLive;
+    player.deathmatch = launch.deathmatch;
     player.vitals = &vitals;
     if (gameContext != nullptr) {
         for (const auto &entry : gameContext->profile.weaponMastery) {
@@ -148,7 +171,9 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     if (gameContext != nullptr) {
         // CBrother::Bind :135820 selects the saved 1001 activeWeaponSlot.
         equippedWeaponSlot = gameContext->profile.activeWeaponSlot;
-        const GameObjectRef &ref = gameContext->profile.configuration.guns[equippedWeaponSlot];
+        if (launch.deathmatch) { equippedWeaponSlot = 0; }
+        GameObjectRef ref = gameContext->profile.configuration.guns[equippedWeaponSlot];
+        if (launch.deathmatch) { ref = matchConfiguration.guns[0]; }
         bool found = false;
         for (std::size_t index = 0; index < weapons.size(); ++index) {
             if (weapons[index].packHash == ref.packHash && weapons[index].ordinal == ref.localIndex) {
@@ -158,6 +183,11 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
             }
         }
         if (!found) { return 1; }
+    }
+    if (launch.deathmatch && gameContext == nullptr) {
+        for (std::size_t index = 0; index < weapons.size(); ++index) {
+            if (weapons[index].packHash == matchConfiguration.guns[0].packHash && weapons[index].ordinal == matchConfiguration.guns[0].localIndex) { weaponSlot = index; break; }
+        }
     }
     if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
     if (armorIndex >= 0) {
@@ -199,12 +229,17 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     }
     CBrotherAI defaultBrother;
     std::unique_ptr<BroAIDeathmatch> localBot;
+    std::unique_ptr<DeathmatchBot> deathmatchBot;
     CBrotherAI *partner = &defaultBrother;
     // A selected friend's equipment does not change the original Solo policy.
     // Construct the host multiplayer input policy only for a Live session.
     if (launch.localLive) {
         localBot = std::make_unique<BroAIDeathmatch>();
         partner = localBot.get();
+    }
+    if (launch.deathmatch) {
+        deathmatchBot = std::make_unique<DeathmatchBot>();
+        partner = deathmatchBot.get();
     }
     CBrotherAI &brother = *partner;
     PlayerModel brotherModel;
@@ -216,6 +251,19 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     brotherConfiguration.guns[1].localIndex = 4;
     if ((launch.localLive || launch.localBot) && launch.botFriend != nullptr) {
         brotherConfiguration = launch.botFriend->profile.configuration;
+    }
+    if (launch.deathmatch) {
+        if (launch.botFriend != nullptr) { brotherConfiguration = launch.botFriend->profile.configuration; }
+        const auto selection = DeathmatchBot::ChooseLoadout(matches[launch.matchIndex], weapons, matchSeed);
+        const WeaponEntry *chosen[2]{};
+        for (unsigned slot = 0; slot < 2; ++slot) {
+            brotherConfiguration.guns[slot] = matches[launch.matchIndex].guns[selection[slot]];
+            for (const auto &weapon : weapons) {
+                if (weapon.packHash == brotherConfiguration.guns[slot].packHash && weapon.ordinal == brotherConfiguration.guns[slot].localIndex) { chosen[slot] = &weapon; break; }
+            }
+            if (chosen[slot] == nullptr) { return 1; }
+        }
+        deathmatchBot->Configure(matchSeed, *chosen[0], *chosen[1]);
     }
     if (withBrother) {
         brother.vitals.maximum = progress.GetHealth();
@@ -229,6 +277,8 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
         brotherModel.vitals = &brother.vitals;
         brotherModel.human = false;
         brotherModel.cooperative = launch.localLive;
+        brotherModel.deathmatch = launch.deathmatch;
+        if (launch.deathmatch) { brotherModel.human = true; }
         if (launch.localLive) { brotherModel.human = true; }
         brotherModel.brotherIndex = 1;
         if (gameContext != nullptr) { brotherModel.brotherIndex = 1 - gameContext->profile.playerBrother; }
@@ -291,7 +341,7 @@ if (check) {
     scene.SetPlayerProgress(&progress);
     scene.SetLocalLive(launch.localLive);
     if (launch.localLive && !scene.SetReviveResources(loaded.playerTemplate->script)) { return 1; }
-    scene.SetTestBot(launch.localLive || launch.localBot);
+    scene.SetTestBot(launch.localLive || launch.localBot || launch.deathmatch);
     survivalHud.SetLiveBrotherIndex(player.brotherIndex);
     survivalHud.SetLivePeerIndex(brotherModel.brotherIndex);
     std::string brotherName = survivalHud.DefaultBrotherName(brotherModel.brotherIndex);
@@ -303,9 +353,10 @@ if (check) {
     scene.SetPeerProgress(&peerProgress);
     if (gameContext != nullptr) { gameContext->botFriend = launch.botFriend; }
     SurvivalSession session(scene, loaded.map, enemies);
+    if (launch.deathmatch) { session.SetDeathmatch(&match); }
     session.GetLevel().SetCooperative(launch.localLive);
     CChallengeManager challenges;
-    if (gameContext != nullptr && gameContext->profile.nativeArchive && GameHostSettings().isConnected && !gameContext->tutorial) {
+    if (gameContext != nullptr && gameContext->profile.nativeArchive && GameHostSettings().isConnected && !gameContext->tutorial && !launch.deathmatch) {
         if (!challenges.InitProgressData(toc, tables, gameContext->profile, static_cast<unsigned>(std::time(nullptr)))) { return 1; }
         session.SetChallenges(&challenges, &gameContext->profile, &weapons);
         survivalHud.SetChallenges(&challenges);
@@ -323,8 +374,17 @@ if (check) {
     scene.SetPeerProfile(peerProfile);
     player.friendCount = pickupProfile->friendCount;
     brotherModel.friendCount = peerProfile->friendCount;
+    if (launch.deathmatch) {
+        // CBrother::HandleDamage :136705 explicitly excludes BRO BUFF in DM.
+        player.friendCount = 0; brotherModel.friendCount = 0;
+        for (const auto &entry : peerProfile->weaponMastery) {
+            const std::uint64_t key = (static_cast<std::uint64_t>(entry.resource.packHash) << 8) | entry.resource.localIndex;
+            brotherModel.masteryByWeapon[key] = entry.experience;
+        }
+    }
     for (unsigned peer = 0; peer < 2; ++peer) {
         const CPlayerConfiguration *configuration = &pickupProfile->configuration;
+        if (launch.deathmatch) { configuration = &matchConfiguration; }
         if (peer == 1) { configuration = &brotherConfiguration; }
         for (unsigned slot = 0; slot < 2; ++slot) {
             for (const auto &weapon : weapons) {
@@ -337,8 +397,9 @@ if (check) {
     }
     player.gunSlot = equippedWeaponSlot;
     PowerupScene peerPowerups(toc, tables, brotherModel, brother.vitals, scene, effects, *peerProfile, kBrotherCombatId);
-    if (launch.localLive && !peerPowerups.Init()) { return 1; }
-    if (launch.localLive) { session.SetPeerPowerups(&peerPowerups); }
+    if ((launch.localLive || launch.deathmatch) && !peerPowerups.Init()) { return 1; }
+    if (launch.localLive || launch.deathmatch) { session.SetPeerPowerups(&peerPowerups); }
+    if (launch.deathmatch) { powerups.SetDeathmatch(&match); peerPowerups.SetDeathmatch(&match); }
 #if GB_ENABLE_TESTS
     {
         const int result = CheckSurvivalPowerupInventory({
@@ -350,9 +411,10 @@ if (check) {
 
     session.SetPowerups(&powerups);
     PickupScene pickups(toc, tables, program, pickupProfile);
-    if (launch.localLive) { pickups.SetPeerProfile(peerProfile); }
+    if (launch.localLive || launch.deathmatch) { pickups.SetPeerProfile(peerProfile); }
     if (!pickups.Init()) { return 1; }
     session.SetPickups(&pickups, &effects);
+    if (launch.deathmatch) { scene.SetDeathmatch(&match, &weapons, &pickups); }
     const GameObjectRef *archiveLevel = nullptr;
     if (archiveMission != nullptr) { archiveLevel = &archiveMission->data.level; }
     else if (gameContext != nullptr && gameContext->profile.nativeArchive && !gameContext->tutorial && gameContext->planet < 4) {
@@ -381,6 +443,10 @@ if (check) {
         session.SetScriptRandomSeed(static_cast<std::uint32_t>(
             std::chrono::steady_clock::now().time_since_epoch().count()));
     }
+#if GB_ENABLE_TESTS
+    // DM checks fix both the Bot stream and the independent LEVEL script stream.
+    if (development->deathmatchCheck) { session.SetScriptRandomSeed(matchSeed); }
+#endif
     const bool tutorial = gameContext != nullptr && gameContext->tutorial;
     session.GetLevel().EnableTutorial(tutorial);
     scene.SetMap(loaded.map, loaded.collisionScene, loaded.weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
@@ -401,6 +467,16 @@ if (check) {
     if (!session.SubmitChallenges(false)) { return 1; }
     loading.Finish();
 #if GB_ENABLE_TESTS
+    if (development->deathmatchCheck) {
+        int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, PickupScene &, PowerupScene &, CProfileManager &, SurvivalGameContext &);
+        SurvivalDeathFixture fixture{checkFailures, packShortName, false, vitals, window, program, batch,
+            loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing};
+        if (development->deathmatchFeedbackCheck) {
+            int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, PowerupScene &, CProfileManager &);
+            return CheckDeathmatchFeedback(fixture, match, powerups, gameContext->profile);
+        }
+        return CheckDeathmatchCombat(fixture, match, pickups, peerPowerups, *peerProfile, *gameContext);
+    }
     if (development->debugMapProfileCheck) {
         if (gameContext == nullptr) { return 1; }
         return CheckDebugMapProfile(tables, player, progress, *gameContext, scene, session.GetLevel());
@@ -550,17 +626,44 @@ if (check) {
     bool shopOpen = false, itemChoice = false;
     int accumulator = 0;
     LiveShopSession liveShop;
+    LiveShopSession botShop;
+    unsigned deathShopSerial = UINT32_MAX;
+    bool matchShopCounted = false, matchShopPurchased = false;
+    std::vector<StoreEntry> matchStore;
+    if (launch.deathmatch && !LoadStoreCatalog(toc, tables, matchStore)) { return 1; }
     bool deathShop = false;
     const auto openShop = [&](unsigned peer) {
-        if (launch.localLive) {
-            if (liveShop.Request(peer, window.GetTicksMs())) { itemChoice = false; accumulator = 0; }
+        if (launch.deathmatch && !match.CanShop(peer)) { return; }
+        if (launch.deathmatch) {
+            if (peer == 1) {
+                if (botShop.Request(1, window.GetTicksMs(), 0)) { matchShopCounted = false; matchShopPurchased = false; }
+            } else if (liveShop.Request(0, window.GetTicksMs(), 0, UINT32_MAX)) { survivalHud.ResetSelector(scene.IsMatchSpawnPending(0)); }
+            itemChoice = false;
+            return;
+        }
+        if (launch.localLive || launch.deathmatch) {
+            if (liveShop.Request(peer, window.GetTicksMs())) {
+                itemChoice = false; accumulator = 0; matchShopCounted = false; matchShopPurchased = false;
+            }
         } else if (peer == 0) { shopOpen = true; itemChoice = false; accumulator = 0; }
     };
     const auto closeShop = [&]() {
+        // ResumeActionCallback :94386 completes both first entry and respawn.
+        if (launch.deathmatch && match.GetResult() == CMPMatch::Result::Playing) {
+            if (scene.IsMatchSpawnPending(0)) {
+                if (!scene.RespawnDeathmatch(0, true)) { ++checkFailures; }
+            } else if (vitals.dead && vitals.deathAnimationComplete) {
+                if (!scene.RespawnDeathmatch(0, false, true)) { ++checkFailures; }
+            }
+        }
         if (deathShop) { scene.FinishDeathChoice(0); deathShop = false; }
-        if (launch.localLive) { liveShop.Close(0); }
+        if (launch.localLive || launch.deathmatch) { liveShop.Close(0); }
+        survivalHud.ResetSelector();
         shopOpen = false; itemChoice = false;
     };
+    if (launch.deathmatch) {
+        if (!survivalHud.ConfigureDeathmatch(matches[launch.matchIndex].data.stores)) { return 1; }
+    }
     GameObjectRef leftPowerup = powerups.GetEquipped(0);
     GameObjectRef rightPowerup = powerups.GetEquipped(1);
 #if GB_ENABLE_TESTS
@@ -623,17 +726,24 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
             state.guns[0].localIndex = static_cast<std::uint8_t>(weapons[weaponSlot].ordinal);
         }
         state.paused = paused;
+        if (launch.deathmatch) {
+            state.guns[0] = scene.MatchGun(0, 0);
+            state.guns[1] = scene.MatchGun(0, 1);
+        }
         state.shopOpen = shopOpen;
         state.localLive = launch.localLive;
-        state.remoteShop = shopOpen && launch.localLive && liveShop.Owner() == 1;
+        state.deathmatch = launch.deathmatch;
+        state.remoteShop = shopOpen && (launch.localLive || launch.deathmatch) && liveShop.Owner() == 1;
         state.afterDeathShop = deathShop;
         state.shopRemainingMs = liveShop.Remaining(window.GetTicksMs());
+        if (!liveShop.IsTimed()) { state.shopRemainingMs = 0; }
         state.brotherName = brotherName;
         state.itemChoice = itemChoice;
         state.leftPowerup = leftPowerup;
         state.rightPowerup = rightPowerup;
         state.leftCount = pickupProfile->GetPowerupCount(leftPowerup);
         state.rightCount = pickupProfile->GetPowerupCount(rightPowerup);
+        state.powerupCooldowns = powerups.Cooldowns();
         state.inventory = pickupProfile->powerups;
         state.coins = pickupProfile->coins;
         state.warbucks = pickupProfile->warbucks;
@@ -654,6 +764,7 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
         for (unsigned type = 0; type < 3; ++type) { state.powerupStatus.frenzyTypes[type] = player.weapon->brother.IsFrenzyType(type); }
         state.dead = vitals.dead;
         state.inputHidden = vitals.inputHidden;
+        if (launch.deathmatch) { state.inputHidden = false; }
         state.cleared = session.GetLevel().IsCleared();
         state.transitioning = session.IsTransitioning();
         state.transitionTime = session.GetTransitionElapsed();
@@ -725,6 +836,55 @@ if (performanceStudy) {
         const auto performanceStart = std::chrono::steady_clock::now();
         const auto frameTicks = window.GetTicksMs();
         const unsigned menuElapsed = static_cast<unsigned>(frameTicks - menuTicks);
+        if (launch.deathmatch && !session.IsFinished()) {
+            // DeathMatchIntroSequenceCallback :90035 opens the selector after the banner.
+            if (survivalHud.TakeDeathmatchIntroCompletion() && !session.IsFinished()) {
+                survivalHud.ResetSelector(true);
+                liveShop.Request(0, frameTicks, 0, match.Data().respawnSeconds * 1000);
+                // The local Bot has already chosen its two guns. Each peer
+                // enters independently; an unfinished player loadout stays absent.
+                if (scene.IsMatchSpawnPending(1) && !scene.RespawnDeathmatch(1, true)) { ++checkFailures; }
+            }
+            const bool wasShopping = liveShop.Active();
+            liveShop.Update(frameTicks);
+            if (wasShopping && !liveShop.Active()) { closeShop(); }
+            botShop.Update(frameTicks);
+            const auto &life = match.GetLife(0);
+            // OnPlayerKilled opens the normal DM selector after the burst.
+            if (life.dead && vitals.deathAnimationComplete && deathShopSerial != life.serial &&
+                match.GetResult() == CMPMatch::Result::Playing) {
+                deathShopSerial = life.serial;
+                liveShop.Close(0);
+                survivalHud.ResetSelector();
+                unsigned selectorMs = 1;
+                if (life.respawnMs > 1000) { selectorMs = life.respawnMs - 1000; }
+                liveShop.Request(0, frameTicks, 0, selectorMs);
+                itemChoice = false;
+            }
+            shopOpen = liveShop.Visible(frameTicks);
+            if (botShop.Visible(frameTicks) && !matchShopCounted) {
+                if (!match.EnterShop(1)) { botShop.Close(1); }
+                else { matchShopCounted = true; }
+            }
+            if (botShop.Visible(frameTicks) && !matchShopPurchased) {
+                // Shop decisions use the same catalog, price, balance and level checks as the player.
+                while (const auto *item = DeathmatchBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1))) {
+                    if (peerProfile->AcquireItem(item->data, peerProgress.GetLevel()) != PurchaseResult::Purchased) { break; }
+                    std::printf("[deathmatch] bot purchased powerup=%u\n", item->data.objects.front().object.localIndex);
+                }
+                matchShopPurchased = true;
+                if (launch.botFriend != nullptr && gameContext != nullptr && gameContext->persistProgress && !launch.botFriend->Save()) { return 1; }
+            }
+            if (botShop.Visible(frameTicks) && botShop.Remaining(frameTicks) < 7500) { botShop.Close(1); }
+            if (!paused && !botShop.Active() && !brother.vitals.dead && !session.IsFinished()) {
+                if (deathmatchBot->WantsHealth()) { peerPowerups.UseMatchConsumable(false); }
+                if (deathmatchBot->WantsGrenade()) { peerPowerups.UseMatchConsumable(true); }
+                if (deathmatchBot->WantsShop() && match.CanShop(1) &&
+                    DeathmatchBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1)) != nullptr) {
+                    openShop(1); deathmatchBot->OnShopAttempt();
+                }
+            }
+        }
         if (launch.localLive) {
             scene.SetAfterDeathAvailability(powerups.HasAfterDeathPowerup(), peerPowerups.HasAfterDeathPowerup());
             const bool wasActive = liveShop.Active();
@@ -772,7 +932,7 @@ if (performanceStudy) {
             if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result, progressData, progress)) { return 1; }
             if (result.botShop && !brother.vitals.dead && !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) { openShop(1); }
             if (result.botPowerup && !liveShop.Active() && !powerups.IsMovieActive()) { peerPowerups.UseAny(true); }
-            if (result.challengesUpdated && !gameContext->tutorial) {
+            if (result.challengesUpdated && !gameContext->tutorial && !launch.deathmatch) {
                 // Discard the old day's pending wave deltas before binding the new list.
                 scene.TakeChallengeKills();
                 scene.TakeChallengePowerups();
@@ -790,7 +950,7 @@ if (performanceStudy) {
         }
 #endif
 
-        if (gameContext && gameContext->profile.nativeArchive && !gameContext->tutorial &&
+        if (gameContext && gameContext->profile.nativeArchive && !gameContext->tutorial && !launch.deathmatch &&
             GameHostSettings().isConnected && challenges.current.empty()) {
             // Enabling the connection during combat establishes the same local clock.
             scene.TakeChallengeKills();
@@ -837,6 +997,7 @@ if (checkControls && controlFrame < controlClickCount) {
         SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
         // Input-pad controls cannot interrupt the active powerup presentation.
         if (powerups.IsMovieActive() || peerPowerups.IsMovieActive()) { action = SurvivalHudAction::None; }
+        if (launch.deathmatch && session.IsFinished()) { action = SurvivalHudAction::None; }
         if (action == SurvivalHudAction::Exit) {
             // Surrender leaves a paused menu; the same BGM continues into results.
             music.SetPaused(false);
@@ -847,6 +1008,11 @@ if (checkControls && controlFrame < controlClickCount) {
         if (action == SurvivalHudAction::CloseShop) { closeShop(); }
         if (action == SurvivalHudAction::CancelItem) { itemChoice = false; }
         const StoreEntry *shopItem = survivalHud.SelectedItem();
+        if (launch.deathmatch && shopItem != nullptr && action == SurvivalHudAction::SelectMatchGun) {
+            const auto &gun = shopItem->data.objects.front().object;
+            if (!scene.SelectMatchGun(0, survivalHud.MatchSelectionSlot(), gun)) { return 1; }
+            survivalHud.AdvanceMatchSelection();
+        }
         if (shopItem != nullptr && (action == SurvivalHudAction::BuyItem || action == SurvivalHudAction::SelectItem)) {
             const GameObjectRef &resource = shopItem->data.objects.front().object;
             if (action == SurvivalHudAction::BuyItem) {
@@ -898,6 +1064,7 @@ if (checkControls && controlFrame < controlClickCount) {
         std::vector<KeyCode> inputs;
         if (pointerKey != KeyCode::None) { inputs.push_back(pointerKey); }
         for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+            if (launch.deathmatch && session.IsFinished()) { continue; }
             // Replay escape bypasses pause, dialogs, death and powerup movies.
             if (gameContext != nullptr && gameContext->debugTutorial && key == KeyCode::Escape) {
                 std::printf("[debug-tutorial] escape no-save=1\n");
@@ -946,11 +1113,11 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
 #endif
 
         for (KeyCode key : inputs) {
-            if (launch.localLive && liveShop.Active() && liveShop.Owner() == 1) { continue; }
+            if ((launch.localLive || launch.deathmatch) && liveShop.Active() && liveShop.Owner() == 1) { continue; }
             if (powerups.IsMovieActive() || peerPowerups.IsMovieActive()) { continue; }
             // The original death script hides the input pad. Do not open an
             // invisible pause menu while the formal death animation is running.
-            if (vitals.dead && gameContext != nullptr && !shopOpen) { continue; }
+            if (vitals.dead && gameContext != nullptr && !shopOpen && !launch.deathmatch) { continue; }
             if (shopOpen) {
                 if (key == KeyCode::Space || key == KeyCode::Escape) {
                     if (survivalHud.BackFromSelectorPrompt()) { continue; }
@@ -984,8 +1151,15 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
                 if (!session.SubmitChallenges(true)) { return 1; }
                 if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
                 session.Restart(startX, startY, startFacing);
+                accountedXplodium = 0;
+                if (launch.deathmatch && gameContext != nullptr) {
+                    gameContext->accountedPeerKills = 0;
+                    gameContext->accountedPeerXplodium = 0;
+                }
                 if (gameContext != nullptr) { gameContext->accountedKills = 0; gameContext->accountedWeaponExperience.clear(); }
                 liveShop = {};
+                botShop = {};
+                deathShopSerial = UINT32_MAX;
                 deathShop = false;
                 if (!session.HasOriginalHud()) { survivalHud.ResetNotices(); }
                 savedDeath = false;
@@ -994,6 +1168,10 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
                 itemChoice = false;
             }
             std::size_t nextWeapon = weaponSlot;
+            if (launch.deathmatch) {
+                if (!paused && !vitals.dead && (key == KeyCode::Digit2 || key == KeyCode::N || key == KeyCode::M)) { scene.RequestMatchWeaponSwap(0); }
+                continue;
+            }
             if (gameContext == nullptr) {
                 KeyCode weaponKey = key;
                 nextWeapon = SelectWeaponKey(weapons, weaponSlot, weaponKey);
@@ -1063,10 +1241,14 @@ if (checkControls && (controlFrame == controlClickCount + 3 || controlFrame == c
         const std::uint64_t now = window.GetTicksMs();
         // Re-evaluate after input and cheats. No leftover simulation tick may
         // move either actor while either peer owns a visible selector.
-        if (launch.localLive) { shopOpen = liveShop.Visible(now); }
-        session.SetSuspended(paused || shopOpen);
-        if (paused || shopOpen) { accumulator = 0; }
-        if (!paused && !shopOpen && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
+        if (launch.localLive || launch.deathmatch) { shopOpen = liveShop.Visible(now); }
+        // CPowerUpSelector::Show only suspends non-DM worlds (:1864xx).
+        const bool worldPaused = paused || (shopOpen && !launch.deathmatch);
+        scene.SetMatchShopping(0, shopOpen);
+        scene.SetMatchShopping(1, botShop.Active());
+        session.SetSuspended(worldPaused);
+        if (worldPaused) { accumulator = 0; }
+        if (!worldPaused && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
         previous = now;
         
 #if GB_ENABLE_TESTS
@@ -1094,7 +1276,7 @@ if (performanceStudy) {
 if (checkControls && !paused && !shopOpen) { accumulator = 960; }
 #endif
 
-        effects.SetPaused(paused || shopOpen);
+        effects.SetPaused(worldPaused || (launch.deathmatch && session.IsFinished()));
         // CGunBros::OnSuspend :78263 lowers BGM to half without stopping it.
         // Gameplay and effects stay suspended; the music stream keeps advancing.
         float musicScale = 1.0f;
@@ -1135,7 +1317,7 @@ if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
                 SetPlayerInput(player, false, false);
                 swapEventAccepted = player.weapon->brother.OnSwapGun();
             }
-            if (!vitals.dead || launch.localLive) {
+            if (!vitals.dead || launch.localLive || launch.deathmatch) {
                 bool shoot = pendingWeapon >= weapons.size() &&
                     (performanceStudy || firePreview || checkSwapFiring || (window.IsLeftMouseDown() && !hudOwnsPointer));
 #if GB_ENABLE_TESTS
@@ -1176,9 +1358,18 @@ if (checkControls) {
 #endif
 
             }
+            if (launch.deathmatch) {
+                const auto active = scene.ActiveMatchGun(0);
+                for (std::size_t index = 0; index < weapons.size(); ++index) {
+                    if (weapons[index].packHash == active.packHash && weapons[index].ordinal == active.localIndex) { weaponSlot = index; break; }
+                }
+                equippedWeaponSlot = player.gunSlot;
+            }
             const int worldDeltaMs = session.GetLevel().TransformWorldElapseMS(16);
-            AdvanceProps(loaded.props, worldDeltaMs);
-            AdvanceTileLayers(loaded.map, worldDeltaMs);
+            if (!launch.deathmatch || !session.IsFinished()) {
+                AdvanceProps(loaded.props, worldDeltaMs);
+                AdvanceTileLayers(loaded.map, worldDeltaMs);
+            }
             accumulator -= 16;
         }
         
@@ -1206,7 +1397,7 @@ if (checkSwapFiring) {
             std::printf("[debug-tutorial] completed no-save=1\n");
             return 0;
         }
-        if (session.IsFinished() && gameContext != nullptr && !check && capturePath.empty()) { break; }
+        if (session.IsReadyForResults() && gameContext != nullptr && !check && capturePath.empty()) { break; }
         loaded.players[0].x = scene.playerX;
         loaded.players[0].y = scene.playerY;
         loaded.players[0].facingDegrees = scene.facing;
@@ -1275,12 +1466,21 @@ if (check) {
             hudState.brotherLabelX = (brother.x - camera.x) * camera.zoom * 1024 / width;
             hudState.brotherLabelY = (brother.y - scene.GetPlayerRadius() * 3 - camera.y) * camera.zoom * 768 / height;
             hudState.brotherLabelAlpha = session.GetLevel().GetBrotherLabelAlpha();
-            if (launch.localLive || launch.localBot) {
+            if (launch.localLive || launch.localBot || launch.deathmatch) {
                 hudState.brotherName = brotherName;
                 hudState.brotherLabelAlpha = 1;
             }
         }
         hudState.localLive = launch.localLive;
+        hudState.deathmatch = launch.deathmatch;
+        if (launch.deathmatch) {
+            hudState.inputHidden = false;
+            hudState.guns[0] = scene.MatchGun(0, 0);
+            hudState.guns[1] = scene.MatchGun(0, 1);
+            hudState.matchScore[0] = match.Score(0); hudState.matchScore[1] = match.Score(1);
+            hudState.matchLimit = match.Data().killLimit;
+            hudState.respawnMs = match.GetLife(0).respawnMs;
+        }
         hudState.reviveProgress = scene.GetReviveProgress();
         if (launch.localLive && hudState.reviveProgress > 0) {
             float x = brother.x, y = brother.y;
@@ -1459,6 +1659,24 @@ if (performanceStudy) {
     if (!performancePassed) { return 1; }
 #endif
     if (!session.SubmitChallenges(true)) { return 1; }
+    if (launch.deathmatch && gameContext != nullptr) {
+        if (match.GetResult() == CMPMatch::Result::Playing) { match.Surrender(0); }
+        auto &result = gameContext->result;
+        result.live = true; result.deathmatch = true;
+        result.matchResult = static_cast<unsigned>(match.GetResult());
+        result.matchKillLimit = match.Data().killLimit;
+        result.matchTimeLimitSeconds = match.Data().seconds;
+        result.score = scene.GetScore();
+        result.bestKillStreak = scene.GetBestKillStreak();
+        result.peerName = brotherName;
+        for (unsigned peer = 0; peer < 2; ++peer) {
+            result.peers[peer] = scene.GetMultiplayerStatistics(peer).total;
+            result.peers[peer].kills = match.Score(peer);
+            result.peers[peer].deaths = match.GetLife(peer).serial;
+            if (match.GetLife(peer).dead) { ++result.peers[peer].deaths; }
+        }
+        if (launch.botFriend != nullptr && gameContext->persistProgress && !launch.botFriend->Save()) { return 1; }
+    }
     if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
     return 0;
 }

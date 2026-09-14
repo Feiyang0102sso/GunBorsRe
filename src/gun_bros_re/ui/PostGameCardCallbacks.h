@@ -5,7 +5,13 @@ class PostGameCardCallbacks : public IMovieRegionCallback {
 public:
     PostGameCardCallbacks(GameMenu &menu, const OriginalMenuEntry &data, const std::string &number, unsigned elapsed = 0, bool live = false)
         : view(menu), entry(data), value(number), iconTime(elapsed), effectIndex(data.index) {
-        if (live) { effectIndex += 7; }
+        if (live) {
+            // DM omits assists: resolve the shared effect by its original icon.
+            for (unsigned index = 0; index < 8; ++index) {
+                const auto *icon = OriginalMenuData("MDS_ICON_POSTGAME_MP", index);
+                if (icon != nullptr && icon->sprites[0] == data.sprites[0]) { effectIndex = index + 7; break; }
+            }
+        }
     }
     bool DrawMovieRegion(const MovieRegion &region) override {
         if (region.index == 1) {

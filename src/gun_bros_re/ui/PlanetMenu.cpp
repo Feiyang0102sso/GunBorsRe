@@ -199,7 +199,9 @@ bool DrawOriginalStarMap(GameMenu &view, MenuState &state, const CProfileManager
         state.planet = selected;
         state.missions.missionScroll = 0;
         state.starMap.startingWave = -1;
-        if (!view.planetEntries[selected].missions.empty()) { state.Navigate(21); }
+        if (state.gameMode == 2 && !view.planetEntries[selected].data.object12.IsNull()) {
+            if (!BeginLocalMatch(state)) { return false; }
+        } else if (!view.planetEntries[selected].missions.empty()) { state.Navigate(21); }
         else { std::printf("[planet-menu] slot=%u has no mission entries\n", state.starMap.starSelectedSlot); }
         state.starMap.starReticleTime = 0;
     }

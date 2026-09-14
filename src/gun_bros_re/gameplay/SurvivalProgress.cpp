@@ -4,6 +4,32 @@ using namespace MapDetail;
 bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &progress,
     const CombatScene &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded ) {
     if (context == nullptr || !context->persistProgress) { return true; }
+    // Deathmatch consumes account inventory but never advances survival waves.
+    if (scene.IsDeathmatch()) {
+        context->profile.experience = progress.GetExperience();
+        if (scene.GetXplodium() < accountedXplodium) { accountedXplodium = 0; }
+        context->profile.xplodium += scene.GetXplodium() - accountedXplodium;
+        accountedXplodium = scene.GetXplodium();
+        const unsigned kills = scene.GetMultiplayerStatistics(0).total.kills;
+        if (kills < context->accountedKills) { context->accountedKills = 0; }
+        // CLevel::OnPlayerKilled :118693 increments DEATHMATCH_KILLS (37).
+        context->profile.statistics[37] += kills - context->accountedKills;
+        context->accountedKills = kills;
+        if (context->botFriend != nullptr) {
+            auto &bot = context->botFriend->profile;
+            bot.experience = scene.GetPeerExperience();
+            const auto ore = scene.GetMultiplayerStatistics(1).total.xplodium;
+            if (ore < context->accountedPeerXplodium) { context->accountedPeerXplodium = 0; }
+            bot.xplodium += ore - context->accountedPeerXplodium;
+            context->accountedPeerXplodium = ore;
+            const unsigned peerKills = scene.GetMultiplayerStatistics(1).total.kills;
+            if (peerKills < context->accountedPeerKills) { context->accountedPeerKills = 0; }
+            bot.statistics[37] += peerKills - context->accountedPeerKills;
+            context->accountedPeerKills = peerKills;
+            if (!context->botFriend->Save()) { return false; }
+        }
+        return context->SaveProfile();
+    }
     CProfileManager &profile = context->profile;
     if (context->tutorial) {
         const int step = level.GetTutorialStep();

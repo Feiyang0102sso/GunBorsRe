@@ -7,6 +7,7 @@
 #include "gameplay/DebugMapChecks.h"
 #include "TestOutput.h"
 int CheckDebugInput();
+int RunDeathmatchDataCheck(const std::string &bigDirectory);
 int CheckViewerControls();
 int RunCoverScaleStudy(const std::string &bigDirectory);
 int RunMapTurretChecks(const std::string &bigDirectory);
@@ -20,6 +21,15 @@ int wmain(int argc, wchar_t **argv) {
         if (std::wstring(argv[index]) == L"--big") { sampleBigDirectory = Paths::Resolve(argv[index + 1]); }
     }
     for (int index = 1; index < argc; ++index) {
+        if (std::wstring(argv[index]) == L"--deathmatch-data-check") {
+            CAudioPlayer::SetMuted(true);
+            return RunDeathmatchDataCheck(sampleBigDirectory.u8string());
+        }
+        if (std::wstring(argv[index]) == L"--deathmatch-check" || std::wstring(argv[index]) == L"--deathmatch-feedback-check") {
+            int RunDeathmatchCombatCheck(const std::string &, bool);
+            CAudioPlayer::SetMuted(true);
+            return RunDeathmatchCombatCheck(sampleBigDirectory.u8string(), std::wstring(argv[index]) == L"--deathmatch-feedback-check");
+        }
         if (std::wstring(argv[index]) == L"--map-turret-check") {
             CAudioPlayer::SetMuted(true);
             return RunMapTurretChecks(sampleBigDirectory.u8string());

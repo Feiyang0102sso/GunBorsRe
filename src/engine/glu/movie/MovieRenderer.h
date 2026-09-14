@@ -49,6 +49,7 @@ public:
     bool DrawSpriteFitted(unsigned archetype, unsigned animation, unsigned time, float x, float y, float width, float height, float alpha = 1);
     bool ButtonBackground(float x, float y, float width, float height, bool selected, bool hovered);
     unsigned SpriteDuration(unsigned archetype, unsigned animation);
+    bool SpriteFrameTimes(unsigned archetype, unsigned animation, std::vector<unsigned> &times);
     /** Bind native step playback to cached BIG durations; cache outlives menu state. */
     bool BindSpritePlayer(unsigned archetype, unsigned animation, CSpritePlayer &player);
     bool DrawSpritePlayer(unsigned archetype, unsigned animation, const CSpritePlayer &player,

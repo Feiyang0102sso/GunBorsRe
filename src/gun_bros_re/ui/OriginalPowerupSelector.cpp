@@ -136,6 +136,7 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
         m_selectorEntries.clear();
         for (unsigned storeIndex : m_selectorAllEntries) {
             const auto &ref = m_store[storeIndex].data.objects.front().object;
+            if (state.deathmatch && state.remoteShop && ref.localIndex != 13 && ref.localIndex != 1 && ref.localIndex != 8 && ref.localIndex != 9) { continue; }
             for (const auto &powerup : m_powerups) {
                 if (powerup.resource.packHash == ref.packHash && powerup.resource.localIndex == ref.localIndex &&
                     (powerup.data.field112 != 0) == state.afterDeathShop) { m_selectorEntries.push_back(storeIndex); }
@@ -148,6 +149,14 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
         m_selectorPosition = std::min(2.0f, std::max(0.0f, float(m_selectorEntries.size()) - 3));
         m_selectorTarget = m_selectorPosition;
         m_selectorChoice = false;
+        m_matchSelectedSlot = 0;
+        // CPowerUpSelector::Show :186531 always enters SetState(0), POWER UPS.
+        // Correction: state 0 starts the opening animation. Show's mode at
+        // mem+3800 selects GUNS (1) or POWER UPS (0) when state 2 is reached.
+        m_matchGuns = state.deathmatch && m_selectorStartOnGuns;
+        m_selectorStartOnGuns = false;
+        m_matchSlotChapter = 1;
+        m_matchSlotTime = 0;
     }
     if (state.itemChoice != m_selectorChoice) { m_selectorChoiceTime = 0; m_selectorChoice = state.itemChoice; }
     m_selectorHits.clear();
@@ -181,7 +190,8 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
             unsigned panelTime, IMovieRegionCallback &items) :
             hud(owner), state(value), layout(movie), layoutTime(time), menuTime(panelTime), content(items) {}
         bool DrawMovieRegion(const MovieRegion &area) override {
-            if (area.index == 2 && state.localLive) {
+            if (area.index == 2 && (state.localLive || state.deathmatch)) {
+                if (state.deathmatch && state.shopRemainingMs == 0) { return true; }
                 // DrawPlayerNameAndTimer :185362 binds the original region 2.
                 const std::string seconds = std::to_string((state.shopRemainingMs + 500) / 1000);
                 float centerX = area.x + area.width / 2;
@@ -196,9 +206,11 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
                     area.y + (area.height - hud.m_movies.TextHeight(11)) / 2, 11, 1, 0, area.alpha);
             }
             if (area.index == 1) {
+                if (state.deathmatch && hud.m_matchGuns) { return hud.DrawMatchGuns(state, area); }
                 return hud.m_movies.Draw(layout, layoutTime, area.x + int(area.width) / 2,
                     area.y + int(area.height) / 2, 1024, 768, 0, area.alpha, &content);
             }
+            if (area.index == 4 && state.deathmatch) { return hud.DrawMatchTabs(area); }
             if (area.index == 3) {
                 const auto coins = hud.SelectorCurrency("IDS_SHOP_COMMON", state.coins);
                 const auto bucks = hud.SelectorCurrency("IDS_SHOP_RARE", state.warbucks);
@@ -253,16 +265,21 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
         }
         if (powerup == nullptr) { return false; }
         CPowerup query;
+        query.SetDeathmatch(state.deathmatch);
         query.Bind(powerup->data, state.powerupStatus);
         const bool equip = query.Query(0);
-        const bool use = query.Query(1) && query.Query(2);
+        int remaining = 0;
+        const auto cooldown = state.powerupCooldowns.find(reference.localIndex);
+        if (state.deathmatch && cooldown != state.powerupCooldowns.end()) { remaining = cooldown->second; }
+        const bool use = remaining == 0 && query.Query(1) && query.Query(2);
         const unsigned movie = m_movies.Ordinal("GLU_MOVIE_POWERUP_MENU_NEW_COPY");
         // This movie has no chapter track; CMovie::Update runs its complete timeline.
         const unsigned end = m_movies.GetMovie(movie)->duration;
         const unsigned choiceTime = std::min(m_selectorChoiceTime, end);
         class Choices : public IMovieRegionCallback {
         public:
-            Choices(SurvivalHud &owner, bool equipable, bool usable) : hud(owner), equip(equipable), use(usable) {}
+            Choices(SurvivalHud &owner, bool equipable, bool usable, const PowerupEntry &item, int cooldown)
+                : hud(owner), equip(equipable), use(usable), powerup(item), remaining(cooldown) {}
             bool DrawMovieRegion(const MovieRegion &area) override {
                 if (area.index == 0 || area.index == 1) {
                     const auto *entry = OriginalMenuData("MDS_BUTTON_POWERUP_SELECTOR", 2);
@@ -276,6 +293,7 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
                     hud.m_movies.Text(text, x - hud.m_movies.TextWidth(text, 5) / 2, y - hud.m_movies.TextHeight(5) / 2, 5, 1, 0, area.alpha);
                 }
                 if (area.index == 5) {
+                    if (remaining > 0) { return hud.DrawPowerupCooldown(powerup, remaining, area, 1); }
                     const auto *entry = OriginalMenuData("MDS_BUTTON_POWERUP_SELECTOR", 3);
                     const float x = area.x + area.width / 2, y = area.y + area.height / 2;
                     float alpha = area.alpha;
@@ -299,8 +317,8 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
                 }
                 return true;
             }
-            SurvivalHud &hud; bool equip, use;
-        } choices(*this, equip, use);
+            SurvivalHud &hud; bool equip, use; const PowerupEntry &powerup; int remaining;
+        } choices(*this, equip, use, *powerup, remaining);
         if (!m_movies.Draw(movie, choiceTime, 512, 384, 1024, 768, 0, 1, &choices)) { return false; }
         if (choiceTime >= end) {
             for (const auto &area : m_movies.Regions(movie, choiceTime, 512, 384, true)) {

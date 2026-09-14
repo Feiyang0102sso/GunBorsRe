@@ -119,6 +119,7 @@ public:
     void OnEnemyTeleport(int objectId, const GameObjectRef &enemy);
     bool IsActivePortal(int objectId) const { return m_world != nullptr && m_world->IsActivePortal(objectId); }
     void OnPickupCollected(int objectId, const GameObjectRef &pickup);
+    void OnDeathmatchKill(float x, float y);
     void OnPropEvent(int objectId, const GameObjectRef &prop, bool entered);
     /** Original trigger export 6; disabled and paused groups do not fire. */
     bool OnTrigger(int group);

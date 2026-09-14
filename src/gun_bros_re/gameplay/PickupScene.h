@@ -16,6 +16,7 @@ class WeaponEffects;
 struct PickupCollection {
     GameObjectRef resource;
     int objectId = 0;
+    unsigned peer = 0;
 };
 
 class PickupScene {
@@ -31,6 +32,7 @@ public:
     void Draw(const float *mvp, float scale);
     std::size_t GetCount() const { return m_instances.size(); }
     bool GetObjectPosition(int objectId, float &x, float &y) const;
+    bool FindNearest(float x, float y, float &goalX, float &goalY) const;
     bool GetIndicatorTarget(unsigned serial, float &x, float &y) const;
     unsigned spawned = 0;
     unsigned collected = 0;

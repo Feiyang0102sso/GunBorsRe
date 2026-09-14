@@ -46,6 +46,8 @@ struct EnemyCombat {
     std::array<std::int16_t, 21> variables{};
     bool enabled = false;
     CombatId id = 0;
+    // Local equivalent of the projectile creator's participant ownership.
+    CombatId summoner = 0;
     float x = 0;
     float y = 0;
     float previousX = 0;

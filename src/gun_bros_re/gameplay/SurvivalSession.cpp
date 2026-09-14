@@ -105,7 +105,7 @@ void SurvivalSession::Restart(float x, float y, float facingDegrees) {
     m_bossIntroSerial = m_level.GetBossIntroSerial();
     if (m_bossIntroSerial > 0) { m_transitionMs = 2000; m_transitionDuration = 2000; }
     m_bossWave = m_bossIntroSerial > 0;
-    if (m_originalHud != nullptr) {
+    if (m_originalHud != nullptr && m_match == nullptr) {
         m_transitionMs = 0;
         unsigned wave = m_level.GetRealWave() + 1;
         if (m_horde && m_level.GetWavesPerRevolution() > 0) { wave = m_level.GetWave() / m_level.GetWavesPerRevolution() + 1; }
@@ -113,6 +113,13 @@ void SurvivalSession::Restart(float x, float y, float facingDegrees) {
     }
     UpdateCamera();
     UpdateDialog(0);
+    if (m_match != nullptr) {
+        m_transitionMs = 0;
+        m_level.HandleEvent(2);
+        m_scene.SetPathLayer(m_level.GetPathLayer());
+        if (!m_scene.StartDeathmatch()) { ++m_scene.invalidSpawns; }
+        if (m_originalHud != nullptr) { m_originalHud->BeginDeathmatch(m_match->Data().killLimit); }
+    }
     for (const CLayerPathLink &path : m_map.GetPathLinkLayers()) {
         std::printf("[survival] path layer=%u nodes=%zu selected=%d\n", path.GetLayerIndex(), path.GetNodes().size(), m_level.GetPathLayer());
     }
@@ -300,6 +307,7 @@ void SurvivalSession::OnWaveCleared(unsigned perfectRewardPercent) {
 }
 
 bool SurvivalSession::IsTransitioning() const {
+    if (m_match != nullptr) { return false; }
     if (m_originalHud != nullptr) { return m_originalHud->HasInterstitial(); }
     return m_transitionMs > 0;
 }
@@ -342,6 +350,24 @@ bool SurvivalSession::SpawnPickupAt(const GameObjectRef &pickup, float x, float 
     // CEnemySpawner::SpawnPickup :146349 marks the particular pickup instance.
     m_level.SetIndicator(objectId, 1, (1ULL << 32) | m_pickups->spawned);
     return true;
+}
+
+bool SurvivalSession::SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) {
+    if (m_match == nullptr || m_pickups == nullptr) { return false; }
+    ILayerPath *path = m_map.GetPathLayer(layer);
+    if (path == nullptr || path->GetNodes().empty()) { return false; }
+    const auto &nodes = path->GetNodes();
+    const unsigned start = static_cast<unsigned>(m_level.RandomInteger(0, static_cast<std::int16_t>(nodes.size() - 1)));
+    for (unsigned offset = 0; offset < nodes.size(); ++offset) {
+        const auto &node = nodes[(start + offset) % nodes.size()];
+        if (node.locked || !m_scene.CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
+        float nearestX = 0, nearestY = 0;
+        if (m_pickups->FindNearest(node.x, node.y, nearestX, nearestY) && std::hypot(nearestX - node.x, nearestY - node.y) < m_scene.GetPlayerRadius() * 2) { continue; }
+        const int candidate = m_match->ChoosePickup();
+        if (candidate < 0) { return false; }
+        return SpawnPickupAt(pickup, node.x, node.y, CMPMatch::PickupIdBase + candidate);
+    }
+    return false;
 }
 
 std::uint64_t SurvivalSession::ResolveIndicatorTarget(int objectId) const {
@@ -435,6 +461,7 @@ void SurvivalSession::UpdateDialog(int deltaMs) {
 }
 
 void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
+    if (m_scene.IsMatchSpawnPending(0)) { return; }
     if (m_archive) {
         const float scaleRatio = 0.8f / m_map.GetCamera().GetScale();
         const float viewWidth = m_viewWidth * scaleRatio;
@@ -472,8 +499,21 @@ void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
 }
 
 
+bool SurvivalSession::IsReadyForResults() const {
+    if (!IsFinished()) { return false; }
+    if (m_match == nullptr || m_originalHud == nullptr) { return true; }
+    return m_originalHud->IsDeathmatchWrapUpComplete();
+}
+
 void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
+    if (m_originalHud != nullptr && m_powerups != nullptr) {
+        for (const auto &name : m_powerups->TakeUseMessages()) { m_originalHud->OnDeathmatchPowerup(name); }
+    }
     if (deltaMs <= 0 || m_suspended) { return; }
+    if (m_match != nullptr && IsFinished()) {
+        if (m_originalHud != nullptr) { m_originalHud->AdvanceDeathmatchWrapUp(deltaMs); }
+        return;
+    }
     // CLevel::Update :121255 advances the active powerup before its pause
     // gate. Keep presentation time alive without advancing actors or spawns.
     if (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive()) {
@@ -534,10 +574,16 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
         for (const PickupSpawn &spawn : m_scene.pickupSpawns) { SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0); }
         m_pickups->Update(worldDeltaMs, m_scene, *m_effects);
         for (const PickupCollection &pickup : m_pickups->collections) {
+            if (m_match != nullptr && pickup.objectId >= CMPMatch::PickupIdBase &&
+                !m_scene.CollectMatchWeapon(pickup.peer, pickup.objectId - CMPMatch::PickupIdBase)) { ++m_scene.invalidSpawns; }
             m_level.OnPickupCollected(pickup.objectId, pickup.resource);
         }
     }
-    for (std::uint8_t event : m_scene.levelEvents) { m_level.HandleEvent(event); }
+    for (std::uint8_t event : m_scene.levelEvents) {
+        // Enemy/prop events belong to this mode's authored LEVEL script.
+        m_level.HandleEvent(event);
+    }
+    if (m_match != nullptr) { m_scene.UpdateDeathmatch(deltaMs); }
     for (const auto &event : m_scene.teleports) { m_level.OnEnemyTeleport(event.objectId, event.enemy); }
     // Deliver only after the scene update, so callbacks may safely spawn actors.
     for (const CombatDeath &death : m_scene.deaths) {
@@ -574,8 +620,12 @@ unsigned SurvivalSession::GetPowerupCount(unsigned localIndex) const {
 void SurvivalSession::UpdateCamera(int deltaMs) {
     const MapRectangle bounds = m_map.GetVisibleBounds();
     const float scale = 0.8f / m_map.GetCamera().GetScale();
-    m_map.GetCamera().UpdatePosition(m_scene.playerX, m_scene.playerY, bounds.x, bounds.y,
-        bounds.width, bounds.height, m_viewWidth * scale, m_viewHeight * scale);
+    // Before the first local spawn, retain the default camera established at load.
+    // The original respawn callback restores player following after confirmation.
+    if (!m_scene.IsMatchSpawnPending(0) || !m_map.GetCamera().HasPosition()) {
+        m_map.GetCamera().UpdatePosition(m_scene.playerX, m_scene.playerY, bounds.x, bounds.y,
+            bounds.width, bounds.height, m_viewWidth * scale, m_viewHeight * scale);
+    }
     m_scene.SetViewCenter(m_map.GetCamera().GetX(), m_map.GetCamera().GetY());
     const float width = m_viewWidth * scale;
     const float height = m_viewHeight * scale;

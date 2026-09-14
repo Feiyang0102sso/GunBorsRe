@@ -78,6 +78,8 @@ struct CombatHit {
     int part = -1;
     int edge = -1;
     bool splash = false;
+    // CProp native 7 passes an actor source, not a bullet carrying its owner.
+    bool propExplosion = false;
     bool percentDamage = false;
     bool applyArmorAttack = true; // Scripted fixed-damage air strikes bypass gun bonuses.
     int spawnObjectId = -1;

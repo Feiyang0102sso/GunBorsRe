@@ -22,7 +22,9 @@ bool DrawLivePostGameList(GameMenu &view, MenuState &state, const MovieRegion &r
         state.postGame.livePosition -= view.window.TakeWheelDelta();
         state.postGame.livePosition -= view.dragY / travel;
     }
-    state.postGame.livePosition = std::clamp(state.postGame.livePosition, 0.0f, 4.0f);
+    float lastPosition = 4;
+    if (state.result.deathmatch) { lastPosition = 3; }
+    state.postGame.livePosition = std::clamp(state.postGame.livePosition, 0.0f, lastPosition);
     const unsigned first = static_cast<unsigned>(std::floor(state.postGame.livePosition));
     unsigned time = start + static_cast<unsigned>((state.postGame.livePosition - first) * (next - start));
     if (state.postGame.postGameItemTime < start) { time = state.postGame.postGameItemTime; }
@@ -32,11 +34,14 @@ bool DrawLivePostGameList(GameMenu &view, MenuState &state, const MovieRegion &r
         bool DrawMovieRegion(const MovieRegion &area) override {
             if (area.type < 2) { return true; }
             const unsigned row = first + area.type - 2;
-            if (row >= 6) { return true; }
+            unsigned rowCount = 6;
+            if (state.result.deathmatch) { rowCount = 5; }
+            if (row >= rowCount) { return true; }
             unsigned icon = row;
             if (row == 5) { icon = 6; }
             if (row == 5 && state.result.horde) { icon = 7; }
             const auto *entry = OriginalMenuData("MDS_ICON_POSTGAME_MP", icon);
+            if (state.result.deathmatch) { entry = OriginalMenuData("MDS_ICON_POSTGAME_MP_DM", row); }
             const unsigned card = view.movies.Ordinal("GLU_MOVIE_WRAPUP_BOX");
             MovieRegion bounds;
             if (entry == nullptr || !view.movies.Region(card, 0, 0, bounds)) { return false; }
@@ -45,7 +50,10 @@ bool DrawLivePostGameList(GameMenu &view, MenuState &state, const MovieRegion &r
                 std::uint64_t bonus = stats.perfectWaves;
                 if (state.result.horde) { bonus = stats.bestStreak; }
                 const std::uint64_t values[] = {stats.kills, stats.assists, stats.deaths, stats.xplodium, stats.experience, bonus};
-                const std::string text = std::to_string(values[row]);
+                const std::uint64_t dmValues[] = {stats.kills, stats.deaths, stats.xplodium, stats.experience, stats.bestStreak};
+                std::uint64_t value = values[row];
+                if (state.result.deathmatch) { value = dmValues[row]; }
+                const std::string text = std::to_string(value);
                 PostGameCardCallbacks callback(view, *entry, text, state.postGame.postGameIconTime, true);
                 float x = area.x;
                 if (peer == 1) { x += area.width - bounds.width; }

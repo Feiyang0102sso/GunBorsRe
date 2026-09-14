@@ -320,11 +320,19 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
         ready = TakeLocalMatch(match, view.clock);
     }
     if (!ready || match.online.IsMatching() || TakeLocalMatch(match, view.clock + 10000)) { return 1; }
-    match.gameMode = 2;
+    match.gameMode = 1;
     if (!BeginLocalMatch(match)) { return 1; }
     GameHostSettings().isConnected = false;
     UpdateLocalConnection(match);
     if (match.online.IsMatching() || match.matchingPrompt || match.gameMode != 0) { return 1; }
+    GameHostSettings().isConnected = true;
+    match.gameMode = 2;
+    if (!BeginLocalMatch(match)) { return 1; }
+    GameHostSettings().isConnected = false;
+    UpdateLocalConnection(match);
+    // The local PvP provider survives disconnect; cooperative Live retains its gate.
+    if (!match.online.IsMatching() || !match.matchingPrompt || match.gameMode != 2) { return 1; }
+    match.online.CancelMatch();
     GameHostSettings().isConnected = true;
 
     int product = -1;

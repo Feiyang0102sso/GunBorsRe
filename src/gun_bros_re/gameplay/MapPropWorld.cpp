@@ -71,10 +71,7 @@ namespace MapDetail {
         }
     }
 
-    bool MapPropWorld::GetIndicatorTarget(unsigned key, float &x, float &y) const {
-        if (key == 0 || key > m_activeProps.size()) { return false; }
-        const auto &prop = *m_activeProps[key - 1];
-        if (!prop.active || (prop.runtime && prop.runtime->IsRemoved())) { return false; }
+    static void GetPropBoundsCenter(const PlacedProp &prop, float &x, float &y) {
         // CProp::GetBounds :123561 unions the active animation bounds of its
         // three SpritePlayers. GetOrientation :191317 tracks the rectangle center.
         const PropSlot *slots[] = {BackgroundSlotFor(prop), MainSlotFor(prop), ForegroundSlotFor(prop)};
@@ -98,6 +95,13 @@ namespace MapDetail {
         }
         x = prop.x + left + int(right - left) / 2;
         y = prop.y + top + int(bottom - top) / 2;
+    }
+
+    bool MapPropWorld::GetIndicatorTarget(unsigned key, float &x, float &y) const {
+        if (key == 0 || key > m_activeProps.size()) { return false; }
+        const auto &prop = *m_activeProps[key - 1];
+        if (!prop.active || (prop.runtime && prop.runtime->IsRemoved())) { return false; }
+        GetPropBoundsCenter(prop, x, y);
         return true;
     }
 
@@ -188,6 +192,7 @@ namespace MapDetail {
     }
 
     bool MapPropWorld::PlayerInside(const PlacedProp &prop) const {
+        if (m_scene.IsMatchSpawnPending(0)) { return false; }
         const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
         if (vertices.empty()) { return false; }
         bool inside = false;
@@ -212,10 +217,19 @@ namespace MapDetail {
             return;
         }
         if (action.kind == PropAction::Kind::Splash) {
+            if (action.playersOnly) {
+                float x = 0, y = 0;
+                GetPropBoundsCenter(prop, x, y);
+                m_scene.SplashBrothers(x, y, static_cast<float>(action.radius), static_cast<float>(action.damage),
+                    static_cast<float>(action.force), action.forceMs);
+                return;
+            }
             CombatHit hit;
             hit.x = prop.x;
             hit.y = prop.y;
             hit.damage = static_cast<float>(action.damage);
+            hit.propExplosion = true;
+            hit.applyArmorAttack = false;
             // CProp::FunctionResolver case 7 :124571 resolves self / last
             // damager / local player. Preserve that object identity for CanCollide.
             hit.owner = kPropIdBase + prop.objectId;
@@ -223,12 +237,10 @@ namespace MapDetail {
             if (action.damageOwner == 1 && prop.lastDamager != 0) { hit.owner = prop.lastDamager; }
             // Self-owned environmental explosions can hurt both sides; the
             // original knockback native explicitly visits only the brothers.
-            if (!action.playersOnly) { m_scene.Splash(hit, static_cast<float>(action.radius), 360, 0, 0); }
-            if (action.playersOnly || action.damageOwner == 0) {
-                hit.owner = 0;
-                hit.ownerType = 1;
-                m_scene.Splash(hit, static_cast<float>(action.radius), 360, static_cast<float>(action.force), action.forceMs);
-            }
+            // Correction: that direct call belongs solely to native 10 above.
+            // Native 7 must retain the actual source type for CanCollide.
+            if (m_scene.Find(hit.owner) != nullptr) { hit.ownerType = 1; }
+            m_scene.Splash(hit, static_cast<float>(action.radius), 360, 0, 0);
             return;
         }
         GunCue cue;

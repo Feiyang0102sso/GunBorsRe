@@ -130,7 +130,7 @@ void CBrother::SetShooting(bool shooting) {
 }
 
 void CBrother::Update(std::int32_t deltaMs) {
-    if (deltaMs <= 0) { return; }
+    if (deltaMs <= 0 || !m_spawned) { return; }
     if (m_powerups != nullptr) {
         if (m_powerups->legacyFrenzyMs > 0) {
             m_powerups->legacyFrenzyMs = std::max(0, m_powerups->legacyFrenzyMs - deltaMs);
@@ -308,9 +308,12 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         if (m_vitals != nullptr) { m_vitals->inputHidden = true; }
         break;
     case 15:
-    case 18:
         // Health reset, control mode and spawn visibility do not alter this
         // unarmoured preview's equipment or mesh animation.
+        break;
+    case 18:
+        // FunctionResolver :139014 stores visibility at runtime +2086.
+        m_visible = arguments[0] > 0;
         break;
     default:
         std::printf("[player] native %u outside weapon preview\n", function);
@@ -363,7 +366,7 @@ void CBrother::UpdateUI(std::int32_t deltaMs) {
 }
 
 HitResult CBrother::ReceiveDamage(float damage) {
-    if (m_vitals == nullptr || m_vitals->dead || damage <= 0 || m_variables[3] > 0 || IsShield()) {
+    if (!m_spawned || m_vitals == nullptr || m_vitals->dead || damage <= 0 || m_variables[3] > 0 || IsShield()) {
         return HitResult::Ignored;
     }
     // HandleDamage (:136693) divides by the defense frenzy multiplier.
@@ -387,7 +390,7 @@ HitResult CBrother::ReceiveDamage(float damage) {
 }
 
 bool CBrother::StartDeath() {
-    if (m_vitals == nullptr || m_vitals->dead) { return false; }
+    if (!m_spawned || m_vitals == nullptr || m_vitals->dead) { return false; }
     SetInput(false, false);
     m_vitals->health = 0;
     m_vitals->dead = true;
@@ -405,13 +408,27 @@ bool CBrother::StartDeath() {
 
 bool CBrother::BeginKnockback(int durationMs) {
     // Original SetForce rejects a second force, death, immunity and shield.
-    if (m_vitals == nullptr || m_vitals->dead || m_knockbackMs > 0 ||
+    if (!m_spawned || m_vitals == nullptr || m_vitals->dead || m_knockbackMs > 0 ||
         m_variables[3] > 0 || IsShield() || durationMs <= 0) { return false; }
     SetInput(false, false);
     m_knockbackMs = durationMs;
     m_knockbackDurationMs = durationMs;
     m_interpreter.CallExportFunction(4);
     return true;
+}
+
+void CBrother::WaitForSpawn() {
+    SetInput(false, false);
+    m_spawned = false;
+    m_visible = false;
+    m_cues.clear();
+}
+
+bool CBrother::Respawn() {
+    m_spawned = true;
+    m_visible = true;
+    m_immunityHidden = false;
+    return m_interpreter.CallExportFunction(8);
 }
 
 float CBrother::GetKnockbackStepSeconds(int deltaMs) const {
@@ -457,7 +474,7 @@ void CBrother::SetGrenade(unsigned slot, const GameObjectRef &resource, unsigned
 }
 
 bool CBrother::CanThrowGrenade(unsigned slot) const {
-    return slot < 2 && m_grenadeStock[slot] > 0 && !m_grenades[slot].IsNull() &&
+    return m_spawned && slot < 2 && m_grenadeStock[slot] > 0 && !m_grenades[slot].IsNull() &&
         (m_vitals == nullptr || !m_vitals->dead);
 }
 

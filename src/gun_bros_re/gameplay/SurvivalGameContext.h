@@ -10,6 +10,9 @@
 
 struct SurvivalResult {
     bool live = false;
+    bool deathmatch = false;
+    unsigned matchResult = 0;
+    unsigned matchKillLimit = 0, matchTimeLimitSeconds = 0;
     std::string peerName = "LOCAL BOT";
     MultiplayerStats peers[2];
     bool horde = false;
@@ -45,6 +48,7 @@ struct SurvivalGameContext {
     bool persistProgress = true;
     LocalBotFriend *botFriend = nullptr;
     std::uint64_t accountedPeerXplodium = 0;
+    unsigned accountedPeerKills = 0;
     bool SaveProfile() const {
         if (!persistProgress) { return true; }
         return profile.SaveToDisk(savePath);

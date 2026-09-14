@@ -3,6 +3,7 @@
 #include "gun_bros_re/ui/GameFrontEndInternal.h"
 #include "engine/core/Paths.h"
 #include "gun_bros_re/ui/MenuInternal.h"
+#include "gun_bros_re/gameplay/CMPMatch.h"
 using namespace MenuDetail;
 
 namespace {
@@ -120,6 +121,41 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         if (choice == -3) { return 1; }
         if (choice == -2) { return 0; }
         if (choice < 0) { return !profile.SaveToDisk(savePath); }
+        if (state.gameMode == 2 && choice < 5) {
+            std::vector<PlanetEntry> planets;
+            std::vector<CMPMatch::Entry> matches;
+            if (!LoadPlanetCatalog(toc, tables, planets) || static_cast<unsigned>(choice) >= planets.size() || !LoadMPMatches(toc, tables, matches)) { return 1; }
+            MissionEntry mission;
+            mission.resource = planets[choice].data.object12;
+            std::vector<std::uint8_t> bytes;
+            if (!tables.ReadSectionResource(mission.resource.packHash, GameSection::Mission, mission.resource.localIndex, bytes)) { return 1; }
+            CArrayInputStream missionInput(bytes);
+            if (!mission.data.Init(missionInput) || mission.data.type != 3 || missionInput.Available() != 0) { return 1; }
+            if (!tables.ReadSectionResource(mission.data.level.packHash, GameSection::Level, mission.data.level.localIndex, bytes)) { return 1; }
+            CArrayInputStream levelInput(bytes);
+            CLevel::Template level;
+            if (!level.Init(levelInput) || levelInput.Available() != 0) { return 1; }
+            // CGunBros::GetRandomMpMatchId :78901 picks the match before entry.
+            static std::mt19937 matchRandom(std::random_device{}());
+            const unsigned tier = std::uniform_int_distribution<unsigned>(0, static_cast<unsigned>(matches.size() - 1))(matchRandom);
+            std::array<unsigned, 2> selection{0, 1};
+            SurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
+            context.music = &music;
+            context.mission = mission.resource; context.missionLevel = mission.data.level;
+            SurvivalLaunch launch;
+            launch.bigDirectory = bigDirectory;
+            launch.packShortName = tables.GetPackName(level.mapRef.packHash);
+            launch.mapIndex = level.mapRef.localIndex;
+            launch.gameContext = &context; launch.window = &window;
+            launch.deathmatch = true; launch.matchIndex = tier;
+            launch.loadout[0] = selection[0]; launch.loadout[1] = selection[1];
+            launch.archiveMission = &mission; launch.botFriend = MatchBot(state);
+            if (launch.botFriend == nullptr || RunSurvival(launch) != 0) { return 1; }
+            state.online.CancelMatch();
+            BeginPostGame(state, context, weapons);
+            std::printf("[deathmatch] entered results\n");
+            continue;
+        }
         if (state.gameMode == 1 && choice < 4) {
             // Live uses the real local account; the peer has its own archive.
             SurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};

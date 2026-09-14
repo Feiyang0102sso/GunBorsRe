@@ -17,11 +17,60 @@
 
 void SurvivalHud::ResetNotices() {
     m_notices.clear();
+    m_matchMessages.clear();
+    m_previousMatchScore[0] = 0; m_previousMatchScore[1] = 0;
     m_challengeHeld = false;
     m_challengeTime = 0;
     m_observedProgress = false;
     m_interstitialCompleted = false;
     m_liveWaveRemaining = 0;
+    m_matchIntro = false; m_matchIntroCompleted = false;
+    m_matchWrapUp = false; m_matchWrapUpTime = 0;
+}
+
+void SurvivalHud::BeginDeathmatch(unsigned killLimit) {
+    ResetNotices();
+    // OnDeathMatchStart :89958 queues the same sliding Movie as wave starts.
+    const char *name = "IDS_HUD_DEATH_MATCH_START2";
+    if (killLimit > 0) { name = "IDS_HUD_DEATH_MATCH_START1"; }
+    QueueOriginalNotice("GLU_MOVIE_WAVE_CLEARED", OriginalNoticeNumber(name, killLimit));
+    m_matchIntro = true;
+}
+
+bool SurvivalHud::TakeDeathmatchIntroCompletion() {
+    const bool complete = m_matchIntroCompleted;
+    m_matchIntroCompleted = false;
+    return complete;
+}
+
+void SurvivalHud::AddMatchMessage(const std::string &text) {
+    // MPMatchConsoleMessageAdd :87241 shares the five-entry queue for all events.
+    if (m_matchMessages.size() == 5) { m_matchMessages.erase(m_matchMessages.begin()); }
+    m_matchMessages.push_back({text});
+}
+
+void SurvivalHud::OnDeathmatchPowerup(const std::string &name) {
+    // OnDeathMatchUsePowerUp :87783 formats the original POWERUP name.
+    std::string text = m_movies.NamedString("IDS_HUD_DEATH_MATCH_USE_POWERUP");
+    const auto marker = text.find("%s");
+    if (marker != std::string::npos) { text.replace(marker, 2, name); }
+    AddMatchMessage(text);
+    std::printf("[hud-match] powerup=%s text=%s\n", name.c_str(), text.c_str());
+}
+
+void SurvivalHud::AdvanceDeathmatchWrapUp(unsigned deltaMs) {
+    // CGame::SetMissionWrapUp :75619 runs MISSION_END before ShowWrapUpMenu.
+    if (!m_matchWrapUp) {
+        m_matchWrapUp = true; m_matchWrapUpTime = 0;
+        const auto *movie = m_movies.GetMovie(m_movies.Ordinal("GLU_MOVIE_MISSION_END"));
+        if (movie != nullptr) { m_matchWrapUpDuration = movie->duration; }
+        return;
+    }
+    m_matchWrapUpTime = std::min(m_matchWrapUpDuration, m_matchWrapUpTime + deltaMs);
+}
+
+bool SurvivalHud::IsDeathmatchWrapUpComplete() const {
+    return m_matchWrapUp && m_matchWrapUpDuration > 0 && m_matchWrapUpTime >= m_matchWrapUpDuration;
 }
 
 bool SurvivalHud::DrawExperienceTexts(const std::vector<CombatScene::ExperienceText> &texts, bool horde) {
@@ -89,6 +138,17 @@ void SurvivalHud::OnOriginalWaveClear(unsigned wave, bool perfect, unsigned rewa
 }
 
 void SurvivalHud::ObserveProgress(const SurvivalHudState &state) {
+    if (state.deathmatch) {
+        // MPMatchConsoleMessageAdd :87241 keeps five messages for 5000 ms.
+        for (unsigned peer = 0; peer < 2; ++peer) {
+            const char *name = "IDS_HUD_DEATH_MATCH_KILL";
+            if (peer == 1) { name = "IDS_HUD_DEATH_MATCH_DEATH"; }
+            for (unsigned score = m_previousMatchScore[peer] + 1; score <= state.matchScore[peer]; ++score) {
+                AddMatchMessage(OriginalNoticeNumber(name, score));
+            }
+            m_previousMatchScore[peer] = state.matchScore[peer];
+        }
+    }
     // Native wave events come directly from the LEVEL consumer, not from
     // comparing two rendered snapshots. Reloading an account is no level-up.
     if (m_observedProgress && state.level > m_previousLevel) {
@@ -103,6 +163,11 @@ void SurvivalHud::Advance(int deltaMs) {
     if (deltaMs > 0) { m_liveWaveRemaining -= std::min(m_liveWaveRemaining, static_cast<unsigned>(deltaMs)); }
     if (deltaMs > 0) {
         m_controlTime += deltaMs;
+        if (!m_matchMessages.empty()) {
+            auto &message = m_matchMessages.front();
+            message.remainingMs -= std::min(message.remainingMs, static_cast<unsigned>(deltaMs));
+            if (message.remainingMs == 0) { m_matchMessages.erase(m_matchMessages.begin()); }
+        }
         if (HasChallenges()) {
             const auto *scroll = m_movies.GetMovie(m_movies.Ordinal("GLU_MOVIE_BRO_OPS_OVERLAY_SCROLL"));
             unsigned start = 0, end = 0;
@@ -120,6 +185,7 @@ void SurvivalHud::Advance(int deltaMs) {
     if (notice.movie == m_movies.Ordinal("GLU_MOVIE_WAVE_WRAPUP") && m_liveWaveRemaining != 0) { return; }
     if (movie != nullptr && notice.elapsed >= movie->duration) {
         if (notice.releaseLevel) { m_interstitialCompleted = true; }
+        if (m_matchIntro) { m_matchIntro = false; m_matchIntroCompleted = true; }
         m_notices.erase(m_notices.begin());
     }
 }

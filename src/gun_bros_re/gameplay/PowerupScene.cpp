@@ -3,6 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/PowerupScene.h"
+#include "gun_bros_re/gameplay/CMPMatch.h"
 #include "engine/core/CStringToKey.h"
 #include <cmath>
 #include <cstdio>
@@ -13,6 +14,39 @@ PowerupScene::PowerupScene(CResTOCManager &toc, PackTables &tables, PlayerModel 
       m_effects(effects), m_profile(profile), m_moviePlayer(toc, tables, scene), m_owner(owner) { m_moviePlayer.SetOwner(owner); }
 
 bool PowerupScene::Init() { return LoadPowerupCatalog(m_toc, m_tables, m_catalog); }
+
+bool PowerupScene::MatchAllows(const PowerupEntry &entry) const {
+    if (m_match == nullptr || m_owner != kBrotherCombatId) { return true; }
+    if (entry.resource.packHash != CStringToKey("pack5")) { return false; }
+    const unsigned id = entry.resource.localIndex;
+    // Resource identities, not replacement effect data. Effects remain Flow-driven.
+    if (id != 13 && id != 1 && id != 8 && id != 9) { return false; }
+    return m_match->CanUse(1, id == 13);
+}
+
+void PowerupScene::CommitMatchUse(const GameObjectRef &resource) {
+    if (m_match == nullptr) { return; }
+    if (m_owner == kBrotherCombatId) { m_match->CommitUse(1, resource.localIndex == 13); }
+    for (const auto &entry : m_catalog) {
+        if (entry.resource.packHash == resource.packHash && entry.resource.localIndex == resource.localIndex) {
+            m_cooldowns[resource.localIndex] = entry.data.field124 * 1000;
+            if (m_owner == kPlayerCombatId) { m_useMessages.push_back(entry.name); }
+            break;
+        }
+    }
+}
+
+bool PowerupScene::UseMatchConsumable(bool grenade) {
+    // Prefer the largest available health pack; the script rejects full health.
+    for (auto entry = m_catalog.rbegin(); entry != m_catalog.rend(); ++entry) {
+        const unsigned id = entry->resource.localIndex;
+        if (entry->resource.packHash != CStringToKey("pack5")) { continue; }
+        if (grenade && id != 13) { continue; }
+        if (!grenade && id != 1 && id != 8 && id != 9) { continue; }
+        if (SelectResource(entry->resource) && Use(!grenade)) { return true; }
+    }
+    return false;
+}
 
 GameObjectRef PowerupScene::GetEquipped(unsigned slot) {
     if (slot >= 2) { return {}; }
@@ -27,6 +61,7 @@ GameObjectRef PowerupScene::GetEquipped(unsigned slot) {
     }
     for (const auto &entry : m_catalog) {
         CPowerup query;
+        query.SetLevelContext(m_scene.GetLevel());
         query.Bind(entry.data);
         if (IsSupported(entry) && query.Query(4, slot)) {
             m_profile.configuration.powerups[slot] = entry.resource.localIndex;
@@ -41,6 +76,7 @@ bool PowerupScene::Equip(unsigned slot, const GameObjectRef &resource) {
     for (const auto &entry : m_catalog) {
         if (entry.resource.packHash != resource.packHash || entry.resource.localIndex != resource.localIndex) { continue; }
         CPowerup query;
+        query.SetLevelContext(m_scene.GetLevel());
         query.Bind(entry.data);
         if (!IsSupported(entry) || !query.Query(0)) { return false; }
         m_profile.configuration.powerups[slot] = resource.localIndex;
@@ -51,6 +87,7 @@ bool PowerupScene::Equip(unsigned slot, const GameObjectRef &resource) {
 }
 
 bool PowerupScene::IsSupported(const PowerupEntry &entry) const {
+    if (!MatchAllows(entry)) { return false; }
     // Expose only completed hosts. Legacy Tantrum and movie/auto-fire/turret
     // templates stay available in the full research catalogue.
     // Auto-fire and turret now have their original targeting/spawn hosts;
@@ -103,9 +140,12 @@ void PowerupScene::Cycle() {
 }
 
 bool PowerupScene::Use(bool fromSelector) {
+    if (m_match != nullptr && m_match->GetResult() != CMPMatch::Result::Playing) { return false; }
     if (m_moviePlayer.IsActive()) { return false; }
     const PowerupEntry *entry = GetSelected();
     if (entry == nullptr || !IsSupported(*entry) || GetCount() == 0 || !m_player.weapon) { return false; }
+    if (!m_player.weapon->brother.HasSpawned()) { return false; }
+    if (m_match != nullptr && m_cooldowns[entry->resource.localIndex] > 0) { return false; }
     if (m_vitals.dead != (entry->data.field112 != 0)) { return false; }
     // CBrother::UsePowerup :138000 guards this exact item before querying its
     // script. Native 29 exists, but the current turret's CanUse export is true.
@@ -119,6 +159,7 @@ bool PowerupScene::Use(bool fromSelector) {
     status.turret = m_player.weapon->brother.IsTurretActive();
     for (unsigned type = 0; type < 3; ++type) { status.frenzyTypes[type] = m_player.weapon->brother.IsFrenzyType(type); }
     CPowerup query;
+    query.SetLevelContext(m_scene.GetLevel());
     query.Bind(entry->data, status);
     if (!query.Query(1)) { return false; }
     if (fromSelector && !query.Query(2)) { return false; }
@@ -130,11 +171,13 @@ bool PowerupScene::Use(bool fromSelector) {
         if (decrement) {
             if (!m_profile.ConsumePowerup(entry->resource)) { m_moviePlayer.Reset(); ++failures; return false; }
             ++consumed;
+            CommitMatchUse(entry->resource);
             if (m_owner == kPlayerCombatId) { m_scene.RecordChallengePowerup(entry->resource); }
         }
         return true;
     }
     CPowerup powerup;
+    powerup.SetLevelContext(m_scene.GetLevel());
     powerup.Bind(entry->data, status);
     powerup.Equip();
     powerup.Use();
@@ -181,18 +224,21 @@ bool PowerupScene::Use(bool fromSelector) {
     if (requested && decrement) {
         if (!m_profile.ConsumePowerup(entry->resource)) { ++failures; return false; }
         ++consumed;
+        CommitMatchUse(entry->resource);
         if (m_owner == kPlayerCombatId) { m_scene.RecordChallengePowerup(entry->resource); }
     }
     return requested;
 }
 
 void PowerupScene::Update(int deltaMs) {
+    for (auto &cooldown : m_cooldowns) { cooldown.second = std::max(0, cooldown.second - deltaMs); }
     m_moviePlayer.Update(deltaMs);
     if (!m_player.weapon) { return; }
     const unsigned thrown = m_player.weapon->brother.TakeThrownGrenades(0);
     if (thrown > 0) {
         if (!m_profile.ConsumePowerup(m_equipped, thrown)) { ++failures; }
         consumed += thrown;
+        CommitMatchUse(m_equipped);
         for (unsigned index = 0; index < thrown; ++index) { if (m_owner == kPlayerCombatId) { m_scene.RecordChallengePowerup(m_equipped); } }
         std::printf("[powerup] thrown=%u remaining=%u\n", thrown, m_profile.GetPowerupCount(m_equipped));
         m_equipped = {};
@@ -208,6 +254,8 @@ void PowerupScene::Update(int deltaMs) {
 }
 
 void PowerupScene::Reset() {
+    m_cooldowns.clear();
+    m_useMessages.clear();
     m_equipped = {};
     m_moviePlayer.Reset();
 }
@@ -215,6 +263,7 @@ void PowerupScene::Reset() {
 bool PowerupScene::DrawMovies() { return m_moviePlayer.Draw(); }
 
 bool PowerupScene::HasAfterDeathPowerup() const {
+    if (m_match != nullptr) { return false; }
     for (const auto &entry : m_catalog) {
         if (entry.data.field112 != 0 && IsSupported(entry) && m_profile.GetPowerupCount(entry.resource) > 0) { return true; }
     }
@@ -222,6 +271,7 @@ bool PowerupScene::HasAfterDeathPowerup() const {
 }
 
 bool PowerupScene::UseAfterDeathPowerup() {
+    if (m_match != nullptr) { return false; }
     for (unsigned index = 0; index < m_catalog.size(); ++index) {
         if (m_catalog[index].data.field112 != 0 && Select(index) && Use(true)) { return true; }
     }

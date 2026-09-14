@@ -18,6 +18,11 @@
 
 #include <cstdio>
 
+bool GameScriptObject::IsDeathmatch() const {
+    if (m_deathmatch) { return true; }
+    return m_levelContext != nullptr && m_levelContext != this && m_levelContext->IsDeathmatch();
+}
+
 namespace GameScriptResolver {
 
 std::int16_t ResolveFunction(GameScriptObject *host, std::uint16_t functionId,

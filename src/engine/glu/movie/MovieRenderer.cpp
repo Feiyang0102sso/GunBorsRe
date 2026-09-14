@@ -211,6 +211,15 @@ float MovieRenderer::TextWidth(const std::string &text, unsigned font, float sca
     return value->Width(text, scale);
 }
 
+bool MovieRenderer::SpriteFrameTimes(unsigned archetype, unsigned animation, std::vector<unsigned> &times) {
+    const auto *data = GetAnimation(archetype, animation);
+    if (data == nullptr) { return false; }
+    times.clear();
+    unsigned time = 0;
+    for (unsigned duration : data->durations) { times.push_back(time); time += duration; }
+    return !times.empty();
+}
+
 bool MovieRenderer::DrawSprite(unsigned archetype, unsigned animationIndex, unsigned time, float x, float y, float scale, float alpha, float rotation) {
     Animation *animation = GetAnimation(archetype, animationIndex);
     if (animation == nullptr || animation->steps.empty()) { return false; }

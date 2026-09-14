@@ -16,6 +16,8 @@
 #include "gun_bros_re/gameplay/CLevelIndicator.h"
 #include <map>
 class CProfileManager;
+class CMPMatch;
+class PickupScene;
 
 constexpr float kArenaWidth = 1200;
 constexpr float kArenaHeight = 900;
@@ -66,6 +68,26 @@ public:
     void SetBrother(PlayerModel *model, CBrotherAI *brother);
     void SetLocalLive(bool enabled) { m_localLive = enabled; }
     bool IsLocalLive() const { return m_localLive; }
+    bool IsDeathmatch() const { return m_match != nullptr; }
+    void SetDeathmatch(CMPMatch *match, const std::vector<WeaponEntry> *weapons, PickupScene *pickups);
+    bool StartDeathmatch();
+    bool IsMatchSpawnPending(unsigned peer) const;
+    void UpdateDeathmatch(unsigned deltaMs);
+    bool RespawnDeathmatch(unsigned peer, bool initial = false, bool resumeFromShop = false);
+    bool EquipMatchGun(unsigned peer, const GameObjectRef &ref, bool resetActor = false);
+    bool CollectMatchWeapon(unsigned peer, unsigned index);
+    bool RequestMatchWeaponSwap(unsigned peer);
+    bool FinishMatchWeaponSwap(unsigned peer);
+    const GameObjectRef &MatchGun(unsigned peer, unsigned slot) const { return m_gunConfigurations[peer][slot]; }
+    GameObjectRef ActiveMatchGun(unsigned peer) const;
+    bool SelectMatchGun(unsigned peer, unsigned slot, const GameObjectRef &gun);
+    void SetMatchShopping(unsigned peer, bool shopping) { m_matchShopping[peer] = shopping; }
+    bool HasLineOfFire(float x, float y, float targetX, float targetY) const;
+    bool FindMatchDestination(float x, float y, bool cover, float targetX, float targetY, float &goalX, float &goalY, unsigned choice = 0) const;
+    bool FindMatchSupply(float x, float y, float &goalX, float &goalY) const;
+    bool FindMatchRoute(float x, float y, float goalX, float goalY, std::vector<CollisionPoint> &route) const;
+    bool CanHitBrother(const CombatHit &hit, CombatId target) const;
+    void RecordMatchDeath(unsigned peer, int killer);
     void SetTestBot(bool enabled) { m_testBot = enabled; }
     bool HasTestBot() const { return m_testBot && m_brotherModel != nullptr; }
     bool KillTestBot();
@@ -77,6 +99,14 @@ public:
     std::vector<IBrotherAIWorld::Threat> GetBrotherThreats() const override;
     bool CanBrotherWalk(float x, float y, float destinationX, float destinationY) const override {
         if (destinationX < m_left || destinationX > m_right || destinationY < m_top || destinationY > m_bottom) { return false; }
+        const float distance = std::hypot(destinationX - x, destinationY - y);
+        if (IsDeathmatch() && distance > 0 && distance <= 48 && !HasClearPath(x, y, x, y, m_playerRadius)) {
+            // At wall contact a swept-circle query returns t=0 even when leaving
+            // the wall. Test the same short movement the actor will execute.
+            float resolvedX = destinationX, resolvedY = destinationY;
+            ResolveMovement(x, y, resolvedX, resolvedY, m_playerRadius);
+            return std::hypot(resolvedX - destinationX, resolvedY - destinationY) < 0.1f;
+        }
         return HasClearPath(x, y, destinationX, destinationY, m_playerRadius);
     }
     void ActorPosition(CombatId actor, float &x, float &y) const;
@@ -90,6 +120,7 @@ public:
     void SetPeerProfile(CProfileManager *profile) { m_peerProfile = profile; }
     void SetGunConfiguration(unsigned peer, unsigned slot, const GameObjectRef &ref, unsigned masteryLimit);
     bool BrotherTouchesPickup(float x, float y) const;
+    bool BrotherIsCloser(float x, float y) const;
     bool IsPlayerDown() const override { return m_vitals.dead; }
     bool IsTeamDeathComplete() const;
     float GetReviveProgress() const { return m_reviveProgress; }
@@ -119,6 +150,7 @@ public:
     void EnemyCircle(const CombatEnemy &enemy, int part, float &x, float &y, float &radius) const;
     struct HealthBar {
         float x, y, width, height, border, fraction, red;
+        float green = 0, blue = 0;
     };
     /** BIG bounds give world top-centre x/y; width/height/border are screen pixels.
      * The HUD projection converts this anchor to a screen top-left rectangle.
@@ -194,6 +226,8 @@ public:
     float GetViewCenterY() const { if (m_hasViewCenter) { return m_viewCenterY; } return playerY; }
     void Splash(const CombatHit &hit, float radius, float coneDegrees,
         float force, int forceMs) override;
+    /** CProp native 10 directly visits the two brothers, bypassing CanCollide. */
+    void SplashBrothers(float x, float y, float radius, float damage, float force, int forceMs);
     void SpawnFromProjectile(const GameObjectRef &resource, const CombatHit &hit) override;
     bool FindTarget(const CombatHit &hit, float radius, float &x, float &y) override;
     bool Anchor(CombatId actor, int part, int node,
@@ -216,6 +250,18 @@ public:
     unsigned invalidSpawns = 0;
 
 private:
+    CMPMatch *m_match = nullptr;
+    const std::vector<WeaponEntry> *m_matchWeapons = nullptr;
+    PickupScene *m_matchPickups = nullptr;
+    unsigned m_auxiliaryMs[2]{};
+    unsigned m_matchSlots[2]{};
+    bool m_matchShopping[2]{};
+    CollisionPoint m_matchInitialSpawns[2];
+    float m_matchInitialAngles[2]{};
+    CollisionPoint m_matchMapSpawn;
+    bool m_matchSwap[2]{};
+    unsigned m_matchStreaks[2]{};
+    std::vector<unsigned> m_matchDeaths;
     void UpdateLocalRevive(int deltaMs);
     bool m_localLive = false;
     bool m_testBot = false, m_testBotReviveRequested = false;
@@ -270,8 +316,10 @@ private:
         float y;
         int objectId = -1;
         bool forcePool = false; // Retained; this host has no fixed original enemy pool.
+        CombatId summoner = 0;
     };
     std::vector<PendingSpawn> m_pendingSpawns;
+    CombatId ParticipantOwner(CombatId owner) const;
     PackTables &m_tables;
     const CShaderProgram &m_program;
     const std::vector<EnemyTemplateData> &m_catalog;
@@ -302,6 +350,7 @@ private:
     CLevel *m_level = nullptr;
     IPropWorld *m_props = nullptr;
     CombatId m_nextId = 2;
+    std::map<CombatId, CombatId> m_summoners;
     float m_playerForceX = 0;
     float m_playerForceY = 0;
     int m_playerForceMs = 0;

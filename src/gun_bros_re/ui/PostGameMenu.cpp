@@ -85,6 +85,7 @@ void BeginPostGame(MenuState &state, const SurvivalGameContext &context, const s
     state.postGame.postGameBound = false;
     state.postGame.postGameClosing = false;
     state.postGame.postGameUpgradePending = false;
+    if (context.result.deathmatch) { return; }
     // ShowForGuns :394260 prefers the active gun, then the other eligible gun.
     const unsigned activeSlot = context.profile.activeWeaponSlot;
     for (unsigned offset = 0; offset < context.profile.configuration.guns.size(); ++offset) {
@@ -482,11 +483,37 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
             : view(menu), state(selection), toc(manager), tables(resources), interactive(enabled) {}
         bool DrawMovieRegion(const MovieRegion &region) override {
             if (region.index == 1) {
+                if (state.result.live) {
+                    // CategoryCallback :165166: overview + original MP buttons.
+                    std::vector<const OriginalMenuEntry *> buttons{OriginalMenuData("MDS_BUTTON_POSTGAME_INFO", 0),
+                        OriginalMenuData("MDS_BUTTON_POSTGAME_LEADERBOARD_MP", 0)};
+                    if (state.result.deathmatch) { buttons.push_back(OriginalMenuData("MDS_BUTTON_POSTGAME_ADD_BRO_MP", 0)); }
+                    float totalWidth = 0;
+                    std::vector<MovieRegion> bounds;
+                    for (const auto *entry : buttons) {
+                        MovieRegion touch;
+                        if (entry == nullptr || !view.movies.Region(view.movies.Ordinal(entry->movies[0]), 1, 0, touch)) { return false; }
+                        totalWidth += touch.width + 2;
+                        bounds.push_back(touch);
+                    }
+                    float x = region.x + (region.width - totalWidth) / 2;
+                    for (unsigned index = 0; index < buttons.size(); ++index) {
+                        MovieRegion origin = region; origin.x = x;
+                        bool pressed = false;
+                        unsigned chapter = 2;
+                        if (index == 0) { chapter = 3; }
+                        // Remote account actions are unavailable to a local opponent.
+                        if (!DrawOriginalMovieButton(view, *buttons[index], origin, view.movies.NamedString(buttons[index]->strings[0]),
+                            5, interactive && index == 0, pressed, chapter, state.postGame.postGameItemTime)) { return false; }
+                        x += bounds[index].width + 2;
+                    }
+                    return true;
+                }
                 const auto *first = OriginalMenuData("MDS_BUTTON_POSTGAME_INFO", 0);
                 if (first == nullptr) { return false; }
                 MovieRegion bounds;
-                if (!view.movies.Region(view.movies.Ordinal(first->movies[0]), 0, 0, bounds)) { return false; }
-                // CategoryCallback ARM native gap=2; CMenuMovieButton origin is top-left.
+                if (!view.movies.Region(view.movies.Ordinal(first->movies[0]), 1, 0, bounds)) { return false; }
+                // CategoryCallback :165166 uses region1 artwork widths (+48), gap=2.
                 float x = region.x + static_cast<int>(region.width) / 2 - static_cast<int>((bounds.width + 2) * 2) / 2;
                 for (unsigned index = 0; index < 2; ++index) {
                     const auto *entry = OriginalMenuData("MDS_BUTTON_POSTGAME_INFO", index);
@@ -521,7 +548,12 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
             } else if (region.index == 2) {
                 std::string title;
                 const auto &result = state.result;
-                if (result.horde) {
+                if (result.deathmatch) {
+                    const char *name = "IDS_WRAPUP_DEATH_MATCH_DRAW";
+                    if (result.matchResult == 1) { name = "IDS_WRAPUP_DEATH_MATCH_WIN"; }
+                    if (result.matchResult == 2) { name = "IDS_WRAPUP_DEATH_MATCH_LOSS"; }
+                    title = view.movies.NamedString(name);
+                } else if (result.horde) {
                     const char *name = "IDS_WRAPUP_SCORE";
                     if (result.score != 0 && result.score == result.highScore) { name = "IDS_WRAPUP_NEW_HIGH_SCORE"; }
                     title = PostGameFormat(view, name, {std::to_string(result.score)});
@@ -540,11 +572,16 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
                     // CUtility::TimeToString flags1,1; ARM string VA0x3c3048.
                     std::snprintf(time, sizeof(time), "%.2u:%.2u:%.2u", seconds / 3600, seconds / 60 % 60, seconds % 60);
                     text = PostGameFormat(view, "IDS_WRAPUP_SURVIVAL_TIME", {time});
+                } else if (state.result.deathmatch) {
+                    text = PostGameFormat(view, "IDS_HUD_DEATH_MATCH_START1", {std::to_string(state.result.matchKillLimit)});
+                    if (state.result.matchKillLimit == 0) {
+                        text = PostGameFormat(view, "IDS_HUD_DEATH_MATCH_START2", {std::to_string(state.result.matchTimeLimitSeconds / 60)});
+                    }
                 } else { text = PostGameFormat(view, "IDS_WRAPUP_WAVE_CLEARED", {std::to_string(state.result.waves)}); }
                 UpgradeCenteredText(view, region, text, 0);
             } else if (state.result.live && region.index == 7) {
                 unsigned index = 0;
-                if (!state.online.IsConnected()) { index = 1; }
+                if (!state.online.IsConnected() && !state.result.deathmatch) { index = 1; }
                 const auto *entry = OriginalMenuData("MDS_BUTTON_POSTGAME_REPLAY_MP", index);
                 if (entry == nullptr) { return false; }
                 MovieRegion origin = region;
@@ -553,12 +590,25 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
                 std::string label = view.movies.NamedString(entry->strings[0]);
                 if (state.postGame.liveReplay) { label = view.movies.NamedString("IDS_WRAPUP_MP_REPLAY_REQUESTED"); }
                 if (!DrawOriginalMovieButton(view, *entry, origin, label, 1,
-                    interactive && state.online.IsConnected() && !state.postGame.liveReplay, pressed)) { return false; }
+                    interactive && (state.online.IsConnected() || state.result.deathmatch) && !state.postGame.liveReplay, pressed)) { return false; }
                 if (pressed) { state.postGame.liveReplay = true; state.postGame.liveReplayAt = view.clock; }
             } else if (state.result.live && (region.index == 5 || region.index == 6)) {
                 std::string name = "PLAYER";
                 if (region.index == 6) { name = state.result.peerName; }
-                UpgradeCenteredText(view, region, name, 0);
+                // PlayerNameCallback :164995 places the status sprite beside
+                // the name and alternates ready text every two seconds.
+                unsigned status = 0;
+                if (state.postGame.liveReplay) { status = 1; }
+                const auto *entry = OriginalMenuData("MDS_POSTGAME_REPLAY_MP", status);
+                if (entry == nullptr) { return false; }
+                const unsigned sprite = entry->sprites[0];
+                MovieRegion bounds;
+                if (!view.movies.SpriteBounds(sprite >> 16, sprite & 255, bounds)) { return false; }
+                if (status == 1 && (state.postGame.postGameIconTime / 2000) % 2 != 0) { name = view.movies.NamedString(entry->strings[0]); }
+                const float gap = bounds.width * 1.5f;
+                const float x = region.x + region.width / 2 + gap - view.movies.TextWidth(name) / 2;
+                if (!view.movies.Text(name, x, region.y + (region.height - view.movies.TextHeight()) / 2, 0, 1, 0, region.alpha) ||
+                    !view.movies.DrawSprite(sprite >> 16, sprite & 255, state.postGame.postGameIconTime, x - gap, region.y, 1, region.alpha)) { return false; }
             } else if (region.index == 5) {
                 const std::string text = view.movies.NamedString("IDS_WRAPUP_TOTAL_KILLS") + std::to_string(static_cast<std::uint16_t>(state.result.kills));
                 view.movies.Text(text, region.x, region.y + (region.height - view.movies.TextHeight(0)) / 2, 0, 1, 0, region.alpha);

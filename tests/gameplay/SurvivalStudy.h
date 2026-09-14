@@ -26,6 +26,8 @@ struct SurvivalDevelopment {
     bool flockCheck = false;
     bool performanceFlockStudy = false;
     bool localLiveCheck = false;
+    bool deathmatchCheck = false;
+    bool deathmatchFeedbackCheck = false;
 };
 int RunLocalLiveCheck(const std::string &bigDirectory);
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,

@@ -18,6 +18,7 @@
 
 bool SurvivalHud::Init(CResTOCManager &toc, PackTables &tables) {
     m_tables = &tables;
+    m_toc = &toc;
     CResPackTOC &core = *toc.GetPack(toc.GetCorePackIndex());
     if (!m_movies.Init(core, core) || !LoadStoreCatalog(toc, tables, m_store)) { return false; }
     if (!LoadPowerupCatalog(toc, tables, m_powerups)) { return false; }
@@ -99,8 +100,14 @@ void SurvivalHud::Icon(unsigned type, const GameObjectRef &object, const MovieRe
 
 std::vector<SurvivalHud::Button> SurvivalHud::Buttons(const SurvivalHudState &state) const {
     // Every entry, including isolated map studies, uses original input geometry.
-    if (state.shopOpen || state.paused || state.dead || state.cleared) { return {}; }
-    return OriginalControlButtons(state);
+    if (state.shopOpen || state.paused || (state.dead && !state.deathmatch) || state.cleared) { return {}; }
+    auto buttons = OriginalControlButtons(state);
+    if (state.dead) {
+        buttons.erase(std::remove_if(buttons.begin(), buttons.end(), [](const Button &button) {
+            return button.action != SurvivalHudAction::Pause;
+        }), buttons.end());
+    }
+    return buttons;
 }
 
 SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, float y, bool down) {
@@ -116,7 +123,7 @@ SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, f
             m_selectorDragged = false;
             m_selectorPressArmed = false;
             for (const auto &hit : m_selectorHits) {
-                if (hit.area.Contains(x, y) && (hit.action == SurvivalHudAction::SelectItem || hit.action == SurvivalHudAction::BuyItem)) {
+                if (hit.area.Contains(x, y) && (hit.action == SurvivalHudAction::SelectItem || hit.action == SurvivalHudAction::BuyItem || hit.action == SurvivalHudAction::SelectMatchGun)) {
                     m_selectorPressArmed = true;
                     break;
                 }
@@ -159,12 +166,24 @@ SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, f
         }
         for (const auto &hit : m_selectorHits) {
             if (!hit.area.Contains(x, y)) { continue; }
+            if (hit.action == SurvivalHudAction::ShowGuns || hit.action == SurvivalHudAction::ShowPowerups) {
+                m_matchGuns = hit.action == SurvivalHudAction::ShowGuns;
+                return SurvivalHudAction::None;
+            }
+            if (hit.action == SurvivalHudAction::MatchSlot1 || hit.action == SurvivalHudAction::MatchSlot2) {
+                m_matchSelectedSlot = 0;
+                if (hit.action == SurvivalHudAction::MatchSlot2) { m_matchSelectedSlot = 1; }
+                m_matchSlotChapter = 6;
+                if (m_matchSelectedSlot == 1) { m_matchSlotChapter = 3; }
+                m_matchSlotTime = 0;
+                return SurvivalHudAction::None;
+            }
             if (hit.storeIndex >= 0) { m_selectedItem = hit.storeIndex; }
             return hit.action;
         }
         return SurvivalHudAction::None;
     }
-    if (state.paused && !state.shopOpen && !state.dead && !state.cleared) {
+    if (state.paused && !state.shopOpen && (!state.dead || state.deathmatch) && !state.cleared) {
         return OriginalPausePointer(state, x, y);
     }
     for (const Button &button : Buttons(state)) {
@@ -184,6 +203,9 @@ bool SurvivalHud::DrawTutorialDebugNotice(std::uint64_t ticks) {
 }
 
 bool SurvivalHud::Draw(const SurvivalHudState &state) {
+    if (m_matchWrapUp) {
+        return m_movies.Draw(m_movies.Ordinal("GLU_MOVIE_MISSION_END"), m_matchWrapUpTime, 512, 384, 1024, 768);
+    }
     for (const auto &bar : state.enemyHealthBars) {
         // Original Utility::DrawRect border 0xFF7F8C98 and red fill.
         m_movies.Rectangle(bar.x, bar.y, bar.width, 1, 127 / 255.0f, 140 / 255.0f, 152 / 255.0f, 1);
@@ -192,7 +214,7 @@ bool SurvivalHud::Draw(const SurvivalHudState &state) {
         m_movies.Rectangle(bar.x + bar.width - 1, bar.y, 1, bar.height, 127 / 255.0f, 140 / 255.0f, 152 / 255.0f, 1);
         m_movies.Rectangle(bar.x + bar.border, bar.y + bar.border,
             (bar.width - 2 * bar.border) * bar.fraction, bar.height - 2 * bar.border,
-            bar.red, std::max(0.0f, bar.red - 200 / 255.0f), std::max(0.0f, bar.red - 200 / 255.0f), 1);
+            bar.red, bar.green + std::max(0.0f, bar.red - 200 / 255.0f), bar.blue + std::max(0.0f, bar.red - 200 / 255.0f), 1);
     }
     if (!state.shopOpen) { m_selectorBound = false; m_selectorHits.clear(); }
     if (!state.paused && m_pauseBound) { m_pauseHelp = false; ResetPauseList(); }
@@ -252,7 +274,7 @@ bool SurvivalHud::Draw(const SurvivalHudState &state) {
     DrawNotice();
     DrawSurvivalDebugInfo(m_movies, state);
     if (state.shopOpen) { return DrawOriginalSelector(state); }
-    if (state.paused && !state.dead && !state.cleared) { return DrawOriginalPause(state); }
+    if (state.paused && (!state.dead || state.deathmatch) && !state.cleared) { return DrawOriginalPause(state); }
     // End-of-run navigation is owned by the original postgame menu in the shell.
     // CDialogPopup draws the original radio portrait beside its text region.
     if (!m_dialog.Draw()) { return false; }
