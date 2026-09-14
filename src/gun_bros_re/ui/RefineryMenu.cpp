@@ -134,7 +134,8 @@ public:
         // The local service has no validated friend power. Provider 69/3
         // alternates only on enabled meters, and only for a nonzero payout.
         if (IsRefinerySlotEnabled(data, slot) && amount != 0 && (state.refinery.refineryElapsed / 2000) % 2 != 0) {
-            const auto payout = static_cast<std::uint64_t>(std::floor(static_cast<float>(amount) * data.efficiencyPercent[slot] / 100.0f + 0.5f));
+            const auto payout = static_cast<std::uint64_t>(std::floor(static_cast<float>(amount) *
+                (data.efficiencyPercent[slot] + profile.refinery.friendEfficiencyBonus) / 100.0f + 0.5f));
             detail = RefineryNumber(view, "IDS_SHOP_COMMON", payout);
             font = 0;
         }

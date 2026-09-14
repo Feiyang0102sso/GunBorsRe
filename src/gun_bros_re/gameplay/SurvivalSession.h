@@ -28,11 +28,13 @@ public:
     void SetOriginalHud(SurvivalHud *hud) { m_originalHud = hud; }
     bool HasOriginalHud() const { return m_originalHud != nullptr; }
     void Update(int deltaMs, float moveX, float moveY, bool fire);
+    void SetSuspended(bool suspended) { m_suspended = suspended; }
     void UpdateAfterDeath(int deltaMs);
     /** Shared gameplay exit gate, also exercised by the fatal-hit regression. */
     bool IsDeathComplete() const {
-        const PlayerVitals &vitals = m_scene.GetPlayerVitals();
-        return vitals.dead && vitals.deathAnimationComplete;
+        if (m_powerups != nullptr && m_powerups->IsMovieActive()) { return false; }
+        if (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive()) { return false; }
+        return m_scene.IsTeamDeathComplete();
     }
     /** Shared session exit decision used by the host loop and regression. */
     // CLevel::OnLevelCleared -> CGame::OnMissionSuccess starts mission wrap-up.
@@ -61,6 +63,7 @@ public:
 
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPowerups(PowerupScene *powerups) { m_powerups = powerups; }
+    void SetPeerPowerups(PowerupScene *powerups) { m_peerPowerups = powerups; }
     void OnWaveCleared(unsigned perfectRewardPercent) override;
     void SetPickups(PickupScene *pickups, WeaponEffects *effects) { m_pickups = pickups; m_effects = effects; }
     bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) override;
@@ -84,6 +87,7 @@ public:
     void CompleteDialog();
     unsigned GetPowerupCount(unsigned localIndex) const override;
 private:
+    bool m_suspended = false;
     void UpdateDialog(int deltaMs);
     void UpdateMapInteractions(float previousX, float previousY);
     void UpdateCamera(int deltaMs = 0);
@@ -127,5 +131,6 @@ private:
     WeaponEffects *m_effects = nullptr;
     IPropWorld *m_props = nullptr;
     PowerupScene *m_powerups = nullptr;
+    PowerupScene *m_peerPowerups = nullptr;
 };
 #endif

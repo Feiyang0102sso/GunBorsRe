@@ -236,7 +236,9 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return -3; }
             if (launch) {
                 if (state.gameMode == 0) { return static_cast<int>(state.planet); }
-                if (!BeginLocalMatch(state)) { state.ShowStorePrompt("MDS_PROMPT_MP_UNAVAILABLE", false, true, 0); }
+                if (!BeginLocalMatch(state)) {
+                    state.ShowStorePrompt("MDS_PROMPT_MP_UNAVAILABLE", false, true, 0);
+                }
             }
         }
 
@@ -311,6 +313,16 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         if (!state.message.empty()) { view.Text(450, 738, state.message, 1.45f, 0.93f, 0.74f, 0.33f); }
         if (state.page == 26 && !DrawMastery(view, state, profile, toc, tables, store, weapons, savePath, &progress)) { return -3; }
         if (!DrawStorePrompt(view, state)) { return -3; }
+        if (TakeLocalMatch(state, menuClock)) { state.rematchingBot = false; return static_cast<int>(state.planet); }
+        if (!state.online.IsConnected()) { state.postGame.liveReplay = false; }
+        if (state.result.live && state.postGame.liveReplay && menuClock >= state.postGame.liveReplayAt + 1500) {
+            state.postGame.liveReplay = false;
+            state.rematchingBot = true;
+            state.postGame.postGameMusic = false;
+            state.starMap.startingWave = 0;
+            state.gameMode = 1;
+            return static_cast<int>(state.planet);
+        }
         if (state.promotion.IsActive()) {
             state.promotion.Update(static_cast<unsigned>(view.clock - state.promotionTick));
             state.promotionTick = view.clock;

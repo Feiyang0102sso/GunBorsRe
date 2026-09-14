@@ -86,6 +86,7 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'audio-transitions' @('--audio-transitions-check')
         Add-Check 'postgame-presentation' @('--postgame-presentation-check')
         Add-Check 'player-death' @('--player-death-check')
+        Add-Check 'local-live' @('--local-live-check')
         Add-Check 'armor-data' @('--armor-check')
         Add-Check 'enemies' @('--arena-check')
         Add-Check 'boss' @('--boss-check')

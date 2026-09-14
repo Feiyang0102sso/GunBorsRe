@@ -9,9 +9,11 @@
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/data/CPlayerProgress.h"
 
+enum class LoadingMode { Solo, Live, Deathmatch };
+
 class OriginalLoadingSplash : public IMovieRegionCallback {
 public:
-    bool Init(MovieRenderer &movies, unsigned index, const CProfileManager *profile = nullptr) {
+    bool Init(MovieRenderer &movies, unsigned index, const CProfileManager *profile = nullptr, LoadingMode mode = LoadingMode::Solo) {
         m_movies = &movies;
         m_profile = profile;
         CKeysetResource images, texts;
@@ -20,8 +22,16 @@ public:
             images.handles.size() <= 5 || texts.handles.size() != images.handles.size()) { return false; }
         // CMenuSystem::Init :97481 excludes the five multiplayer/end splashes.
         m_count = static_cast<unsigned>(images.handles.size()) - 5;
-        index %= m_count;
+        if (mode == LoadingMode::Solo) { index %= m_count; }
+        // User-required separate pools: the four blue multiplayer wallpapers
+        // precede the final red Deathmatch entry in the original KEYSET.
+        // iOS 3.6.0's action24 also visits the red entry; see correction research.
+        if (mode == LoadingMode::Live) { index = m_count + index % (images.handles.size() - m_count - 1); }
+        if (mode == LoadingMode::Deathmatch) { index = static_cast<unsigned>(images.handles.size() - 1); }
         m_imageHandle = images.handles[index];
+        // MENU_GAME_LOAD 0x4031F0 uses GLU_MOVIE_SPLASH and KEYSET images.
+        // 0x4031B0 / IDB_SPLASH_MAIN_MP belongs to MENU_BOOT_LOAD, not a level load.
+        m_alignment = kSplashImageAlignment;
         m_textHandle = texts.handles[index];
         std::vector<std::uint8_t> bytes;
         PNGImage image;
@@ -108,8 +118,8 @@ private:
         if (region.index == 0) {
             const float scale = std::max(region.width / m_image.GetWidth(), region.height / m_image.GetHeight());
             const float width = m_image.GetWidth() * scale, height = m_image.GetHeight() * scale;
-            float x = 0;
-            if (kSplashImageAlignment == 1) { x = region.x + (region.width - width) / 2; }
+            float x = region.x;
+            if (m_alignment == 1) { x = region.x + (region.width - width) / 2; }
             m_movies->Image(m_image, x, region.y, width, height);
         } else if (region.index == 1) {
             const std::string caption = m_movies->NamedString(kSplashCaption);
@@ -131,5 +141,6 @@ private:
     std::string m_text;
     unsigned m_ordinal = 0, m_count = 0, m_imageHandle = 0, m_textHandle = 0;
     unsigned m_idleStart = 0, m_idleEnd = 0, m_duration = 0;
+    unsigned m_alignment = 0;
 };
 #endif

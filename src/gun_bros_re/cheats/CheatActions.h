@@ -19,6 +19,7 @@ struct CombatCheatResult {
     bool resume = false;
     bool resetClock = false;
     bool challengesUpdated = false;
+    bool botShop = false, botPowerup = false;
 };
 bool ApplyCombatCheat(const std::string &command, CombatScene &scene, PlayerVitals &vitals,
     PowerupScene &powerups, SurvivalSession &session, SurvivalGameContext *context, CombatCheatResult &result,

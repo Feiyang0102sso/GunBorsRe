@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <string>
 #include <bitset>
+#include "gun_bros_re/data/CFriendPowerManager.h"
 
 enum class PurchaseResult { Purchased, Owned, LevelLocked, InsufficientCoins, InsufficientWarbucks, Unsupported };
 
@@ -28,6 +29,7 @@ struct WeaponMasteryEntry {
 
 class CProfileManager {
 public:
+    unsigned friendCount = 0; // Runtime roster membership, not native record 1006.
     void Reset(std::uint32_t corePackHash, const CRefinementManager::Template &refinement);
     bool LoadFromDisk(const std::filesystem::path &path);
     bool SaveToDisk(const std::filesystem::path &path) const;

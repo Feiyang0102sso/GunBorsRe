@@ -30,6 +30,7 @@ struct EnemyAction {
     float force = 0;
     int durationMs = 0;
     CombatId projectile = 0;
+    CombatId owner = 0;
     HitResult result = HitResult::Pending;
 };
 

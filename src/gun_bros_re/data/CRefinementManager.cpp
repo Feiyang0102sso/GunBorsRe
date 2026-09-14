@@ -64,7 +64,8 @@ bool CRefinementManager::BeginRefinement(unsigned slot, unsigned interval, std::
     }
     CRefinementSlot &target = slots[slot];
     target.amount = amount;
-    target.efficiency = m_template->efficiencyPercent[interval] / 100.0f;
+    // CRefinementManager::GetEfficiency adds percentage points, not a factor.
+    target.efficiency = (m_template->efficiencyPercent[interval] + friendEfficiencyBonus) / 100.0f;
     target.finishTime = now + static_cast<std::int64_t>(m_template->minutes[interval]) * 60;
     target.startTimeSeconds = static_cast<std::uint32_t>(now);
     target.totalDurationMs = static_cast<std::int32_t>(m_template->minutes[interval] * 60000);

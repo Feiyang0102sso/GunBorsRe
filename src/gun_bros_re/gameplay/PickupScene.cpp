@@ -1,6 +1,7 @@
 /** @file PickupScene.cpp
  * @brief Keep templates/animation clocks stable; collect each instance once.
  */
+#define NOMINMAX
 #include "gun_bros_re/gameplay/PickupScene.h"
 #include "gun_bros_re/gameplay/CombatScene.h"
 #include "gun_bros_re/gameplay/WeaponEffects.h"
@@ -85,8 +86,8 @@ bool PickupScene::Spawn(const GameObjectRef &ref, float x, float y, int objectId
     return false;
 }
 
-void PickupScene::GrantStoreItem(const GameObjectRef &ref) {
-    if (m_profile == nullptr) { return; }
+void PickupScene::GrantStoreItem(const GameObjectRef &ref, CProfileManager *profile) {
+    if (profile == nullptr) { return; }
     std::vector<std::uint8_t> payload;
     if (!m_tables.ReadSectionResource(ref.packHash, GameSection::StoreItem, ref.localIndex, payload)) { ++failures; return; }
     CStoreItem item;
@@ -94,8 +95,8 @@ void PickupScene::GrantStoreItem(const GameObjectRef &ref) {
     if (!item.Init(stream)) { ++failures; return; }
     // CollectItem uses AcquireItem(..., free=true). No currency is deducted.
     for (const GameObjectTypeRef &object : item.objects) {
-        if (object.type == 17) { m_profile->AddPowerup(object.object, 1); }
-        else if (object.type == 2 || object.type == 6) { m_profile->Grant(object.type, object.object); }
+        if (object.type == 17) { profile->AddPowerup(object.object, 1); }
+        else if (object.type == 2 || object.type == 6) { profile->Grant(object.type, object.object); }
         else { ++failures; std::printf("[pickup] unsupported store object type=%u\n", object.type); }
     }
 }
@@ -119,15 +120,27 @@ void PickupScene::Update(int deltaMs, CombatScene &scene, WeaponEffects &effects
     collections.clear();
     for (std::size_t index = 0; index < m_instances.size();) {
         Instance &instance = *m_instances[index];
-        if (!scene.TouchesPickup(instance.x, instance.y)) { ++index; continue; }
+        const bool playerTouch = scene.TouchesPickup(instance.x, instance.y);
+        const bool peerTouch = !playerTouch && scene.BrotherTouchesPickup(instance.x, instance.y);
+        if (!playerTouch && !peerTouch) { ++index; continue; }
         if (instance.pickup.Collect()) {
             effects.StopEffect(instance.effectHandle);
             ++collected;
             for (const PickupAction &action : instance.pickup.TakeActions()) {
-                if (action.kind == PickupAction::Kind::Xplodium) { scene.AddXplodium(action.amount); }
-                else if (action.kind == PickupAction::Kind::Experience) { scene.AddExperience(action.amount); }
-                else if (action.kind == PickupAction::Kind::Health) { scene.AddHealth(action.amount); }
-                else if (action.kind == PickupAction::Kind::StoreItem) { GrantStoreItem(action.resource); }
+                if (action.kind == PickupAction::Kind::Xplodium) {
+                    if (peerTouch) { scene.AddPeerXplodium(action.amount); } else { scene.AddXplodium(action.amount); }
+                } else if (action.kind == PickupAction::Kind::Experience) {
+                    if (peerTouch) { scene.AddPeerExperience(action.amount); } else { scene.AddExperience(action.amount); }
+                } else if (action.kind == PickupAction::Kind::Health) {
+                    if (peerTouch) {
+                        auto *vitals = scene.GetBrotherVitals();
+                        vitals->health = std::min(vitals->maximum, vitals->health + action.amount);
+                    } else { scene.AddHealth(action.amount); }
+                } else if (action.kind == PickupAction::Kind::StoreItem) {
+                    CProfileManager *profile = m_profile;
+                    if (peerTouch) { profile = m_peerProfile; }
+                    GrantStoreItem(action.resource, profile);
+                }
                 else if (action.kind == PickupAction::Kind::Sound) {
                     GunCue cue;
                     cue.kind = GunCue::Kind::Sound;

@@ -88,9 +88,12 @@ bool PowerupMoviePlayer::ApplyActions() {
         } else if (action.function == 14 || action.function == 26) {
             // Selector-only input/mode controls are already inaccessible while
             // its powerup owns presentation. Neither native emits an event.
+        } else if (action.function == 21) {
+            // CPowerup native 21 calls OnRevive(1), distinct from rescue(0).
+            if (!m_scene.ReviveActor(m_owner, 1)) { ++failures; return false; }
         } else if (action.function == 3) {
             CombatHit hit;
-            hit.owner = kPlayerCombatId;
+            hit.owner = m_owner;
             hit.ownerType = 0;
             // Native 3 reads CMap::CCamera's center (+9960/+9964), which
             // differs from the player near the camera bounds.

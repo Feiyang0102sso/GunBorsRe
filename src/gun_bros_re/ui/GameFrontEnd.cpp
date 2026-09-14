@@ -6,8 +6,24 @@
 using namespace MenuDetail;
 
 namespace {
+LocalBotFriend *MatchBot(MenuState &state) {
+    if (!state.rematchingBot && state.botRoster != nullptr) { state.matchedBot = state.botRoster->MatchSelected(); }
+    state.rematchingBot = false;
+    return state.matchedBot;
+}
 int RunFrontEndSurvival(SurvivalLaunch launch, MenuState &state) {
     launch.debugSelection = &state.debugMap;
+    launch.localBot = state.online.IsConnected() && state.social.selectedLocalFriend != 0;
+    launch.botFriend = nullptr;
+    if (launch.localBot) { launch.botFriend = state.botFriend; }
+    if (state.botRoster != nullptr && launch.localBot) { launch.botFriend = state.botRoster->At(state.social.selectedLocalFriend - 1); }
+    // Original action23 also matches unlocked MissionType2 (BOKOR) in Live.
+    if (state.gameMode == 1 && launch.archiveMission != nullptr) {
+        launch.localLive = true;
+        launch.withBrother = true;
+        if (state.botRoster != nullptr) { launch.botFriend = MatchBot(state); }
+        if (launch.botFriend == nullptr) { return 1; }
+    }
     return RunSurvival(launch);
 }
 }
@@ -60,6 +76,12 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
     }
     CBGM music; // Lifetime includes every menu, loading screen and game session.
     MenuState state;
+    LocalBotRoster botRoster;
+    if (!botRoster.Load(toc, tables, savePath, profile)) { return 1; }
+    state.botRoster = &botRoster;
+    state.social.selectedLocalFriend = botRoster.Selected();
+    state.botFriend = botRoster.At(0);
+    if (botRoster.Selected() != 0) { state.botFriend = botRoster.At(botRoster.Selected() - 1); }
     state.store.shopGunSlot = profile.activeWeaponSlot;
     state.page = std::min(page, 29u);
     if (page == 0 && screenshotPath.empty()) {
@@ -98,6 +120,34 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         if (choice == -3) { return 1; }
         if (choice == -2) { return 0; }
         if (choice < 0) { return !profile.SaveToDisk(savePath); }
+        if (state.gameMode == 1 && choice < 4) {
+            // Live uses the real local account; the peer has its own archive.
+            SurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
+            context.music = &music;
+            const auto &level = profile.nativeArchive->survivalLevels[choice];
+            std::vector<std::uint8_t> bytes;
+            if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, bytes)) { return 1; }
+            CArrayInputStream input(bytes);
+            CLevel::Template data;
+            if (!data.Init(input) || input.Available() != 0) { return 1; }
+            SurvivalLaunch launch;
+            launch.bigDirectory = bigDirectory;
+            launch.packShortName = tables.GetPackName(data.mapRef.packHash);
+            launch.mapIndex = data.mapRef.localIndex;
+            launch.gameContext = &context;
+            launch.window = &window;
+            launch.localLive = true;
+            launch.botFriend = MatchBot(state);
+            if (launch.botFriend == nullptr) { return 1; }
+            launch.withBrother = true;
+            if (state.starMap.startingWave >= 0) { launch.startWave = static_cast<unsigned>(state.starMap.startingWave); }
+            const int result = RunSurvival(launch);
+            if (result != 0) { return result; }
+            state.online.CancelMatch();
+            BeginPostGame(state, context, weapons);
+            std::printf("[local-live] entered multiplayer results\n");
+            continue;
+        }
         if (choice == 5) {
             SurvivalGameContext context{profile, savePath, 0};
             context.music = &music;

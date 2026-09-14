@@ -634,6 +634,7 @@ bool EquipPlayerWeapon(PackTables &tables, const CScript &playerScript,
     std::vector<const CMesh *> bodyMeshes;
     for (auto &part : out.parts) { bodyMeshes.push_back(&part->mesh); }
     weapon->brother.SetHuman(out.human);
+    weapon->brother.SetCooperative(out.cooperative);
     weapon->gun.SetMasteryExperience(out.masteryExperience);
     weapon->brother.Bind(weapon->playerScript, out.moveSet, bodyMeshes, weapon->gun, meshes);
     std::printf("[player] equipped %s: weaponTorso=%d move=%d legs=%d hand=%u state=%d\n",

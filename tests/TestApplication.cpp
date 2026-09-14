@@ -141,6 +141,7 @@ int RunTestApplication(int argc, char **argv) {
     bool checkBoss = false;
     bool checkMapOcclusion = false;
     bool checkPlayerDeath = false;
+    bool checkLocalLive = false;
     bool checkDialog = false;
     int modeArgumentCount = 0;
     bool researchMenu = false;
@@ -642,6 +643,7 @@ else if (std::strcmp(argument, "--dialog-check") == 0) {
 else if (std::strcmp(argument, "--performance-check") == 0) {
             checkPerformance = true;
         }
+else if (std::strcmp(argument, "--local-live-check") == 0) { checkLocalLive = true; }
 else if (std::strcmp(argument, "--spawn-performance-check") == 0) {
             checkSpawnPerformance = true;
         }
@@ -858,6 +860,7 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
 #endif
 #if GB_ENABLE_TESTS
     if (checkPlayerDeath) { return RunPlayerDeathCheck(bigDirectory); }
+    if (checkLocalLive) { return RunLocalLiveCheck(bigDirectory); }
 #endif
     if (checkCombatFeedback) { return RunViewerSurvival(bigDirectory, "pack7", 6, 0, -1, "", 0, false, false, false, 2, 0, nullptr, false, false, nullptr, false, nullptr, true); }
 #if GB_ENABLE_TESTS

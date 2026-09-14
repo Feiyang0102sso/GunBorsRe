@@ -1,15 +1,16 @@
 /** @file PowerupScene.cpp
  * @brief Separate availability, request and the actual grenade inventory commit.
  */
+#define NOMINMAX
 #include "gun_bros_re/gameplay/PowerupScene.h"
 #include "engine/core/CStringToKey.h"
 #include <cmath>
 #include <cstdio>
 
 PowerupScene::PowerupScene(CResTOCManager &toc, PackTables &tables, PlayerModel &player,
-    PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile)
+    PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile, CombatId owner)
     : m_toc(toc), m_tables(tables), m_player(player), m_vitals(vitals), m_scene(scene),
-      m_effects(effects), m_profile(profile), m_moviePlayer(toc, tables, scene) {}
+      m_effects(effects), m_profile(profile), m_moviePlayer(toc, tables, scene), m_owner(owner) { m_moviePlayer.SetOwner(owner); }
 
 bool PowerupScene::Init() { return LoadPowerupCatalog(m_toc, m_tables, m_catalog); }
 
@@ -104,7 +105,8 @@ void PowerupScene::Cycle() {
 bool PowerupScene::Use(bool fromSelector) {
     if (m_moviePlayer.IsActive()) { return false; }
     const PowerupEntry *entry = GetSelected();
-    if (entry == nullptr || !IsSupported(*entry) || GetCount() == 0 || m_vitals.dead || !m_player.weapon) { return false; }
+    if (entry == nullptr || !IsSupported(*entry) || GetCount() == 0 || !m_player.weapon) { return false; }
+    if (m_vitals.dead != (entry->data.field112 != 0)) { return false; }
     // CBrother::UsePowerup :138000 guards this exact item before querying its
     // script. Native 29 exists, but the current turret's CanUse export is true.
     const bool turret = entry->resource.packHash == CStringToKey("pack5") && entry->resource.localIndex == 19;
@@ -118,15 +120,17 @@ bool PowerupScene::Use(bool fromSelector) {
     for (unsigned type = 0; type < 3; ++type) { status.frenzyTypes[type] = m_player.weapon->brother.IsFrenzyType(type); }
     CPowerup query;
     query.Bind(entry->data, status);
-    if (!query.Query(0) || !query.Query(1)) { return false; }
+    if (!query.Query(1)) { return false; }
+    if (fromSelector && !query.Query(2)) { return false; }
+    if (!fromSelector && !query.Query(0)) { return false; }
     const bool decrement = query.Query(3);
     const unsigned itemIndex = entry->resource.localIndex;
-    if (itemIndex == 0 || itemIndex == 10 || itemIndex == 11) {
+    if (entry->data.field112 != 0 || itemIndex == 0 || itemIndex == 10 || itemIndex == 11) {
         if (!m_moviePlayer.Start(*entry, fromSelector)) { ++failures; return false; }
         if (decrement) {
             if (!m_profile.ConsumePowerup(entry->resource)) { m_moviePlayer.Reset(); ++failures; return false; }
             ++consumed;
-            m_scene.RecordChallengePowerup(entry->resource);
+            if (m_owner == kPlayerCombatId) { m_scene.RecordChallengePowerup(entry->resource); }
         }
         return true;
     }
@@ -145,7 +149,7 @@ bool PowerupScene::Use(bool fromSelector) {
             requested = m_player.weapon->brother.OnThrowGrenade(0);
             if (!requested) { m_equipped = {}; }
         } else if (action.function == 10) {
-            m_scene.AddHealth(action.arguments[0]);
+            if (!m_vitals.dead) { m_vitals.health = std::min(m_vitals.maximum, m_vitals.health + action.arguments[0]); }
             requested = true;
         } else if (action.function == 16) {
             m_player.weapon->brother.StartShield(action.resource, action.arguments[1] * 1000 / 256);
@@ -165,7 +169,9 @@ bool PowerupScene::Use(bool fromSelector) {
             GunCue cue;
             cue.kind = GunCue::Kind::Sound;
             cue.resource = action.resource;
-            m_effects.Emit(cue, m_scene.playerX, m_scene.playerY, 0, 0, kPlayerCombatId);
+            float x = 0, y = 0;
+            m_scene.ActorPosition(m_owner, x, y);
+            m_effects.Emit(cue, x, y, 0, 0, m_owner);
         } else {
             ++failures;
             std::printf("[powerup] unhandled action=%u\n", action.function);
@@ -175,7 +181,7 @@ bool PowerupScene::Use(bool fromSelector) {
     if (requested && decrement) {
         if (!m_profile.ConsumePowerup(entry->resource)) { ++failures; return false; }
         ++consumed;
-        m_scene.RecordChallengePowerup(entry->resource);
+        if (m_owner == kPlayerCombatId) { m_scene.RecordChallengePowerup(entry->resource); }
     }
     return requested;
 }
@@ -187,7 +193,7 @@ void PowerupScene::Update(int deltaMs) {
     if (thrown > 0) {
         if (!m_profile.ConsumePowerup(m_equipped, thrown)) { ++failures; }
         consumed += thrown;
-        for (unsigned index = 0; index < thrown; ++index) { m_scene.RecordChallengePowerup(m_equipped); }
+        for (unsigned index = 0; index < thrown; ++index) { if (m_owner == kPlayerCombatId) { m_scene.RecordChallengePowerup(m_equipped); } }
         std::printf("[powerup] thrown=%u remaining=%u\n", thrown, m_profile.GetPowerupCount(m_equipped));
         m_equipped = {};
     }
@@ -207,3 +213,35 @@ void PowerupScene::Reset() {
 }
 
 bool PowerupScene::DrawMovies() { return m_moviePlayer.Draw(); }
+
+bool PowerupScene::HasAfterDeathPowerup() const {
+    for (const auto &entry : m_catalog) {
+        if (entry.data.field112 != 0 && IsSupported(entry) && m_profile.GetPowerupCount(entry.resource) > 0) { return true; }
+    }
+    return false;
+}
+
+bool PowerupScene::UseAfterDeathPowerup() {
+    for (unsigned index = 0; index < m_catalog.size(); ++index) {
+        if (m_catalog[index].data.field112 != 0 && Select(index) && Use(true)) { return true; }
+    }
+    return false;
+}
+
+bool PowerupScene::UseAny(bool grantTestCharge) {
+    if (m_catalog.empty()) { return false; }
+    // Input policy only: every attempt still enters the original CanUse/Use.
+    m_choice = m_choice * 1664525u + 1013904223u;
+    for (unsigned offset = 0; offset < m_catalog.size(); ++offset) {
+        const unsigned index = (m_choice % m_catalog.size() + offset) % m_catalog.size();
+        if (!Select(index)) { continue; }
+        const auto &ref = m_catalog[index].resource;
+        bool granted = false;
+        if (grantTestCharge && m_owner == kBrotherCombatId && m_scene.HasTestBot() && GetCount() == 0) {
+            m_profile.AddPowerup(ref, 1); granted = true;
+        }
+        if (Use()) { return true; }
+        if (granted) { m_profile.ConsumePowerup(ref); }
+    }
+    return false;
+}

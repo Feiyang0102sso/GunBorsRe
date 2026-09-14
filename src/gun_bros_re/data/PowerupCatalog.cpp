@@ -40,5 +40,5 @@ bool LoadPowerupCatalog(CResTOCManager &toc, PackTables &tables, std::vector<Pow
 bool IsPlayablePowerup(const GameObjectRef &resource) {
     if (resource.packHash != CStringToKey("pack5")) { return false; }
     const unsigned index = resource.localIndex;
-    return index == 0 || index == 1 || index == 5 || index == 6 || (index >= 8 && index <= 19);
+    return index == 0 || index == 1 || (index >= 5 && index <= 19);
 }

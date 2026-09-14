@@ -4,12 +4,8 @@
 
 namespace MenuDetail {
 namespace {
-struct FriendPower { unsigned friends, type, percent; };
 // Native initialization in CGunBros::Init :80477-80488, not a resource table.
-constexpr FriendPower kFriendPowers[] = {
-    {1, 7, 10}, {2, 2, 5}, {3, 5, 10}, {4, 1, 10}, {5, 3, 10},
-    {6, 7, 10}, {7, 2, 5}, {8, 0, 10}, {9, 6, 10}, {10, 1, 5}
-};
+constexpr const auto &kFriendPowers = CFriendPowerManager::Powers;
 // CFriendPowerManager::Init :234195. Labels are resolved from the core BIG.
 constexpr const char *kPowerNames[] = {
     "IDS_FRIEND_POWER_DAMAGE", "IDS_FRIEND_POWER_ARMOUR", "IDS_FRIEND_POWER_SPEED",
@@ -37,7 +33,7 @@ std::string RewardQuantity(const DailyPrize &prize) {
     return {};
 }
 
-enum class SocialPart { Friend, Power, Challenge, Details, PowerDetails, Endcap };
+enum class SocialPart { Friend, LocalFriend, Power, Challenge, Details, PowerDetails, Endcap };
 
 class SocialContentCallback : public IMovieRegionCallback {
 public:
@@ -70,11 +66,53 @@ public:
 
     bool DrawMovieRegion(const MovieRegion &region) override {
         auto &social = state.social;
-        if (part == SocialPart::Friend) {
+        if (part == SocialPart::Friend || part == SocialPart::LocalFriend) {
+            unsigned friendIndex = social.selectedLocalFriend;
+            if (part == SocialPart::LocalFriend) { friendIndex = index; }
+            LocalBotFriend *friendData = nullptr;
+            if (friendIndex != 0) {
+                friendData = state.botFriend;
+                if (state.botRoster != nullptr) { friendData = state.botRoster->At(friendIndex - 1); }
+            }
+            if (part == SocialPart::LocalFriend && region.index == 0 &&
+                view.Hit(region.x, region.y, region.width, region.height)) {
+                social.selectedLocalFriend = index;
+                unsigned focusStart = 0, focusEnd = 0;
+                if (!Chapter(view.movies, "GLU_MOVIE_BROTHER_BOX", 1, focusStart, focusEnd)) { return false; }
+                if (index < social.friendTimes.size()) { social.friendTimes[index] = focusStart; }
+                if (state.botRoster != nullptr) {
+                    if (!state.botRoster->Select(index)) { return false; }
+                    state.botFriend = friendData;
+                } else if (state.botFriend != nullptr && !state.botFriend->Select(index == 1)) { return false; }
+            }
             // CMenuFriendOption::Init :198675 binds avatar/name/level to 1/2/3.
-            if (region.index == 1) { return Icon(social.avatar, region); }
-            if (region.index == 2) { return Text(social.brotherName, region); }
+            if (region.index == 1) {
+                CGameAssetRef avatar = social.avatar;
+                if (friendData != nullptr) {
+                    auto &toc = *profile.nativeArchive->toc;
+                    auto &tables = *profile.nativeArchive->tables;
+                    const int core = toc.GetCorePackIndex();
+                    const char *name = "IDB_AVATAR_DEFAULT1";
+                    if (friendData->profile.playerBrother != 0) { name = "IDB_AVATAR_DEFAULT2"; }
+                    const auto handle = toc.GetPack(core)->GetResValue(name);
+                    const auto base = tables.GetObjectPack(core).GetHandle(GameSection::Png, 0);
+                    if (base == 0 || handle < base) { return false; }
+                    avatar.assetId = static_cast<int>(handle - base);
+                }
+                return Icon(avatar, region);
+            }
+            if (region.index == 2) {
+                if (friendData != nullptr) { return Text(friendData->name, region); }
+                return Text(social.brotherName, region);
+            }
             if (region.index == 3) {
+                if (friendData != nullptr) {
+                    CPlayerProgress progress;
+                    progress.Bind(profile.nativeArchive->progression);
+                    progress.SetExperience(profile.experience);
+                    progress.SetExperience(friendData->profile.experience);
+                    return Text(view.movies.NamedString("IDS_FRIEND_LEVEL") + std::to_string(progress.GetLevel()), region);
+                }
                 // CFriendData contains CPlayerProgress, whose constructor
                 // initializes level 1 (:194437), independently of the player.
                 return Text(view.movies.NamedString("IDS_FRIEND_LEVEL") + "1", region);
@@ -101,7 +139,8 @@ public:
                 }
                 if (maximum == 0) { continue; }
                 if (region.index == summary) {
-                    return Text(view.movies.NamedString(kPowerNames[type]) + " +0%", region, 0, true);
+                    return Text(view.movies.NamedString(kPowerNames[type]) + " +" +
+                        std::to_string(CFriendPowerManager::Bonus(profile.friendCount, type)) + "%", region, 0, true);
                 }
                 ++summary;
             }
@@ -274,14 +313,19 @@ bool DrawPart(GameMenu &view, MenuState &state, const CProfileManager &profile,
     const char *name, SocialPart part, const MovieRegion &region, unsigned index = 0) {
     unsigned start = 0, end = 0;
     unsigned chapter = 0;
+    if (part == SocialPart::Power && profile.friendCount >= kFriendPowers[index].friends) { chapter = 2; }
     if (part == SocialPart::Details || part == SocialPart::PowerDetails) { chapter = 1; }
+    if (part == SocialPart::Friend) { chapter = 1; }
     if (!Chapter(view.movies, name, chapter, start, end)) {
         std::printf("[social-content] missing chapter movie=%s\n", name);
         return false;
     }
     SocialContentCallback callback(view, state, profile, part, index);
     unsigned time = end;
+    if (part == SocialPart::Power && end > start) { time = start + static_cast<unsigned>(view.clock % (end - start + 1)); }
     if (part == SocialPart::Challenge) { time = state.social.challengeTimes[index]; }
+    if (part == SocialPart::LocalFriend) { time = state.social.friendTimes[index]; }
+    if (part == SocialPart::Friend) { time = start + static_cast<unsigned>(view.clock % (end - start + 1)); }
     if (part == SocialPart::Details) { time = state.social.sidebarTime; }
     const bool result = view.movies.Draw(view.movies.Ordinal(name), time, region.x, region.y,
         kMenuWidth, kMenuHeight, 0, region.alpha, &callback);
@@ -300,6 +344,11 @@ public:
         if (state.page == 5) {
             if (index >= state.social.challenges.current.size()) { return true; }
             if (!DrawPart(view, state, profile, "GLU_MOVIE_BRO_OP_BOX", SocialPart::Challenge, region, index)) { return false; }
+        } else if (state.social.socialTab != 1) {
+            unsigned count = 2;
+            if (state.botRoster != nullptr) { count = 1 + state.botRoster->Count(); }
+            if (index >= count) { return true; }
+            if (!DrawPart(view, state, profile, "GLU_MOVIE_BROTHER_BOX", SocialPart::LocalFriend, region, index)) { return false; }
         } else {
             if (index >= std::size(kFriendPowers)) { return true; }
             if (!DrawPart(view, state, profile, "GLU_MOVIE_BROBUFF_BOX", SocialPart::Power, region, index)) { return false; }
@@ -350,7 +399,7 @@ bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
     auto &social = state.social;
     if (state.page == 4) {
         if (region.index == 0 && social.socialTab == 1) {
-            return view.movies.Text(FormatCount(view.movies.NamedString("IDS_FRIEND_POWER_FRIEND_COUNT_PLURAL"), 0), region.x, region.y);
+            return view.movies.Text(FormatCount(view.movies.NamedString("IDS_FRIEND_POWER_FRIEND_COUNT_PLURAL"), profile.friendCount), region.x, region.y);
         }
         if (region.index == 2 && social.socialTab != 1) {
             if (!DrawPart(view, state, profile, "GLU_MOVIE_BROTHER_BOX", SocialPart::Friend, region)) { return false; }
@@ -395,11 +444,35 @@ bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
             region, social.sidebarChallenge);
     }
     if (region.index != 4) { return true; }
-    if (state.page == 4 && social.socialTab != 1) { return true; }
     if (state.page == 5 && social.socialTab != 0) { return true; }
     const char *listName = "GLU_MOVIE_BROTHER_MENU_SCROLL_3_OPTION";
     unsigned count = static_cast<unsigned>(std::size(kFriendPowers));
     unsigned visible = 3;
+    if (state.page == 4 && social.socialTab != 1) {
+        // MENU_FRIENDS 0x402D70 selects the three-option Movie for all tabs;
+        // SetBoundsOptions ends at count-3, not count-4.
+        count = 2; // Original default plus the explicitly simulated local peer.
+        if (state.botRoster != nullptr) { count = 1 + state.botRoster->Count(); }
+        unsigned idleStart = 0, idleEnd = 0, focusStart = 0, focusEnd = 0;
+        if (!Chapter(view.movies, "GLU_MOVIE_BROTHER_BOX", 0, idleStart, idleEnd) ||
+            !Chapter(view.movies, "GLU_MOVIE_BROTHER_BOX", 1, focusStart, focusEnd)) { return false; }
+        if (social.friendTimes.size() != count) {
+            social.friendTimes.assign(count, idleEnd);
+            social.friendTimes[social.selectedLocalFriend] = focusStart;
+        }
+        // CMenuFriendOption::Focus :198360 loops chapter1; UnFocus :198345
+        // reverses the same authored highlight and then stops.
+        for (unsigned index = 0; index < count; ++index) {
+            auto &time = social.friendTimes[index];
+            if (index == social.selectedLocalFriend) {
+                if (time < focusStart) { time = focusStart; }
+                time = focusStart + (time - focusStart + social.contentElapsed) % (focusEnd - focusStart + 1);
+            } else if (time >= focusStart) {
+                if (social.contentElapsed >= time - focusStart) { time = idleEnd; }
+                else { time -= social.contentElapsed; }
+            }
+        }
+    }
     if (state.page == 5) {
         listName = "GLU_MOVIE_BROTHER_MENU_SCROLL";
         count = static_cast<unsigned>(social.challenges.current.size());
@@ -475,8 +548,10 @@ bool DrawOriginalSocialModel(GameMenu &view, MenuState &state, const CProfileMan
     if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"), 3, state.social.socialTime, region)) { return false; }
     MovieRegion model = region;
     if (state.social.socialTab == 1) { model.height *= 0.5f; }
-    if (!view.DrawEquippedPlayer(*profile.nativeArchive->toc, *profile.nativeArchive->tables,
-        state.social.defaultBrother, state.social.weapons, state.social.armors, 0, nullptr, &model)) { return false; }
+        const CProfileManager *brother = &state.social.defaultBrother;
+        if (state.social.selectedLocalFriend != 0 && state.botFriend != nullptr) { brother = &state.botFriend->profile; }
+        if (!view.DrawEquippedPlayer(*profile.nativeArchive->toc, *profile.nativeArchive->tables,
+            *brother, state.social.weapons, state.social.armors, 0, nullptr, &model)) { return false; }
     if (state.social.socialTab == 1) {
         return DrawPart(view, state, profile, "GLU_MOVIE_BRO_BUFFS_DETAILS", SocialPart::PowerDetails, region);
     }

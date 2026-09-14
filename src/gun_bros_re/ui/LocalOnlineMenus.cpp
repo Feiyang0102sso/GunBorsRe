@@ -6,6 +6,17 @@ namespace MenuDetail {
 void UpdateLocalConnection(MenuState &state) {
     const bool wasConnected = state.online.IsConnected();
     state.online.SetConnected(GameHostSettings().isConnected);
+    // Offline sessions use the original default brother, including cold starts
+    // with a previously selected local friend (CFriendManager::SetActiveFriend).
+    if (!state.online.IsConnected()) {
+        if (state.botRoster != nullptr && state.botRoster->Selected() != 0 && !state.botRoster->Select(0)) {
+            std::printf("[local-online] failed to save default brother selection\n");
+        }
+        state.social.selectedLocalFriend = 0;
+        state.botFriend = nullptr;
+        state.matchedBot = nullptr;
+        state.rematchingBot = false;
+    }
     if (wasConnected && !state.online.IsConnected()) {
         state.social.socialBound = false;
         if (state.gameMode != 0) {
@@ -29,6 +40,16 @@ bool BeginLocalMatch(MenuState &state) {
     state.ShowStorePrompt("MDS_PROMPT_MP_UNAVAILABLE", false, false);
     state.matchingPrompt = true;
     state.storePromptButtons = "MDS_BUTTON_MP_DATA_EXCHANGE";
+    return true;
+}
+
+bool TakeLocalMatch(MenuState &state, std::uint64_t clock) {
+    UpdateLocalConnection(state);
+    if (!state.matchingPrompt || !state.storePopup.IsReady() || !state.online.AdvanceMatch(clock)) { return false; }
+    state.matchingPrompt = false;
+    state.storePromptRequested = false;
+    state.storePopup = CMenuPopupPrompt{};
+    state.storePromptButtons = nullptr;
     return true;
 }
 

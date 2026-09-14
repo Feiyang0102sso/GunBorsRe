@@ -19,9 +19,26 @@ void LocalOnlineServices::SetConnected(bool connected) {
 bool LocalOnlineServices::BeginMatch(unsigned mode) {
     // CGameCenterManager::findMultiplayerMatch :260057 requests exactly two
     // players. Stage one has no peer provider, so it never reports a match.
+    // Stage two supplies the user-requested local bot for cooperative mode.
     if (!m_connected || mode < 1 || mode > 2) { return false; }
     m_matching = true;
+    m_matchMode = mode;
+    m_matchClockBound = false;
     std::printf("[local-online] matchmaking mode=%u players=2 status=waiting\n", mode);
+    return true;
+}
+
+bool LocalOnlineServices::AdvanceMatch(std::uint64_t clock) {
+    if (!m_connected || !m_matching || m_matchMode != 1) { return false; }
+    if (!m_matchClockBound || clock < m_matchStarted) {
+        m_matchStarted = clock;
+        m_matchClockBound = true;
+        return false;
+    }
+    // Host delay leaves time to review/cancel the labelled simulated match.
+    if (clock - m_matchStarted < 1500) { return false; }
+    m_matching = false;
+    std::printf("[local-online] matched mode=live peer=LOCAL_BOT no-network=1\n");
     return true;
 }
 

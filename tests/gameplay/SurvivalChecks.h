@@ -45,6 +45,9 @@ struct SurvivalDeathFixture {
     float startFacing;
 };
 int CheckSurvivalDeath(SurvivalDeathFixture fixture);
+int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud);
+int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, PackTables &tables,
+    PowerupScene &playerPowerups, PowerupScene &peerPowerups, CProfileManager &peerProfile);
 
 struct SurvivalBossFixture {
     unsigned & checkFailures;

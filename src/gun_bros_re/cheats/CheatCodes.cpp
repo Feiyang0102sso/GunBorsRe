@@ -24,7 +24,8 @@ bool GameCheats::Consume(std::string &prefix, std::vector<std::string> &commands
         // movement; only an established ST prefix consumes its suffix.
         // The same prefix also accepts the desktop suicide shortcut.
         // STBROW requests the brother's normal weapon swap animation.
-        return prefix.size() >= 2 || letter == 'c';
+        // Renamed to BROW; every BRO command is reserved for the test peer.
+        return prefix.size() >= 2 || letter == 'c' || letter == 'b';
     }
     prefix.clear();
     for (const char *code : Commands) {

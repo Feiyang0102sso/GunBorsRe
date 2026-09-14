@@ -146,6 +146,9 @@ void CEnemy::ResolvePendingHit(bool apply) {
     EnemyAction action;
     action.kind = EnemyAction::Kind::CollisionResolved;
     action.projectile = combat.pendingHit.projectile;
+    action.owner = combat.pendingHit.owner;
+    action.resource = combat.pendingHit.weapon;
+    action.slot = static_cast<int>(combat.pendingHit.weaponSlot);
     action.result = combat.collisionResult;
     combat.actions.push_back(action);
 }

@@ -16,6 +16,7 @@
 #include <sstream>
 
 void SurvivalHud::Scroll(const SurvivalHudState &state, float amount) {
+    if (state.remoteShop) { return; }
     if (amount == 0) { return; }
     if (state.shopOpen) {
         if (!state.itemChoice) {
@@ -40,6 +41,7 @@ void SurvivalHud::Scroll(const SurvivalHudState &state, float amount) {
 }
 
 void SurvivalHud::ScrollMenuInput(const SurvivalHudState &state, float wheel, float dragX, float dragY) {
+    if (state.remoteShop) { return; }
     if (state.shopOpen) {
         Scroll(state, wheel);
         if (state.itemChoice || m_selectorPromptRequested || m_selectorPrompt.IsActive() || dragX == 0) { return; }

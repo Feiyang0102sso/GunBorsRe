@@ -9,6 +9,7 @@ enum class MapViewMode { Preview, GameView };
 struct SurvivalGameContext;
 struct MissionEntry;
 struct DebugMapSelection;
+class LocalBotFriend;
 
 /** Production session configuration: map, equipment, progress, and an existing window, without validation modes. */
 struct SurvivalLaunch {
@@ -24,6 +25,9 @@ struct SurvivalLaunch {
     CWindow *window = nullptr;
     DebugMapSelection *debugSelection = nullptr;
     const DebugMapSelection *debugMap = nullptr;
+    bool localLive = false;
+    bool localBot = false; // Selected from the persistent Windows BROS roster.
+    LocalBotFriend *botFriend = nullptr;
 };
 int RunSurvival(const SurvivalLaunch &launch);
 

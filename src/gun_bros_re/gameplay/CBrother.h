@@ -123,6 +123,8 @@ public:
     void Stun(int durationMs);
     /** Original CBrother::OnWaveCleared (:135964), including script recovery. */
     void OnWaveCleared();
+    /** CBrother::OnRevive :135970 -> original PLAYER export 7 (normal revive). */
+    bool OnRevive(unsigned reason = 0);
     /** CPlayer::OnSwapGun :101048 forwards input event 5 to this script. */
     bool OnSwapGun() { return m_interpreter.HandleEvent(5, 5); }
     bool TakeWeaponSwap() { bool requested = m_weaponSwapRequested; m_weaponSwapRequested = false; return requested; }

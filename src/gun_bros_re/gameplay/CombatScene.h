@@ -12,7 +12,10 @@
 #include "gun_bros_re/data/CPlayerProgress.h"
 #include "gun_bros_re/gameplay/CBrotherAI.h"
 #include "gun_bros_re/gameplay/IPropWorld.h"
+#include "gun_bros_re/gameplay/MultiplayerStatistics.h"
+#include "gun_bros_re/gameplay/CLevelIndicator.h"
 #include <map>
+class CProfileManager;
 
 constexpr float kArenaWidth = 1200;
 constexpr float kArenaHeight = 900;
@@ -28,6 +31,7 @@ struct CombatEnemy {
     bool mapPlaced = false; // Map mechanisms are not dynamic wave enemies.
     bool deathReported = false;
     int navigationTimer = 0;
+    unsigned assistMask[2]{}; // Each peer's original two gun configuration bits.
 };
 
 struct CombatDeath {
@@ -60,6 +64,40 @@ public:
     void Update(int deltaMs, float moveX, float moveY, bool shoot);
     void PlayerMatrix(float *matrix) const;
     void SetBrother(PlayerModel *model, CBrotherAI *brother);
+    void SetLocalLive(bool enabled) { m_localLive = enabled; }
+    bool IsLocalLive() const { return m_localLive; }
+    void SetTestBot(bool enabled) { m_testBot = enabled; }
+    bool HasTestBot() const { return m_testBot && m_brotherModel != nullptr; }
+    bool KillTestBot();
+    bool ReviveTestBot();
+    bool ReviveActor(CombatId actor, unsigned reason);
+    void SetAfterDeathAvailability(bool player, bool peer) { m_afterDeathAvailable[0] = player; m_afterDeathAvailable[1] = peer; }
+    bool NeedsDeathChoice(unsigned peer) const;
+    void FinishDeathChoice(unsigned peer);
+    std::vector<IBrotherAIWorld::Threat> GetBrotherThreats() const override;
+    bool CanBrotherWalk(float x, float y, float destinationX, float destinationY) const override {
+        if (destinationX < m_left || destinationX > m_right || destinationY < m_top || destinationY > m_bottom) { return false; }
+        return HasClearPath(x, y, destinationX, destinationY, m_playerRadius);
+    }
+    void ActorPosition(CombatId actor, float &x, float &y) const;
+    void SetPeerProgress(CPlayerProgress *progress) { m_peerProgress = progress; }
+    std::uint64_t GetPeerExperience() const { if (m_peerProgress != nullptr) { return m_peerProgress->GetExperience(); } return 0; }
+    void SetPlayerGunSlot(unsigned slot) { m_playerGunSlot = slot; }
+    const MultiplayerStatistics &GetMultiplayerStatistics(unsigned peer) const { return m_multiplayer[peer]; }
+    void ClearWaveStatistics();
+    void AddPeerExperience(unsigned amount);
+    void AddPeerXplodium(unsigned amount);
+    void SetPeerProfile(CProfileManager *profile) { m_peerProfile = profile; }
+    void SetGunConfiguration(unsigned peer, unsigned slot, const GameObjectRef &ref, unsigned masteryLimit);
+    bool BrotherTouchesPickup(float x, float y) const;
+    bool IsPlayerDown() const override { return m_vitals.dead; }
+    bool IsTeamDeathComplete() const;
+    float GetReviveProgress() const { return m_reviveProgress; }
+    unsigned GetReviveCount() const { return m_reviveCount; }
+    bool SetReviveResources(const CScript &script);
+    unsigned GetReviveEffectState() const { return m_reviveEffectState; }
+    void UpdatePeerIndicator(unsigned deltaMs, float left, float top, float width, float height);
+    const CLevelIndicator *PeerIndicator() const { if (!m_peerIndicatorVisible) { return nullptr; } return &m_peerIndicator; }
     void SetBrotherWeapons(const CScript &script, const CGun::Template &pistol, const CGun::Template &rifle);
     /** AI and desktop cheats enter the original swap script before changing guns. */
     bool RequestBrotherWeaponSwap();
@@ -178,6 +216,27 @@ public:
     unsigned invalidSpawns = 0;
 
 private:
+    void UpdateLocalRevive(int deltaMs);
+    bool m_localLive = false;
+    bool m_testBot = false, m_testBotReviveRequested = false;
+    MultiplayerStatistics m_multiplayer[2];
+    CPlayerProgress *m_peerProgress = nullptr;
+    unsigned m_playerGunSlot = 0;
+    CProfileManager *m_peerProfile = nullptr;
+    GameObjectRef m_gunConfigurations[2][2];
+    unsigned m_gunMasteryLimits[2][2]{};
+    void CreditAssistMastery(unsigned peer, unsigned slot, unsigned experience);
+    bool m_afterDeathAvailable[2]{};
+    unsigned m_deathChoiceHandled[2]{};
+    float m_reviveProgress = 0;
+    unsigned m_reviveCount = 0;
+    CombatId m_reviveTarget = 0;
+    GameObjectRef m_reviveEffects[2];
+    std::uint64_t m_reviveEffectHandle = 0;
+    unsigned m_reviveEffectState = 0;
+    CombatId m_reviveEffectTarget = 0;
+    CLevelIndicator m_peerIndicator;
+    bool m_peerIndicatorVisible = false;
     std::vector<EnemyCombat *> m_flockEnemies;
     EnemyModelCache m_enemyModelCache;
     CTargetingController m_autoAim;

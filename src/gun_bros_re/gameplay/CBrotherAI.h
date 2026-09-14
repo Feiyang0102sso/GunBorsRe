@@ -9,6 +9,10 @@
 class IBrotherAIWorld {
 public:
     virtual ~IBrotherAIWorld() = default;
+    virtual bool IsPlayerDown() const { return false; }
+    struct Threat { float x, y, radius; };
+    virtual std::vector<Threat> GetBrotherThreats() const { return {}; }
+    virtual bool CanBrotherWalk(float x, float y, float destinationX, float destinationY) const { return true; }
     virtual CombatId FindBrotherTarget(float x, float y, float radius) = 0;
     virtual bool GetBrotherTarget(CombatId id, float &x, float &y) = 0;
     virtual bool GetBrotherWaypoint(float x, float y, float targetX, float targetY,
@@ -22,11 +26,12 @@ public:
  */
 class CBrotherAI {
 public:
+    virtual ~CBrotherAI() = default;
     /** startFacing is the map PLAYER object's spawn angle, as the player uses. */
-    void Reset(float startX, float startY, float startFacing);
+    virtual void Reset(float startX, float startY, float startFacing);
     void SetForce(float x, float y, int durationMs);
     void SetShootingAllowed(bool allowed) { m_shootingAllowed = allowed; }
-    void Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
+    virtual void Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
         float playerX, float playerY, float speedMultiplier);
     float x = 0;
     float y = 0;
@@ -34,12 +39,15 @@ public:
     float previousY = 0;
     float facing = 0;
     PlayerVitals vitals;
-    CombatId GetTarget() const { return m_target; }
-    bool IsMoving() const { return m_moving; }
-    unsigned GetTargetCount() const { return m_targetCount; }
+    virtual CombatId GetTarget() const { return m_target; }
+    virtual bool IsMoving() const { return m_moving; }
+    virtual unsigned GetTargetCount() const { return m_targetCount; }
     bool TakeWeaponSwapRequest() { const bool requested = m_weaponSwapRequested; m_weaponSwapRequested = false; return requested; }
-private:
+protected:
+    void UpdateForce(int deltaMs, CBrother &brother, IBrotherAIWorld &world);
     bool m_shootingAllowed = true;
+    bool m_weaponSwapRequested = false;
+private:
     int Random(int minimum, int maximum);
     void UpdateTarget(int deltaMs, IBrotherAIWorld &world, bool &shooting);
     std::mt19937 m_random{0xB6400};
@@ -53,6 +61,5 @@ private:
     float m_forceX = 0;
     float m_forceY = 0;
     int m_forceMs = 0;
-    bool m_weaponSwapRequested = false;
 };
 #endif

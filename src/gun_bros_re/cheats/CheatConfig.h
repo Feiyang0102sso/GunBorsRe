@@ -16,10 +16,15 @@ inline constexpr const char *LevelUp = "chxp";
 inline constexpr const char *MaximumLevel = "chlvmax";
 inline constexpr const char *Boss = "stboss";
 inline constexpr const char *Suicide = "stsuicide";
-inline constexpr const char *BrotherWeapon = "stbrow";
+inline constexpr const char *BrotherWeapon = "brow";
+inline constexpr const char *BrotherKill = "brok";
+inline constexpr const char *BrotherRevive = "bror";
+inline constexpr const char *BrotherShop = "bros";
+inline constexpr const char *BrotherPowerup = "brop";
 inline constexpr const char *Commands[] = {Money, NextDay, ToggleDebug, ToggleConnection, UpdateChallenges,
     UnlockWaves, LevelUp, MaximumLevel,
-    Boss, Suicide, BrotherWeapon, Xplodium, AdvanceRefinery, ToggleRefineryLocks};
+    Boss, Suicide, BrotherWeapon, BrotherKill, BrotherRevive, BrotherShop, BrotherPowerup,
+    Xplodium, AdvanceRefinery, ToggleRefineryLocks};
 // Host cheat bounds, not resource timings. Normal gameplay never uses these.
 inline constexpr int BossSkipStepMs = 16;
 inline constexpr int BossSkipLimitMs = 600000;

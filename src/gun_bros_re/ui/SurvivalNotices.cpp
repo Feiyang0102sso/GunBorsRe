@@ -21,6 +21,7 @@ void SurvivalHud::ResetNotices() {
     m_challengeTime = 0;
     m_observedProgress = false;
     m_interstitialCompleted = false;
+    m_liveWaveRemaining = 0;
 }
 
 bool SurvivalHud::DrawExperienceTexts(const std::vector<CombatScene::ExperienceText> &texts, bool horde) {
@@ -99,6 +100,7 @@ void SurvivalHud::ObserveProgress(const SurvivalHudState &state) {
 }
 
 void SurvivalHud::Advance(int deltaMs) {
+    if (deltaMs > 0) { m_liveWaveRemaining -= std::min(m_liveWaveRemaining, static_cast<unsigned>(deltaMs)); }
     if (deltaMs > 0) {
         m_controlTime += deltaMs;
         if (HasChallenges()) {
@@ -115,6 +117,7 @@ void SurvivalHud::Advance(int deltaMs) {
     Notice &notice = m_notices.front();
     notice.elapsed += static_cast<unsigned>(deltaMs);
     CMovie *movie = m_movies.GetMovie(notice.movie);
+    if (notice.movie == m_movies.Ordinal("GLU_MOVIE_WAVE_WRAPUP") && m_liveWaveRemaining != 0) { return; }
     if (movie != nullptr && notice.elapsed >= movie->duration) {
         if (notice.releaseLevel) { m_interstitialCompleted = true; }
         m_notices.erase(m_notices.begin());
@@ -124,6 +127,14 @@ void SurvivalHud::Advance(int deltaMs) {
 void SurvivalHud::DrawNotice() {
     if (m_notices.empty()) { return; }
     const Notice &notice = m_notices.front();
+    if (notice.movie == m_movies.Ordinal("GLU_MOVIE_WAVE_WRAPUP")) {
+        const auto *movie = m_movies.GetMovie(notice.movie);
+        if (movie == nullptr || movie->duration == 0) { return; }
+        unsigned time = std::min(notice.elapsed, movie->duration - 1);
+        if (m_liveWaveRemaining < 1000) { time = m_liveWaveRemaining; }
+        DrawLiveWave(time);
+        return;
+    }
     {
         // OverlayDraw :86532 uses font 11 at its original size and centers in
         // the Movie region. Drawing as a callback preserves authored layering.

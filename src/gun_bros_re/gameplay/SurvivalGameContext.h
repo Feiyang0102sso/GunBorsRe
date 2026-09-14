@@ -5,9 +5,13 @@
 #define GUN_BROS_RE_SURVIVALGAMECONTEXT_H
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/CombatTypes.h"
+#include "gun_bros_re/gameplay/MultiplayerStatistics.h"
 #include <map>
 
 struct SurvivalResult {
+    bool live = false;
+    std::string peerName = "LOCAL BOT";
+    MultiplayerStats peers[2];
     bool horde = false;
     unsigned score = 0, highScore = 0, bestKillStreak = 0, stopwatchMs = 0;
     unsigned wavesPerRevolution = 0, waveLimit = 0;
@@ -18,6 +22,7 @@ struct SurvivalResult {
 };
 
 class CBGM;
+class LocalBotFriend;
 
 struct SurvivalGameContext {
     CProfileManager &profile;
@@ -38,6 +43,8 @@ struct SurvivalGameContext {
     CBGM *music = nullptr; // Owned by the outer game flow, including loading and results.
     // Debug map sessions use a copy of the current profile without disk writes.
     bool persistProgress = true;
+    LocalBotFriend *botFriend = nullptr;
+    std::uint64_t accountedPeerXplodium = 0;
     bool SaveProfile() const {
         if (!persistProgress) { return true; }
         return profile.SaveToDisk(savePath);

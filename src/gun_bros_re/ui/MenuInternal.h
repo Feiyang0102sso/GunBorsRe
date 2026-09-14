@@ -8,6 +8,7 @@
 #define NOMINMAX
 #include "gun_bros_re/ui/GameFrontEnd.h"
 #include "gun_bros_re/data/OriginalProfile.h"
+#include "gun_bros_re/data/LocalBotFriend.h"
 #include "gun_bros_re/data/MissionCatalog.h"
 #include "gun_bros_re/data/PlanetCatalog.h"
 #include "gun_bros_re/data/StoreCatalog.h"
@@ -189,6 +190,9 @@ struct ModeMenuState {
 
 };
 struct PostGameMenuState {
+    float livePosition = 0;
+    bool liveReplay = false;
+    std::uint64_t liveReplayAt = 0;
     bool postGameMusic = false;
     bool postGameBound = false, postGameUpgradePending = false, postGameClosing = false;
     unsigned postGameTime = 0, postGameItemTime = 0, postGameCloseTime = 0;
@@ -257,6 +261,8 @@ struct SocialMenuState {
     CProfileManager defaultBrother;
     CGameAssetRef avatar;
     std::string brotherName;
+    unsigned selectedLocalFriend = 0; // 0: original default, 1: simulated peer.
+    std::vector<unsigned> friendTimes; // Each active friend's authored Focus/UnFocus timeline.
     bool contentBound = false;
     unsigned contentPage = 0;
     unsigned selectedChallenge = 0;
@@ -276,6 +282,10 @@ struct SocialMenuState {
 };
 
 struct MenuState {
+    LocalBotFriend *botFriend = nullptr;
+    LocalBotRoster *botRoster = nullptr;
+    LocalBotFriend *matchedBot = nullptr;
+    bool rematchingBot = false;
     LocalOnlineServices online;
     bool matchingPrompt = false;
     bool currencySimulated = false;
@@ -629,7 +639,7 @@ private:
     CShaderProgram textProgram;
     CShaderProgram imageProgram;
     std::array<std::unique_ptr<WeaponEffects>, 2> modeEffects;
-    std::array<std::unique_ptr<WeaponEffects>, 7> postGameEffects;
+    std::array<std::unique_ptr<WeaponEffects>, 16> postGameEffects;
     struct RefineryEffect {
         std::unique_ptr<WeaponEffects> player;
         std::uint64_t handle = 0;
@@ -1043,6 +1053,7 @@ bool BindOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
 bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileManager &profile, const MovieRegion &region);
 bool DrawOriginalSocialModel(GameMenu &view, MenuState &state, const CProfileManager &profile);
 bool BeginLocalMatch(MenuState &state);
+bool TakeLocalMatch(MenuState &state, std::uint64_t clock);
 void UpdateLocalConnection(MenuState &state);
 
 /** CMenuDataProvider::CreateContentString :151507 resolves the action only

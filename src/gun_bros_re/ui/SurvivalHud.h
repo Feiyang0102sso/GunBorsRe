@@ -32,9 +32,16 @@ struct SurvivalHudState {
     unsigned damageHits = 0, perfectWaves = 0, clearedWaves = 0;
     bool showCollisions = false, lastWavePerfect = false;
     bool horde = false;
+    bool localLive = false;
+    float reviveProgress = 0;
+    MovieRegion reviveBar;
+    float revivePaddingX = 1, revivePaddingY = 1;
     unsigned score = 0, killStreak = 0;
     bool paused = false, dead = false, cleared = false, transitioning = false, withBrother = false;
     bool shopOpen = false, itemChoice = false, soundEnabled = true, musicEnabled = true;
+    bool remoteShop = false;
+    bool afterDeathShop = false;
+    unsigned shopRemainingMs = 0;
     bool originalUi = false, dockedSticks = true;
     bool swapKeyDown = false;
     bool inputHidden = false;
@@ -77,11 +84,21 @@ public:
     void OnOriginalWaveClear(unsigned wave, bool perfect, unsigned rewardPercent, bool boss);
     bool HasInterstitial() const;
     bool TakeInterstitialCompletion();
+    void BeginLiveWave(const MultiplayerStatistics &player, const MultiplayerStatistics &peer);
+    unsigned LiveWaveRemaining() const { return m_liveWaveRemaining; }
+    void SetLiveBrotherIndex(unsigned index) { m_liveBrotherIndex = index; }
+    void SetLivePeerIndex(unsigned index) { m_livePeerIndex = index; }
+    void SetLivePeerName(const std::string &name) { m_livePeerName = name; }
+    std::string DefaultBrotherName(unsigned index) const {
+        if (index == 0) { return m_movies.NamedString("IDS_FRIEND_DEFAULT_BRO1"); }
+        return m_movies.NamedString("IDS_FRIEND_DEFAULT_BRO2");
+    }
     unsigned NoticeCount() const { return static_cast<unsigned>(m_notices.size()); }
     unsigned NoticeTime() const { if (m_notices.empty()) { return 0; } return m_notices.front().elapsed; }
     SurvivalHudAction Pointer(const SurvivalHudState &state, float x, float y, bool down);
     bool CapturesPointer(const SurvivalHudState &state, float x, float y) const;
     void Scroll(const SurvivalHudState &state, float amount);
+    void BrowseRemoteShop(unsigned selection);
     void ScrollMenuInput(const SurvivalHudState &state, float wheel, float dragX, float dragY);
     void AdvanceMenu(unsigned deltaMs);
     bool BackFromHelp();
@@ -91,6 +108,7 @@ public:
     // Research/accessibility queries use the same authored hit regions as input.
     bool FindActionRegion(const SurvivalHudState &state, SurvivalHudAction action, MovieRegion &region) const;
 private:
+    std::string m_livePeerName = "LOCAL BOT";
     const CChallengeManager *m_challenges = nullptr;
     bool m_challengeHeld = false;
     unsigned m_challengeTime = 0, m_challengeRows = 0;
@@ -120,6 +138,7 @@ private:
     struct SelectorHit { MovieRegion area; SurvivalHudAction action; int storeIndex = -1; };
     std::vector<SelectorHit> m_selectorHits;
     std::vector<unsigned> m_selectorEntries;
+    std::vector<unsigned> m_selectorAllEntries;
     unsigned m_selectorTime = 0, m_selectorChoiceTime = 0;
     float m_selectorPosition = 0, m_selectorTarget = 0;
     bool m_selectorBound = false, m_selectorChoice = false;
@@ -140,6 +159,11 @@ private:
     void Icon(unsigned type, const GameObjectRef &object, const MovieRegion &region);
     void ObserveProgress(const SurvivalHudState &state);
     void DrawNotice();
+    bool DrawLiveWave(unsigned time);
+    MultiplayerStatistics m_liveStats[2];
+    unsigned m_liveWaveRemaining = 0;
+    unsigned m_liveBrotherIndex = 0;
+    unsigned m_livePeerIndex = 1;
     void QueueOriginalNotice(const char *movie, const std::string &title, const std::string &footer = "", bool releaseLevel = false);
     std::string OriginalNoticeNumber(const char *name, unsigned number);
     int m_selectedItem = -1;

@@ -42,6 +42,7 @@ public:
     bool CollectResources(unsigned slot, std::uint64_t &coins);
     bool IsGated(unsigned slot) const;
     std::array<CRefinementSlot, kRefinementSlotCount> slots;
+    unsigned friendEfficiencyBonus = 0;
 
 private:
     const Template *m_template = nullptr;

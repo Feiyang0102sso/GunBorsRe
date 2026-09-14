@@ -84,8 +84,7 @@ void CBrotherAI::UpdateTarget(int deltaMs, IBrotherAIWorld &world, bool &shootin
     shooting = true;
 }
 
-void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
-    float playerX, float playerY, float speedMultiplier) {
+void CBrotherAI::UpdateForce(int deltaMs, CBrother &brother, IBrotherAIWorld &world) {
     previousX = x;
     previousY = y;
     if (!vitals.dead && m_forceMs > 0) {
@@ -95,6 +94,11 @@ void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
         m_forceMs = std::max(0, m_forceMs - deltaMs);
         world.ResolveBrotherForce(previousX, previousY, x, y);
     }
+}
+
+void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
+    float playerX, float playerY, float speedMultiplier) {
+    UpdateForce(deltaMs, brother, world);
     if (vitals.dead || vitals.stunMs > 0) {
         m_moving = false;
         brother.SetInput(false, false);

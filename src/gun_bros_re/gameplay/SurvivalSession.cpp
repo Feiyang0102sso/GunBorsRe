@@ -74,9 +74,11 @@ bool SurvivalSession::Load(CResTOCManager &toc, PackTables &tables, std::uint32_
 }
 
 void SurvivalSession::Restart(float x, float y, float facingDegrees) {
+    m_suspended = false;
     m_scene.Reset();
     m_challengeSessionEnded = false;
     if (m_powerups != nullptr) { m_powerups->Reset(); }
+    if (m_peerPowerups != nullptr) { m_peerPowerups->Reset(); }
     if (m_pickups != nullptr) { m_pickups->Reset(); }
     if (m_props != nullptr) { m_props->Reset(); }
     m_scene.playerX = x;
@@ -290,6 +292,9 @@ void SurvivalSession::OnWaveCleared(unsigned perfectRewardPercent) {
     if (m_originalHud != nullptr && !m_horde) {
         m_originalHud->OnOriginalWaveClear(m_level.GetRealWave() + 1,
             m_scene.GetPerfectWaves() > previousPerfect, perfectRewardPercent, m_bossWave);
+        if (m_scene.IsLocalLive() && m_level.GetWave() + 1 < m_level.GetWaveLimit()) {
+            m_originalHud->BeginLiveWave(m_scene.GetMultiplayerStatistics(0), m_scene.GetMultiplayerStatistics(1));
+        }
     }
     m_bossWave = false;
 }
@@ -468,19 +473,30 @@ void SurvivalSession::UpdateMapInteractions(float previousX, float previousY) {
 
 
 void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
-    if (deltaMs <= 0) { return; }
-    if (IsDeathComplete()) { UpdateAfterDeath(deltaMs); return; }
+    if (deltaMs <= 0 || m_suspended) { return; }
     // CLevel::Update :121255 advances the active powerup before its pause
     // gate. Keep presentation time alive without advancing actors or spawns.
+    if (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive()) {
+        m_peerPowerups->Update(deltaMs);
+        return;
+    }
     if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
         m_powerups->Update(deltaMs);
         return;
     }
+    if (IsDeathComplete()) { UpdateAfterDeath(deltaMs); return; }
     if (m_level.IsPaused()) { return; }
     const int worldDeltaMs = m_level.TransformWorldElapseMS(deltaMs);
     m_map.GetCamera().Update(worldDeltaMs);
     UpdateDialog(deltaMs);
     if (m_originalHud != nullptr) { m_originalHud->Advance(deltaMs); }
+    if (m_originalHud != nullptr && m_originalHud->LiveWaveRemaining() != 0) {
+        // CLevel::Update :121325 keeps both player objects alive during the
+        // 15-second script wait. CInputPad does not block movement sticks.
+        m_scene.Update(worldDeltaMs, moveX, moveY, fire);
+        UpdateCamera(worldDeltaMs);
+        return;
+    }
     if (m_level.IsCleared()) {
         m_scene.Update(worldDeltaMs, 0, 0, false);
         UpdateCamera(worldDeltaMs);
@@ -489,7 +505,10 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     if (m_originalHud != nullptr) {
         // InterstitialSequenceCallback :86336 emits LEVEL event 2 only after
         // the last authored Movie completes. BOKOR keeps its script clock alive.
-        if (m_originalHud->TakeInterstitialCompletion()) { m_level.HandleEvent(2); }
+        if (m_originalHud->TakeInterstitialCompletion()) {
+            if (m_scene.IsLocalLive()) { m_scene.ClearWaveStatistics(); }
+            m_level.HandleEvent(2);
+        }
         // CGame::Update :76581 keeps CLevel::Update running under the Movie.
         // The script's object multiplier supplies slow motion, not a pause.
     }
@@ -509,6 +528,7 @@ void SurvivalSession::Update(int deltaMs, float moveX, float moveY, bool fire) {
     // CPlayer::Move checks triggers in every mode, including retail survival.
     UpdateMapInteractions(previousX, previousY);
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
+    if (m_peerPowerups != nullptr) { m_peerPowerups->Update(deltaMs); }
     if (m_props != nullptr) { m_props->Update(worldDeltaMs); }
     if (m_pickups != nullptr) {
         for (const PickupSpawn &spawn : m_scene.pickupSpawns) { SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0); }
@@ -576,6 +596,7 @@ void SurvivalSession::UpdateCamera(int deltaMs) {
 }
 
 void SurvivalSession::UpdateAfterDeath(int deltaMs) {
+    if (m_suspended) { return; }
     // HP zero starts the animation; native 1 ends normal level updates.
     if (!IsDeathComplete()) { Update(deltaMs, 0, 0, false); return; }
     if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
@@ -598,6 +619,7 @@ bool SurvivalSession::SubmitChallenges(bool ended, bool waveCleared) {
     data.level = m_levelReference;
     data.guns = m_challengeProfile->configuration.guns;
     data.gameType = 1;
+    if (m_scene.IsLocalLive()) { data.gameType = 2; }
     // Horde is a mission type, not the cooperative GameType=2 requirement.
     data.wave = m_level.GetWave() + 1; // Original +0x4BEEC is the global wave, not modulo revolution.
     data.waveCleared = waveCleared;

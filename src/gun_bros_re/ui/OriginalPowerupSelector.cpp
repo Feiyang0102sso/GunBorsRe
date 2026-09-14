@@ -83,7 +83,7 @@ bool SurvivalHud::DrawSelectorItem(const SurvivalHudState &state, unsigned index
     const int x = int(area.x - bounds.x) + int(area.width - bounds.width) / 2;
     const int y = int(area.y - bounds.y) + int(area.height - bounds.height) / 2 - int(bounds.height) / 4;
     if (!renderer.DrawSprite(sprite.archetype, sprite.animation, 0, float(x), float(y), 1, alpha)) { return false; }
-    const bool available = powerup->data.field112 == 0;
+    const bool available = (powerup->data.field112 != 0) == state.afterDeathShop;
     if (!available && !renderer.DrawSprite(sprite.archetype, powerup->data.field28, 0, float(x), float(y), 1, alpha)) { return false; }
     if (count > 0) {
         unsigned animation = 87;
@@ -133,6 +133,14 @@ bool SurvivalHud::DrawSelectorItem(const SurvivalHudState &state, unsigned index
 
 bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
     if (!m_selectorBound) {
+        m_selectorEntries.clear();
+        for (unsigned storeIndex : m_selectorAllEntries) {
+            const auto &ref = m_store[storeIndex].data.objects.front().object;
+            for (const auto &powerup : m_powerups) {
+                if (powerup.resource.packHash == ref.packHash && powerup.resource.localIndex == ref.localIndex &&
+                    (powerup.data.field112 != 0) == state.afterDeathShop) { m_selectorEntries.push_back(storeIndex); }
+            }
+        }
         m_selectorBound = true;
         m_selectorTime = 0;
         m_selectorChoiceTime = 0;
@@ -173,6 +181,20 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
             unsigned panelTime, IMovieRegionCallback &items) :
             hud(owner), state(value), layout(movie), layoutTime(time), menuTime(panelTime), content(items) {}
         bool DrawMovieRegion(const MovieRegion &area) override {
+            if (area.index == 2 && state.localLive) {
+                // DrawPlayerNameAndTimer :185362 binds the original region 2.
+                const std::string seconds = std::to_string((state.shopRemainingMs + 500) / 1000);
+                float centerX = area.x + area.width / 2;
+                if (state.remoteShop) {
+                    const float nameWidth = hud.m_movies.TextWidth(state.brotherName, 5);
+                    if (!hud.m_movies.Text(state.brotherName, centerX - nameWidth / 2,
+                        area.y + (area.height - hud.m_movies.TextHeight(5)) / 2, 5, 1, 0, area.alpha)) { return false; }
+                    // ARM 0x106980..0x106AB4: name edge + one font11 zero glyph.
+                    centerX += nameWidth / 2 + hud.m_movies.TextWidth("0", 11);
+                }
+                return hud.m_movies.Text(seconds, centerX - hud.m_movies.TextWidth(seconds, 11) / 2,
+                    area.y + (area.height - hud.m_movies.TextHeight(11)) / 2, 11, 1, 0, area.alpha);
+            }
             if (area.index == 1) {
                 return hud.m_movies.Draw(layout, layoutTime, area.x + int(area.width) / 2,
                     area.y + int(area.height) / 2, 1024, 768, 0, area.alpha, &content);
@@ -219,7 +241,7 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
     unsigned cancelIndex = 0;
     auto cancelAction = SurvivalHudAction::CloseShop;
     if (state.itemChoice) { cancelIndex = 1; cancelAction = SurvivalHudAction::CancelItem; }
-    if (!DrawSelectorButton("MDS_BUTTON_POWERUP_SELECTOR", cancelIndex,
+    if (!state.remoteShop && !DrawSelectorButton("MDS_BUTTON_POWERUP_SELECTOR", cancelIndex,
         resume.x + resume.width / 2, resume.y + resume.height / 2, resume.alpha, cancelAction)) { return false; }
     if (state.itemChoice) {
         const auto *selected = SelectedItem();
@@ -288,7 +310,7 @@ bool SurvivalHud::DrawOriginalSelector(const SurvivalHudState &state) {
             }
         }
     }
-    if (!ready) { m_selectorHits.clear(); }
+    if (!ready || state.remoteShop) { m_selectorHits.clear(); }
     return DrawSelectorPrompt() && m_movies.Failures() == 0;
 }
 
@@ -381,4 +403,13 @@ bool SurvivalHud::DrawSelectorPrompt() {
         if (m_selectorPrompt.IsReady()) { m_selectorPromptHits.push_back({touch, dismiss->action}); }
     }
     return true;
+}
+
+void SurvivalHud::BrowseRemoteShop(unsigned selection) {
+    if (m_selectorEntries.empty()) { return; }
+    // The local peer drives the same resource list's focus, not a second UI.
+    const unsigned index = selection % static_cast<unsigned>(m_selectorEntries.size());
+    const float maximum = std::max(0.0f, float(m_selectorEntries.size()) - 3);
+    m_selectorTarget = std::clamp(static_cast<float>(index), std::min(2.0f, maximum), maximum);
+    m_selectedItem = static_cast<int>(m_selectorEntries[index]);
 }

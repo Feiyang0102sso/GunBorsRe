@@ -437,6 +437,13 @@ void CBrother::OnWaveCleared() {
     m_interpreter.CallExportFunction(6);
 }
 
+bool CBrother::OnRevive(unsigned reason) {
+    if (m_vitals == nullptr || !m_vitals->dead || !m_vitals->deathAnimationComplete) { return false; }
+    m_interpreter.CallExportFunction(7, static_cast<std::int16_t>(reason));
+    std::printf("[local-live] revive human=%d health=%.1f\n", m_variables[2], m_vitals->health);
+    return !m_vitals->dead;
+}
+
 std::vector<GunCue> CBrother::TakeCues() {
     std::vector<GunCue> cues;
     cues.swap(m_cues);

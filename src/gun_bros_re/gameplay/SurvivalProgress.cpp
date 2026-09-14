@@ -1,4 +1,5 @@
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/data/LocalBotFriend.h"
 using namespace MapDetail;
 bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &progress,
     const CombatScene &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded ) {
@@ -44,6 +45,18 @@ bool SaveSurvivalProgress(SurvivalGameContext *context, const CPlayerProgress &p
         credited = entry.experience;
     }
     context->result.kills = scene.GetTotalKills();
+    context->result.live = scene.IsLocalLive();
+    for (unsigned peer = 0; peer < 2; ++peer) { context->result.peers[peer] = scene.GetMultiplayerStatistics(peer).total; }
+    if (scene.IsLocalLive() && context->botFriend != nullptr) {
+        context->result.peerName = context->botFriend->name;
+        auto &bot = context->botFriend->profile;
+        bot.experience = scene.GetPeerExperience();
+        const auto ore = scene.GetMultiplayerStatistics(1).total.xplodium;
+        if (ore < context->accountedPeerXplodium) { context->accountedPeerXplodium = 0; }
+        bot.xplodium += ore - context->accountedPeerXplodium;
+        context->accountedPeerXplodium = ore;
+        if (!context->botFriend->Save()) { return false; }
+    }
     context->result.horde = context->hordeStart >= 0;
     context->result.score = scene.GetScore();
     context->result.bestKillStreak = scene.GetBestKillStreak();

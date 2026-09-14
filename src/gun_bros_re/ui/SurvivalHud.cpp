@@ -40,6 +40,7 @@ bool SurvivalHud::Init(CResTOCManager &toc, PackTables &tables) {
     }
     std::sort(selectorOrder.begin(), selectorOrder.end());
     for (const auto &item : selectorOrder) { m_selectorEntries.push_back(item.second); }
+    m_selectorAllEntries = m_selectorEntries;
     // First-use font and atlas uploads belong to loading, not the first shot
     // or a wave-clear frame. No gameplay or notification state is advanced.
     constexpr unsigned movies[] = {1, 3, 7, 34, 87, 116, 130, 131, 134, 135};
@@ -103,6 +104,7 @@ std::vector<SurvivalHud::Button> SurvivalHud::Buttons(const SurvivalHudState &st
 }
 
 SurvivalHudAction SurvivalHud::Pointer(const SurvivalHudState &state, float x, float y, bool down) {
+    if (state.remoteShop) { m_previousDown = down; return SurvivalHudAction::None; }
     m_mouseX = x;
     m_mouseY = y;
     bool clicked = down && !m_previousDown;
@@ -198,6 +200,14 @@ bool SurvivalHud::Draw(const SurvivalHudState &state) {
     if (state.withBrother && state.brotherHealth > 0 && state.brotherLabelAlpha > 0) {
         m_movies.Text(state.brotherName, state.brotherLabelX - m_movies.TextWidth(state.brotherName, 0) * 0.5f,
             state.brotherLabelY - m_movies.TextHeight(0) / 2, 0, 1, 0, state.brotherLabelAlpha);
+    }
+    if (state.localLive && state.reviveProgress > 0) {
+        // CLevel::DrawReviveBar :120152: native rectangles, not a Movie.
+        const auto &bar = state.reviveBar;
+        m_movies.Rectangle(bar.x, bar.y, bar.width, bar.height, 127.0f/255, 140.0f/255, 152.0f/255, 1);
+        m_movies.Rectangle(bar.x + state.revivePaddingX, bar.y + state.revivePaddingY,
+            std::max(0.0f, bar.width - 2 * state.revivePaddingX) * state.reviveProgress,
+            std::max(0.0f, bar.height - 2 * state.revivePaddingY), 100.0f/255, 182.0f/255, 253.0f/255, 1);
     }
     // Preserve the authored iPad bottom rail and original top-left pause control.
     // Exact ARMv7 CLevelIndicator::INDICATOR_ANIMS bytes at 0x3C4AB0.

@@ -58,12 +58,20 @@ void CombatScene::SetPlayerProgress(CPlayerProgress *progress) {
 
 void CombatScene::AddExperience(unsigned amount) {
     if (m_progress == nullptr) { return; }
+    if (m_localLive && IsTeamDeathComplete()) { return; }
+    const auto before = m_progress->GetExperience();
     const float fraction = m_vitals.health / m_vitals.maximum;
-    if (!m_progress->AddExperience(amount)) { return; }
+    const bool leveled = m_progress->AddExperience(amount);
+    if (m_localLive) {
+        const auto earned = m_progress->GetExperience() - before;
+        m_multiplayer[0].wave.experience += earned;
+        m_multiplayer[0].total.experience += earned;
+    }
+    if (!leveled) { return; }
     // CPlayer::AddExperience (:101250) preserves the current health fraction.
     m_vitals.maximum = m_progress->GetHealth();
     m_vitals.health = m_vitals.maximum * fraction;
-    if (m_brother != nullptr) {
+    if (m_brother != nullptr && !m_localLive) {
         const float brotherFraction = m_brother->vitals.health / m_brother->vitals.maximum;
         m_brother->vitals.maximum = m_progress->GetHealth();
         m_brother->vitals.health = m_brother->vitals.maximum * brotherFraction;
@@ -78,8 +86,48 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
     // Multiplier attribute 2 is Xplodium; attribute 3 is XP. Both round UP.
     const GameObjectRef &ref = actor.model.enemy.combat.templateRef;
     const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-        m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(m_player, 3)));
+        m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(m_player, 3) * CFriendPowerManager::Multiplier(m_player.friendCount, 5)));
     const bool playerKill = actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId;
+    if (m_localLive) {
+        const auto owner = actor.model.enemy.combat.pendingHit.owner;
+        if (owner == kPlayerCombatId || owner == kBrotherCombatId) {
+            unsigned killer = 0;
+            if (owner == kBrotherCombatId) { killer = 1; }
+            auto &stats = m_multiplayer[killer];
+            ++stats.wave.kills; ++stats.total.kills; ++stats.streak;
+            stats.total.bestStreak = std::max(stats.total.bestStreak, stats.streak);
+            const unsigned other = 1 - killer;
+            unsigned assistExperience = experience;
+            if (other == 1 && m_brotherModel != nullptr) {
+                assistExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
+                    m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_brotherModel, 3) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
+            }
+            unsigned assisted = 0;
+            for (unsigned slot = 0; slot < 2; ++slot) {
+                if ((actor.assistMask[other] & (1u << slot)) == 0) { continue; }
+                ++assisted;
+                ++m_multiplayer[other].wave.assists;
+                ++m_multiplayer[other].total.assists;
+                CreditAssistMastery(other, slot, assistExperience);
+            }
+            if (assisted == 0) {
+                unsigned slot = m_player.gunSlot;
+                if (other == 1) { slot = m_brotherWeaponSlot; }
+                CreditAssistMastery(other, slot, assistExperience); // OnEnemyKilledByBro, no numerical assist.
+            }
+            if (killer == 1 && m_brotherModel != nullptr) {
+                const unsigned peerXP = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
+                    m_level->GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_brotherModel, 3) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
+                const unsigned peerOre = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
+                    m_level->GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(*m_brotherModel, 4) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 6)));
+                AddPeerExperience(peerXP);
+                AddPeerXplodium(peerOre);
+                if (!actor.model.enemy.combat.pendingHit.weapon.IsNull()) {
+                    CreditAssistMastery(1, actor.model.enemy.combat.pendingHit.weaponSlot, peerXP);
+                }
+            }
+        }
+    }
     bool counted = false;
     for (auto &entry : m_casualties) {
         if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) {
@@ -118,11 +166,11 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
         m_bestKillStreak = std::max(m_bestKillStreak, m_killStreak);
         m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL, m_score + points));
         if (playerKill) { AddExperience(experience); }
-    } else { AddExperience(experience); }
+    } else if (!m_localLive || playerKill) { AddExperience(experience); }
     // CLevel::OnEnemyKilled VA0x950AC passes the awarded XP to the STR
     // formatter, then projects enemy position (+828/+832) once. The text
     // survives the corpse and does not follow later camera/player movement.
-    if (m_experienceTexts.size() < kTextEffectCapacity) {
+    if ((!m_localLive || playerKill) && m_experienceTexts.size() < kTextEffectCapacity) {
         const auto &enemy = actor.model.enemy.combat;
         ExperienceText text;
         text.amount = experience;
@@ -132,7 +180,7 @@ void CombatScene::RewardEnemy(const CombatEnemy &actor) {
     }
     if (actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId) {
         const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
-            m_level->GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(m_player, 4)));
+            m_level->GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(m_player, 4) * CFriendPowerManager::Multiplier(m_player.friendCount, 6)));
         AddXplodium(xplodium);
     }
 }
@@ -156,12 +204,17 @@ void CombatScene::AddHealth(unsigned amount) {
 }
 
 void CombatScene::AddXplodium(unsigned amount) {
+    if (m_localLive && IsTeamDeathComplete()) { return; }
     // CPlayer::AddXplodium :101116 keeps hundredths between individual grants.
     // Rounding every small pickup separately loses the later-wave bonus.
     unsigned percent = 100;
     if (m_level != nullptr) { percent = static_cast<unsigned>(std::max(0, m_level->GetXplodiumMultiplierPercent())); }
     const std::uint64_t scaled = static_cast<std::uint64_t>(amount) * percent + m_xplodiumRemainder;
     m_xplodium += scaled / 100;
+    if (m_localLive) {
+        m_multiplayer[0].wave.xplodium += scaled / 100;
+        m_multiplayer[0].total.xplodium += scaled / 100;
+    }
     m_xplodiumRemainder = static_cast<unsigned>(scaled % 100);
 }
 
@@ -208,6 +261,19 @@ void CombatScene::OnWaveCleared(unsigned perfectRewardPercent) {
     // The next wave excludes this wave's bonus from its reward basis.
     m_waveXplodium = m_xplodium;
     m_waveHits = m_vitals.hits;
+    if (m_localLive && m_brother != nullptr) {
+        auto &peer = m_multiplayer[1];
+        if (m_brother->vitals.hits == peer.previousHits) {
+            const auto bonus = std::max<std::uint64_t>(1, peer.wave.xplodium * perfectRewardPercent / 100);
+            AddPeerXplodium(static_cast<unsigned>(bonus));
+            peer.wave.perfectWaves = 1; ++peer.total.perfectWaves;
+        }
+        if (m_wavePerfectResults.back()) {
+            m_multiplayer[0].wave.perfectWaves = 1;
+            ++m_multiplayer[0].total.perfectWaves;
+        }
+        peer.previousHits = m_brother->vitals.hits;
+    }
 }
 
 CombatScene::CombatScene(PackTables &tables, const CShaderProgram &program,
@@ -319,6 +385,17 @@ void CombatScene::UpdateNavigation(CombatEnemy &actor, int deltaMs) {
 }
 
 void CombatScene::Reset() {
+    m_deathChoiceHandled[0] = 0; m_deathChoiceHandled[1] = 0;
+    m_multiplayer[0] = {}; m_multiplayer[1] = {};
+    m_testBotReviveRequested = false;
+    m_reviveProgress = 0;
+    m_reviveCount = 0;
+    m_reviveTarget = 0;
+    m_effects.StopEffect(m_reviveEffectHandle);
+    m_reviveEffectHandle = 0;
+    m_reviveEffectState = 0;
+    m_reviveEffectTarget = 0;
+    m_peerIndicatorVisible = false;
     m_flockEnemies.clear();
     m_experienceTexts.clear();
     m_weaponProgress.clear();
@@ -555,6 +632,8 @@ bool CombatScene::SwapBrotherWeapon() {
     }
     SelectPlayerUIWeapon(*m_brotherModel, next == 0);
     m_brotherWeaponSlot = next;
+    m_brotherModel->gunSlot = next;
+    m_brotherModel->gunResource = m_gunConfigurations[1][next];
     std::printf("[brother] weapon-slot=%u\n", next);
     return true;
 }
@@ -708,6 +787,14 @@ bool CombatScene::Anchor(CombatId id, int part, int node, float &x, float &y, fl
 void CombatScene::SelectTarget(CombatEnemy &actor) {
     CEnemy &enemy = actor.model.enemy;
     if (enemy.combat.targetType != 2) {
+        // Local peer has no network target packet: choose the nearest living
+        // brother on this host, including while the human player is down.
+        if (m_localLive && m_brother != nullptr && !m_brother->vitals.dead &&
+            (m_vitals.dead || std::hypot(m_brother->x - enemy.combat.x, m_brother->y - enemy.combat.y) <
+                std::hypot(playerX - enemy.combat.x, playerY - enemy.combat.y))) {
+            enemy.SetTarget(kBrotherCombatId, m_brother->x, m_brother->y, true);
+            return;
+        }
         enemy.SetTarget(kPlayerCombatId, playerX, playerY, !m_vitals.dead);
         return;
     }
@@ -873,7 +960,8 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
         const float reduction = PlayerArmorMultiplier(*m_brotherModel, 0) - 1;
         float damage = hit.damage;
         if (hit.splash && hit.percentDamage) { damage *= m_brother->vitals.maximum * 0.01f; }
-        return m_brotherModel->weapon->brother.ReceiveDamage(std::max(0.0f, damage * (1 - reduction)));
+        return m_brotherModel->weapon->brother.ReceiveDamage(std::max(0.0f, damage * (1 - reduction)) /
+            CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 1));
     }
     if (target == kPlayerCombatId) {
         if (hit.ownerType != 1 || m_player.weapon == nullptr) { return HitResult::Ignored; }
@@ -885,7 +973,7 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
         // of maximum health before the ordinary armor / frenzy reductions.
         float damage = hit.damage;
         if (hit.splash && hit.percentDamage) { damage *= m_vitals.maximum * 0.01f; }
-        damage = std::max(0.0f, damage * (1.0f - reduction));
+        damage = std::max(0.0f, damage * (1.0f - reduction)) / CFriendPowerManager::Multiplier(m_player.friendCount, 1);
         const unsigned hitsBefore = m_vitals.hits;
         const HitResult result = m_player.weapon->brother.ReceiveDamage(damage);
         // OnPlayerDamaged :115914 resets the streak on accepted damage only.
@@ -893,6 +981,9 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
         return result;
     }
     CombatHit adjusted = hit;
+    // CPlayer::GetDamage includes the active roster's native BRO BUFF.
+    if (hit.owner == kPlayerCombatId) { adjusted.damage *= CFriendPowerManager::Multiplier(m_player.friendCount, 0); }
+    if (hit.owner == kBrotherCombatId && m_brotherModel != nullptr) { adjusted.damage *= CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 0); }
     if (hit.applyArmorAttack && hit.owner == kPlayerCombatId) {
         adjusted.damage *= PlayerArmorMultiplier(m_player, 1);
     }
@@ -904,7 +995,8 @@ HitResult CombatScene::ApplyHit(CombatId target, const CombatHit &hit) {
         if (m_props != nullptr) { return m_props->ApplyHit(target, adjusted); }
         return HitResult::Ignored;
     }
-    return actor->model.enemy.ReceiveHit(adjusted);
+    const HitResult result = actor->model.enemy.ReceiveHit(adjusted);
+    return result;
 }
 
 float CombatScene::GetDamageMultiplier(CombatId owner, float fallback) const {
@@ -1048,6 +1140,12 @@ void CombatScene::Actions(CombatEnemy &actor) {
                 m_brotherModel->weapon->brother.Stun(action.durationMs);
             }
         } else if (action.kind == EnemyAction::Kind::CollisionResolved) {
+            // Record assistance only after the enemy Flow accepts the collision.
+            if (m_localLive && (action.result == HitResult::Hit || action.result == HitResult::Killed) &&
+                !action.resource.IsNull() && action.slot >= 0 && action.slot < 2) {
+                if (action.owner == kPlayerCombatId) { actor.assistMask[0] |= 1u << action.slot; }
+                if (action.owner == kBrotherCombatId) { actor.assistMask[1] |= 1u << action.slot; }
+            }
             m_effects.ResolveHit(action.projectile, action.result);
         } else if (action.kind == EnemyAction::Kind::RemoveBullet) {
             m_effects.RemoveOldestProjectile(state.id);
@@ -1095,7 +1193,7 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     if (!m_vitals.dead && m_vitals.stunMs == 0) {
         const float length = std::hypot(moveX, moveY);
         if (length > 0 && m_player.weapon->brother.CanMove()) {
-            const float speed = kPlayerSpeed * PlayerArmorMultiplier(m_player, 2) * m_player.weapon->brother.GetFrenzyMultiplier(2) *
+            const float speed = kPlayerSpeed * PlayerArmorMultiplier(m_player, 2) * CFriendPowerManager::Multiplier(m_player.friendCount, 2) * m_player.weapon->brother.GetFrenzyMultiplier(2) *
                 m_player.ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f;
             playerX += moveX / length * speed * deltaMs * 0.001f;
             playerY += moveY / length * speed * deltaMs * 0.001f;
@@ -1122,12 +1220,17 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         PerformanceProbe::Scope timing(PerformanceProbe::counters.brotherMs);
 #endif
         m_brother->SetShootingAllowed(m_level == nullptr || m_level->CanBrotherShoot());
+        float speedMultiplier = PlayerArmorMultiplier(*m_brotherModel, 2) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2);
+        // Live substitutes player input, so CPlayer::UpdateMovement :101437
+        // also applies the equipped gun's native mastery movement modifier.
+        if (m_localLive) { speedMultiplier *= m_brotherModel->ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f; }
         m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this,
-            playerX, playerY, PlayerArmorMultiplier(*m_brotherModel, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2));
+            playerX, playerY, speedMultiplier);
         if (m_brother->TakeWeaponSwapRequest()) { RequestBrotherWeaponSwap(); }
         AdvancePlayer(*m_brotherModel, deltaMs);
         if (m_brotherModel->weapon->brother.TakeWeaponSwap() && !SwapBrotherWeapon()) { ++invalidSpawns; }
     }
+    UpdateLocalRevive(deltaMs);
     // CLevel::Update :121318 refreshes CFlock before object movement.
     // AddObject/RemoveObject maintain membership, including unremoved corpses.
     m_flockEnemies.clear();
@@ -1254,4 +1357,111 @@ void CombatScene::Update(int deltaMs, float moveX, float moveY, bool shoot) {
             enemies.erase(enemies.begin() + i);
         } else { ++i; }
     }
+}
+
+bool CombatScene::IsTeamDeathComplete() const {
+    if (!m_vitals.dead || !m_vitals.deathAnimationComplete) { return false; }
+    if (!m_localLive || m_brother == nullptr) { return true; }
+    if (NeedsDeathChoice(0) || NeedsDeathChoice(1)) { return false; }
+    return m_brother->vitals.dead && m_brother->vitals.deathAnimationComplete;
+}
+
+bool CombatScene::NeedsDeathChoice(unsigned peer) const {
+    if (!m_localLive || peer > 1 || !m_afterDeathAvailable[peer] || m_brother == nullptr) { return false; }
+    const PlayerVitals *vitals = &m_vitals;
+    if (peer == 1) { vitals = &m_brother->vitals; }
+    return vitals->dead && vitals->deaths > m_deathChoiceHandled[peer];
+}
+
+void CombatScene::FinishDeathChoice(unsigned peer) {
+    if (peer == 0) { m_deathChoiceHandled[0] = m_vitals.deaths; }
+    if (peer == 1 && m_brother != nullptr) { m_deathChoiceHandled[1] = m_brother->vitals.deaths; }
+}
+
+bool CombatScene::ReviveActor(CombatId actor, unsigned reason) {
+    if (actor == kPlayerCombatId) { return m_player.weapon->brother.OnRevive(reason); }
+    if (actor == kBrotherCombatId && m_brotherModel != nullptr) { return m_brotherModel->weapon->brother.OnRevive(reason); }
+    return false;
+}
+
+bool CombatScene::KillTestBot() {
+    if (!HasTestBot()) { return false; }
+    m_testBotReviveRequested = false;
+    return m_brotherModel->weapon->brother.StartDeath();
+}
+
+bool CombatScene::ReviveTestBot() {
+    if (!HasTestBot() || !m_brother->vitals.dead) { return false; }
+    m_testBotReviveRequested = true;
+    return true;
+}
+
+void CombatScene::ActorPosition(CombatId actor, float &x, float &y) const {
+    x = playerX; y = playerY;
+    if (actor == kBrotherCombatId && m_brother != nullptr) { x = m_brother->x; y = m_brother->y; }
+}
+
+std::vector<IBrotherAIWorld::Threat> CombatScene::GetBrotherThreats() const {
+    std::vector<IBrotherAIWorld::Threat> result;
+    for (const auto &actor : enemies) {
+        const auto &enemy = actor->model.enemy;
+        if (!enemy.combat.enabled || !enemy.combat.targetable) { continue; }
+        result.push_back({enemy.combat.x, enemy.combat.y, enemy.GetPart(0).radius + m_playerRadius});
+    }
+    return result;
+}
+
+void CombatScene::UpdateLocalRevive(int deltaMs) {
+    if (m_localLive && m_brother != nullptr) {
+        const PlayerVitals *vitals[] = {&m_vitals, &m_brother->vitals};
+        for (unsigned peer = 0; peer < 2; ++peer) {
+            auto &stats = m_multiplayer[peer];
+            const unsigned deaths = vitals[peer]->deaths;
+            stats.wave.deaths += deaths - stats.total.deaths;
+            stats.total.deaths = deaths;
+            if (vitals[peer]->hits != stats.streakHits) { stats.streak = 0; stats.streakHits = vitals[peer]->hits; }
+        }
+    }
+    if (m_testBotReviveRequested && HasTestBot() && m_brother->vitals.deathAnimationComplete) {
+        if (m_brotherModel->weapon->brother.OnRevive()) { m_testBotReviveRequested = false; }
+    }
+    if (!m_localLive || m_brother == nullptr || m_brotherModel == nullptr) { return; }
+    CombatId target = 0;
+    CBrother *actor = nullptr;
+    if (m_vitals.dead && m_vitals.deathAnimationComplete && !m_brother->vitals.dead) {
+        target = kPlayerCombatId;
+        actor = &m_player.weapon->brother;
+    } else if (m_brother->vitals.dead && m_brother->vitals.deathAnimationComplete && !m_vitals.dead) {
+        target = kBrotherCombatId;
+        actor = &m_brotherModel->weapon->brother;
+    }
+    if (target != m_reviveTarget) { m_reviveTarget = target; m_reviveProgress = 0; }
+    // CPlayer::Update :100377 chooses PLAYER script resource 2 outside
+    // rescue range and resource 3 inside it. This belongs to multiplayer,
+    // independently of whether the other player's input comes from a bot.
+    unsigned effectState = 0;
+    const bool inRange = std::hypot(playerX - m_brother->x, playerY - m_brother->y) < 125;
+    if (actor != nullptr) { effectState = 1; if (inRange) { effectState = 2; } }
+    if (effectState != m_reviveEffectState || target != m_reviveEffectTarget) {
+        m_effects.StopEffect(m_reviveEffectHandle);
+        m_reviveEffectHandle = 0;
+        m_reviveEffectState = effectState;
+        m_reviveEffectTarget = target;
+        if (effectState != 0 && !m_reviveEffects[effectState - 1].IsNull()) {
+            float x = 0, y = 0;
+            ActorPosition(target, x, y);
+            m_reviveEffectHandle = m_effects.StartPersistentEffect(m_reviveEffects[effectState - 1], x, y, true);
+        }
+    }
+    if (actor == nullptr) { return; }
+    // CPlayer::Update :100405..100437: strict 125-unit radius, 0.0001/ms.
+    // Leaving the radius retains progress; the original has no reset branch.
+    if (!inRange) { return; }
+    m_reviveProgress = std::min(1.0f, m_reviveProgress + deltaMs * 0.0001f);
+    if (m_reviveProgress < 1 || !actor->OnRevive()) { return; }
+    ++m_reviveCount;
+    if (target == kBrotherCombatId) { AddExperience(10); } // SetRevivePercent :115366.
+    else { AddPeerExperience(10); }
+    m_reviveProgress = 0;
+    m_reviveTarget = 0;
 }

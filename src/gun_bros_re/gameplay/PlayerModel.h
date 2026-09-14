@@ -104,6 +104,7 @@ struct PlayerArmorState {
  * copied or moved, and because `configMeshes` points back at its own `mesh`.
  */
 struct PlayerModel {
+    unsigned friendCount = 0;
     // Owned here so the controllers can point at it.
     CMoveSetMesh moveSet;
     std::vector<std::unique_ptr<PlayerPart>> parts;
@@ -116,7 +117,9 @@ struct PlayerModel {
     PlayerVitals *vitals = nullptr;
     CBrother::PowerupState powerups;
     bool human = true;
+    bool cooperative = false;
     GameObjectRef gunResource;
+    unsigned gunSlot = 0; // Retained on projectiles after the player switches guns.
     unsigned masteryExperience = 0;
     std::map<std::uint64_t, unsigned> masteryByWeapon;
     unsigned brotherIndex = 0;

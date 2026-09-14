@@ -163,7 +163,13 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
 #if GB_ENABLE_CHEATS
     if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
     if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
-    if (cheat == GameCheats::BrotherWeapon) { scene.RequestBrotherWeaponSwap(); }
+    if (scene.HasTestBot()) {
+        if (cheat == GameCheats::BrotherWeapon) { scene.RequestBrotherWeaponSwap(); }
+        if (cheat == GameCheats::BrotherKill) { scene.KillTestBot(); }
+        if (cheat == GameCheats::BrotherRevive) { scene.ReviveTestBot(); }
+        result.botShop = cheat == GameCheats::BrotherShop && scene.IsLocalLive();
+        result.botPowerup = cheat == GameCheats::BrotherPowerup && scene.IsLocalLive();
+    }
     if (cheat == GameCheats::Suicide && !powerups.IsMovieActive() && scene.Suicide()) {
         result.resume = true;
         std::printf("[death] suicide started\n");

@@ -23,6 +23,7 @@ public:
     PickupScene(CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,
         CProfileManager *profile = nullptr);
     bool Init();
+    void SetPeerProfile(CProfileManager *profile) { m_peerProfile = profile; }
     void Reset();
     bool Spawn(const GameObjectRef &ref, float x, float y, int objectId = 0);
     void Update(int deltaMs, CombatScene &scene, WeaponEffects &effects);
@@ -52,11 +53,12 @@ private:
         std::uint64_t effectHandle = 0;
         bool effectStarted = false;
     };
-    void GrantStoreItem(const GameObjectRef &ref);
+    void GrantStoreItem(const GameObjectRef &ref, CProfileManager *profile);
     CResTOCManager &m_toc;
     PackTables &m_tables;
     const CShaderProgram &m_program;
     CProfileManager *m_profile;
+    CProfileManager *m_peerProfile = nullptr;
     WeaponEffects *m_effects = nullptr;
     CQuadBatch m_batch;
     std::vector<PickupEntry> m_catalog;

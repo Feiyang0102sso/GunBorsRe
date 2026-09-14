@@ -11,6 +11,7 @@ class PowerupMoviePlayer {
 public:
     PowerupMoviePlayer(CResTOCManager &toc, PackTables &tables, CombatScene &scene);
     bool Start(const PowerupEntry &entry, bool fromSelector = false);
+    void SetOwner(CombatId owner) { m_owner = owner; }
     void Update(int deltaMs);
     bool Draw();
     void Reset();
@@ -26,6 +27,7 @@ private:
     CResTOCManager &m_toc;
     PackTables &m_tables;
     CombatScene &m_scene;
+    CombatId m_owner = kPlayerCombatId;
     CPowerup m_script;
     CShaderProgram m_program;
     std::unique_ptr<WeaponEffects> m_particles;

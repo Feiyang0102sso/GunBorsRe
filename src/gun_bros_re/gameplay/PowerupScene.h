@@ -11,7 +11,7 @@
 class PowerupScene {
 public:
     PowerupScene(CResTOCManager &toc, PackTables &tables, PlayerModel &player,
-        PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile);
+        PlayerVitals &vitals, CombatScene &scene, WeaponEffects &effects, CProfileManager &profile, CombatId owner = kPlayerCombatId);
     bool Init();
     bool Select(unsigned index);
     bool SelectResource(const GameObjectRef &resource);
@@ -20,6 +20,9 @@ public:
     bool Equip(unsigned slot, const GameObjectRef &resource);
     void Cycle();
     bool Use(bool fromSelector = false);
+    bool UseAny(bool grantTestCharge = false);
+    bool HasAfterDeathPowerup() const;
+    bool UseAfterDeathPowerup();
     void Update(int deltaMs);
     void Reset();
     bool DrawMovies();
@@ -40,6 +43,8 @@ private:
     WeaponEffects &m_effects;
     CProfileManager &m_profile;
     PowerupMoviePlayer m_moviePlayer;
+    CombatId m_owner;
+    unsigned m_choice = 0;
     std::vector<PowerupEntry> m_catalog;
     GameObjectRef m_equipped;
     unsigned m_selected = 13;

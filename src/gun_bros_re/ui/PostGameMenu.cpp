@@ -1,6 +1,7 @@
 #include "gun_bros_re/ui/PostGameCardCallbacks.h"
 #include "gun_bros_re/ui/MenuInternal.h"
 namespace MenuDetail {
+bool DrawLivePostGameList(GameMenu &view, MenuState &state, const MovieRegion &region, bool interactive);
 
 class PostGameListCallbacks : public IMovieRegionCallback {
 public:
@@ -72,6 +73,9 @@ const StoreEntry *FindWeaponStore(const std::vector<StoreEntry> &store, const Ga
 
 void BeginPostGame(MenuState &state, const SurvivalGameContext &context, const std::vector<WeaponEntry> &weapons) {
     state.result = context.result;
+    state.postGame.liveReplay = false;
+    state.postGame.liveReplayAt = 0;
+    state.postGame.livePosition = 0;
     state.postGame.postGameMusic = true;
     state.refinery.casualtyPage = 0;
     state.refinery.refineryTab = 0;
@@ -399,7 +403,9 @@ std::string PostGameFormat(GameMenu &view, const char *name, const std::vector<s
  * Native menu/provider logic below; layouts, fonts and artwork stay in BIG. */
 bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc, PackTables &tables,
     const CProfileManager &profile) {
-    const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN");
+    const char *screen = "GLU_MOVIE_WRAPUP_SCREEN";
+    if (state.result.live) { screen = "GLU_MOVIE_WRAPUP_SCREEN_MP"; }
+    const unsigned ordinal = view.movies.Ordinal(screen);
     const auto *movie = view.movies.GetMovie(ordinal);
     unsigned idleStart = 0, idleEnd = 0;
     if (movie == nullptr || !movie->GetChapterRange(1, idleStart, idleEnd)) { return false; }
@@ -414,6 +420,7 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
         state.postGame.postGameGalleryPosition = 0;
         if (state.result.casualties.size() <= 2) { state.postGame.postGameGalleryPosition = -1; }
         state.postGame.postGameGalleryVelocity = 0;
+        state.postGame.livePosition = 0;
         // Provider74 walks flattened ENEMY order, not the order of first kills.
         for (std::size_t item = 1; item < state.result.casualties.size(); ++item) {
             std::size_t cursor = item;
@@ -438,8 +445,14 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
         state.postGame.postGameIconTime += delta;
         unsigned lastIcon = 4;
         if (state.result.horde) { lastIcon = 5; }
-        for (unsigned icon : {0u, 1u, lastIcon}) {
-            if (!view.AdvancePostGameEffect(icon, delta)) { return false; }
+        if (state.result.live) {
+            for (unsigned icon : {0u, 1u, 2u, 3u, 4u, 6u, 7u}) {
+                if (!view.AdvancePostGameEffect(7 + icon, delta)) { return false; }
+            }
+        } else {
+            for (unsigned icon : {0u, 1u, lastIcon}) {
+                if (!view.AdvancePostGameEffect(icon, delta)) { return false; }
+            }
         }
     }
     if (state.postGame.postGameTime > idleEnd) { state.postGame.postGameTime = idleStart + (state.postGame.postGameTime - idleStart) % (idleEnd - idleStart + 1); }
@@ -529,10 +542,28 @@ bool DrawOriginalPostGame(GameMenu &view, MenuState &state, CResTOCManager &toc,
                     text = PostGameFormat(view, "IDS_WRAPUP_SURVIVAL_TIME", {time});
                 } else { text = PostGameFormat(view, "IDS_WRAPUP_WAVE_CLEARED", {std::to_string(state.result.waves)}); }
                 UpgradeCenteredText(view, region, text, 0);
+            } else if (state.result.live && region.index == 7) {
+                unsigned index = 0;
+                if (!state.online.IsConnected()) { index = 1; }
+                const auto *entry = OriginalMenuData("MDS_BUTTON_POSTGAME_REPLAY_MP", index);
+                if (entry == nullptr) { return false; }
+                MovieRegion origin = region;
+                origin.x += region.width / 2; origin.y += region.height / 2;
+                bool pressed = false;
+                std::string label = view.movies.NamedString(entry->strings[0]);
+                if (state.postGame.liveReplay) { label = view.movies.NamedString("IDS_WRAPUP_MP_REPLAY_REQUESTED"); }
+                if (!DrawOriginalMovieButton(view, *entry, origin, label, 1,
+                    interactive && state.online.IsConnected() && !state.postGame.liveReplay, pressed)) { return false; }
+                if (pressed) { state.postGame.liveReplay = true; state.postGame.liveReplayAt = view.clock; }
+            } else if (state.result.live && (region.index == 5 || region.index == 6)) {
+                std::string name = "PLAYER";
+                if (region.index == 6) { name = state.result.peerName; }
+                UpgradeCenteredText(view, region, name, 0);
             } else if (region.index == 5) {
                 const std::string text = view.movies.NamedString("IDS_WRAPUP_TOTAL_KILLS") + std::to_string(static_cast<std::uint16_t>(state.result.kills));
                 view.movies.Text(text, region.x, region.y + (region.height - view.movies.TextHeight(0)) / 2, 0, 1, 0, region.alpha);
             } else if (region.index == 4) {
+                if (state.result.live && state.page == 27) { return DrawLivePostGameList(view, state, region, interactive); }
                 PostGameListCallbacks callback(view, state, toc, tables);
                 const char *name = "GLU_MOVIE_WRAPUP_MENU_SCROLL";
                 if (state.page == 28) { name = "GLU_MOVIE_WRAPUP_GALLERY"; }

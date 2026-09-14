@@ -99,7 +99,9 @@ bool CDailyBonusTracking::CommitBonus(CProfileManager &profile, std::int64_t loc
         if (result == PurchaseResult::LevelLocked) { continue; }
         if (result != PurchaseResult::Purchased && result != PurchaseResult::Owned) { return false; }
     }
-    candidate.coins += prize.coins;
+    // CDailyBonusTracking::CommitBonus :209500-209546: coins only.
+    candidate.coins += static_cast<std::uint64_t>(prize.coins) *
+        (100 + CFriendPowerManager::Bonus(profile.friendCount, 7)) / 100;
     candidate.warbucks += prize.warbucks;
     candidate.experience += prize.experience;
     if (profile.nativeArchive) {

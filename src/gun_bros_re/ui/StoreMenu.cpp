@@ -622,6 +622,11 @@ bool DrawStorePrompt(GameMenu &view, MenuState &state) {
         // This labelled desktop adapter borrows only the native popup geometry.
         title = "LOCAL MATCHMAKING";
         body = "Waiting for another player.\nLocal simulation has no peer connected.";
+        if (state.gameMode == 1) {
+            body = "Joining LOCAL BOT for Live co-op...";
+        } else {
+            body = "Death Match is not implemented yet.\nChoose Live to play with LOCAL BOT.";
+        }
     }
     if (!state.matchingPrompt && state.storePromptButtons != nullptr && !StoreFailureText(view, state, body)) { return false; }
     const float bodyHeight = view.movies.TextHeight(0);

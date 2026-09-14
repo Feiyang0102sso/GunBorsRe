@@ -25,7 +25,9 @@ struct SurvivalDevelopment {
     bool performanceUncachedPaths = false;
     bool flockCheck = false;
     bool performanceFlockStudy = false;
+    bool localLiveCheck = false;
 };
+int RunLocalLiveCheck(const std::string &bigDirectory);
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,

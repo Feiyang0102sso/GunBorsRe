@@ -147,6 +147,7 @@ void PrintTestUsage() {
 #endif
 #if GB_ENABLE_TESTS
         "  --player-death-check      original slow motion, death completion and stsuicide\n"
+        "  --local-live-check        local bot, co-op combat, revive and practice isolation\n"
 #endif
 #if GB_ENABLE_TESTS
         "  --performance-check       record 1200 real gameplay frames to CSV\n"

@@ -79,6 +79,28 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
         }
         if (state.social.challenges.templates.size() != 238 || state.social.challenges.current.empty() ||
             state.social.brotherName.empty() || view.Header(profile, progress, page) == -3 || !GB_SAVE_FRAME(view.window, (path / ("social-initial-" + std::to_string(page) + ".png")).string())) { return 1; }
+        if (page == 4) {
+            MovieRegion list, row, card;
+            const auto listMovie = view.movies.Ordinal("GLU_MOVIE_BROTHER_MENU_SCROLL_3_OPTION");
+            const auto cardMovie = view.movies.Ordinal("GLU_MOVIE_BROTHER_BOX");
+            unsigned start = 0, end = 0;
+            if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"), 4, state.social.socialTime, list) ||
+                !view.movies.GetMovie(listMovie)->GetChapterRange(1, start, end) ||
+                !view.movies.Region(listMovie, 2, start, row) ||
+                !view.movies.GetMovie(cardMovie)->GetChapterRange(0, start, end) ||
+                !view.movies.Region(cardMovie, 0, end, card)) { return 1; }
+            row.x += list.x - 512;
+            row.y += list.y - 384;
+            card.x += row.x - 512;
+            card.y += row.y - 384;
+            view.Begin(page);
+            view.SetTestClick({card.x + card.width / 2, card.y + card.height / 2});
+            if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.selectedLocalFriend != 1) { return 1; }
+            view.Begin(page);
+            if (!DrawOriginalSocialMenu(view, state, profile, false) ||
+                view.Header(profile, progress, page) == -3 ||
+                !GB_SAVE_FRAME(view.window, (path / "local-bot-selected.png").string())) { return 1; }
+        }
         // Isolate the warning tape between the title and tabs, away from the
         // independently animated player model, header and selected challenge.
         MovieRegion titleArea, tabsArea;
@@ -264,6 +286,11 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
 
     MenuState match;
     match.gameMode = 1;
+    match.planet = 4;
+    if (!BeginLocalMatch(match) || !match.online.IsMatching()) { return 1; }
+    match = MenuState{};
+    match.gameMode = 1;
+    match.planet = 0;
     if (!BeginLocalMatch(match) || !match.online.IsMatching()) { return 1; }
     for (unsigned frame = 0; frame < 4; ++frame) {
         view.clock += 1000;
@@ -284,6 +311,15 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
         UpdateLocalConnection(match);
     }
     if (match.matchingPrompt) { return 1; }
+    if (!BeginLocalMatch(match)) { return 1; }
+    bool ready = false;
+    for (unsigned frame = 0; frame < 7 && !ready; ++frame) {
+        view.clock += 1000;
+        view.Begin(0);
+        if (!DrawStorePrompt(view, match)) { return 1; }
+        ready = TakeLocalMatch(match, view.clock);
+    }
+    if (!ready || match.online.IsMatching() || TakeLocalMatch(match, view.clock + 10000)) { return 1; }
     match.gameMode = 2;
     if (!BeginLocalMatch(match)) { return 1; }
     GameHostSettings().isConnected = false;

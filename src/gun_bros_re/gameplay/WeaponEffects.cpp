@@ -116,6 +116,7 @@ struct Shot {
     CombatId id = 0;
     CombatId owner = kPlayerCombatId;
     GameObjectRef weapon;
+    unsigned weaponSlot = 0;
     unsigned weaponMasteryLimit = 0;
     float masteryDamageMultiplier = 1;
     bool critical = false;
@@ -611,6 +612,7 @@ struct WeaponEffects::Impl {
             hit.projectile = owner->id;
             hit.owner = owner->owner;
             hit.weapon = owner->weapon;
+            hit.weaponSlot = owner->weaponSlot;
             hit.bullet = owner->source.resource;
             hit.critical = owner->critical;
             hit.weaponMasteryLimit = owner->weaponMasteryLimit;
@@ -1015,6 +1017,7 @@ void WeaponEffects::EmitBrother(PlayerModel &player, const float *modelToScene, 
             shot->id = scene.nextProjectile++;
             shot->owner = owner;
             shot->weapon = player.gunResource;
+            shot->weaponSlot = player.gunSlot;
             shot->followsMuzzle = true;
             shot->weaponMasteryLimit = player.ActiveWeapon().data.GetMasteryLimit();
             float masteryRoll = 1;
@@ -1097,6 +1100,7 @@ void WeaponEffects::Update(PlayerModel &player, const float *modelToScene, float
         hit.projectile = shot->id;
         hit.owner = shot->owner;
         hit.weapon = shot->weapon;
+        hit.weaponSlot = shot->weaponSlot;
         hit.bullet = shot->source.resource;
         hit.critical = shot->critical;
         hit.weaponMasteryLimit = shot->weaponMasteryLimit;

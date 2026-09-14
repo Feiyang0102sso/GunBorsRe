@@ -319,13 +319,20 @@ if (scripted) {
         static const struct { const char *pack; int ordinals[7]; } binding =
 #include "gun_bros_re/ui/OriginalPostGameParticleData.inc"
         ;
+        static const struct { const char *pack; int ordinals[9]; } liveBinding =
+#include "gun_bros_re/ui/OriginalLivePostGameParticleData.inc"
+        ;
         if (index >= postGameEffects.size()) { return false; }
         if (!postGameEffects[index]) {
-            const int pack = resourceToc->GetPackIndexFromName(binding.pack);
-            if (pack < 0 || binding.ordinals[index] < 0) { return false; }
+            const char *packName = binding.pack;
+            int ordinal = 0;
+            if (index < 7) { ordinal = binding.ordinals[index]; }
+            else { packName = liveBinding.pack; ordinal = liveBinding.ordinals[index - 7]; }
+            const int pack = resourceToc->GetPackIndexFromName(packName);
+            if (pack < 0 || ordinal < 0) { return false; }
             GameObjectRef resource;
             resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
-            resource.localIndex = static_cast<std::uint8_t>(binding.ordinals[index]);
+            resource.localIndex = static_cast<std::uint8_t>(ordinal);
             auto effect = std::make_unique<WeaponEffects>(*resourceToc, *resourceTables, imageProgram);
             // CParticleEffectPlayer's constructor enables looping (:131269).
             if (effect->StartPersistentEffect(resource, 0, 0, true) == 0) { return false; }
