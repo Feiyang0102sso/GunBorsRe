@@ -77,12 +77,33 @@ struct MenuScrollMotion {
     bool captured = false;
 
     void Update(float &position, std::uint64_t clock, float delta, float wheel, bool held,
-        bool pressedInside, bool enabled, float maximum, float stride, unsigned duration) {
+        bool pressedInside, bool enabled, float maximum, float stride, unsigned duration, bool elastic = false) {
         const float seconds = std::min(0.05f, static_cast<float>(clock - lastTick) / 1000);
         lastTick = clock;
-        if (!enabled || maximum <= 0) { velocity = 0; captured = false; return; }
+        if (!enabled || (maximum <= 0 && !elastic)) { velocity = 0; captured = false; return; }
         const float baseSpeed = stride * 1000 / std::max(1u, duration);
         if (pressedInside) { captured = true; velocity = 0; }
+        const float bound = std::clamp(position, 0.0f, maximum);
+        const float extension = position - bound;
+        if (elastic && extension != 0) {
+            // CMenuMovieControl::DampenHyperExtension :140984 has a default
+            // limit of three options. Input moving back toward the list is undamped.
+            if (captured && held && delta * extension < 0) {
+                delta *= std::max(0.0f, 1 - std::abs(extension) / (3 * stride));
+            }
+            if (!held) {
+                // UpdatePlaybackSpeed :141207: return by remaining fraction +
+                // whole options (capped at five) + 1/3, in chapter-time units.
+                const float options = std::abs(extension) / stride;
+                const float speed = std::min(5.0f, std::floor(options)) +
+                    options - std::floor(options) + 1.0f / 3;
+                const float distance = std::min(std::abs(extension), speed * baseSpeed * seconds);
+                position -= std::copysign(distance, extension);
+                velocity = 0;
+                captured = false;
+                return;
+            }
+        }
         if (captured && held) {
             position -= delta;
             if (delta != 0 && seconds > 0) {
@@ -102,7 +123,8 @@ struct MenuScrollMotion {
             velocity = std::copysign(std::max(0.0f, speed - deceleration * seconds), velocity);
         }
         if (wheel != 0) { position -= wheel * stride; velocity = 0; }
-        position = std::clamp(position, 0.0f, maximum);
+        if (elastic) { position = std::clamp(position, -3 * stride, maximum + 3 * stride); }
+        else { position = std::clamp(position, 0.0f, maximum); }
         if ((position == 0 && velocity < 0) || (position == maximum && velocity > 0)) { velocity = 0; }
     }
 };
@@ -238,6 +260,10 @@ struct SocialMenuState {
     bool contentBound = false;
     unsigned contentPage = 0;
     unsigned selectedChallenge = 0;
+    std::vector<unsigned> challengeTimes;
+    unsigned contentElapsed = 0;
+    unsigned sidebarChallenge = 0, sidebarTime = 0;
+    bool sidebarBound = false, sidebarReverse = false;
     float scrollPosition = 0;
     MenuScrollMotion scrollMotion;
     unsigned renderedEntries = 0; // Actual local content cards drawn this frame.
@@ -467,7 +493,8 @@ public:
     // Historical explicit .dat research UI; native profiles use Header below.
 
     bool Icon(CResTOCManager &toc, PackTables &tables, const StoreEntry &entry, float x, float y, float width,
-        float height, float alpha = 1, bool originalSize = false, bool fitHeight = false);
+        float height, float alpha = 1, bool originalSize = false, bool fitHeight = false,
+        bool alignRight = false, float *renderedWidth = nullptr);
 
     bool DrawEquippedPlayer(CResTOCManager &toc, PackTables &tables, const CProfileManager &profile,
         const std::vector<WeaponEntry> &weapons, const std::vector<ArmorEntry> &armors, unsigned slot,

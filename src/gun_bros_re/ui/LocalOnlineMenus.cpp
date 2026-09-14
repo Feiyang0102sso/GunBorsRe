@@ -81,6 +81,8 @@ public:
         if (challenges && region.index == 2) {
             // TitleCallback :235637 anchors title at main region0's top, with
             // the original font6, then paints the body below it using font0.
+            // Correction to the historical note: BindContent :236691 binds
+            // font1 and centers the body; the heading still uses font6.
             const auto *entry = OriginalMenuData("MDS_CHALLENGE_MENU", 0);
             MovieRegion main;
             if (entry == nullptr || !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"),
@@ -89,7 +91,7 @@ public:
             textArea.y = main.y;
             DrawMissionText(view, textArea, view.movies.NamedString(entry->strings[0]), 6, true);
             textArea.y += view.movies.TextHeight(6);
-            DrawMissionText(view, textArea, view.movies.NamedString(entry->strings[1]), 0);
+            DrawMissionText(view, textArea, view.movies.NamedString(entry->strings[1]), 1, true);
         }
         return DrawOriginalSocialContent(view, state, profile, region);
     }
@@ -114,24 +116,33 @@ bool DrawOriginalSocialMenu(GameMenu &view, MenuState &state, const CProfileMana
         state.social.scrollPosition = 0;
         state.social.scrollMotion = MenuScrollMotion{};
         state.social.selectedChallenge = 0;
+        state.social.challengeTimes.clear();
+        state.social.sidebarBound = false;
     }
     if (!BindOriginalSocialContent(view, state, profile)) { return false; }
     // Original ARMv7 MENU_FRIENDS 0x402d70+4 and MENU_CHALLENGES 0x402eb0+4.
     // Both load this BIG movie; their region callbacks supply different content.
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU");
     const CMovie *movie = view.movies.GetMovie(ordinal);
-    unsigned start = 0, end = 0;
-    if (movie == nullptr || !movie->GetChapterRange(0, start, end)) { return false; }
+    unsigned start = 0, end = 0, loopStart = 0, loopEnd = 0;
+    if (movie == nullptr || !movie->GetChapterRange(0, start, end) ||
+        !movie->GetChapterRange(1, loopStart, loopEnd)) { return false; }
     if (!state.social.socialBound) {
         state.social.socialBound = true;
         state.social.socialLastTick = view.clock;
         state.social.socialTime = start;
-        if (!view.animateNavigation) { state.social.socialTime = end; }
+        if (!view.animateNavigation) { state.social.socialTime = loopStart; }
         std::printf("[local-online] social page=%u ready remote-records=0\n", state.page);
     }
     const auto elapsed = static_cast<unsigned>(view.clock - state.social.socialLastTick);
     state.social.socialLastTick = view.clock;
-    state.social.socialTime = std::min(end, state.social.socialTime + elapsed);
+    // CMenuFriends::OnShow :196222 / CMenuChallenges::OnFocus :236109
+    // loop chapter 1 after the entrance; its tiled sprite scrolls the warning tape.
+    state.social.socialTime += elapsed;
+    if (state.social.socialTime > loopEnd) {
+        state.social.socialTime = loopStart + (state.social.socialTime - loopStart) % (loopEnd - loopStart + 1);
+    }
+    state.social.contentElapsed = elapsed;
     state.social.renderedEntries = 0;
     LocalSocialCallbacks callbacks(view, state, profile);
     if (!view.movies.Draw(ordinal, state.social.socialTime, kMenuWidth / 2, kMenuHeight / 2,

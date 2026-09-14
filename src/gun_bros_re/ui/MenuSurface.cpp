@@ -114,7 +114,7 @@ if (scripted) {
     // Historical explicit .dat research UI; native profiles use Header below.
 
     bool GameMenu::Icon(CResTOCManager &toc, PackTables &tables, const StoreEntry &entry, float x, float y, float width,
-        float height, float alpha , bool originalSize , bool fitHeight ) {
+        float height, float alpha , bool originalSize , bool fitHeight, bool alignRight, float *renderedWidth ) {
         const CGameAssetRef &ref = entry.data.assets[1];
         if (ref.assetId < 0 || ref.IsNull()) { return false; }
         const std::uint64_t key = (static_cast<std::uint64_t>(ref.packHash) << 32) | static_cast<unsigned>(ref.assetId);
@@ -135,8 +135,11 @@ if (scripted) {
         // including its 16.16 truncation, instead of fitting both dimensions.
         if (fitHeight) { scale = std::floor(height * 65536 / texture.GetHeight()) / 65536; }
         const float drawnWidth = texture.GetWidth() * scale;
+        if (renderedWidth) { *renderedWidth = std::floor(drawnWidth); }
         const float drawnHeight = texture.GetHeight() * scale;
         float drawnX = x + (width - drawnWidth) * 0.5f;
+        // CMenuChallenges::RewardCallback :235381 aligns the scaled image right.
+        if (alignRight) { drawnX = x + width - drawnWidth; }
         if (originalSize && drawnWidth > width) { drawnX = x; }
         const SourceRect source{0, 0, static_cast<std::uint16_t>(texture.GetWidth()), static_cast<std::uint16_t>(texture.GetHeight())};
         images.Begin();

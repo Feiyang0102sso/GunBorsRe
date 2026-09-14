@@ -1,5 +1,6 @@
 /** CMenuFriends / CMenuChallenges content bindings for the local service. */
 #include "gun_bros_re/ui/MenuInternal.h"
+#include "gun_bros_re/ui/StoreRegionClip.h"
 
 namespace MenuDetail {
 namespace {
@@ -43,11 +44,28 @@ public:
     SocialContentCallback(GameMenu &view, MenuState &state, const CProfileManager &profile,
         SocialPart part, unsigned index = 0) : view(view), state(state), profile(profile), part(part), index(index) {}
 
-    bool Icon(const CGameAssetRef &asset, const MovieRegion &region) {
+    bool Icon(const CGameAssetRef &asset, const MovieRegion &region, bool alignRight = false, float *renderedWidth = nullptr) {
         StoreEntry icon;
         icon.data.assets[1] = asset;
         return view.Icon(*profile.nativeArchive->toc, *profile.nativeArchive->tables, icon,
-            region.x, region.y, region.width, region.height, region.alpha, false, true);
+            region.x, region.y, region.width, region.height, region.alpha, false, true, alignRight, renderedWidth);
+    }
+
+    bool ChallengeSprite(unsigned entryIndex, bool active, float x, float y, float alpha) {
+        // Provider177 is the original MDS_ICON_CHALLENGES table, not a new icon map.
+        const auto *entry = OriginalMenuData("MDS_ICON_CHALLENGES", entryIndex);
+        if (!entry) { return false; }
+        unsigned variant = 0;
+        if (active) { variant = 1; }
+        const unsigned sprite = entry->sprites[variant];
+        return view.movies.DrawSprite(sprite >> 16, sprite & 255, 0, x, y, 1, alpha);
+    }
+
+    bool ChallengeSpriteBounds(unsigned entryIndex, MovieRegion &bounds) {
+        const auto *entry = OriginalMenuData("MDS_ICON_CHALLENGES", entryIndex);
+        if (!entry) { return false; }
+        const unsigned sprite = entry->sprites[0];
+        return view.movies.SpriteBounds(sprite >> 16, sprite & 255, bounds);
     }
 
     bool DrawMovieRegion(const MovieRegion &region) override {
@@ -108,6 +126,9 @@ public:
         if (part == SocialPart::Challenge) {
             if (region.index == 0 && view.Hit(region.x, region.y, region.width, region.height)) {
                 social.selectedChallenge = index;
+                unsigned start = 0, end = 0;
+                if (!Chapter(view.movies, "GLU_MOVIE_BRO_OP_BOX", 1, start, end)) { return false; }
+                social.challengeTimes[index] = start;
             }
             if (region.index == 1) { return Text(challenge.name, region); }
             if (region.index == 2) {
@@ -137,8 +158,16 @@ public:
                 // PrizeIconCallback :237431 divides this region into 3 cells.
                 MovieRegion cell = region;
                 cell.width /= 3;
+                MovieRegion check;
+                if (!ChallengeSpriteBounds(1, check)) { return false; }
                 for (unsigned tier = 0; tier < 3; ++tier) {
                     if (!Icon(challenge.prizes[tier].image, cell)) { return false; }
+                    const bool available = challenge.progress == 100 &&
+                        definition.participationRequired[tier] <= challenge.completedFriends;
+                    // PrizeIconCallback :237488 / :237525: lower-right marker,
+                    // inset by half its authored width inside each of the three cells.
+                    if (!ChallengeSprite(1, available, cell.x + cell.width - check.width - check.width / 2,
+                        cell.y + cell.height - check.height, cell.alpha)) { return false; }
                     cell.x += cell.width;
                 }
             }
@@ -156,7 +185,19 @@ public:
                 region.y, 0, 1, 0, region.alpha);
         }
         if (region.index == 1) {
-            DrawStoreTemplate(view, challenge.description, region, {});
+            // BindSideBarContent :235793: font slot0=font1, slot1=font0;
+            // CTextBox centers the formatted description in the original sidebar.
+            const auto lines = FormatStoreText(view.movies, challenge.description, region.width, {1, 0, 1, 1, 1});
+            StoreRegionClip clip(view, region);
+            float y = region.y;
+            for (const auto &line : lines) {
+                const float x = region.x + (region.width - line.width) / 2;
+                for (const auto &run : line.runs) {
+                    view.movies.Text(run.text, x + run.x, y + (line.height - run.height) / 2,
+                        run.font, 1, 0, region.alpha);
+                }
+                y += line.height;
+            }
         }
         if (region.index == 2) {
             const auto *button = OriginalMenuData("MDS_BUTTON_CHALLENGE_INVITE_BRO", 0);
@@ -172,9 +213,8 @@ public:
             MovieRegion icon = region;
             icon.x += region.width - region.height;
             icon.width = region.height;
-            if (!Icon(prize.image, icon)) { return false; }
-            MovieRegion text = region;
-            text.width -= icon.width;
+            float imageWidth = 0;
+            if (!Icon(prize.image, icon, true, &imageWidth)) { return false; }
             // CreateRewardTierStatusString :240515 supplies the challenge
             // status; CPrize::name can instead be a friend-notification format.
             unsigned remaining = 0;
@@ -186,7 +226,26 @@ public:
             else if (tier == 0) { status = view.movies.NamedString("IDS_CHALLENGES_REWARD_TIER1"); }
             else if (remaining == 0) { status = view.movies.NamedString("IDS_CHALLENGES_REWARD_TIER_COMPLETED"); }
             else { status = FormatCount(view.movies.NamedString("IDS_CHALLENGES_REWARD_TIER2"), remaining); }
-            if (!Text(status, text, 1)) { return false; }
+            const float statusWidth = view.movies.TextWidth(status, 1);
+            float statusX = region.x + (region.width - statusWidth) / 2;
+            if (statusWidth > region.width - 2 * imageWidth) {
+                statusX = region.x + region.width - imageWidth - statusWidth;
+            }
+            if (!view.movies.Text(status, statusX, region.y, 1, 1, 0, region.alpha)) { return false; }
+            MovieRegion check, person;
+            if (!ChallengeSpriteBounds(1, check) || !ChallengeSpriteBounds(0, person)) { return false; }
+            const bool available = challenge.progress == 100 && remaining == 0;
+            if (!ChallengeSprite(1, available, region.x, region.y + (region.height - check.height) / 2,
+                region.alpha)) { return false; }
+            float personX = region.x + 4 * check.width;
+            for (unsigned friendIndex = 0; friendIndex < definition.participationRequired[tier]; ++friendIndex) {
+                // RewardCallback uses the filled person for completed recruits,
+                // and the second (outline) sprite for recruits still required.
+                if (!ChallengeSprite(0, friendIndex >= challenge.completedFriends, personX,
+                    region.y + person.height, region.alpha)) { return false; }
+                personX += person.width;
+            }
+            if (tier == 0 && !Text(view.movies.NamedString("IDS_CHALLENGES_REWARD_SOLO"), region, 0, true)) { return false; }
             const auto quantity = RewardQuantity(prize);
             return view.movies.Text(quantity, region.x + region.width - view.movies.TextWidth(quantity),
                 region.y + region.height - view.movies.TextHeight(0), 0, 1, 0, region.alpha);
@@ -221,7 +280,10 @@ bool DrawPart(GameMenu &view, MenuState &state, const CProfileManager &profile,
         return false;
     }
     SocialContentCallback callback(view, state, profile, part, index);
-    const bool result = view.movies.Draw(view.movies.Ordinal(name), end, region.x, region.y,
+    unsigned time = end;
+    if (part == SocialPart::Challenge) { time = state.social.challengeTimes[index]; }
+    if (part == SocialPart::Details) { time = state.social.sidebarTime; }
+    const bool result = view.movies.Draw(view.movies.Ordinal(name), time, region.x, region.y,
         kMenuWidth, kMenuHeight, 0, region.alpha, &callback);
     if (!result) { std::printf("[social-content] draw failed movie=%s index=%u\n", name, index); }
     return result;
@@ -303,8 +365,34 @@ bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
         }
     }
     if (state.page == 5 && region.index == 3 && social.socialTab == 0) {
+        unsigned start = 0, end = 0;
+        if (!Chapter(view.movies, "GLU_MOVIE_BRO_OPS_DETAILS", 1, start, end)) { return false; }
+        if (!social.sidebarBound) {
+            social.sidebarBound = true;
+            social.sidebarChallenge = social.selectedChallenge;
+            social.sidebarTime = start;
+            if (!view.animateNavigation) { social.sidebarTime = end; }
+            social.sidebarReverse = false;
+        }
+        // CMenuChallenges::Refresh action106 :236507 reverses the old sidebar.
+        // Update :236264 uses 2*dt and rebinds only when it reaches the hidden pose.
+        if (social.sidebarChallenge != social.selectedChallenge) { social.sidebarReverse = true; }
+        unsigned elapsed = 2 * social.contentElapsed;
+        if (social.sidebarReverse) {
+            const unsigned remaining = social.sidebarTime - start;
+            if (elapsed < remaining) {
+                social.sidebarTime -= elapsed;
+                elapsed = 0;
+            } else {
+                elapsed -= remaining;
+                social.sidebarTime = start;
+                social.sidebarChallenge = social.selectedChallenge;
+                social.sidebarReverse = false;
+            }
+        }
+        if (!social.sidebarReverse) { social.sidebarTime = std::min(end, social.sidebarTime + elapsed); }
         return DrawPart(view, state, profile, "GLU_MOVIE_BRO_OPS_DETAILS", SocialPart::Details,
-            region, social.selectedChallenge);
+            region, social.sidebarChallenge);
     }
     if (region.index != 4) { return true; }
     if (state.page == 4 && social.socialTab != 1) { return true; }
@@ -316,6 +404,24 @@ bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
         listName = "GLU_MOVIE_BROTHER_MENU_SCROLL";
         count = static_cast<unsigned>(social.challenges.current.size());
         visible = 4;
+        unsigned idleStart = 0, idleEnd = 0, focusStart = 0, focusEnd = 0;
+        if (!Chapter(view.movies, "GLU_MOVIE_BRO_OP_BOX", 0, idleStart, idleEnd) ||
+            !Chapter(view.movies, "GLU_MOVIE_BRO_OP_BOX", 1, focusStart, focusEnd)) { return false; }
+        if (social.challengeTimes.size() != count) {
+            social.challengeTimes.assign(count, idleEnd);
+            social.challengeTimes[social.selectedChallenge] = focusStart;
+        }
+        // Focus loops the authored glow. UnFocus plays that same chapter in reverse.
+        for (unsigned index = 0; index < count; ++index) {
+            auto &time = social.challengeTimes[index];
+            if (index == social.selectedChallenge) {
+                if (time < focusStart) { time = focusStart; }
+                time = focusStart + (time - focusStart + social.contentElapsed) % (focusEnd - focusStart + 1);
+            } else if (time >= focusStart) {
+                if (social.contentElapsed >= time - focusStart) { time = idleEnd; }
+                else { time -= social.contentElapsed; }
+            }
+        }
     }
     unsigned start = 0, end = 0, next = 0, nextEnd = 0;
     if (!Chapter(view.movies, listName, 1, start, end) || !Chapter(view.movies, listName, 2, next, nextEnd)) { return false; }
@@ -325,20 +431,28 @@ bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
     const float stride = slots[2].y - slots[1].y;
     if (stride <= 0 || next <= start) { return false; }
     MovieRegion viewport = region;
-    viewport.height = slots[visible].y + slots[visible].height - region.y;
+    // ListCallback :235474 clips at the list's top and retains the screen bottom.
+    viewport.height = kMenuHeight - viewport.y;
     const bool inside = view.MouseIn(viewport.x, viewport.y, viewport.width, viewport.height);
     float wheel = 0;
     if (inside) { wheel = view.window.TakeWheelDelta(); }
     unsigned maximum = 0;
     if (count > visible) { maximum = count - visible; }
     social.scrollMotion.Update(social.scrollPosition, view.clock, view.dragY, wheel, view.pointerHeld,
-        inside && view.pointerPressed, true, maximum * stride, stride, next - start);
-    const unsigned first = static_cast<unsigned>(social.scrollPosition / stride);
-    const unsigned time = start + static_cast<unsigned>((social.scrollPosition / stride - first) * (next - start));
+        inside && view.pointerPressed, view.inputEnabled, maximum * stride, stride, next - start, state.page == 5);
+    const float position = std::clamp(social.scrollPosition, 0.0f, maximum * stride);
+    const float extension = social.scrollPosition - position;
+    const unsigned first = static_cast<unsigned>(position / stride);
+    const unsigned time = start + static_cast<unsigned>((position / stride - first) * (next - start));
     SocialListCallback callback(view, state, profile, first);
+    const bool click = view.ExchangeClick(false);
+    // Scissoring affects pixels only; never let clipped cards consume a pointer.
+    if (inside && !view.pointerHeld) { view.ExchangeClick(click); }
     view.Clip(viewport.x, viewport.y, viewport.width, viewport.height);
-    const bool result = view.movies.Draw(ordinal, time, region.x, region.y, kMenuWidth, kMenuHeight, 0, region.alpha, &callback);
+    const bool result = view.movies.Draw(ordinal, time, region.x, region.y - extension,
+        kMenuWidth, kMenuHeight, 0, region.alpha, &callback);
     view.EndClip();
+    if (!inside || view.pointerHeld) { view.ExchangeClick(click); }
     if (result && maximum != 0) {
         // FriendListCallback :195808 places the original vertical scrollbar
         // at the right edge; its timeline represents option progress.
@@ -348,7 +462,7 @@ bool DrawOriginalSocialContent(GameMenu &view, MenuState &state, const CProfileM
         const auto *movie = view.movies.GetMovie(bar);
         MovieRegion bounds;
         if (!movie || !view.movies.Region(bar, 0, 0, bounds)) { return false; }
-        const unsigned barTime = static_cast<unsigned>(movie->duration * social.scrollPosition / (maximum * stride));
+        const unsigned barTime = static_cast<unsigned>(movie->duration * position / (maximum * stride));
         return view.movies.Draw(bar, barTime, region.x + region.width,
             region.y + region.height / 2 - bounds.height / 2);
     }
