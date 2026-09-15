@@ -1,6 +1,7 @@
 /** @file CampaignDoorChecks.cpp
  * @brief Walk through the authored Lava 3 entrance gate using the real session.
  */
+#include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/debug/DebugMaps.h"
@@ -31,13 +32,14 @@ static int RunCampaignCheck(unsigned levelIndex, CampaignCheck check) {
         launch.mapIndex = level.mapRef.localIndex;
         launch.archiveMission = &mission;
         SurvivalDevelopment development;
+        DevelopmentBinding binding(launch, development);
         development.campaignDoorCheck = check == CampaignCheck::Doors;
         development.campaignTargetCheck = check == CampaignCheck::Targets;
         development.campaignProgressionCheck = check == CampaignCheck::Progression;
         development.campaignRescueCheck = check == CampaignCheck::Rescue;
         development.campaignPortalCheck = check == CampaignCheck::Portal;
         development.campaignCacheCheck = check == CampaignCheck::Cache;
-        return RunSurvivalSession(launch, &development);
+        return RunSurvivalSession(launch);
     }
     return 1;
 }
@@ -64,8 +66,9 @@ int RunCampaignLava2Check() {
     launch.mapIndex = selection.map;
     launch.debugMap = &selection;
     SurvivalDevelopment development;
+    DevelopmentBinding binding(launch, development);
     development.campaignProgressionCheck = true;
-    return RunSurvivalSession(launch, &development);
+    return RunSurvivalSession(launch);
 }
 int RunCampaignTargetCheck() {
     if (RunCampaignCheck(4, CampaignCheck::Targets) != 0) { return 1; }

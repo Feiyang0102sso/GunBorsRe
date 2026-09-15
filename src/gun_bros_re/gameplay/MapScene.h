@@ -10,6 +10,10 @@ struct SurvivalGameContext;
 struct MissionEntry;
 struct DebugMapSelection;
 class LocalBotFriend;
+// Development-only check configuration, defined in tests/. Production never
+// sets it, so an incomplete type is all this header needs.
+struct SurvivalDevelopment;
+class ISurvivalScenario;
 
 /** Production session configuration: map, equipment, progress, and an existing window, without validation modes. */
 struct SurvivalLaunch {
@@ -31,6 +35,11 @@ struct SurvivalLaunch {
     bool deathmatch = false;
     unsigned matchIndex = 0;
     unsigned loadout[2]{0, 1};
+    // Always null on the production path. Keep this last so the existing
+    // aggregate initialisations in tests/ stay valid.
+    const SurvivalDevelopment *development = nullptr;
+    // Development hook set; production leaves it null and the loop skips every hook.
+    ISurvivalScenario *scenario = nullptr;
 };
 int RunSurvival(const SurvivalLaunch &launch);
 

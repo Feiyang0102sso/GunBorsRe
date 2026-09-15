@@ -7,7 +7,7 @@
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 #include "engine/core/CStringToKey.h"
 #include <chrono>
-#include "gameplay/PerformanceProbe.h"
+#include "gun_bros_re/debug/PerformanceProbe.h"
 
 int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, PowerupScene &powerups, CProfileManager &profile) {
     auto &scene = fixture.scene;

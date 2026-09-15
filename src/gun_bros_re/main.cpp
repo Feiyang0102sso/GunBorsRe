@@ -1,7 +1,5 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
-#if GB_ENABLE_TESTS
-#include "ui/GameMenuStudy.h"
-#endif
+#include "gun_bros_re/ui/GameFrontEndInternal.h"
 #include "gun_bros_re/Config.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "engine/platform/Startup.h"
@@ -65,11 +63,7 @@ int RunApplication(int argc, char **argv) {
         const int result = RunStartupSequence("", 0, &window);
         if (result != 0) { return result; }
     }
-#if GB_ENABLE_TESTS
-    return RunGameMenuStudy(big, screenshot, page, originalProfile, profile, &window);
-#else
-    return RunGameFrontEnd(big, originalProfile, profile, &window);
-#endif
+    return RunGameMenuSession(big, screenshot, page, originalProfile, profile, &window);
 }
 }
 

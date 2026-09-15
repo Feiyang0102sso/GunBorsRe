@@ -4,9 +4,6 @@
  * @brief Empty arenas sharing the same player, weapons and enemy script hosts.
  */
 #define NOMINMAX
-#if GB_ENABLE_TESTS
-#include "TestOutput.h"
-#endif
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
 #include "gun_bros_re/data/ArmorCatalog.h"
 #include "gun_bros_re/gameplay/CombatScene.h"

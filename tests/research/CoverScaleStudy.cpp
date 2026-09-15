@@ -1,6 +1,7 @@
 /** Compare one real cover transition at fixed time under historical dock widths. */
+#include "TestOutput.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
-#include "tests/Capture.h"
+#include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 using namespace MapDetail;
 

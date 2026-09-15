@@ -1,34 +1,7 @@
 #pragma once
 #include "gun_bros_re/gameplay/MapScene.h"
-/** Development driver input and experiment selection, compiled only in Debug. */
-struct SurvivalDevelopment {
-    std::string screenshotPath;
-    unsigned advanceMs = 0;
-    bool firePreview = false;
-    bool showCollisions = false;
-    bool check = false;
-    unsigned checkWaves = 2;
-    bool powerupStudy = false;
-    bool performanceStudy = false;
-    bool feedbackStudy = false;
-    bool bossStudy = false;
-    bool deathStudy = false;
-    bool campaignDoorCheck = false;
-    bool debugMapProfileCheck = false;
-    bool campaignTargetCheck = false;
-    bool campaignProgressionCheck = false;
-    bool campaignRescueCheck = false;
-    bool campaignPortalCheck = false;
-    bool campaignCacheCheck = false;
-    bool performanceSpawnStudy = false;
-    bool performanceRealtimeStudy = false;
-    bool performanceUncachedPaths = false;
-    bool flockCheck = false;
-    bool performanceFlockStudy = false;
-    bool localLiveCheck = false;
-    bool deathmatchCheck = false;
-    bool deathmatchFeedbackCheck = false;
-};
+#include "gun_bros_re/debug/SurvivalDevelopment.h"
+#include "gun_bros_re/debug/FlockMetrics.h"
 int RunLocalLiveCheck(const std::string &bigDirectory);
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
@@ -49,10 +22,4 @@ class CombatScene;
 int RunFlockCheck(const std::string &bigDirectory);
 int CheckFlockMovement(CombatScene &scene);
 int RunFlockPerformanceCheck(const std::string &bigDirectory);
-struct FlockMetrics {
-    float nearestMean = 0;
-    float minimum = 0;
-    unsigned closePairs = 0;
-};
-FlockMetrics MeasureFlock(const CombatScene &scene);
 

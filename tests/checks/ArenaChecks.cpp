@@ -1,3 +1,4 @@
+#include "TestOutput.h"
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
 #include "gun_bros_re/data/StoreCatalog.h"

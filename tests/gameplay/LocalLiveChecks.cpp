@@ -1,4 +1,5 @@
 /** Real BIG regression for the local cooperative peer and original revive Flow. */
+#include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
@@ -84,8 +85,9 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     launch.gameContext = &context;
     launch.localLive = true;
     SurvivalDevelopment development;
+    DevelopmentBinding binding(launch, development);
     development.localLiveCheck = true;
-    const int result = RunSurvivalSession(launch, &development);
+    const int result = RunSurvivalSession(launch);
     if (result != 0 || source.experience != sourceExperience || source.coins != sourceCoins) { return 1; }
     for (unsigned index = 0; index < sourceRecords.size(); ++index) {
         if (source.nativeArchive->records[index].payload != sourceRecords[index].payload) { return 1; }
@@ -94,13 +96,13 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     development.localLiveCheck = false;
     development.advanceMs = 8000;
     development.screenshotPath = TestOutput::Path("local-live-play.png");
-    if (RunSurvivalSession(launch, &development) != 0) { return 1; }
+    if (RunSurvivalSession(launch) != 0) { return 1; }
     launch.localLive = false;
     launch.localBot = true;
     development.screenshotPath.clear();
     development.advanceMs = 0;
     development.localLiveCheck = true;
-    if (RunSurvivalSession(launch, &development) != 0) { return 1; }
+    if (RunSurvivalSession(launch) != 0) { return 1; }
     std::printf("[local-live-check] profile-copy=1 no-save=1\n");
     std::vector<MissionEntry> missions;
     if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
@@ -119,7 +121,7 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     development.localLiveCheck = false;
     development.advanceMs = 8000;
     development.screenshotPath = TestOutput::Path("live-bokor.png");
-    if (RunSurvivalSession(launch, &development) != 0) { return 1; }
+    if (RunSurvivalSession(launch) != 0) { return 1; }
     std::printf("[local-live-check] bokor-live-entry=1\n");
     return 0;
 }

@@ -26,7 +26,7 @@
 #if GB_ENABLE_TESTS
 #include "tests/gameplay/SurvivalPilot.h"
 #include "tests/gameplay/SurvivalStudy.h"
-#include "tests/gameplay/PerformanceProbe.h"
+#include "gun_bros_re/debug/PerformanceProbe.h"
 #include "Checks.h"
 #include "ui/MenuChecks.h"
 #endif

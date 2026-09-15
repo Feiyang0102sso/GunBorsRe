@@ -4,7 +4,7 @@
 #define NOMINMAX
 #include "Checks.h"
 #include "TestOutput.h"
-#include "PNGEncode.h"
+#include "engine/graphics/PNGEncode.h"
 #include "engine/core/Paths.h"
 #include "engine/core/CMatrix4d.h"
 #include "engine/graphics/CBitmapFont.h"

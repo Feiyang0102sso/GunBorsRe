@@ -36,9 +36,7 @@
 #include "gun_bros_re/gameplay/CBGM.h"
 
 #include "gun_bros_re/gameplay/EnemyModel.h"
-#if GB_ENABLE_TESTS
-#include "gameplay/SurvivalInputDriver.h"
-#endif
+#include "gun_bros_re/gameplay/SurvivalInputDriver.h"
 #include "gun_bros_re/gameplay/PlayerModel.h"
 #include "gun_bros_re/data/WeaponCatalog.h"
 #include "gun_bros_re/data/ArmorCatalog.h"

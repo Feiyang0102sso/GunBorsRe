@@ -1,4 +1,5 @@
-#include "Capture.h"
+#if GB_ENABLE_CAPTURE
+#include "gun_bros_re/debug/Capture.h"
 #include "engine/platform/CWindow.h"
 #include "engine/platform/GLLoader.h"
 #include "engine/graphics/CPNG.h"
@@ -36,3 +37,4 @@ bool Capture::SaveFrame(const CWindow &window, const std::string &path) {
 
     return PNGEncode(frame, path);
 }
+#endif

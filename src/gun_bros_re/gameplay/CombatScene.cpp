@@ -13,7 +13,7 @@
 #include <cmath>
 #include <cstdio>
 #if GB_ENABLE_TESTS
-#include "gameplay/PerformanceProbe.h"
+#include "gun_bros_re/debug/PerformanceProbe.h"
 #endif
 
 namespace {

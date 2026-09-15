@@ -1,7 +1,8 @@
 /** Exercise Haven's placed turret models and authored indicator scripts. */
+#include "TestOutput.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 #include "gun_bros_viewer/scenes/MapTurretPreview.h"
-#include "tests/Capture.h"
+#include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 using namespace MapDetail;
 

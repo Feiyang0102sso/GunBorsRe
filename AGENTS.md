@@ -2,8 +2,8 @@
 
 ## 当前目录与开发入口（2026-09-10）
 
-- 源码为 `src/engine`、`src/gun_bros_re`、`src/gun_bros_viewer` 三个包；工程最多三个：`GunBrosRe.vcxproj`、`GunBrosViewer.vcxproj`、`GunBrosTests.vcxproj`。各工程直接列入所需源码并编译 EXE，不增加内部静态库工程。
-- `_prep/` 整体 Git 忽略，仅在必须核对原版证据时查阅；日常开发、构建、运行和测试均不依赖它。用户最新要求优先于其中的旧方案。构建配置直接放在各 `.vcxproj` 中，不额外建立构建配置目录，运行输入在 `big/` 与 `assets/`，测试样本在 `tests/fixtures/saves/`。所有 EXE 统一输出到 `bin/<Configuration>/`，中间文件在 `obj/`。
+- 源码为 `src/engine`、`src/gun_bros_re`、`src/gun_bros_viewer` 三个包；工程只有一个 `GunBrosRe.vcxproj`，用 `GbProduct` 属性（`Game`／`Viewer`／`Tests`，默认 `Game`）产出 `GunBrosRe.exe`、`GunBrosViewer.exe`、`GunBrosTests.exe`。构建 `Game` 会递归构建 Viewer，Debug 再递归构建 Tests。工程直接列入所需源码并编译 EXE，不增加内部静态库工程，也不再拆分第二个 `.vcxproj`。
+- `_prep/` 整体 Git 忽略，仅在必须核对原版证据时查阅；日常开发、构建、运行和测试均不依赖它。用户最新要求优先于其中的旧方案。构建配置直接放在这一个 `.vcxproj` 中，不额外建立构建配置目录，运行输入在 `big/` 与 `assets/`，测试样本在 `tests/fixtures/saves/`。所有 EXE 统一输出到 `bin/<Configuration>/`，中间文件在 `obj/`。
 - Debug 自动构建并运行对应开发测试；其他检查使用 `pwsh -File tests/run.ps1 -Case <名称>`。测试代码只放 `tests`，Release 不编译测试源码。
 - 用户本轮要求先集中完成拆分，再统一构建与测试；不重复运行全量截图基线。后续修改按影响选择检查，已有原始样本只读。
 

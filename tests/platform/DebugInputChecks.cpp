@@ -6,7 +6,7 @@
 #include "gun_bros_re/debug/SurvivalDebug.h"
 #include "gun_bros_re/HostSettings.h"
 #include "engine/platform/GLLoader.h"
-#include "Capture.h"
+#include "gun_bros_re/debug/Capture.h"
 #include "TestOutput.h"
 #include <SDL3/SDL.h>
 #include <cstdio>

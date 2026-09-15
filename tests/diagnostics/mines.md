@@ -8,7 +8,7 @@
 
 ## 运行
 
-Debug 构建 GunBrosTests.vcxproj 后，在项目根目录的 PowerShell 执行：
+Debug 构建 `GunBrosRe.vcxproj /p:GbProduct=Tests` 后，在项目根目录的 PowerShell 执行：
 
 ```powershell
 pwsh -File tests/run.ps1 -Case mines -NoBuild

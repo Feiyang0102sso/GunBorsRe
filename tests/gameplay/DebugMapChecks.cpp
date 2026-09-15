@@ -1,6 +1,7 @@
 /** @file DebugMapChecks.cpp
  * @brief Verify saved equipment at the real debug launch seam and inspect BIG map content.
  */
+#include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/DebugMapChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "TestOutput.h"
@@ -53,12 +54,13 @@ int RunDebugMapProfileCheck() {
             CProfileManager preview = original;
             preview.activeWeaponSlot = slot;
             SurvivalGameContext context{preview, copiedSave / "must-not-exist"};
-            const auto launch = MakeDebugMapLaunch(big, selected, context);
+            auto launch = MakeDebugMapLaunch(big, selected, context);
             if (launch.gameContext != &context || context.persistProgress ||
                 launch.withBrother != original.brotherEnabled) { return 1; }
             SurvivalDevelopment development;
+            DevelopmentBinding binding(launch, development);
             development.debugMapProfileCheck = true;
-            if (RunSurvivalSession(launch, &development) != 0) { return 1; }
+            if (RunSurvivalSession(launch) != 0) { return 1; }
             preview.coins += 1;
             if (!context.SaveProfile() || std::filesystem::exists(context.savePath) ||
                 preview.coins == original.coins) { return 1; }

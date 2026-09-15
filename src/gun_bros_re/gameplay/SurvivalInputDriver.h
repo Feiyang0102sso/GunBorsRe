@@ -1,6 +1,6 @@
 /** @file SurvivalInputDriver.h
- * @brief Optional external input driver for repeatable research runs.
- * The game installs no driver; the research executable owns the test pilot.
+ * @brief Optional external input driver for repeatable runs.
+ * The game installs no driver; the test executable owns the pilot implementation.
  */
 #ifndef GUN_BROS_RE_SURVIVALINPUTDRIVER_H
 #define GUN_BROS_RE_SURVIVALINPUTDRIVER_H

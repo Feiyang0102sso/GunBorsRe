@@ -1,6 +1,6 @@
 /** Regression for repeated route requests and live graph changes. */
 #include "gameplay/SurvivalStudy.h"
-#include "gameplay/PerformanceProbe.h"
+#include "gun_bros_re/debug/PerformanceProbe.h"
 #include "gun_bros_re/gameplay/CLayerPathLink.h"
 #include "gun_bros_re/gameplay/CLayerPathMesh.h"
 #include <cstdio>

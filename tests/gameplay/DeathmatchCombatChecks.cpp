@@ -1,5 +1,6 @@
 /** Directed checks run the production scene, original Flow and BIG maps. */
 #define NOMINMAX
+#include "gameplay/SurvivalCheckScenario.h"
 #include "gun_bros_re/gameplay/SurvivalRuntime.h"
 #include "gun_bros_re/gameplay/SurvivalGameContext.h"
 #include "gun_bros_re/gameplay/SurvivalSession.h"
@@ -46,15 +47,16 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
         launch.archiveMission = &mission;
         launch.gameContext = &context;
         SurvivalDevelopment development;
+        DevelopmentBinding binding(launch, development);
         development.deathmatchCheck = true;
         development.deathmatchFeedbackCheck = feedback;
         std::printf("[deathmatch-check] map=%u tier=%u\n", index, index);
-        if (RunSurvivalSession(launch, &development) != 0) { return 1; }
+        if (RunSurvivalSession(launch) != 0) { return 1; }
         if (!feedback && index == 0) {
             development.deathmatchCheck = false;
             development.advanceMs = 8000;
             development.screenshotPath = TestOutput::Path("deathmatch-play.png");
-            if (RunSurvivalSession(launch, &development) != 0) { return 1; }
+            if (RunSurvivalSession(launch) != 0) { return 1; }
         }
     }
     return 0;

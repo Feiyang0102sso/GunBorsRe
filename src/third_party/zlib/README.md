@@ -13,7 +13,7 @@
 
 只保留了参与编译的 15 个 `.c` 和 11 个 `.h`，官方包里的 `configure` /
 `CMakeLists.txt` / `test/` / `contrib/` / 各平台移植目录全部丢弃——工程由
-`gun_bro_re.vcxproj` 直接列文件编译，这些用不上。
+`GunBrosRe.vcxproj` 直接列文件编译，这些用不上。
 
 `zconf.h` 用的是官方包里已生成好的默认版本，没跑 `configure`。
 
@@ -26,4 +26,4 @@
 ## 升级方式
 
 下载新版官方发布包，按上面的清单覆盖这些文件，然后核对
-`gun_bro_re.vcxproj` 里的文件列表有无增减。
+`GunBrosRe.vcxproj` 里的文件列表有无增减。

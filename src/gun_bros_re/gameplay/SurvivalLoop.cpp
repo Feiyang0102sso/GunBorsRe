@@ -10,26 +10,16 @@
 #include "gun_bros_re/gameplay/LiveShopSession.h"
 #include "gun_bros_re/LocalOnlineServices.h"
 #if GB_ENABLE_TESTS
-#include "gameplay/SurvivalStudy.h"
-#include "gameplay/PerformanceProbe.h"
+#include "gun_bros_re/debug/PerformanceProbe.h"
 #endif
-#if GB_ENABLE_TESTS
-#include "gameplay/SurvivalChecks.h"
-#include "gameplay/CampaignDoorChecks.h"
-#include "gameplay/DebugMapChecks.h"
-#endif
+#include "gun_bros_re/debug/SurvivalDevelopment.h"
+#include "gun_bros_re/debug/FlockMetrics.h"
+#include "gun_bros_re/gameplay/SurvivalScenario.h"
 #include "gun_bros_re/gameplay/MapWorldInternal.h"
 #include <ctime>
-#if GB_ENABLE_TESTS
-#include "TestOutput.h"
-#endif
 using namespace MapDetail;
 
-#if GB_ENABLE_TESTS
-int RunSurvivalSession(const SurvivalLaunch &launch, const SurvivalDevelopment *development) {
-#else
 int RunSurvivalSession(const SurvivalLaunch &launch) {
-#endif
 
     const auto &bigDirectory = launch.bigDirectory;
     const auto &packShortName = launch.packShortName;
@@ -43,6 +33,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     auto *sharedWindow = launch.window;
 #if GB_ENABLE_TESTS
     SurvivalDevelopment defaults;
+    const SurvivalDevelopment *development = launch.development;
     if (development == nullptr) { development = &defaults; }
     const auto &screenshotPath = development->screenshotPath;
     const unsigned advanceMs = development->advanceMs;
@@ -55,6 +46,12 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     const bool feedbackStudy = development->feedbackStudy;
     const bool bossStudy = development->bossStudy;
     const bool deathStudy = development->deathStudy;
+    // Evidence paths come from the development record, not from tests/.
+    const auto DevelopmentPath = [&development](const std::string &name) {
+        std::filesystem::path directory(development->outputDirectory);
+        std::filesystem::create_directories(directory);
+        return (directory / name).string();
+    };
 #else
     const std::string screenshotPath;
     constexpr unsigned advanceMs = 0;
@@ -214,8 +211,8 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     }
     WeaponEffects effects(toc, tables, program);
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalRewards({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnRewards({
             checkFailures, check, toc, tables, enemies, vitals, progressData, window, survivalHud, program, loaded, player, effects
         });
         if (result >= 0) { return result; }
@@ -403,8 +400,8 @@ if (check) {
     if (launch.localLive || launch.deathmatch) { session.SetPeerPowerups(&peerPowerups); }
     if (launch.deathmatch) { powerups.SetDeathmatch(&match); peerPowerups.SetDeathmatch(&match); }
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalPowerupInventory({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnPowerupInventory({
             powerupStudy, toc, researchProfile
         });
         if (result >= 0) { return result; }
@@ -469,42 +466,14 @@ if (check) {
     if (!session.SubmitChallenges(false)) { return 1; }
     loading.Finish();
 #if GB_ENABLE_TESTS
-    if (development->deathmatchCheck) {
-        int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, PickupScene &, PowerupScene &, CProfileManager &, SurvivalGameContext &);
-        SurvivalDeathFixture fixture{checkFailures, packShortName, false, vitals, window, program, batch,
-            loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing};
-        if (development->deathmatchFeedbackCheck) {
-            int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, PowerupScene &, CProfileManager &);
-            const int feedbackResult = CheckDeathmatchFeedback(fixture, match, powerups, gameContext->profile);
-            if (feedbackResult != 0) { return feedbackResult; }
-            int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, PackTables &,
-                CMPMatch &, PowerupScene &, CProfileManager &);
-            return CheckDeathmatchBotDifficulty(fixture, toc, tables, match, peerPowerups, *peerProfile);
-        }
-        return CheckDeathmatchCombat(fixture, match, pickups, peerPowerups, *peerProfile, *gameContext);
-    }
-    if (development->debugMapProfileCheck) {
-        if (gameContext == nullptr) { return 1; }
-        return CheckDebugMapProfile(tables, player, progress, *gameContext, scene, session.GetLevel());
-    }
-    if (development->campaignDoorCheck) { return CheckCampaignDoorPassage(loaded, scene, session); }
-    if (development->campaignTargetCheck) { return CheckCampaignTargets(loaded, scene, session); }
-    if (development->campaignProgressionCheck) { return CheckCampaignProgression(loaded, scene, session, mapIndex); }
-    if (development->campaignRescueCheck) { return CheckCampaignRescue(loaded, scene, session); }
-    if (development->campaignPortalCheck) { return CheckCampaignPortal(loaded, scene, session); }
-    if (development->campaignCacheCheck) { return CheckCampaignCache(loaded, scene, session, pickups); }
-    if (development->localLiveCheck) {
-        SurvivalDeathFixture fixture{checkFailures, packShortName, false, vitals, window, program, batch,
-            loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing};
-        if (launch.localLive && CheckLiveCheatProgress(fixture, survivalHud) != 0) { return 1; }
-        if (launch.localLive && CheckLivePolicies(fixture, peerPowerups, *peerProfile) != 0) { return 1; }
-        if (CheckLocalLive(fixture, &survivalHud) != 0) { return 1; }
-        session.Restart(startX, startY, startFacing);
-        return CheckLivePeerActions(fixture, toc, tables, powerups, peerPowerups, *peerProfile);
-    }
-    {
-        const int result = CheckSurvivalDeath({
-            checkFailures, packShortName, deathStudy, vitals, window, program, batch, loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing
+    // Which check runs here is a development concern; the loop only offers the
+    // finished scene and honours the answer.
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnSceneReady({
+            checkFailures, packShortName, mapIndex, launch.localLive, deathStudy, toc, tables, vitals,
+            window, program, batch, loaded, player, effects, scene, brother, brotherModel, session,
+            survivalHud, progress, match, pickups, powerups, peerPowerups, peerProfile, gameContext,
+            startX, startY, startFacing
         });
         if (result >= 0) { return result; }
     }
@@ -517,8 +486,8 @@ if (check) {
     music.SetVolume(1.0f);
     if (!music.NextTrack()) { return 1; }
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalBoss({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnBoss({
             checkFailures, packShortName, bossStudy, toc, tables, enemies, vitals, window, program, loaded, player, scene, session, startX, startY, startFacing
         });
         if (result >= 0) { return result; }
@@ -526,8 +495,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalFeedback({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnFeedback({
             checkFailures, capturePath, feedbackStudy, toc, tables, weapons, enemies, vitals, survivalHud, program, loaded, player, scene, session, props, startX, startY, startFacing
         });
         if (result >= 0) { return result; }
@@ -535,8 +504,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalLevelSounds({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnLevelSounds({
             checkFailures, check, session
         });
         if (result >= 0) { return result; }
@@ -544,8 +513,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalPropRoutes({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnPropRoutes({
             checkFailures, check, props
         });
         if (result >= 0) { return result; }
@@ -553,8 +522,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalTriggerRoutes({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnTriggerRoutes({
             checkFailures, check, session, startX, startY, startFacing
         });
         if (result >= 0) { return result; }
@@ -562,8 +531,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalPlacedProps({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnPlacedProps({
             check, loaded
         });
         if (result >= 0) { return result; }
@@ -571,8 +540,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalBrotherPose({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnBrotherPose({
             checkFailures, check, withBrother, scene, brother, brotherModel
         });
         if (result >= 0) { return result; }
@@ -580,8 +549,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalTutorial({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnTutorial({
             checkFailures, capturePath, check, gameContext, tables, weapons, vitals, progress, program, loaded, player, weaponSlot, equippedWeaponSlot, scene, brother, session, powerups, pickups, pickupProfile, tutorial, accountedXplodium
         });
         if (result >= 0) { return result; }
@@ -589,8 +558,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalWaves({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnWaves({
             checkFailures, capturePath, packShortName, mapIndex, check, checkWaves, startWave, gameContext, withBrother, powerupStudy, archiveMission, toc, tables, weapons, enemies, vitals, progress, window, program, loaded, player, weaponSlot, effects, scene, brother, brotherModel, session, pickups, props, tutorial, startX, startY, startFacing, packIndex, archiveLevel
         });
         if (result >= 0) { return result; }
@@ -598,8 +567,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalHorde({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnHorde({
             checkFailures, capturePath, check, startWave, vitals, loaded, scene, session, horde
         });
         if (result >= 0) { return result; }
@@ -607,8 +576,8 @@ if (check) {
 #endif
 
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalCampaign({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnCampaign({
             checkFailures, capturePath, packShortName, mapIndex, check, archiveMission, vitals, loaded, scene, session, pickups, horde
         });
         if (result >= 0) { return result; }
@@ -621,8 +590,8 @@ if (check) {
         AdvanceTileLayers(loaded.map, 16);
     }
 #if GB_ENABLE_TESTS
-    {
-        const int result = CheckSurvivalPowerupCapture({
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnPowerupCapture({
             capturePath, powerupStudy, scene, powerups
         });
         if (result >= 0) { return result; }
@@ -802,9 +771,9 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
 
 #if GB_ENABLE_TESTS
     // Deterministic 1,200 rendered frames, with real waves, AI and projectiles.
-    if (development != nullptr && development->flockCheck) {
-        vitals.invincible = true;
-        return CheckFlockMovement(scene);
+    if (launch.scenario != nullptr) {
+        const int result = launch.scenario->OnLoopStarting(scene, vitals);
+        if (result >= 0) { return result; }
     }
     std::unique_ptr<ISurvivalInputDriver> performancePilot;
     std::ofstream performanceReport;
@@ -836,7 +805,7 @@ if (performanceStudy) {
         if (!window.SetVSync(false)) { return 1; }
         std::printf("[performance] vsync=0 update-step=16ms realtime=%d uncached-paths=%d target=1200\n",
             development->performanceRealtimeStudy, development->performanceUncachedPaths);
-        performanceReport.open(TestOutput::Path("performance-frames.csv"));
+        performanceReport.open(DevelopmentPath("performance-frames.csv"));
         performanceReport << "frame,update_ms,geometry_ms,world_ms,hud_ms,present_ms,alive,spawned,spawn_ms,brother_ms,navigation_ms,enemy_ms,effects_ms,new_spawns,brother_hp,player_x,player_y,path_ms,path_calls,path_nodes,update_steps,flock_ms,nearest_mean,minimum_gap,close_pairs\n";
     }
 #endif
@@ -1543,8 +1512,8 @@ if (check) {
         
 #if GB_ENABLE_TESTS
 if (checkControls && controlFrame < controlClickCount) {
-            if (controlFrame == 0 && !GB_SAVE_FRAME(window, TestOutput::Path("combat-controls-shop.png"))) { return 1; }
-            if (controlFrame == 3 && !GB_SAVE_FRAME(window, TestOutput::Path("combat-controls-pause.png"))) { return 1; }
+            if (controlFrame == 0 && !GB_SAVE_FRAME(window, DevelopmentPath("combat-controls-shop.png"))) { return 1; }
+            if (controlFrame == 3 && !GB_SAVE_FRAME(window, DevelopmentPath("combat-controls-pause.png"))) { return 1; }
             if (controlFrame + 1 == controlClickCount) {
                 const bool inventoryUnchanged = pickupProfile->warbucks == controlsInitialBucks &&
                     pickupProfile->GetPowerupCount(rightPowerup) == controlsInitialGrenades;
@@ -1599,7 +1568,7 @@ if (!capturePath.empty()) {
                 if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
                 CProfileManager hordeProfile;
                 hordeProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-                SurvivalGameContext record{hordeProfile, TestOutput::Path("horde-progress-check.dat")};
+                SurvivalGameContext record{hordeProfile, DevelopmentPath("horde-progress-check.dat")};
                 record.hordeStart = static_cast<int>(startWave);
                 std::uint64_t credited = 0;
                 if (!SaveSurvivalProgress(&record, progress, scene, session.GetLevel(), credited) ||
@@ -1627,7 +1596,7 @@ if (!capturePath.empty()) {
         const auto performanceHud = std::chrono::steady_clock::now();
 #if GB_ENABLE_TESTS
         if (performanceStudy && development->performanceFlockStudy && (performanceFrame + 1) % 300 == 0) {
-            if (!GB_SAVE_FRAME(window, TestOutput::Path("flock-" + std::to_string(performanceFrame + 1) + ".png"))) { return 1; }
+            if (!GB_SAVE_FRAME(window, DevelopmentPath("flock-" + std::to_string(performanceFrame + 1) + ".png"))) { return 1; }
         }
 #endif
         window.Present();
@@ -1709,9 +1678,5 @@ if (performanceStudy) {
     return 0;
 }
 int RunSurvival(const SurvivalLaunch &launch) {
-#if GB_ENABLE_TESTS
-    return RunSurvivalSession(launch, nullptr);
-#else
     return RunSurvivalSession(launch);
-#endif
 }

@@ -5,7 +5,7 @@
 #ifndef GUN_BROS_RE_SURVIVALPILOT_H
 #define GUN_BROS_RE_SURVIVALPILOT_H
 #include "gun_bros_re/gameplay/CombatScene.h"
-#include "gameplay/SurvivalInputDriver.h"
+#include "gun_bros_re/gameplay/SurvivalInputDriver.h"
 
 class SurvivalPilot : public ISurvivalInputDriver {
 public:

@@ -8,12 +8,25 @@
     <Platform Condition="'$(Platform)'==''">x64</Platform>
     <VCProjectVersion>18.0</VCProjectVersion>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <!-- This single project file produces all three executables. Building the
+         default Game product also builds the companions; see BuildCompanions. -->
+    <GbProduct Condition="'$(GbProduct)'==''">Game</GbProduct>
   </PropertyGroup>
   <ItemGroup Label="ProjectConfigurations">
     <!-- x64 only: the bundled SDL3 runtime is x64. -->
     <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
   </ItemGroup>
+  <PropertyGroup Label="Product">
+    <!-- Executable name per product. An unknown GbProduct leaves this empty and
+         ValidateProduct stops the build instead of writing a nameless target. -->
+    <GbTargetName Condition="'$(GbProduct)'=='Game'">GunBrosRe</GbTargetName>
+    <GbTargetName Condition="'$(GbProduct)'=='Viewer'">GunBrosViewer</GbTargetName>
+    <GbTargetName Condition="'$(GbProduct)'=='Tests'">GunBrosTests</GbTargetName>
+    <!-- Test sources and capture support compile into Debug products only. -->
+    <GbUseTestSupport>false</GbUseTestSupport>
+    <GbUseTestSupport Condition="'$(Configuration)'=='Debug'">true</GbUseTestSupport>
+  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -25,15 +38,22 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
     <LinkIncremental>false</LinkIncremental>
+    <TargetName>$(GbTargetName)</TargetName>
     <OutDir>$(RepoRoot)bin\$(Configuration)\</OutDir>
-    <IntDir>$(RepoRoot)obj\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
+    <!-- One intermediate directory per product; sharing one would trip MSB8028. -->
+    <IntDir>$(RepoRoot)obj\$(Platform)\$(Configuration)\$(GbTargetName)\</IntDir>
     <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
+    <!-- F5 runs the game. Set GbDebugTarget to GunBrosViewer or GunBrosTests in
+         the project properties to debug a companion; that value lands in the
+         ignored .vcxproj.user file and never changes what gets built. -->
+    <GbDebugTarget Condition="'$(GbDebugTarget)'==''">GunBrosRe</GbDebugTarget>
+    <LocalDebuggerCommand>$(OutDir)$(GbDebugTarget).exe</LocalDebuggerCommand>
     <LocalDebuggerCommandArguments />
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <FeatureDefinitions>GB_ENABLE_TESTS=0;GB_ENABLE_CAPTURE=0;GB_ENABLE_CHEATS=1</FeatureDefinitions>
     <FeatureDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;GB_ENABLE_TESTS=1;GB_ENABLE_CAPTURE=1;GB_ENABLE_CHEATS=1</FeatureDefinitions>
     <FeatureHeaders>$(RepoRoot)src\engine\core\BuildFeatures.h</FeatureHeaders>
-    <FeatureHeaders Condition="'$(Configuration)'=='Debug'">$(FeatureHeaders);$(RepoRoot)tests\Capture.h</FeatureHeaders>
+    <FeatureHeaders Condition="'$(Configuration)'=='Debug'">$(FeatureHeaders);$(RepoRoot)src\gun_bros_re\debug\Capture.h</FeatureHeaders>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -53,7 +73,9 @@
       <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <!-- The game owns a native window; both companions are console tools. -->
+      <SubSystem Condition="'$(GbProduct)'=='Game'">Windows</SubSystem>
+      <SubSystem Condition="'$(GbProduct)'!='Game'">Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
       <AdditionalLibraryDirectories>$(RepoRoot)src\third_party\SDL3\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -70,22 +92,34 @@
     <ClCompile Include="$(RepoRoot)src\gun_bros_re\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_re\main.cpp" />
     <ClInclude Include="$(RepoRoot)src\gun_bros_re\**\*.h" />
   </ItemGroup>
+  <!-- The viewer executable hosts every resource page. -->
+  <ItemGroup Condition="'$(GbProduct)'=='Viewer'">
+    <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\**\*.cpp" Exclude="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
+    <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\**\*.h" />
+  </ItemGroup>
   <!-- Test capture cases reuse the same viewer scene hosts. -->
-  <ItemGroup Condition="'$(Configuration)'=='Debug'">
+  <ItemGroup Condition="'$(GbProduct)'!='Viewer' and '$(GbUseTestSupport)'=='true'">
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\scenes\*.cpp" />
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\ViewerSettings.cpp" />
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\ViewerControls.cpp" />
     <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\ViewerSettings.h" />
     <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\scenes\*.h" />
   </ItemGroup>
-  <ItemGroup Condition="'$(Configuration)'=='Debug'">
+  <ItemGroup Condition="'$(GbUseTestSupport)'=='true'">
     <ClCompile Include="$(RepoRoot)tests\**\*.cpp" Exclude="$(RepoRoot)tests\main.cpp;$(RepoRoot)tests\out\**" />
     <ClInclude Include="$(RepoRoot)tests\**\*.h" Exclude="$(RepoRoot)tests\out\**" />
   </ItemGroup>
+  <!-- Exactly one entry point per product. -->
   <ItemGroup>
-    <ClCompile Include="$(RepoRoot)src\gun_bros_re\main.cpp" />
+    <ClCompile Condition="'$(GbProduct)'=='Game'" Include="$(RepoRoot)src\gun_bros_re\main.cpp" />
+    <ClCompile Condition="'$(GbProduct)'=='Viewer'" Include="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
+    <ClCompile Condition="'$(GbProduct)'=='Tests'" Include="$(RepoRoot)tests\main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="ValidateProduct" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(GbTargetName)'==''" Text="Unknown GbProduct '$(GbProduct)'. Use Game, Viewer or Tests." />
+    <Error Condition="'$(GbProduct)'=='Tests' and '$(Configuration)'!='Debug'" Text="Tests are development-only. Build Debug or use tests/run.ps1." />
+  </Target>
   <Target Name="StageRuntime" AfterTargets="Build" Condition="'$(SkipRuntimeStaging)'!='true'">
     <ItemGroup>
       <RuntimeBig Include="$(RepoRoot)big\**\*" />
@@ -97,8 +131,18 @@
     <!-- SDL3 is a DLL; it has to sit next to the .exe to run. -->
     <Copy SourceFiles="$(RepoRoot)src\third_party\SDL3\lib\x64\SDL3.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
-  <Target Name="RunCorrespondingDebugTest" AfterTargets="StageRuntime" Condition="'$(Configuration)'=='Debug' and '$(SkipAutoTests)'!='true'">
-    <MSBuild Projects="$(RepoRoot)GunBrosTests.vcxproj" Targets="Build" Properties="Configuration=Debug;Platform=x64;SkipAutoTests=true" />
-    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\run.ps1&quot; -Case progress -NoBuild" />
+  <!-- Building the game also builds the viewer and, in Debug, the tests. The
+       recursive passes carry SkipCompanions so they do not recurse again, and
+       SkipRuntimeStaging because the game pass already filled the same OutDir. -->
+  <Target Name="BuildCompanions" AfterTargets="StageRuntime" Condition="'$(GbProduct)'=='Game' and '$(SkipCompanions)'!='true'">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="GbProduct=Viewer;Configuration=$(Configuration);Platform=$(Platform);SkipCompanions=true;SkipRuntimeStaging=true" />
+    <MSBuild Condition="'$(Configuration)'=='Debug'" Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="GbProduct=Tests;Configuration=$(Configuration);Platform=$(Platform);SkipCompanions=true;SkipRuntimeStaging=true" />
+  </Target>
+  <!-- Debug runs the checks both former product projects owned: the game's
+       progress case, the viewer's big-version and viewer-controls cases, and
+       the six-entry viewer smoke script. -->
+  <Target Name="RunCorrespondingDebugTest" AfterTargets="BuildCompanions" Condition="'$(GbProduct)'=='Game' and '$(Configuration)'=='Debug' and '$(SkipAutoTests)'!='true'">
+    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\run.ps1&quot; -Case progress,big-version,viewer-controls -NoBuild" />
+    <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tests\viewer-smoke.ps1&quot;" />
   </Target>
 </Project>

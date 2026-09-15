@@ -9,7 +9,7 @@
 #include <limits>
 #include <cmath>
 #if GB_ENABLE_TESTS
-#include "gameplay/PerformanceProbe.h"
+#include "gun_bros_re/debug/PerformanceProbe.h"
 #endif
 
 bool CombatScene::FindMatchRoute(float x, float y, float goalX, float goalY, std::vector<CollisionPoint> &route) const {

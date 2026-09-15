@@ -1,7 +1,8 @@
 /** Exercise real SDL routing: remapped keys, dock ownership, resize and GL state. */
+#include "TestOutput.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
-#include "tests/Capture.h"
+#include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 #include <SDL3/SDL.h>
 #include <cstdio>
