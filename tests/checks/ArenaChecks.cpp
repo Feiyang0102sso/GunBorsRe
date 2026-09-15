@@ -1,13 +1,30 @@
 #include "TestOutput.h"
+#include "checks/ArenaChecks.h"
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
 #include "gun_bros_re/data/StoreCatalog.h"
 namespace ArenaDetail {
+int CheckArena(ArenaScene &ready);
+}
+
+int RunArenaCheck(const std::string &bigDirectory, std::uint32_t enemyIndex, std::uint32_t weaponIndex) {
+    return RunArena(bigDirectory, enemyIndex, weaponIndex, "", 0, false, false, -1, ArenaDetail::CheckArena);
+}
+
+namespace ArenaDetail {
 /** Exercise actual archive scripts, then write a per-entry audit for inspection. */
-int CheckArena(CWindow &window, CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,
-    const std::vector<EnemyTemplateData> &catalog, const std::vector<WeaponEntry> &weapons,
-    const PlayerTemplateData &playerData, PlayerModel &player, PlayerVitals &vitals,
-    WeaponEffects &effects, CombatScene &scene) {
+int CheckArena(ArenaScene &ready) {
+    auto &window = ready.window;
+    auto &toc = ready.toc;
+    auto &tables = ready.tables;
+    const auto &program = ready.program;
+    const auto &catalog = ready.catalog;
+    const auto &weapons = ready.weapons;
+    const auto &playerData = ready.playerData;
+    auto &player = ready.player;
+    auto &vitals = ready.vitals;
+    auto &effects = ready.effects;
+    auto &scene = ready.scene;
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("arena-check.csv"));
     report << "index,owner,script,health,allegiance,target_type,parts,shots,travel,hits,unknown_natives,death_count,incoming_damage,deferred\n";

@@ -2,9 +2,7 @@
  * @brief Catalogue original UI timelines without altering any source assets.
  */
 #define NOMINMAX
-#if GB_ENABLE_TESTS
 #include "TestOutput.h"
-#endif
 #include "tests/research/MovieStudy.h"
 #include "engine/glu/movie/MovieRenderer.h"
 #include "engine/platform/CWindow.h"
@@ -38,9 +36,7 @@ int RunMovieStudy(const std::string &bigDirectory, unsigned ordinal, const std::
         }
     }
     
-#if GB_ENABLE_TESTS
-if (gallery) { std::filesystem::create_directories(TestOutput::Path("ui-movies")); }
-#endif
+    if (gallery) { std::filesystem::create_directories(TestOutput::Path("ui-movies")); }
 
     // User regions carry the original layout, so screenshots must show them too.
     bool overlay = regionOverlay;
@@ -57,9 +53,7 @@ if (gallery) { std::filesystem::create_directories(TestOutput::Path("ui-movies")
         unsigned time = advanceMs;
         if (screenshotPath.empty() && !gallery) { time += static_cast<unsigned>(window.GetTicksMs() - start); }
         
-#if GB_ENABLE_TESTS
-if (gallery) { time = std::min(1600u, movie->duration / 2); }
-#endif
+        if (gallery) { time = std::min(1600u, movie->duration / 2); }
 
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);

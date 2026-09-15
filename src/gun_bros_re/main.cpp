@@ -37,11 +37,11 @@ int RunApplication(int argc, char **argv) {
         if (argument == "--skip-intro") { skipIntro = true; continue; }
         if (argument == "--original-profile") { originalProfile = true; continue; }
         if (argument == "--profile" && index + 1 < argc) { profile = Paths::Resolve(std::filesystem::u8path(argv[++index])).u8string(); continue; }
-#if GB_ENABLE_TESTS
+#if GB_ENABLE_CAPTURE
         if (argument == "--screenshot" && index + 1 < argc) { screenshot = argv[++index]; continue; }
 #endif
         if (argument == "--big" && index + 1 < argc) { big = Paths::Resolve(std::filesystem::u8path(argv[++index])).u8string(); continue; }
-#if GB_ENABLE_TESTS
+#if GB_ENABLE_CAPTURE
         if (argument == "--menu-page" && index + 1 < argc) { page = static_cast<unsigned>(std::strtoul(argv[++index], nullptr, 10)); continue; }
 #endif
         if (argument == "--help" || argument == "-h") {

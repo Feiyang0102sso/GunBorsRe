@@ -6,10 +6,14 @@ $runtimeDirectory = Join-Path $root 'bin/Release'
 $reportDirectory = Join-Path $PSScriptRoot 'out/runtime'
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 $viewer = Join-Path $runtimeDirectory 'GunBrosViewer.exe'
+$tests = Join-Path $runtimeDirectory 'GunBrosTests.exe'
 Push-Location $env:TEMP
 try {
-    & $viewer --mute --m1 > (Join-Path $reportDirectory 'resources.log')
+    # Resource checks belong to Tests; Viewer still loads its own archive at startup.
+    & $tests --mute --m1 --test-output (Join-Path $reportDirectory 'resources') > (Join-Path $reportDirectory 'resources.log')
     if ($LASTEXITCODE -ne 0) { throw "Resource check failed: $LASTEXITCODE" }
+    '0' | & $viewer --mute > (Join-Path $reportDirectory 'viewer-start.log')
+    if ($LASTEXITCODE -ne 0) { throw 'Release viewer startup failed' }
     & $viewer --mute --help > (Join-Path $reportDirectory 'viewer-help.log')
     if ($LASTEXITCODE -ne 0) { throw 'Release viewer help failed' }
     foreach ($option in @('--weapon-check', '--screenshot', '--start-wave', '--powerup-study')) {

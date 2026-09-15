@@ -25,9 +25,7 @@ private:
     float m_lastFacing = 0;
 };
 
-#if GB_ENABLE_TESTS
 
 unsigned CheckTargetingController();
-#endif
 
 #endif

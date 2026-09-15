@@ -1,6 +1,6 @@
 # Gun Bros Windows 重建
 
-打开 `gun_bro_re.slnx`，使用 Visual Studio 的 x64 配置构建。整个仓库只有 `GunBrosRe.vcxproj` 一个工程，它用 `GbProduct` 属性（`Game`／`Viewer`／`Tests`，默认 `Game`）产出 Re、Viewer、Tests 三个 EXE：构建主程序时会自动递归构建 Viewer，Debug 再额外构建 Tests。编译选项、源码清单和自动测试规则都写在这一个 `.vcxproj` 中。
+打开 `gun_bro_re.slnx`，使用 Visual Studio 的 x64 配置构建。整个仓库只有 `GunBrosRe.vcxproj` 一个工程，它用 `GbProduct` 属性（`Game`／`Viewer`／`Tests`，默认 `Game`）产出 Re、Viewer、Tests 三个 EXE：Debug、Release 构建主程序时都会自动构建 Viewer 和 Tests。编译选项、源码清单和自动测试规则都写在这一个 `.vcxproj` 中。
 
 | 目录 | 用途 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | `obj` | 中间文件、调试符号及构建日志 |
 | `_prep` | 已整体忽略的历史参考资料，仅在必须核对原版证据时查阅 |
 
-直接运行 `bin/Release/GunBrosRe.exe`；查看器是同目录的 `GunBrosViewer.exe`。Debug 的三个程序全部位于 `bin/Debug`，Tests 不参与 Release 构建。不生成内部静态库，不使用其他 EXE 输出目录。
+直接运行 `bin/Release/GunBrosRe.exe`；查看器和测试程序位于同目录。两种配置各自生成三个程序，测试源码仅编进 `GunBrosTests.exe`，通过统一的 src 接口执行测试。Debug 和 Tests 支持截图，Release Game/Viewer 关闭截图。不生成内部静态库，不使用其他 EXE 输出目录。
 
 VS 的 F5 默认启动 `GunBrosRe.exe`。要调试查看器或测试程序，在工程属性里把 `GbDebugTarget` 改为 `GunBrosViewer` 或 `GunBrosTests`；该值只写进被忽略的 `.vcxproj.user`，不影响构建产物。
 
@@ -68,10 +68,11 @@ msbuild gun_bro_re.slnx /p:Configuration=Debug /p:Platform=x64 /m
 msbuild gun_bro_re.slnx /p:Configuration=Release /p:Platform=x64 /m
 ```
 
-Debug 构建自动生成 `GunBrosViewer.exe` 和 `GunBrosTests.exe`，并运行 `progress`、`big-version`、`viewer-controls` 三项检查及六入口冒烟检查。其他检查按需运行，脚本自动增量构建测试程序：
+两种配置都自动生成 `GunBrosViewer.exe` 和 `GunBrosTests.exe`；Debug 还运行 `progress`、`big-version`、`viewer-controls` 三项检查及六入口冒烟检查。其他检查按需运行，脚本自动增量构建所选配置的测试程序：
 
 ```powershell
 pwsh -File tests/run.ps1 -Case resources,progress,movies
+pwsh -File tests/run.ps1 -Configuration Release -Case progress
 pwsh -File tests/run.ps1 -List
 pwsh -File tests/verify-runtime.ps1
 ```

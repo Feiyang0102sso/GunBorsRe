@@ -1,9 +1,7 @@
 #pragma once
 
-// MSBuild selects the features; both game configurations enable cheats, while Release excludes tests and capture.
-#ifndef GB_ENABLE_TESTS
-#define GB_ENABLE_TESTS 0
-#endif
+// MSBuild selects capture per product; both game configurations enable cheats.
+// Test sources belong exclusively to the Tests executable.
 #ifndef GB_ENABLE_CAPTURE
 #define GB_ENABLE_CAPTURE 0
 #endif

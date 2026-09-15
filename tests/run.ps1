@@ -13,7 +13,7 @@ pwsh -File tests/run.ps1 -Phase Core -Case original-saves -List
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Debug')]
+    [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Debug',
     [string[]]$Phase = @('Core','UI','OriginalUI','Extended','Smoke','Boundary','Campaign','LongRun'),
     [string]$ExecutablePath = '',
@@ -202,13 +202,13 @@ if ($Case.Count -gt 0) {
 if ($List) { $checks.ToArray(); exit 0 }
 
 
-# Debug tests are built on demand; product Debug targets use -NoBuild after building this dependency.
+# The selected configuration is built on demand; Debug targets use -NoBuild after building this dependency.
 # GbProduct=Tests selects the test executable out of the single project file.
 if (-not $NoBuild) {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     $msbuild = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
     if (-not $msbuild) { throw 'MSBuild not found' }
-    & $msbuild (Join-Path $projectRoot 'GunBrosRe.vcxproj') /p:GbProduct=Tests /p:Configuration=Debug /p:Platform=x64 /p:SkipAutoTests=true /m /v:minimal /nologo
+    & $msbuild (Join-Path $projectRoot 'GunBrosRe.vcxproj') /p:GbProduct=Tests "/p:Configuration=$Configuration" /p:Platform=x64 /p:SkipAutoTests=true /m /v:minimal /nologo
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 if (-not (Test-Path -LiteralPath $gameExe -PathType Leaf)) {

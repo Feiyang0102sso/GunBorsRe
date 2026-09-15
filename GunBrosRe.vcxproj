@@ -23,9 +23,10 @@
     <GbTargetName Condition="'$(GbProduct)'=='Game'">GunBrosRe</GbTargetName>
     <GbTargetName Condition="'$(GbProduct)'=='Viewer'">GunBrosViewer</GbTargetName>
     <GbTargetName Condition="'$(GbProduct)'=='Tests'">GunBrosTests</GbTargetName>
-    <!-- Test sources and capture support compile into Debug products only. -->
-    <GbUseTestSupport>false</GbUseTestSupport>
-    <GbUseTestSupport Condition="'$(Configuration)'=='Debug'">true</GbUseTestSupport>
+    <!-- Tests own their sources in both configurations. Capture also remains
+         available to Debug game/viewer runs for existing visual checks. -->
+    <GbCaptureEnabled>0</GbCaptureEnabled>
+    <GbCaptureEnabled Condition="'$(Configuration)'=='Debug' or '$(GbProduct)'=='Tests'">1</GbCaptureEnabled>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
@@ -50,10 +51,10 @@
     <LocalDebuggerCommand>$(OutDir)$(GbDebugTarget).exe</LocalDebuggerCommand>
     <LocalDebuggerCommandArguments />
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <FeatureDefinitions>GB_ENABLE_TESTS=0;GB_ENABLE_CAPTURE=0;GB_ENABLE_CHEATS=1</FeatureDefinitions>
-    <FeatureDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;GB_ENABLE_TESTS=1;GB_ENABLE_CAPTURE=1;GB_ENABLE_CHEATS=1</FeatureDefinitions>
+    <FeatureDefinitions>GB_ENABLE_CAPTURE=$(GbCaptureEnabled);GB_ENABLE_CHEATS=1</FeatureDefinitions>
+    <FeatureDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;$(FeatureDefinitions)</FeatureDefinitions>
     <FeatureHeaders>$(RepoRoot)src\engine\core\BuildFeatures.h</FeatureHeaders>
-    <FeatureHeaders Condition="'$(Configuration)'=='Debug'">$(FeatureHeaders);$(RepoRoot)src\gun_bros_re\debug\Capture.h</FeatureHeaders>
+    <FeatureHeaders Condition="'$(GbCaptureEnabled)'=='1'">$(FeatureHeaders);$(RepoRoot)src\gun_bros_re\debug\Capture.h</FeatureHeaders>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -63,7 +64,8 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(RepoRoot)src;$(RepoRoot);$(RepoRoot)tests;$(RepoRoot)src\third_party\zlib;$(RepoRoot)src\third_party\SDL3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(RepoRoot)src;$(RepoRoot)src\third_party\zlib;$(RepoRoot)src\third_party\SDL3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(GbProduct)'=='Tests'">$(RepoRoot);$(RepoRoot)tests;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>$(FeatureDefinitions);%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ForcedIncludeFiles>$(FeatureHeaders);%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
@@ -98,14 +100,14 @@
     <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\**\*.h" />
   </ItemGroup>
   <!-- Test capture cases reuse the same viewer scene hosts. -->
-  <ItemGroup Condition="'$(GbProduct)'!='Viewer' and '$(GbUseTestSupport)'=='true'">
+  <ItemGroup Condition="'$(GbProduct)'=='Tests'">
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\scenes\*.cpp" />
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\ViewerSettings.cpp" />
     <ClCompile Include="$(RepoRoot)src\gun_bros_viewer\ViewerControls.cpp" />
     <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\ViewerSettings.h" />
     <ClInclude Include="$(RepoRoot)src\gun_bros_viewer\scenes\*.h" />
   </ItemGroup>
-  <ItemGroup Condition="'$(GbUseTestSupport)'=='true'">
+  <ItemGroup Condition="'$(GbProduct)'=='Tests'">
     <ClCompile Include="$(RepoRoot)tests\**\*.cpp" Exclude="$(RepoRoot)tests\main.cpp;$(RepoRoot)tests\out\**" />
     <ClInclude Include="$(RepoRoot)tests\**\*.h" Exclude="$(RepoRoot)tests\out\**" />
   </ItemGroup>
@@ -118,7 +120,6 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="ValidateProduct" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(GbTargetName)'==''" Text="Unknown GbProduct '$(GbProduct)'. Use Game, Viewer or Tests." />
-    <Error Condition="'$(GbProduct)'=='Tests' and '$(Configuration)'!='Debug'" Text="Tests are development-only. Build Debug or use tests/run.ps1." />
   </Target>
   <Target Name="StageRuntime" AfterTargets="Build" Condition="'$(SkipRuntimeStaging)'!='true'">
     <ItemGroup>
@@ -131,12 +132,12 @@
     <!-- SDL3 is a DLL; it has to sit next to the .exe to run. -->
     <Copy SourceFiles="$(RepoRoot)src\third_party\SDL3\lib\x64\SDL3.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
-  <!-- Building the game also builds the viewer and, in Debug, the tests. The
+  <!-- Building the game also builds the viewer and tests in both configurations. The
        recursive passes carry SkipCompanions so they do not recurse again, and
        SkipRuntimeStaging because the game pass already filled the same OutDir. -->
   <Target Name="BuildCompanions" AfterTargets="StageRuntime" Condition="'$(GbProduct)'=='Game' and '$(SkipCompanions)'!='true'">
     <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="GbProduct=Viewer;Configuration=$(Configuration);Platform=$(Platform);SkipCompanions=true;SkipRuntimeStaging=true" />
-    <MSBuild Condition="'$(Configuration)'=='Debug'" Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="GbProduct=Tests;Configuration=$(Configuration);Platform=$(Platform);SkipCompanions=true;SkipRuntimeStaging=true" />
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Targets="Build" Properties="GbProduct=Tests;Configuration=$(Configuration);Platform=$(Platform);SkipCompanions=true;SkipRuntimeStaging=true" />
   </Target>
   <!-- Debug runs the checks both former product projects owned: the game's
        progress case, the viewer's big-version and viewer-controls cases, and

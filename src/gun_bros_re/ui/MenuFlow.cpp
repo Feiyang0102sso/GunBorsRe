@@ -22,12 +22,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     if (!state.postGame.postGameMusic && !music.Play(0)) { return -3; }
     CAudioPlayer::SetEffectsEnabled(profile.soundEnabled);
     if (!view.Open(toc, tables, &profile, state.page == 14, &music)) { return -3; }
-#if GB_ENABLE_TESTS
     view.animateNavigation = capturePath.empty() || testTransitions;
     view.scripted = testClicks != nullptr;
-#else
-    view.animateNavigation = true;
-#endif
     // CMenuMeshPlayer::BindPlayer copies the current equipment when binding a new menu.
     // Combat may have changed the active gun while the previous menu state survived.
     state.store.shopGunSlot = profile.activeWeaponSlot;
@@ -41,12 +37,8 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     CPlayerProgress progress;
     progress.Bind(progressData);
     progress.SetExperience(profile.experience);
-#if GB_ENABLE_TESTS
     unsigned testFrame = 0;
-#endif
-#if GB_ENABLE_TESTS
     std::uint64_t testClock = 0;
-#endif
     MenuWipe wipe;
     std::uint64_t wipeLastTick = 0;
     std::uint64_t frameTicks = view.window.GetTicksMs();
@@ -63,13 +55,9 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
     while (view.window.PumpEvents()) {
         const auto ticks = view.window.GetTicksMs();
         frameTicks = ticks;
-#if GB_ENABLE_TESTS
         if (testClicks != nullptr && testFrame < testClicks->size()) { testClock += (*testClicks)[testFrame].advanceMs; }
-#endif
         std::uint64_t menuClock = ticks;
-#if GB_ENABLE_TESTS
         if (testClicks != nullptr) { menuClock = testClock; }
-#endif
         view.clock = menuClock;
         unsigned wipeDelta = 0;
         if (wipeLastTick != 0) { wipeDelta = static_cast<unsigned>(menuClock - wipeLastTick); }
@@ -197,9 +185,7 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
         view.Begin(state.page);
         view.inputEnabled = !state.currencyPending && !state.storePromptRequested && !state.storePopup.IsActive() &&
             !state.promotion.IsActive() && !wipe.IsActive() && !state.refinery.refineryExitPending;
-#if GB_ENABLE_TESTS
         if (testClicks != nullptr && testFrame < testClicks->size()) { view.SetTestClick((*testClicks)[testFrame]); }
-#endif
         if (wipe.IsActive()) {
             view.ExchangeClick(false);
             view.dragX = view.dragY = 0;
@@ -346,44 +332,32 @@ int ShowGameMenu(CResTOCManager &toc, PackTables &tables, CProfileManager &profi
             const bool changed = MenuBranchPage(state.page) != MenuBranchPage(previousPage);
             const bool popup = state.page == 26 || previousPage == 26;
             // Deterministic reproduction of first-use resource work during a frame.
-#if GB_ENABLE_TESTS
             if (testClicks && testFrame < testClicks->size()) { testClock += (*testClicks)[testFrame].renderDelayMs; }
-#endif
             if (changed && !popup && !wipe.IsActive()) {
                 if (!wipe.Begin(view.movies)) { return -3; }
-#if GB_ENABLE_TESTS
                 if (transitionTrace) { ++transitionTrace->starts; }
-#endif
                 // Start at the first presented wipe frame, after cold resources
                 // for the destination have loaded. Frame-start time is stale here.
                 wipeLastTick = view.window.GetTicksMs();
-#if GB_ENABLE_TESTS
                 if (testClicks) { wipeLastTick = testClock; }
-#endif
                 std::printf("[menu-wipe] from=%u/%u to=%u/%u duration=%u first-frame=0\n",
                     previousPage, previousCategory, state.page, state.store.shopCategory, wipe.Duration());
             }
             if (!wipe.Draw()) { return -3; }
             if (!wipe.IsActive() && !wipe.Remember()) { return -3; }
         }
-#if GB_ENABLE_TESTS
         if (transitionTrace) {
             transitionTrace->active = wipe.IsActive();
             transitionTrace->time = wipe.Time();
             transitionTrace->frames.push_back({state.page, view.HeaderTime(), wipe.Time(),
                 view.IsNavigationReady(), state.refinery.refineryExitPending, wipe.IsActive()});
         }
-#endif
-#if GB_ENABLE_TESTS
         ++testFrame;
-#endif
-#if GB_ENABLE_TESTS
         if (!capturePath.empty() && (testClicks == nullptr || testFrame > testClicks->size())) {
             if (glGetError() != 0 || !GB_SAVE_FRAME(view.window, capturePath)) { return -3; }
             view.window.Present();
             return -2;
         }
-#endif
 
         view.window.Present();
     }

@@ -83,8 +83,7 @@ namespace MenuDetail {
         clicked = !down && previousDown && dragDistance < 9;
         previousDown = down;
         
-#if GB_ENABLE_TESTS
-if (scripted) {
+        if (scripted) {
             pointerPressed = false;
             pointerHeld = false;
             dragX = 0;
@@ -92,7 +91,6 @@ if (scripted) {
             dragDistance = 0;
             window.TakeWheelDelta();
         }
-#endif
 
         if (page != 0 && page != 22) { movies.Draw(47, 1600); }
         if (page == 3) { movies.Draw(36, 1600); }
@@ -399,9 +397,7 @@ if (scripted) {
         bool pressed = pointerPressed && inside;
         bool held = pointerHeld;
         
-#if GB_ENABLE_TESTS
-if (scripted && dragX != 0) { pressed = inside; held = true; }
-#endif
+        if (scripted && dragX != 0) { pressed = inside; held = true; }
 
         motion.Update(position, clock, dragX, wheel, held, pressed, enabled, maximum, stride, duration);
     }

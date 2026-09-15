@@ -4,9 +4,7 @@
 #include "gun_bros_re/gameplay/ILayerPath.h"
 #include <cmath>
 #include <limits>
-#if GB_ENABLE_TESTS
 #include "gun_bros_re/debug/PerformanceProbe.h"
-#endif
 
 void ILayerPath::SetNodeLocked(int index, bool locked) {
     if (index >= 0 && index < static_cast<int>(m_nodes.size()) && m_nodes[index].locked != locked) {
@@ -30,7 +28,6 @@ int ILayerPath::FindNearest(float x, float y) const {
 }
 
 int ILayerPath::FindNext(int start, int destination) const {
-#if GB_ENABLE_TESTS
     PerformanceProbe::Scope timing(PerformanceProbe::counters.pathSearchMs);
     if (PerformanceProbe::enabled) {
         ++PerformanceProbe::counters.pathSearches;
@@ -38,16 +35,13 @@ int ILayerPath::FindNext(int start, int destination) const {
     }
     // Development A/B replay uses the unchanged search as its reference.
     if (PerformanceProbe::uncachedPaths) { return FindNextUncached(start, destination); }
-#endif
     const int count = static_cast<int>(m_nodes.size());
     if (start < 0 || start >= count || destination < 0 || destination >= count) { return -1; }
     if (start == destination) { return destination; }
     const auto key = std::make_pair(start, destination);
     const auto found = m_nextRoutes.find(key);
     if (found != m_nextRoutes.end()) {
-#if GB_ENABLE_TESTS
         if (PerformanceProbe::enabled) { ++PerformanceProbe::counters.pathCacheHits; }
-#endif
         return found->second;
     }
     const int result = FindNextUncached(start, destination);

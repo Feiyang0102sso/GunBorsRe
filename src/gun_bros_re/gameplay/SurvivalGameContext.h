@@ -35,9 +35,7 @@ struct SurvivalGameContext {
     int hordeStart = -1;
     GameObjectRef mission, missionLevel;
     // Program-local pointer injection for the persistent profile regression.
-#if GB_ENABLE_TESTS
     bool checkControls = false;
-#endif
     bool tutorial = false;
     bool debugTutorial = false; // Menu-only replay: ESC returns directly, with a no-save notice.
     std::uint64_t startingExperience = 0;

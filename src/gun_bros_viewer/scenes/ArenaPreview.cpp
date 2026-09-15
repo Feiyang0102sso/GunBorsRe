@@ -20,7 +20,7 @@ using namespace ArenaDetail;
 
 int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     std::uint32_t weaponIndex, const std::string &screenshot, std::uint32_t advanceMs,
-    bool fire, bool check, bool showCollisions, int armorIndex) {
+    bool fire, bool showCollisions, int armorIndex, ArenaSceneCallback onSceneReady) {
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
     PackTables tables(toc);
@@ -54,9 +54,10 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     CombatScene scene(tables, program, catalog, player, vitals, effects,
         playerData.gameScale);
     
-#if GB_ENABLE_TESTS
-if (check) { return CheckArena(window, toc, tables, program, catalog, weapons, playerData, player, vitals, effects, scene); }
-#endif
+    if (onSceneReady != nullptr) {
+        ArenaScene ready{window, toc, tables, program, catalog, weapons, playerData, player, vitals, effects, scene};
+        return onSceneReady(ready);
+    }
 
     std::array<PowerupEntry, 3> grenades;
     if (!LoadArenaGrenades(toc, tables, grenades)) { return 1; }

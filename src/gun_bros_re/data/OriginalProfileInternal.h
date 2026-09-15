@@ -27,8 +27,6 @@ bool ReportReference(PackTables &tables, CResTOCManager &toc, const GameObjectRe
 // Exercise malformed copies only. A failed envelope read must not replace the
 // caller's last valid record; checksum failure remains visible to the inspector.
 
-#if GB_ENABLE_TESTS
 unsigned CheckStorageBoundaries(const std::filesystem::path &source, const std::filesystem::path &output);
-#endif
 
 }

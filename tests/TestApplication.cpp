@@ -1,7 +1,6 @@
-#if GB_ENABLE_TESTS
 #include "ui/GameMenuStudy.h"
-#endif
 #include "TestApplication.h"
+#include "checks/ArenaChecks.h"
 #include "gun_bros_viewer/scenes/ResourceInfo.h"
 #include "research/ResearchDefaults.h"
 #include "gun_bros_viewer/scenes/MapPreview.h"
@@ -19,33 +18,25 @@
 
 // Keep the Windows compatibility macros out of shared original-state headers.
 #define NOMINMAX
-#if GB_ENABLE_TESTS
 #include "TestOutput.h"
-#endif
 #include "tests/research/ResourceSurvey.h"
-#if GB_ENABLE_TESTS
 #include "tests/gameplay/SurvivalPilot.h"
 #include "tests/gameplay/SurvivalStudy.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include "Checks.h"
 #include "ui/MenuChecks.h"
-#endif
 #include "tests/research/TextureStudy.h"
 #include "gun_bros_viewer/scenes/MapPreview.h"
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 #include "gun_bros_viewer/scenes/EnemyPreview.h"
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
-#if GB_ENABLE_TESTS
 #include "tests/checks/M5LevelFlow.h"
-#endif
 #include "gun_bros_re/data/WeaponCatalog.h"
 #include "gun_bros_re/data/ArmorCatalog.h"
 #include "gun_bros_re/data/StoreCatalog.h"
 #include "gun_bros_re/ui/GameFrontEnd.h"
 #include "gun_bros_re/data/PickupCatalog.h"
-#if GB_ENABLE_TESTS
 #include "tests/checks/PropCatalog.h"
-#endif
 #include "gun_bros_re/data/PowerupCatalog.h"
 #include "gun_bros_re/data/MissionCatalog.h"
 #include "gun_bros_re/data/OriginalProfile.h"
@@ -65,11 +56,7 @@
 namespace {
 int OpenGameMenu(const std::string &bigDirectory, const std::string &screenshotPath = "", unsigned page = 0,
     bool originalProfile = false, const std::string &profilePath = "") {
-#if GB_ENABLE_TESTS
     return RunGameMenuStudy(bigDirectory, screenshotPath, page, originalProfile, profilePath);
-#else
-    return RunGameFrontEnd(bigDirectory, originalProfile, profilePath);
-#endif
 }
 
 
@@ -85,15 +72,12 @@ using namespace ResearchDefaults;
 
 }  // namespace
 
-#if GB_ENABLE_TESTS
 std::unique_ptr<ISurvivalInputDriver> MakeResearchPilot(CombatScene &scene, const MapRectangle &bounds) {
     return std::make_unique<SurvivalPilot>(scene, bounds);
 }
 
-#endif
 int RunTestApplication(int argc, char **argv) {
     GameCheats::Bind();
-#if GB_ENABLE_TESTS
     // The test driver supplies the absolute case directory before any dispatch.
     for (int index = 1; index < argc; ++index) {
         if (std::strcmp(argv[index], "--test-output") == 0) {
@@ -112,7 +96,6 @@ int RunTestApplication(int argc, char **argv) {
         if (std::strcmp(argv[index], "--reference-gallery") == 0) { TestOutput::referenceGallery = true; }
     }
     SetSurvivalInputFactory(MakeResearchPilot);
-#endif
     bool checkDailyBonus = false;
     bool checkUpgradePopup = false;
     bool checkNativeProfile = false;
@@ -243,14 +226,12 @@ int RunTestApplication(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const char *argument = argv[i];
 
-#if GB_ENABLE_TESTS
         if (std::strcmp(argument, "--fixtures") == 0) { ++i; continue; }
         if (std::strcmp(argument, "--reference-gallery") == 0) { continue; }
         if (std::strcmp(argument, "--test-output") == 0) {
             ++i;
             continue;
         }
-#endif
 
         if (std::strcmp(argument, "--help") == 0 || std::strcmp(argument, "-h") == 0) {
             PrintTestUsage();
@@ -270,35 +251,27 @@ int RunTestApplication(int argc, char **argv) {
             movieStudy = true;
             movieOrdinal = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--movie-gallery") == 0) {
             movieStudy = true;
             movieGallery = true;
         }
-#endif
  else if (std::strcmp(argument, "--movie-regions") == 0) {
             movieRegions = true;
             --modeArgumentCount;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--hud-check") == 0) { checkHud = true; }
-#endif
 
         
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--movie-check") == 0) {
             checkMovies = true;
         }
 else if (std::strcmp(argument, "--fontbitmap") == 0) { checkFontBitmap = true; }
-#endif
  else if (std::strcmp(argument, "--intro") == 0) {
             introStudy = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--media-check") == 0) {
             checkMedia = true;
         }
-#endif
  else if (std::strcmp(argument, "--skip-intro") == 0) {
             skipIntro = true;
             playGame = true;
@@ -307,33 +280,24 @@ else if (std::strcmp(argument, "--media-check") == 0) {
         } else if (std::strcmp(argument, "--game") == 0) {
             playGame = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--pickup-check") == 0) {
             checkPickups = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--mission-check") == 0) {
             checkMissions = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--original-save-check") == 0) {
             checkOriginalSaves = true;
         }
-#endif
  else if (std::strcmp(argument, "--original-profile") == 0) {
             playOriginalProfile = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--original-profile-check") == 0) {
             checkOriginalProfile = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--horde") == 0 || std::strcmp(argument, "--horde-check") == 0) {
             playCampaign = true;
             checkCampaign = std::strcmp(argument, "--horde-check") == 0;
@@ -341,18 +305,14 @@ else if (std::strcmp(argument, "--horde") == 0 || std::strcmp(argument, "--horde
             campaignMission = 0;
             if (i + 1 < argc && argv[i + 1][0] != '-') { campaignMission = std::atoi(argv[++i]); }
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if ((std::strcmp(argument, "--campaign") == 0 || std::strcmp(argument, "--campaign-check") == 0) && i + 2 < argc) {
             playCampaign = true;
             checkCampaign = std::strcmp(argument, "--campaign-check") == 0;
             campaignPack = argv[++i];
             campaignMission = std::atoi(argv[++i]);
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--prop-check") == 0) {
             checkProps = true;
         }
@@ -362,284 +322,196 @@ else if (std::strcmp(argument, "--prop-combat-check") == 0) {
 else if (std::strcmp(argument, "--actor-feedback-check") == 0) {
             checkActorFeedback = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--powerup-check") == 0) {
             checkPowerups = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--powerup-study") == 0) {
             powerupStudy = true;
             playSurvival = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--powerup-play-check") == 0) {
             powerupStudy = true;
             playSurvival = true;
             checkSurvival = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--pickup-render-check") == 0) {
             checkPickupRendering = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--menu-page") == 0 && i + 1 < argc) {
             menuPage = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--start-wave") == 0 && i + 1 < argc) {
             const unsigned displayWave = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
             if (displayWave == 0 || displayWave > 500) { return 1; }
             startWave = displayWave - 1;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--check-waves") == 0 && i + 1 < argc) {
             checkWaves = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
             if (checkWaves == 0 || checkWaves > 500) { return 1; }
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--brother-check") == 0) {
             playSurvival = true;
             checkSurvival = true;
             withBrother = true;
         }
-#endif
  else if (std::strcmp(argument, "--brother") == 0) {
             withBrother = true;
             playSurvival = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--survival-check") == 0) {
             playSurvival = true;
             checkSurvival = true;
         }
-#endif
  else if (std::strcmp(argument, "--play") == 0) {
             playSurvival = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--level-flow-check") == 0) {
             checkLevelFlow = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--game-menu-check") == 0) {
             checkGameMenu = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--bank-check") == 0) {
             checkBank = true;
             ++modeArgumentCount;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--options-check") == 0) {
             checkOptions = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--social-check") == 0) {
             checkSocial = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--play-interaction-check") == 0) {
             checkPlayInteraction = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--mission-menu-check") == 0) {
             checkMissionMenu = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--header-check") == 0) {
             checkHeader = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--refinery-menu-check") == 0) {
             checkRefineryMenu = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--greeting-check") == 0) {
             checkGreeting = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--player-select-check") == 0) {
             checkPlayerSelect = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--original-hud-check") == 0) {
             checkOriginalHud = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--powerup-selector-check") == 0) {
             checkPowerupSelector = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--pause-check") == 0) {
             checkPause = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--postgame-menu-check") == 0) {
             checkPostGame = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--planet-menu-check") == 0) {
             checkPlanetMenu = true;
             ++modeArgumentCount;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--native-profile-play-check") == 0) {
             checkNativeProfilePlay = true;
             ++modeArgumentCount;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--native-profile-check") == 0) {
             checkNativeProfile = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--upgrade-popup-check") == 0) {
             checkUpgradePopup = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--store-card-check") == 0) {
             checkStoreCards = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--store-template-check") == 0) {
             checkStoreTemplate = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--ui-feedback-check") == 0) {
             checkUiFeedback = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--package-purchase-check") == 0) {
             checkPackagePurchase = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--tutorial-check") == 0) {
             checkTutorial = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--daily-bonus-check") == 0) {
             checkDailyBonus = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--loading-wipe-check") == 0) {
             checkLoadingWipe = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--promotion-check") == 0) {
             checkPromotion = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--scene-transition-check") == 0) {
             checkSceneTransition = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--dual-weapon-check") == 0) {
             checkDualWeapon = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--boss-check") == 0) {
             checkBoss = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--map-occlusion-check") == 0) {
             checkMapOcclusion = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--player-death-check") == 0) {
             checkPlayerDeath = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--combat-feedback-check") == 0) {
             checkCombatFeedback = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--dialog-check") == 0) {
             checkDialog = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--performance-check") == 0) {
             checkPerformance = true;
         }
@@ -666,31 +538,22 @@ else if (std::strcmp(argument, "--spawn-performance-realtime-check") == 0) {
 else if (std::strcmp(argument, "--uncached-paths") == 0) {
             performanceUncachedPaths = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--profile-play-check") == 0) {
             checkProfilePlay = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--progress-check") == 0) {
             checkProgress = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--armor-check") == 0) {
             checkArmor = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--armor-render-check") == 0) {
             checkArmorRendering = true;
         }
-#endif
  else if (std::strcmp(argument, "--armor") == 0) {
             armorIndex = 0;
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -701,39 +564,29 @@ else if (std::strcmp(argument, "--armor-render-check") == 0) {
         } else if (std::strcmp(argument, "--weapons") == 0) {
             surveyWeapons = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--weapon-check") == 0) {
             checkWeapons = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--postgame-presentation-check") == 0) {
             checkPostGamePresentation = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--audio-transitions-check") == 0) {
             checkAudioTransitions = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--weapon-effects-check") == 0) {
             checkWeaponEffects = true;
         }
 else if (std::strcmp(argument, "--mine-check") == 0) {
             checkMines = true;
         }
-#endif
  
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--arena-check") == 0) {
             arena = true;
             checkArena = true;
         }
-#endif
  else if (std::strcmp(argument, "--arena") == 0) {
             arena = true;
             if (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -804,11 +657,9 @@ else if (std::strcmp(argument, "--arena-check") == 0) {
         } else if (std::strcmp(argument, "--big-version") == 0) {
             inspectBigVersion = true;
         } 
-#if GB_ENABLE_TESTS
 else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
             screenshotPath = argv[++i];
         }
-#endif
  else if (std::strcmp(argument, "--advance") == 0 && i + 1 < argc) {
             advanceMs = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 0));
         } else {
@@ -818,9 +669,7 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     }
 
     auto configPath = Paths::Root() / ResearchDefaults::Filename;
-#if GB_ENABLE_TESTS
     if (!TestOutput::directory.empty()) { configPath = TestOutput::directory / ResearchDefaults::Filename; }
-#endif
     if (!GameHostSettings().Load(configPath)) { return 1; }
     // The original dial is 0..10 and a voice plays at dial x 0.1;
     // CAudioPlayer::SetEffectsGain documents the chain.
@@ -837,42 +686,20 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
         if (!DetectViewerBigVersion(bigDirectory, bigVersion, inspectBigVersion)) { return 1; }
     }
     if (inspectBigVersion) { return 0; }
-#if GB_ENABLE_TESTS
     if (checkMedia) { return RunMediaCheck(); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkLoadingWipe) { return RunLoadingWipeCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPromotion) { return RunPromotionCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkSceneTransition) { return RunSceneTransitionCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkDualWeapon) { return RunDualWeaponCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkBoss) { return RunBossCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkMapOcclusion) { return RunMapOcclusionCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPlayerDeath) { return RunPlayerDeathCheck(bigDirectory); }
     if (checkLocalLive) { return RunLocalLiveCheck(bigDirectory); }
-#endif
     if (checkCombatFeedback) { return RunViewerSurvival(bigDirectory, "pack7", 6, 0, -1, "", 0, false, false, false, 2, 0, nullptr, false, false, nullptr, false, nullptr, true); }
-#if GB_ENABLE_TESTS
     if (checkDialog) { return RunOriginalDialogCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkHud) { return RunSurvivalHudCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkMovies) { return RunMovieCheck(bigDirectory); }
     if (checkFontBitmap) { return RunFontBitmapCheck(bigDirectory); }
-#endif
     if (movieStudy) { return RunMovieStudy(bigDirectory, movieOrdinal, screenshotPath, advanceMs, movieGallery, movieRegions); }
     if (introStudy) { return RunStartupSequence(screenshotPath, advanceMs); }
     if ((playGame || playOriginalProfile) && screenshotPath.empty() && !skipIntro) {
@@ -881,110 +708,44 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
         if (result != 0) { return result; }
     }
 
-#if GB_ENABLE_TESTS
     if (checkProgress) { return RunProgressCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPickups) { return RunPickupCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkProps) { return RunPropCheck(bigDirectory); }
     if (checkPropCombat) { return RunPropCombatCheck(bigDirectory); }
     if (checkActorFeedback) { return RunActorFeedbackCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPowerups) { return RunPowerupCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkMissions) { return RunMissionCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkOriginalSaves) { return RunOriginalProfileCheck(bigDirectory); }
-#endif
     if (playOriginalProfile) { return OpenGameMenu(bigDirectory, screenshotPath, menuPage, true, profilePath); }
-#if GB_ENABLE_TESTS
     if (checkOriginalProfile) { return RunOriginalProfilePlayCheck(bigDirectory); }
-#endif
     if (playCampaign) { return RunMissionPlay(bigDirectory, campaignPack, campaignMission, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, checkCampaign); }
-#if GB_ENABLE_TESTS
     if (checkPickupRendering) { return RunPickupRenderCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkProfilePlay) { return RunProfilePlayCheck(bigDirectory); }
-#endif
     if (playGame) { return OpenGameMenu(bigDirectory, screenshotPath, menuPage, false, profilePath); }
-#if GB_ENABLE_TESTS
     if (checkGameMenu) { return RunGameMenuCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkUpgradePopup) { return RunUpgradePopupCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkNativeProfile) { return RunNativeProfileCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkNativeProfilePlay) { return RunNativeProfilePlayCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkBank) { return RunStoreTemplateCheck(bigDirectory, false, true); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkOptions) { return RunOptionsCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkSocial) { return RunSocialOfflineCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPlanetMenu) { return RunPlanetMenuCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPlayInteraction) { return RunPlayInteractionCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkMissionMenu) { return RunMissionMenuCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkHeader) { return RunNavigationBarCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkRefineryMenu) { return RunRefineryMenuCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkGreeting) { return RunGreetingCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPlayerSelect) { return RunPlayerSelectCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkOriginalHud) { return RunOriginalHudCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPowerupSelector) { return RunOriginalPowerupSelectorCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPause) { return RunOriginalPauseCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPostGame) { return RunPostGameMenuCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkStoreCards) { return RunStoreTemplateCheck(bigDirectory, true); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkStoreTemplate) { return RunStoreTemplateCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkUiFeedback) { return RunStoreTemplateCheck(bigDirectory, false, false, true); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkPackagePurchase) { return RunPackagePurchaseCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkDailyBonus) { return RunDailyBonusCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkTutorial) { return RunTutorialPlayCheck(bigDirectory); }
-#endif
     PerformanceProbe::uncachedPaths = performanceUncachedPaths;
     if (checkSpawnPerformance) { return RunSpawnPerformanceCheck(bigDirectory, checkRealtimePerformance, performanceUncachedPaths); }
     if (checkPathCache) { return RunPathCacheCheck(); }
@@ -995,25 +756,22 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
         return RunViewerSurvival(bigDirectory, mapPackName, mapIndex, gunIndex, armorIndex, "", 0, false, false, false, 2, startWave, nullptr, true, false, nullptr, true);
     }
     if (checkArmor) {
-#if GB_ENABLE_TESTS
         return RunArmorCheck(bigDirectory);
-#endif
     }
     if (playSurvival) {
         if (!explicitMap) { mapPackName = "pack2"; mapIndex = 7; }
         return RunViewerSurvival(bigDirectory, mapPackName, mapIndex, gunIndex, armorIndex, screenshotPath, advanceMs, firePreview, showCollisions, checkSurvival, checkWaves, startWave, nullptr, withBrother, powerupStudy);
     }
     if (checkLevelFlow) {
-#if GB_ENABLE_TESTS
         return RunLevelFlowCheck(bigDirectory);
-#endif
     }
     if (checkArmorRendering) {
-#if GB_ENABLE_TESTS
         return RunArmorRenderCheck(bigDirectory);
-#endif
     }
-    if (arena) { return RunArena(bigDirectory, enemyIndex, gunIndex, screenshotPath, advanceMs, firePreview, checkArena, showCollisions, armorIndex); }
+    if (arena) {
+        if (checkArena) { return RunArenaCheck(bigDirectory, enemyIndex, gunIndex); }
+        return RunArena(bigDirectory, enemyIndex, gunIndex, screenshotPath, advanceMs, firePreview, showCollisions, armorIndex);
+    }
     if (armorIndex >= 0) {
         return RunPlayerEquipmentPreview(bigDirectory, gunIndex, meshSpinDegrees, screenshotPath, advanceMs, firePreview, armorIndex);
     }
@@ -1044,19 +802,11 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
                            stateIndex);
     }
     if (surveyWeapons) { return RunWeaponSurvey(bigDirectory); }
-#if GB_ENABLE_TESTS
     if (checkPostGamePresentation) { return RunPostGamePresentationCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkAudioTransitions) { return RunAudioTransitionsCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkWeaponEffects) { return RunWeaponEffectsCheck(bigDirectory); }
     if (checkMines) { return RunMineCheck(bigDirectory); }
-#endif
-#if GB_ENABLE_TESTS
     if (checkWeapons) { return RunWeaponCheck(bigDirectory); }
-#endif
     if (runM37) {
         return RunPlayerEquipmentPreview(bigDirectory, gunIndex, meshSpinDegrees,
                                screenshotPath, advanceMs, firePreview);

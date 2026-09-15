@@ -58,9 +58,7 @@ public:
     unsigned GetDurationMs(std::uint64_t key) const;
     /** Research-only: exercise real SDL streams at zero gain, even with --mute. */
 
-#if GB_ENABLE_TESTS
     unsigned CheckSilentPlayback(std::uint64_t first, std::uint64_t second);
-#endif
 
     /** Isolated regression players only; force zero gain for all future plays. */
     void EnableSilentValidation();

@@ -150,13 +150,11 @@ private:
     unsigned m_challengeTime = 0, m_challengeRows = 0;
     CDialogPopup m_dialog;
     struct Button;
-#if GB_ENABLE_TESTS
     friend int CheckDeathmatchMenus(CResTOCManager &, PackTables &, CProfileManager &);
     friend int RunOriginalHudCheck(const std::string &bigDirectory);
     friend int RunOriginalDialogCheck(const std::string &bigDirectory);
     friend int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory);
     friend int RunOriginalPauseCheck(const std::string &bigDirectory);
-#endif
     bool DrawOriginalPause(const SurvivalHudState &state);
     bool DrawOriginalControls(const SurvivalHudState &state);
     bool DrawOriginalMeter(const MovieRegion &area, unsigned slot);

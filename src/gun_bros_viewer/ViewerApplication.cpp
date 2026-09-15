@@ -55,7 +55,7 @@ int RunView(const Options &options) {
         return RunPlayerEquipmentPreview(options.bigDirectory, options.gun, 0, options.screenshot, options.advance, options.fire, options.index);
     case View::Arena:
         return RunArena(options.bigDirectory, options.index, options.gun, options.screenshot,
-            options.advance, options.fire, false, options.collisions, options.armor);
+            options.advance, options.fire, options.collisions, options.armor);
     default:
         return 0;
     }

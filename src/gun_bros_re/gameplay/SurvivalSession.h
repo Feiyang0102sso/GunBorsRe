@@ -63,14 +63,10 @@ public:
     bool IsActivePortal(int propId) const override { return m_props != nullptr && m_props->IsActivePortal(propId); }
     void PlayLevelSound(const GameObjectRef &sound) override;
 
-#if GB_ENABLE_TESTS
     unsigned CheckLevelSounds();
-#endif
 
-#if GB_ENABLE_TESTS
 
     unsigned CheckTriggerRoutes(float startX, float startY, float startFacing);
-#endif
 
     void SetProps(IPropWorld *props) { m_props = props; }
     void SetPowerups(PowerupScene *powerups) { m_powerups = powerups; }

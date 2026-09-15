@@ -8,14 +8,10 @@
 #include <queue>
 #include <limits>
 #include <cmath>
-#if GB_ENABLE_TESTS
 #include "gun_bros_re/debug/PerformanceProbe.h"
-#endif
 
 bool CombatScene::FindMatchRoute(float x, float y, float goalX, float goalY, std::vector<CollisionPoint> &route) const {
-#if GB_ENABLE_TESTS
     PerformanceProbe::Scope timing(PerformanceProbe::counters.pathSearchMs);
-#endif
     route.clear();
     if (CanBrotherWalk(x, y, goalX, goalY)) { route.emplace_back(goalX, goalY); return true; }
     const float step = std::max(24.0f, m_playerRadius * 2);

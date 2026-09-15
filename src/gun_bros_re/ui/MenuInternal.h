@@ -428,13 +428,11 @@ struct MenuState {
 struct MenuTransitionTrace {
     bool active = false;
     unsigned time = 0, starts = 0;
-#if GB_ENABLE_TESTS
     struct Frame {
         unsigned page, headerTime, wipeTime;
         bool navigationReady, refineryExitPending, wipeActive;
     };
     std::vector<Frame> frames;
-#endif
 };
 
 struct MenuTestClick { float x; float y; unsigned advanceMs = 0; unsigned renderDelayMs = 0; };
@@ -444,9 +442,7 @@ class GameMenu {
 public:
     explicit GameMenu(CWindow *sharedWindow = nullptr) : window(sharedWindow ? *sharedWindow : ownedWindow) {}
     /** Integration harness input; it still goes through rendered button hit tests. */
-#if GB_ENABLE_TESTS
     void SetTestClick(const MenuTestClick &click) { mouseX = click.x; mouseY = click.y; clicked = true; }
-#endif
     /** Temporarily route this frame's click exclusively to a modal panel. */
     bool ExchangeClick(bool enabled) { const bool previous = clicked; clicked = enabled; return previous; }
     std::pair<float, float> Cursor() const { return {mouseX, mouseY}; }
@@ -496,9 +492,7 @@ public:
 
     int Header(const CProfileManager &profile, const CPlayerProgress &progress, unsigned currentPage);
     bool IsNavigationReady() const { return navigationReady; }
-#if GB_ENABLE_TESTS
     unsigned HeaderTime() const { return originalHeaderTime; }
-#endif
 
     // Historical explicit .dat research UI; native profiles use Header below.
 
@@ -520,9 +514,7 @@ public:
     std::uint64_t clock = 0;
     // Under the harness the real pointer must not scroll anything, or a stray
     // drag over the window moves a list out from under a scripted click.
-#if GB_ENABLE_TESTS
     bool scripted = false;
-#endif
     // The plate movies own the press burst; remember the last press so the
     // following frames can play it where the button was.
     unsigned pressMovie = 0;

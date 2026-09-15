@@ -31,9 +31,7 @@ public:
     unsigned duplicates = 0;
 };
 
-#if GB_ENABLE_TESTS
 
 unsigned CheckMissionMap(const CLevel::Template &data, CMap &map, std::ofstream &report);
-#endif
 
 }

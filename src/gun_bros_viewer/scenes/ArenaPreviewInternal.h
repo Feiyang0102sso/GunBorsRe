@@ -21,10 +21,19 @@
 namespace ArenaDetail {
 constexpr int kStepMs = 16;
 bool Equip(PackTables &tables, const PlayerTemplateData &data, const WeaponEntry &entry, PlayerModel &player, const CShaderProgram &program);
-#if GB_ENABLE_TESTS
-int CheckArena(CWindow &window, CResTOCManager &toc, PackTables &tables, const CShaderProgram &program,
-    const std::vector<EnemyTemplateData> &catalog, const std::vector<WeaponEntry> &weapons,
-    const PlayerTemplateData &playerData, PlayerModel &player, PlayerVitals &vitals,
-    WeaponEffects &effects, CombatScene &scene);
-#endif
 }
+
+/** Borrowed scene state, valid only during RunArena's scene-ready callback. */
+struct ArenaScene {
+    CWindow &window;
+    CResTOCManager &toc;
+    PackTables &tables;
+    const CShaderProgram &program;
+    const std::vector<EnemyTemplateData> &catalog;
+    const std::vector<WeaponEntry> &weapons;
+    const PlayerTemplateData &playerData;
+    PlayerModel &player;
+    PlayerVitals &vitals;
+    WeaponEffects &effects;
+    CombatScene &scene;
+};

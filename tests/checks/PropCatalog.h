@@ -4,7 +4,5 @@
 #ifndef GUN_BROS_RE_PROPCATALOG_H
 #define GUN_BROS_RE_PROPCATALOG_H
 #include <string>
-#if GB_ENABLE_TESTS
 int RunPropCheck(const std::string &bigDirectory);
-#endif
 #endif

@@ -754,15 +754,11 @@ public:
     }
 
     unsigned GetHitCount() const { return m_hitCount; }
-#if GB_ENABLE_TESTS
 
     unsigned CheckEntryRoutes();
-#endif
 
-#if GB_ENABLE_TESTS
 
     unsigned CheckDamageContracts();
-#endif
 
 private:
     static constexpr CombatId kPropIdBase = 1ull << 62;

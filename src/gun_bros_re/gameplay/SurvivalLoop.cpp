@@ -9,9 +9,7 @@
 #include "gun_bros_re/data/LocalBotFriend.h"
 #include "gun_bros_re/gameplay/LiveShopSession.h"
 #include "gun_bros_re/LocalOnlineServices.h"
-#if GB_ENABLE_TESTS
 #include "gun_bros_re/debug/PerformanceProbe.h"
-#endif
 #include "gun_bros_re/debug/SurvivalDevelopment.h"
 #include "gun_bros_re/debug/FlockMetrics.h"
 #include "gun_bros_re/gameplay/SurvivalScenario.h"
@@ -31,7 +29,6 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     const bool withBrother = launch.withBrother || launch.localLive || launch.localBot || launch.deathmatch;
     const auto *archiveMission = launch.archiveMission;
     auto *sharedWindow = launch.window;
-#if GB_ENABLE_TESTS
     SurvivalDevelopment defaults;
     const SurvivalDevelopment *development = launch.development;
     if (development == nullptr) { development = &defaults; }
@@ -52,13 +49,6 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
         std::filesystem::create_directories(directory);
         return (directory / name).string();
     };
-#else
-    const std::string screenshotPath;
-    constexpr unsigned advanceMs = 0;
-    bool showCollisions = false;
-    constexpr bool firePreview = false, check = false, powerupStudy = false;
-    constexpr bool performanceStudy = false, feedbackStudy = false, bossStudy = false, deathStudy = false;
-#endif
 
     std::string capturePath = screenshotPath;
     unsigned checkFailures = 0;
@@ -123,9 +113,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
     if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     unsigned matchSeed = static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count());
-#if GB_ENABLE_TESTS
     if (development->deathmatchCheck || !capturePath.empty()) { matchSeed = 42 + launch.matchIndex; }
-#endif
     if (launch.deathmatch) {
         if (!LoadMPMatches(toc, tables, matches) || launch.matchIndex >= matches.size()) { return 1; }
         const auto &entry = matches[launch.matchIndex];
@@ -210,14 +198,12 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
         }
     }
     WeaponEffects effects(toc, tables, program);
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnRewards({
             checkFailures, check, toc, tables, enemies, vitals, progressData, window, survivalHud, program, loaded, player, effects
         });
         if (result >= 0) { return result; }
     }
-#endif
 
     CombatScene scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
     if (gameContext != nullptr) {
@@ -303,8 +289,7 @@ int RunSurvivalSession(const SurvivalLaunch &launch) {
         }
         // Regression: a local default partner must never inherit premium gear.
         
-#if GB_ENABLE_TESTS
-if (check) {
+        if (check) {
             const unsigned coreHash = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
             bool defaultEquipment = weapons[brotherWeaponSlot].packHash == coreHash && weapons[brotherWeaponSlot].ordinal == 0;
             for (unsigned slot = 0; slot < 3; ++slot) {
@@ -315,7 +300,6 @@ if (check) {
             std::printf("[brother-equipment-check] gun=%s default=%d\n", weapons[brotherWeaponSlot].name.c_str(), defaultEquipment);
             if (!defaultEquipment) { return 1; }
         }
-#endif
 
         scene.SetBrother(&brotherModel, &brother);
         const WeaponEntry *rifle = nullptr;
@@ -328,13 +312,11 @@ if (check) {
         if (rifle == nullptr) { return 1; }
         scene.SetBrotherWeapons(loaded.playerTemplate->script, weapons[brotherWeaponSlot].data, rifle->data);
         
-#if GB_ENABLE_TESTS
-if (check) {
+        if (check) {
             if (!scene.SwapBrotherWeapon() || scene.GetBrotherWeaponSlot() != 1 ||
                 !scene.SwapBrotherWeapon() || scene.GetBrotherWeaponSlot() != 0) { return 1; }
             std::printf("[brother-equipment-check] pistol-rifle-pistol=1 player-unchanged=1\n");
         }
-#endif
 
     }
     scene.SetPlayerProgress(&progress);
@@ -399,14 +381,12 @@ if (check) {
     if ((launch.localLive || launch.deathmatch) && !peerPowerups.Init()) { return 1; }
     if (launch.localLive || launch.deathmatch) { session.SetPeerPowerups(&peerPowerups); }
     if (launch.deathmatch) { powerups.SetDeathmatch(&match); peerPowerups.SetDeathmatch(&match); }
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnPowerupInventory({
             powerupStudy, toc, researchProfile
         });
         if (result >= 0) { return result; }
     }
-#endif
 
     session.SetPowerups(&powerups);
     PickupScene pickups(toc, tables, program, pickupProfile);
@@ -442,10 +422,8 @@ if (check) {
         session.SetScriptRandomSeed(static_cast<std::uint32_t>(
             std::chrono::steady_clock::now().time_since_epoch().count()));
     }
-#if GB_ENABLE_TESTS
     // DM checks fix both the Bot stream and the independent LEVEL script stream.
     if (development->deathmatchCheck) { session.SetScriptRandomSeed(matchSeed); }
-#endif
     const bool tutorial = gameContext != nullptr && gameContext->tutorial;
     session.GetLevel().EnableTutorial(tutorial);
     scene.SetMap(loaded.map, loaded.collisionScene, loaded.weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
@@ -465,7 +443,6 @@ if (check) {
     session.Restart(startX, startY, startFacing);
     if (!session.SubmitChallenges(false)) { return 1; }
     loading.Finish();
-#if GB_ENABLE_TESTS
     // Which check runs here is a development concern; the loop only offers the
     // finished scene and honours the answer.
     if (launch.scenario != nullptr) {
@@ -477,7 +454,6 @@ if (check) {
         });
         if (result >= 0) { return result; }
     }
-#endif
 
     if (!loading.IsValid()) { return 1; }
     if (loading.Cancelled()) { return 0; }
@@ -485,118 +461,94 @@ if (check) {
     music.SetPaused(false);
     music.SetVolume(1.0f);
     if (!music.NextTrack()) { return 1; }
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnBoss({
             checkFailures, packShortName, bossStudy, toc, tables, enemies, vitals, window, program, loaded, player, scene, session, startX, startY, startFacing
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnFeedback({
             checkFailures, capturePath, feedbackStudy, toc, tables, weapons, enemies, vitals, survivalHud, program, loaded, player, scene, session, props, startX, startY, startFacing
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnLevelSounds({
             checkFailures, check, session
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnPropRoutes({
             checkFailures, check, props
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnTriggerRoutes({
             checkFailures, check, session, startX, startY, startFacing
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnPlacedProps({
             check, loaded
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnBrotherPose({
             checkFailures, check, withBrother, scene, brother, brotherModel
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnTutorial({
             checkFailures, capturePath, check, gameContext, tables, weapons, vitals, progress, program, loaded, player, weaponSlot, equippedWeaponSlot, scene, brother, session, powerups, pickups, pickupProfile, tutorial, accountedXplodium
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnWaves({
             checkFailures, capturePath, packShortName, mapIndex, check, checkWaves, startWave, gameContext, withBrother, powerupStudy, archiveMission, toc, tables, weapons, enemies, vitals, progress, window, program, loaded, player, weaponSlot, effects, scene, brother, brotherModel, session, pickups, props, tutorial, startX, startY, startFacing, packIndex, archiveLevel
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnHorde({
             checkFailures, capturePath, check, startWave, vitals, loaded, scene, session, horde
         });
         if (result >= 0) { return result; }
     }
-#endif
 
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnCampaign({
             checkFailures, capturePath, packShortName, mapIndex, check, archiveMission, vitals, loaded, scene, session, pickups, horde
         });
         if (result >= 0) { return result; }
     }
-#endif
 
     for (unsigned elapsed = 0; elapsed < advanceMs; elapsed += 16) {
         session.Update(16, 0, 0, firePreview);
         AdvanceProps(loaded.props, 16);
         AdvanceTileLayers(loaded.map, 16);
     }
-#if GB_ENABLE_TESTS
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnPowerupCapture({
             capturePath, powerupStudy, scene, powerups
         });
         if (result >= 0) { return result; }
     }
-#endif
 
     bool paused = false;
     int lastSavedTutorialStep = session.GetLevel().GetTutorialStep();
@@ -647,18 +599,12 @@ if (check) {
     }
     GameObjectRef leftPowerup = powerups.GetEquipped(0);
     GameObjectRef rightPowerup = powerups.GetEquipped(1);
-#if GB_ENABLE_TESTS
     const bool checkControls = gameContext != nullptr && gameContext->checkControls;
-#else
-    constexpr bool checkControls = false;
-#endif
     unsigned controlFrame = 0;
     // The keyboard fixture needs owned charges; selector purchases/equipping
     // are separately exercised by RunOriginalPowerupSelectorCheck.
     
-#if GB_ENABLE_TESTS
-if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
-#endif
+    if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
 
     const std::uint64_t controlsInitialBucks = pickupProfile->warbucks;
     const bool controlsInitialSound = pickupProfile->soundEnabled;
@@ -769,7 +715,6 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
     std::printf("[survival] WASD move, mouse aim/fire, Q/E powerups, 1 shop, 2 swap weapon, Esc/space pause\n");
     auto menuTicks = window.GetTicksMs();
 
-#if GB_ENABLE_TESTS
     // Deterministic 1,200 rendered frames, with real waves, AI and projectiles.
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnLoopStarting(scene, vitals);
@@ -782,10 +727,8 @@ if (checkControls) { pickupProfile->AddPowerup(rightPowerup, 2); }
     unsigned performanceSteps = 0;
     std::size_t performancePeakAlive = 0;
     bool performancePassed = true;
-#endif
     
-#if GB_ENABLE_TESTS
-if (performanceStudy) {
+    if (performanceStudy) {
         if (development->performanceSpawnStudy) {
             // User screenshot coordinates are a test input, not map resource data.
             scene.playerX = 454.8f;
@@ -808,12 +751,9 @@ if (performanceStudy) {
         performanceReport.open(DevelopmentPath("performance-frames.csv"));
         performanceReport << "frame,update_ms,geometry_ms,world_ms,hud_ms,present_ms,alive,spawned,spawn_ms,brother_ms,navigation_ms,enemy_ms,effects_ms,new_spawns,brother_hp,player_x,player_y,path_ms,path_calls,path_nodes,update_steps,flock_ms,nearest_mean,minimum_gap,close_pairs\n";
     }
-#endif
 
     while (window.PumpEvents()) {
-#if GB_ENABLE_TESTS
         PerformanceProbe::counters = {};
-#endif
         const auto performanceStart = std::chrono::steady_clock::now();
         const auto frameTicks = window.GetTicksMs();
         const unsigned menuElapsed = static_cast<unsigned>(frameTicks - menuTicks);
@@ -967,8 +907,7 @@ if (performanceStudy) {
             float(menuDragX) * 1024 / inputWidth, float(menuDragY) * 768 / inputHeight);
         bool pointerDown = window.IsLeftMouseDown();
         
-#if GB_ENABLE_TESTS
-if (checkControls && controlFrame < controlClickCount) {
+        if (checkControls && controlFrame < controlClickCount) {
             // Bind and finish authored menu entrance before querying its live hitbox.
             if (!survivalHud.Draw(inputState)) { return 1; }
             survivalHud.AdvanceMenu(2000);
@@ -983,7 +922,6 @@ if (checkControls && controlFrame < controlClickCount) {
             survivalHud.Pointer(inputState, inputX, inputY, false);
             pointerDown = true;
         }
-#endif
 
         const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
         SurvivalHudAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
@@ -1083,8 +1021,7 @@ if (checkControls && controlFrame < controlClickCount) {
         }
         const int controlsWaveBeforeInput = session.GetLevel().GetWave();
         
-#if GB_ENABLE_TESTS
-if (checkControls && controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
+        if (checkControls && controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
             const unsigned step = controlFrame - controlClickCount;
             if (step == 0 || step == 4) {
                 vitals.invincible = true;
@@ -1102,7 +1039,6 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
             }
             AppendSurvivalShortcut(inputs, controlKeys[step]);
         }
-#endif
 
         for (KeyCode key : inputs) {
             if ((launch.localLive || launch.deathmatch) && liveShop.Active() && liveShop.Owner() == 1) { continue; }
@@ -1188,11 +1124,9 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
                     pendingWeapon = nextWeapon;
                     swapEventAccepted = false;
                     
-#if GB_ENABLE_TESTS
-if (checkControls) {
+                    if (checkControls) {
                         std::printf("[combat-swap-check] queued old=%zu requested=%zu unchanged=1\n", weaponSlot, pendingWeapon);
                     }
-#endif
 
                     continue;
                 }
@@ -1203,12 +1137,10 @@ if (checkControls) {
             if (gameContext != nullptr && !vitals.dead) { gameContext->profile.activeWeaponSlot = equippedWeaponSlot; }
         }
         
-#if GB_ENABLE_TESTS
-if (checkControls && (controlFrame == controlClickCount + 3 || controlFrame == controlClickCount + 5)) {
+        if (checkControls && (controlFrame == controlClickCount + 3 || controlFrame == controlClickCount + 5)) {
             // Throwing consumes inventory at the authored animation event.
             for (unsigned tick = 0; tick < 60; ++tick) { session.Update(16, 0, 0, false); }
         }
-#endif
 
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
@@ -1243,8 +1175,7 @@ if (checkControls && (controlFrame == controlClickCount + 3 || controlFrame == c
         if (!worldPaused && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
         previous = now;
         
-#if GB_ENABLE_TESTS
-if (performanceStudy) {
+        if (performanceStudy) {
             if (!development->performanceRealtimeStudy) { accumulator = 16; }
             if (performancePilot) { performancePilot->Update(16, moveX, moveY); }
             if (development->performanceSpawnStudy) {
@@ -1261,12 +1192,9 @@ if (performanceStudy) {
                 }
             }
         }
-#endif
 
         
-#if GB_ENABLE_TESTS
-if (checkControls && !paused && !shopOpen) { accumulator = 960; }
-#endif
+        if (checkControls && !paused && !shopOpen) { accumulator = 960; }
 
         effects.SetPaused(worldPaused || (launch.deathmatch && session.IsDeathmatchFading()));
         if (session.IsBossSkipActive()) {
@@ -1281,8 +1209,7 @@ if (checkControls && !paused && !shopOpen) { accumulator = 960; }
         music.SetVolume(musicScale);
         music.Update();
         
-#if GB_ENABLE_TESTS
-if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
+        if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
             const auto playback = music.GetPlaybackState();
             float expectedVolume = 0;
             if (pickupProfile->musicEnabled) {
@@ -1293,17 +1220,12 @@ if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
             std::printf("[pause-bgm-check] frame=%u menu=%d paused-stream=%d gain=%.2f expected=%.2f failures=%u\n",
                 controlFrame, paused || shopOpen, playback.paused, playback.volume, expectedVolume, checkFailures);
         }
-#endif
 
         const std::size_t shotsBeforeSwap = effects.GetShotCount();
-#if GB_ENABLE_TESTS
         unsigned performanceUpdateSteps = 0;
-#endif
         const bool checkSwapFiring = checkControls && (controlFrame == 2 || controlFrame == controlClickCount + 2);
         while (accumulator >= 16) {
-#if GB_ENABLE_TESTS
             ++performanceUpdateSteps;
-#endif
             if (powerups.IsMovieActive() || peerPowerups.IsMovieActive()) {
                 session.Update(16, 0, 0, false);
                 accumulator -= 16;
@@ -1317,9 +1239,7 @@ if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
             if (!vitals.dead || launch.localLive || launch.deathmatch) {
                 bool shoot = pendingWeapon >= weapons.size() &&
                     (performanceStudy || firePreview || checkSwapFiring || (window.IsLeftMouseDown() && !hudOwnsPointer));
-#if GB_ENABLE_TESTS
                 if (development->performanceSpawnStudy) { shoot = false; }
-#endif
                 session.Update(16, moveX, moveY, shoot);
             }
             else {
@@ -1333,9 +1253,7 @@ if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
                 const int outgoingTime = torso.GetTimeMs();
                 SelectPlayerUIWeapon(player, pendingEquippedSlot == primaryEquippedSlot);
                 
-#if GB_ENABLE_TESTS
-if (checkControls && (torso.GetMesh() != outgoingMesh || torso.GetTimeMs() != outgoingTime)) { ++checkFailures; }
-#endif
+                if (checkControls && (torso.GetMesh() != outgoingMesh || torso.GetTimeMs() != outgoingTime)) { ++checkFailures; }
 
                 weaponSlot = pendingWeapon;
                 equippedWeaponSlot = pendingEquippedSlot;
@@ -1348,11 +1266,9 @@ if (checkControls && (torso.GetMesh() != outgoingMesh || torso.GetTimeMs() != ou
                 pendingWeapon = weapons.size();
                 ++combatSwapEvents;
                 
-#if GB_ENABLE_TESTS
-if (checkControls) {
+                if (checkControls) {
                     std::printf("[combat-swap-check] native-event=%u slot=%u torso-preserved=1\n", combatSwapEvents, equippedWeaponSlot);
                 }
-#endif
 
             }
             if (launch.deathmatch) {
@@ -1370,13 +1286,11 @@ if (checkControls) {
             accumulator -= 16;
         }
         
-#if GB_ENABLE_TESTS
-if (checkSwapFiring) {
+        if (checkSwapFiring) {
             const std::size_t shots = effects.GetShotCount() - shotsBeforeSwap;
             if (shots == 0) { ++checkFailures; }
             std::printf("[combat-swap-check] fire-after-switch=%zu failures=%u\n", shots, checkFailures);
         }
-#endif
 
         if (session.GetLevel().GetWave() != lastSavedWave || (session.IsDeathComplete() && !savedDeath) ||
             session.GetLevel().GetTutorialStep() != lastSavedTutorialStep) {
@@ -1427,15 +1341,13 @@ if (checkSwapFiring) {
         DrawMapObjects(loaded, batch, program, mvp, true, &scene, drawBrother, brother.y, width);
         effects.Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::InFrontOfPlayer);
         
-#if GB_ENABLE_TESTS
-if (check) {
+        if (check) {
             GLint sourceBlend = 0, destinationBlend = 0;
             glGetIntegerv(GL_BLEND_SRC, &sourceBlend);
             glGetIntegerv(GL_BLEND_DST, &destinationBlend);
             if (sourceBlend != GL_SRC_ALPHA || destinationBlend != GL_ONE_MINUS_SRC_ALPHA) { ++checkFailures; }
             std::printf("[render-check] after-particles blend=%x/%x failures=%u\n", sourceBlend, destinationBlend, checkFailures);
         }
-#endif
 
         if (showCollisions) {
             const CBrotherAI *collisionBrother = nullptr;
@@ -1510,8 +1422,7 @@ if (check) {
         if (gameContext != nullptr && gameContext->debugTutorial &&
             !survivalHud.DrawTutorialDebugNotice(window.GetTicksMs())) { return 1; }
         
-#if GB_ENABLE_TESTS
-if (checkControls && controlFrame < controlClickCount) {
+        if (checkControls && controlFrame < controlClickCount) {
             if (controlFrame == 0 && !GB_SAVE_FRAME(window, DevelopmentPath("combat-controls-shop.png"))) { return 1; }
             if (controlFrame == 3 && !GB_SAVE_FRAME(window, DevelopmentPath("combat-controls-pause.png"))) { return 1; }
             if (controlFrame + 1 == controlClickCount) {
@@ -1524,11 +1435,9 @@ if (checkControls && controlFrame < controlClickCount) {
                 if (!controlsPassed) { ++checkFailures; }
             }
         }
-#endif
 
         
-#if GB_ENABLE_TESTS
-if (checkControls && controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
+        if (checkControls && controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
             const unsigned step = controlFrame - controlClickCount;
             bool passed = true;
             if (step == 0) { passed = shopOpen; }
@@ -1544,19 +1453,15 @@ if (checkControls && controlFrame >= controlClickCount && controlFrame < control
                 static_cast<int>(controlKeys[step]), passed, pickupProfile->GetPowerupCount(rightPowerup));
             if (!passed) { ++checkFailures; }
         }
-#endif
 
         
-#if GB_ENABLE_TESTS
-if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
+        if (checkControls && controlFrame < controlClickCount + controlKeyCount) {
             ++controlFrame;
             if (controlFrame < controlClickCount + controlKeyCount) { window.Present(); continue; }
         }
-#endif
 
         
-#if GB_ENABLE_TESTS
-if (!capturePath.empty()) {
+        if (!capturePath.empty()) {
             if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium, check && horde)) { return 1; }
             const unsigned errors = glGetError();
             if (errors != 0 || !GB_SAVE_FRAME(window, capturePath)) { return 1; }
@@ -1591,18 +1496,14 @@ if (!capturePath.empty()) {
             if (checkFailures != 0) { return 1; }
             return 0;
         }
-#endif
 
         const auto performanceHud = std::chrono::steady_clock::now();
-#if GB_ENABLE_TESTS
         if (performanceStudy && development->performanceFlockStudy && (performanceFrame + 1) % 300 == 0) {
             if (!GB_SAVE_FRAME(window, DevelopmentPath("flock-" + std::to_string(performanceFrame + 1) + ".png"))) { return 1; }
         }
-#endif
         window.Present();
         
-#if GB_ENABLE_TESTS
-if (performanceStudy) {
+        if (performanceStudy) {
             const auto performanceEnd = std::chrono::steady_clock::now();
             const double updateMs = std::chrono::duration<double, std::milli>(performanceUpdated - performanceStart).count();
             const double geometryMs = std::chrono::duration<double, std::milli>(performanceGeometry - performanceUpdated).count();
@@ -1647,14 +1548,11 @@ if (performanceStudy) {
                 break;
             }
         }
-#endif
 
     }
-#if GB_ENABLE_TESTS
     PerformanceProbe::enabled = false;
     PerformanceProbe::uncachedPaths = false;
     if (!performancePassed) { return 1; }
-#endif
     if (!session.SubmitChallenges(true)) { return 1; }
     if (launch.deathmatch && gameContext != nullptr) {
         if (match.GetResult() == CMPMatch::Result::Playing) { match.Surrender(0); }
