@@ -17,7 +17,7 @@ struct ZSurvivalFrame {
     CProfileManager *profile;
     CInputPad &hud;
     CGame &session;
-    ZCombatWorld &scene;
+    CLevel &scene;
     ZPlayerModel &player;
     ZPlayerVitals &vitals;
     ZWeaponEffects &effects;

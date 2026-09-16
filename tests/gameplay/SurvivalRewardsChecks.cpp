@@ -21,19 +21,22 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
     if (check) {
         // A separate world exercises empty-wave minimums and damage rejection
         // without putting fixture currency into the actual survival/profile run.
-        ZCombatWorld rewardProbe(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+        CLevel rewardProbe(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+        CLevel::Template percentageTemplate;
+        CMap percentageMap;
+        rewardProbe.Bind(percentageTemplate, percentageMap);
         rewardProbe.Reset();
-        rewardProbe.OnWaveCleared(10);
-        rewardProbe.OnWaveCleared(100);
+        rewardProbe.ResolveWaveReward(10);
+        rewardProbe.ResolveWaveReward(100);
         if (rewardProbe.GetXplodium() != 2 || rewardProbe.GetPerfectWaves() != 2) { ++checkFailures; }
         ZCombatHit wound;
         wound.ownerType = 1;
         wound.damage = 0.25f;
         rewardProbe.ApplyHit(kPlayerCombatId, wound);
-        rewardProbe.OnWaveCleared(10);
+        rewardProbe.ResolveWaveReward(10);
         if (rewardProbe.GetLastWaveBonus() != 0 || rewardProbe.GetXplodium() != 2 ||
             rewardProbe.GetPerfectWaves() != 2 || rewardProbe.GetClearedWaves() != 3) { ++checkFailures; }
-        rewardProbe.OnWaveCleared(10);
+        rewardProbe.ResolveWaveReward(10);
         if (rewardProbe.GetLastWaveBonus() != 1 || rewardProbe.GetXplodium() != 3) { ++checkFailures; }
         // Render an actual credited reward, not a percentage estimate or a made-up HUD bonus.
         ZInputPadState rewardState;
@@ -94,18 +97,14 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
             !restoredPickupProfile.LoadFromDisk(TestOutput::Path("pickup-profile-check.dat")) ||
             restoredPickupProfile.GetPowerupCount(grenade) != 1) { ++checkFailures; }
         std::printf("[pickup-check] health/experience/xplodium/grenade/save-once failures=%u\n", checkFailures);
-        CLevel percentageLevel;
-        CLevel::Template percentageTemplate;
-        CMap percentageMap;
-        percentageLevel.Bind(percentageTemplate, percentageMap);
-        rewardProbe.SetLevel(&percentageLevel);
+        rewardProbe.Bind(percentageTemplate, percentageMap);
         const std::uint64_t beforePercentage = rewardProbe.GetXplodium();
         const std::int16_t percentage = 105;
-        percentageLevel.FunctionResolver(56, &percentage, 1);
+        rewardProbe.FunctionResolver(56, &percentage, 1);
         for (unsigned award = 0; award < 20; ++award) { rewardProbe.AddXplodium(1); }
         if (rewardProbe.GetXplodium() != beforePercentage + 21) { ++checkFailures; }
         const std::int16_t increment = 95;
-        percentageLevel.FunctionResolver(57, &increment, 1);
+        rewardProbe.FunctionResolver(57, &increment, 1);
         rewardProbe.AddXplodium(1);
         if (rewardProbe.GetXplodium() != beforePercentage + 23) { ++checkFailures; }
         std::printf("[xplodium-check] fractional-carry=1 set-add-percent=1 failures=%u\n", checkFailures);
@@ -115,7 +114,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         pickupProgress.Bind(progressData);
         rewardProbe.SetPlayerProgress(&pickupProgress);
         rewardProbe.SetHorde(true);
-        percentageLevel.Bind(percentageTemplate, percentageMap);
+        rewardProbe.Bind(percentageTemplate, percentageMap);
         vitals.invincible = true;
         unsigned expectedExperience = 0;
         for (unsigned death = 0; death < 3; ++death) {

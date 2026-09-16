@@ -25,7 +25,7 @@ public:
     bool Draw(const ZInputPadState &state);
     bool DrawTutorialDebugNotice(std::uint64_t ticks);
     /** Original level effect pass, also callable by the permanent death check. */
-    bool DrawExperienceTexts(const std::vector<ZCombatWorld::ExperienceText> &texts, bool horde);
+    bool DrawExperienceTexts(const std::vector<CLevel::ExperienceText> &texts, bool horde);
     void Advance(int deltaMs);
     void ResetNotices();
     // Original CInputPad interstitial callbacks release LEVEL event 2.

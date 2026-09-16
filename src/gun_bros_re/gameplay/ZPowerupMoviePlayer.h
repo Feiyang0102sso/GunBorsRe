@@ -5,11 +5,11 @@
 #define GUN_BROS_RE_ZPOWERUPMOVIEPLAYER_H
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 
 class ZPowerupMoviePlayer {
 public:
-    ZPowerupMoviePlayer(CResTOCManager &toc, ZPackTables &tables, ZCombatWorld &scene);
+    ZPowerupMoviePlayer(CResTOCManager &toc, ZPackTables &tables, CLevel &scene);
     bool Start(const ZPowerupEntry &entry, bool fromSelector = false);
     void SetOwner(ZCombatId owner) { m_owner = owner; }
     void Update(int deltaMs);
@@ -26,7 +26,7 @@ private:
     bool StartMovie(const ZPowerupAction &action);
     CResTOCManager &m_toc;
     ZPackTables &m_tables;
-    ZCombatWorld &m_scene;
+    CLevel &m_scene;
     ZCombatId m_owner = kPlayerCombatId;
     CPowerup m_script;
     ZShaderProgram m_program;

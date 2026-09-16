@@ -110,7 +110,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     ZPlayerVitals vitals;
     std::vector<ZEnemyTemplateData> catalog;
     ZWeaponEffects effects(toc, tables, program);
-    ZCombatWorld scene(tables, program, catalog, player, vitals, effects, 1.0f);
+    CLevel scene(tables, program, catalog, player, vitals, effects, 1.0f);
     CLevel level;
     ZMapPropWorld props(loaded, scene, level, effects);
     props.Reset();

@@ -200,7 +200,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         if (result >= 0) { return result; }
     }
 
-    ZCombatWorld scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+    CLevel scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
     if (gameContext != nullptr) {
         music.SetEnabled(gameContext->profile.musicEnabled);
         ZAudioPlayer::SetEffectsEnabled(gameContext->profile.soundEnabled);
@@ -1268,7 +1268,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             const unsigned errors = glGetError();
             if (errors != 0 || !Capture::SaveFrame(window, capturePath)) { return 1; }
             std::printf("[survival] wave=%d alive=%d spawned=%u kills=%u hp=%.1f\n",
-                session.GetLevel().GetWave(), session.CountEnemies(), scene.spawned, session.GetKills(), vitals.health);
+                session.GetLevel().GetWave(), session.CountEnemies(), scene.GetSpawnCount(), session.GetKills(), vitals.health);
             window.Present();
             if (launch.scenario != nullptr) {
                 const int result = launch.scenario->OnStage(ZSurvivalPhase::Captured, state);
@@ -1292,7 +1292,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             const double hudMs = std::chrono::duration<double, std::milli>(performanceHud - performanceWorld).count();
             const double presentMs = std::chrono::duration<double, std::milli>(performanceEnd - performanceHud).count();
             performanceReport << performanceFrame << ',' << updateMs << ',' << geometryMs << ',' << worldMs << ',' << hudMs << ',' << presentMs
-                << ',' << scene.AliveCount() << ',' << scene.spawned
+                << ',' << scene.AliveCount() << ',' << scene.GetSpawnCount()
                 << ',' << PerformanceProbe::counters.spawnMs << ',' << PerformanceProbe::counters.brotherMs
                 << ',' << PerformanceProbe::counters.navigationMs << ',' << PerformanceProbe::counters.enemyMs
                 << ',' << PerformanceProbe::counters.effectsMs << ',' << PerformanceProbe::counters.spawns

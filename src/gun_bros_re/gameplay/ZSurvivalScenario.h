@@ -27,7 +27,7 @@ struct ZSurvivalState {
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
     ZWeaponEffects & effects;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
     CGame & session;

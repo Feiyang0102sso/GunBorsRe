@@ -10,7 +10,7 @@
 #include <cstdio>
 
 ZPowerupScene::ZPowerupScene(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
-    ZPlayerVitals &vitals, ZCombatWorld &scene, ZWeaponEffects &effects, CProfileManager &profile, ZCombatId owner)
+    ZPlayerVitals &vitals, CLevel &scene, ZWeaponEffects &effects, CProfileManager &profile, ZCombatId owner)
     : m_toc(toc), m_tables(tables), m_player(player), m_vitals(vitals), m_scene(scene),
       m_effects(effects), m_profile(profile), m_moviePlayer(toc, tables, scene), m_owner(owner) { m_moviePlayer.SetOwner(owner); }
 
@@ -145,7 +145,7 @@ GameObjectRef ZPowerupScene::GetEquipped(unsigned slot) {
     }
     for (const auto &entry : m_catalog) {
         CPowerup query;
-        query.SetLevelContext(m_scene.GetLevel());
+        query.SetLevelContext(&m_scene);
         query.Bind(entry.data);
         if (IsSupported(entry) && query.Query(4, slot)) {
             m_profile.configuration.powerups[slot] = entry.resource.localIndex;
@@ -163,7 +163,7 @@ bool ZPowerupScene::Equip(unsigned slot, const GameObjectRef &resource) {
     for (const auto &entry : m_catalog) {
         if (entry.resource.packHash != resource.packHash || entry.resource.localIndex != resource.localIndex) { continue; }
         CPowerup query;
-        query.SetLevelContext(m_scene.GetLevel());
+        query.SetLevelContext(&m_scene);
         query.Bind(entry.data);
         if (!IsSupported(entry) || !query.Query(0)) { return false; }
         m_profile.configuration.powerups[slot] = resource.localIndex;
@@ -245,7 +245,7 @@ bool ZPowerupScene::Use(bool fromSelector) {
     status.turret = m_player.weapon->brother.IsTurretActive();
     for (unsigned type = 0; type < 3; ++type) { status.frenzyTypes[type] = m_player.weapon->brother.IsFrenzyType(type); }
     CPowerup query;
-    query.SetLevelContext(m_scene.GetLevel());
+    query.SetLevelContext(&m_scene);
     query.Bind(entry->data, status);
     if (!query.Query(1)) { return false; }
     if (fromSelector && !query.Query(2)) { return false; }
@@ -263,7 +263,7 @@ bool ZPowerupScene::Use(bool fromSelector) {
         return true;
     }
     CPowerup powerup;
-    powerup.SetLevelContext(m_scene.GetLevel());
+    powerup.SetLevelContext(&m_scene);
     powerup.Bind(entry->data, status);
     powerup.Equip();
     powerup.Use();
@@ -392,7 +392,7 @@ bool ZPowerupScene::CanBotUseSelected() const {
     unsigned alive = 0, nearby = 0;
     float x = 0, y = 0;
     m_scene.ActorPosition(m_owner, x, y);
-    for (const auto &actor : m_scene.enemies) {
+    for (const auto &actor : m_scene.GetEnemies()) {
         const auto &enemy = actor->model.enemy.combat;
         if (enemy.dead || enemy.removed || !enemy.enabled || enemy.health <= 0) { continue; }
         ++alive;

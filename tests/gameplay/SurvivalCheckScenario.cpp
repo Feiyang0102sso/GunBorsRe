@@ -86,7 +86,7 @@ int SurvivalCheckScenario::OnHorde(SurvivalHordeFixture fixture) { return CheckS
 int SurvivalCheckScenario::OnCampaign(SurvivalCampaignFixture fixture) { return CheckSurvivalCampaign(fixture); }
 int SurvivalCheckScenario::OnPowerupCapture(SurvivalPowerupCaptureFixture fixture) { return CheckSurvivalPowerupCapture(fixture); }
 
-int SurvivalCheckScenario::OnLoopStarting(ZCombatWorld &scene, ZPlayerVitals &vitals) {
+int SurvivalCheckScenario::OnLoopStarting(CLevel &scene, ZPlayerVitals &vitals) {
     if (!m_development.flockCheck) { return kScenarioContinue; }
     vitals.invincible = true;
     return CheckFlockMovement(scene);

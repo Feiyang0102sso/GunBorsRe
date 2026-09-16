@@ -73,7 +73,7 @@ bool CInputPad::IsDeathmatchWrapUpComplete() const {
     return m_matchWrapUp && m_matchWrapUpDuration > 0 && m_matchWrapUpTime >= m_matchWrapUpDuration;
 }
 
-bool CInputPad::DrawExperienceTexts(const std::vector<ZCombatWorld::ExperienceText> &texts, bool horde) {
+bool CInputPad::DrawExperienceTexts(const std::vector<CLevel::ExperienceText> &texts, bool horde) {
     // CLevel::Bind :121860 selects the original STR. TextEffect::Draw ARM
     // 0x394D4..0x394F4 centers font 9 on both axes; it never scales with zoom.
     const char *name = "IDS_HUD_EXPERIENCE_UP";

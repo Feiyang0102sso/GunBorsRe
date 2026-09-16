@@ -3,7 +3,9 @@
 #include "gun_bros_re/gameplay/CTargetingController.h"
 #include "gun_bros_re/data/CPlayerProgress.h"
 
-class ZCombatWorld;
+class CCollisionData;
+class CLevelObjectPool;
+class CMap;
 
 /** Player state and native input/progression responsibilities from player.cpp.
  * Equipment/render storage remains in the desktop model; the level owns peers,
@@ -11,7 +13,9 @@ class ZCombatWorld;
  */
 class CPlayer {
 public:
+    CPlayer() = default;
     CPlayer(ZPlayerModel &model, ZPlayerVitals &vitals);
+    void BindActor(ZPlayerModel &model, ZPlayerVitals &vitals);
     void BindProgress(CPlayerProgress *progress);
     CPlayerProgress *GetProgress() const { return m_progress; }
     bool AddExperience(unsigned amount, bool updateHealth);
@@ -20,11 +24,17 @@ public:
     std::uint64_t GetXplodium() const { return m_xplodium; }
     void ResetXplodiumRemainder() { m_xplodiumRemainder = 0; }
     void AddHealth(unsigned amount);
+    /** Bind the map and original level-object collection used by Move. */
+    void BindLevel(CMap &map, const CCollisionData &collision,
+        CLevelObjectPool &objects, float collisionRadius);
     void BeginMovement();
     // Original CPlayer::Move resolves bounds, enemy bodies, then map edges.
-    void Move(const ZCombatWorld &world);
+    void Move();
     bool UpdateMovement(int deltaMs, float moveX, float moveY);
     void UpdateShooting(int deltaMs, bool moving, bool shoot, ZBrotherAIWorld &world);
+    /** Original per-frame player order: input, weapon, force, then collision. */
+    void Update(int deltaMs, float moveX, float moveY, bool shoot,
+        ZBrotherAIWorld &world, bool moveActor);
     void ApplyKnockback(int deltaMs, float seconds);
     CTargetingController &GetTargetingController() { return m_autoAim; }
     const CTargetingController &GetTargetingController() const { return m_autoAim; }
@@ -34,10 +44,14 @@ public:
     float forceX = 0, forceY = 0;
     int forceMs = 0;
 private:
-    ZPlayerModel &m_model;
-    ZPlayerVitals &m_vitals;
+    ZPlayerModel *m_model = nullptr;
+    ZPlayerVitals *m_vitals = nullptr;
     CPlayerProgress *m_progress = nullptr;
     CTargetingController m_autoAim;
     std::uint64_t m_xplodium = 0;
     unsigned m_xplodiumRemainder = 0;
+    CMap *m_map = nullptr;
+    const CCollisionData *m_collision = nullptr;
+    CLevelObjectPool *m_objects = nullptr;
+    float m_collisionRadius = 0;
 };

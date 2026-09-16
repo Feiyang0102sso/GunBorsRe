@@ -72,7 +72,7 @@ int RunDebugMapProfileCheck() {
 }
 
 int CheckDebugMapProfile(ZPackTables &tables, const ZPlayerModel &player,
-    const CPlayerProgress &progress, ZSurvivalGameContext &context, const ZCombatWorld &scene, const CLevel &level) {
+    const CPlayerProgress &progress, ZSurvivalGameContext &context, const CLevel &scene, const CLevel &level) {
     const auto &profile = context.profile;
     const auto &gun = profile.configuration.guns[profile.activeWeaponSlot];
     if (player.gunResource.packHash != gun.packHash || player.gunResource.localIndex != gun.localIndex ||

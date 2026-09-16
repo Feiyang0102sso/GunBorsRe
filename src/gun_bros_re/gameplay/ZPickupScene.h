@@ -10,7 +10,7 @@
 #include "engine/glu/sprite/CSpritePlayer.h"
 #include <map>
 
-class ZCombatWorld;
+class CLevel;
 class ZWeaponEffects;
 
 struct ZPickupCollection {
@@ -27,7 +27,7 @@ public:
     void SetPeerProfile(CProfileManager *profile) { m_peerProfile = profile; }
     void Reset();
     bool Spawn(const GameObjectRef &ref, float x, float y, int objectId = 0);
-    void Update(int deltaMs, ZCombatWorld &scene, ZWeaponEffects &effects);
+    void Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects);
     void UpdateEffects(int deltaMs, ZWeaponEffects &effects);
     void Draw(const float *mvp, float scale);
     std::size_t GetCount() const { return m_instances.size(); }

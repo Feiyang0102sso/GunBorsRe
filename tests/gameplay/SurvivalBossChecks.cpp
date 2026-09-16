@@ -44,7 +44,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         const unsigned introBeforeRepeat = session.GetLevel().GetBossIntroSerial();
         if (session.SkipToBoss() || session.GetLevel().GetBossIntroSerial() != introBeforeRepeat) { ++checkFailures; }
         ZCombatEnemy *boss = nullptr;
-        for (auto &actor : scene.enemies) {
+        for (auto &actor : scene.GetEnemies()) {
             if (actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { boss = actor.get(); }
         }
         if (session.GetLevel().GetBossIntroSerial() != 1 || boss == nullptr) {
@@ -109,8 +109,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         const ZEnemyTemplateData *bossData = boss->data;
         std::size_t bossEntry = static_cast<std::size_t>(bossData - enemies.data());
         ZWeaponEffects blastEffects(toc, tables, program);
-        ZCombatWorld blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
-        blastScene.SetLevel(&session.GetLevel());
+        CLevel blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
         for (unsigned kind = 0; kind < 3; ++kind) {
             blastScene.Reset();
             vitals.invincible = true;
@@ -198,7 +197,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                 session.GetLevel().GetBossIntroSerial() != 1) { ++checkFailures; }
             // Compare authored health tiers and REV multipliers at the actual
             // production shortcut, including the first wave of REV10.
-            for (const auto &actor : scene.enemies) {
+            for (const auto &actor : scene.GetEnemies()) {
                 if (actor->mapPlaced || !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
                 const auto &combat = actor->model.enemy.combat;
                 float baseHealth = 100;

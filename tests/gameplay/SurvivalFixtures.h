@@ -35,7 +35,7 @@ struct SurvivalDeathFixture {
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
     ZWeaponEffects & effects;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
     CGame & session;
@@ -56,7 +56,7 @@ struct SurvivalBossFixture {
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CGame & session;
     float startX;
     float startY;
@@ -76,7 +76,7 @@ struct SurvivalFeedbackFixture {
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CGame & session;
     MapDetail::ZMapPropWorld & props;
     float startX;
@@ -95,7 +95,7 @@ struct SurvivalPropRoutesFixture {
     unsigned & checkFailures;
     bool check;
     MapDetail::ZLoadedMap & loaded;
-    ZCombatWorld & scene;
+    CLevel & scene;
 };
 
 struct SurvivalTriggerRoutesFixture {
@@ -103,7 +103,7 @@ struct SurvivalTriggerRoutesFixture {
     bool check;
     CGame & session;
     CMap & map;
-    ZCombatWorld & scene;
+    CLevel & scene;
     float startX;
     float startY;
     float startFacing;
@@ -118,7 +118,7 @@ struct SurvivalBrotherPoseFixture {
     unsigned & checkFailures;
     bool check;
     bool withBrother;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
 };
@@ -137,7 +137,7 @@ struct SurvivalTutorialFixture {
     ZPlayerModel & player;
     std::size_t & weaponSlot;
     unsigned & equippedWeaponSlot;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CBrotherAI & brother;
     CGame & session;
     ZPowerupScene & powerups;
@@ -171,7 +171,7 @@ struct SurvivalWavesFixture {
     ZPlayerModel & player;
     std::size_t & weaponSlot;
     ZWeaponEffects & effects;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
     CGame & session;
@@ -192,7 +192,7 @@ struct SurvivalHordeFixture {
     unsigned startWave;
     ZPlayerVitals & vitals;
     MapDetail::ZLoadedMap & loaded;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CGame & session;
     bool horde;
 };
@@ -206,7 +206,7 @@ struct SurvivalCampaignFixture {
     const ZMissionEntry * archiveMission;
     ZPlayerVitals & vitals;
     MapDetail::ZLoadedMap & loaded;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CGame & session;
     ZPickupScene & pickups;
     bool horde;
@@ -215,7 +215,7 @@ struct SurvivalCampaignFixture {
 struct SurvivalPowerupCaptureFixture {
     std::string & capturePath;
     bool powerupStudy;
-    ZCombatWorld & scene;
+    CLevel & scene;
     ZPowerupScene & powerups;
 };
 
@@ -236,7 +236,7 @@ struct SurvivalSceneFixture {
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
     ZWeaponEffects & effects;
-    ZCombatWorld & scene;
+    CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
     CGame & session;

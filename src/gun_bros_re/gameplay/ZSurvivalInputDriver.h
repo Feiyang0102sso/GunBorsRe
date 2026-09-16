@@ -6,7 +6,7 @@
 #define GUN_BROS_RE_ZSURVIVALINPUTDRIVER_H
 #include <memory>
 #include "engine/platform/ZWindow.h"
-class ZCombatWorld;
+class CLevel;
 struct ZMapRectangle;
 
 class ZSurvivalInputDriver {
@@ -15,9 +15,9 @@ public:
     virtual void Update(int deltaMs, float &moveX, float &moveY) = 0;
     virtual void Report() const = 0;
 };
-using ZSurvivalInputFactory = std::unique_ptr<ZSurvivalInputDriver> (*)(ZCombatWorld &, const ZMapRectangle &);
+using ZSurvivalInputFactory = std::unique_ptr<ZSurvivalInputDriver> (*)(CLevel &, const ZMapRectangle &);
 void SetSurvivalInputFactory(ZSurvivalInputFactory factory);
-std::unique_ptr<ZSurvivalInputDriver> CreateSurvivalInputDriver(ZCombatWorld &scene, const ZMapRectangle &bounds);
+std::unique_ptr<ZSurvivalInputDriver> CreateSurvivalInputDriver(CLevel &scene, const ZMapRectangle &bounds);
 namespace MapDetail {
 void AppendSurvivalShortcut(std::vector<ZKeyCode> &inputs, ZKeyCode key);
 }

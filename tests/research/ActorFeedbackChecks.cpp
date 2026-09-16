@@ -6,7 +6,7 @@ using namespace MapDetail;
 
 namespace {
 /** Reproduce player input entering an actual BIG enemy's body circle. */
-unsigned CheckEnemyMovement(ZCombatWorld &scene, ZPlayerModel &player, ZPlayerVitals &vitals) {
+unsigned CheckEnemyMovement(CLevel &scene, ZPlayerModel &player, ZPlayerVitals &vitals) {
     scene.Reset();
     ZCombatEnemy *actor = scene.Spawn(0, 650, 550);
     if (actor == nullptr) { return 1; }
@@ -58,11 +58,11 @@ unsigned CheckEnemyMovement(ZCombatWorld &scene, ZPlayerModel &player, ZPlayerVi
 }
 
 /** Traverse several frozen BIG enemies using the immunity from a real melee hit. */
-unsigned CheckMeleeEscape(ZCombatWorld &scene, ZPlayerModel &player, std::size_t entry) {
+unsigned CheckMeleeEscape(CLevel &scene, ZPlayerModel &player, std::size_t entry) {
     unsigned failures = 0;
     CBrother &brother = player.weapon->brother;
     // Keep the original PLAYER script/timer; only isolate the enemy AI motion.
-    scene.enemies.clear();
+    scene.GetEnemies().clear();
     const float startX = 400, startY = 550;
     for (int index = 0; index < 3; ++index) {
         ZCombatEnemy *actor = scene.Spawn(entry, startX + 25 + index * 55, startY);
@@ -80,7 +80,7 @@ unsigned CheckMeleeEscape(ZCombatWorld &scene, ZPlayerModel &player, std::size_t
     scene.GetPlayer().y = 750;
     for (int frame = 0; frame < 150 && brother.CanPassEnemies(); ++frame) { scene.Update(16, 0, 0, false); }
     if (brother.CanPassEnemies() || brother.IsImmunityHidden()) { ++failures; }
-    ZCombatEnemy &actor = *scene.enemies.front();
+    ZCombatEnemy &actor = *scene.GetEnemies().front();
     float centerX = actor.model.enemy.combat.x, centerY = actor.model.enemy.combat.y, radius = 0;
     EnemyCollisionCircle(actor.model.enemy, actor.data->gameScale, 0, centerX, centerY, radius);
     scene.GetPlayer().x = centerX - (brother.GetRadius() + actor.model.enemy.GetPart(0).radius * 0.8f - 1);
@@ -140,7 +140,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         !EquipPlayerWeapon(tables, playerData.script, pistol->data, "feedback player", player) ||
         !CreatePlayerBuffers(player, program)) { return 1; }
     ZWeaponEffects effects(toc, tables, program);
-    ZCombatWorld scene(tables, program, enemies, player, vitals, effects, playerData.gameScale);
+    CLevel scene(tables, program, enemies, player, vitals, effects, playerData.gameScale);
     unsigned failures = 0;
     failures += CheckOriginalCircleCircle();
     failures += CheckEnemyMovement(scene, player, vitals);

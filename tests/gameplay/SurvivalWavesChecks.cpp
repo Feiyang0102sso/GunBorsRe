@@ -6,7 +6,7 @@ using namespace MapDetail;
 
 /** Exercise mode changes with real BIG items and isolated inventory. */
 static unsigned CheckPowerupModes(CResTOCManager &toc, ZPackTables &tables, ZPowerupScene &powerups,
-    CProfileManager &profile, ZCombatWorld &scene) {
+    CProfileManager &profile, CLevel &scene) {
     std::vector<ZStoreEntry> stores;
     std::vector<ZPowerupEntry> catalog;
     if (!LoadStoreCatalog(toc, tables, stores) || !LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
@@ -180,7 +180,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             const bool fromSelector = airstrikeCase++ >= 3;
             session.Restart(startX, startY, startFacing);
             ZWeaponEffects airstrikeEffects(toc, tables, program);
-            ZCombatWorld airstrikeScene(tables, program, enemies, player, vitals, airstrikeEffects, loaded.playerTemplate->gameScale);
+            CLevel airstrikeScene(tables, program, enemies, player, vitals, airstrikeEffects, loaded.playerTemplate->gameScale);
             airstrikeScene.Reset();
             // Exercise the same session update as gameplay: movie-only tests
             // cannot detect actors continuing to move during an air strike.
@@ -227,7 +227,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             const float frozenHealth = vitals.health;
             // Haven's LEVEL also creates two map turrets. Freeze preserves
             // the starting count; it does not imply only our two probes exist.
-            const std::size_t frozenEnemyCount = airstrikeScene.enemies.size();
+            const std::size_t frozenEnemyCount = airstrikeScene.GetEnemies().size();
             for (int elapsed = 0; elapsed < 12000 && airstrike.IsMovieActive(); elapsed += 16) {
                 airstrikeSession.Update(16, 1, 0, true);
                 if (airstrike.GetMoviePlayer().IsForegroundMovie()) { ++warningFrames; }
@@ -241,7 +241,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 }
                 if (airstrikeScene.GetPlayer().x != frozenX || airstrikeScene.GetPlayer().y != frozenY || airstrikeEffects.GetShotCount() != 0) { ++movingFrames; }
                 if (target->model.enemy.combat.x != frozenEnemyX || target->model.enemy.combat.y != frozenEnemyY ||
-                    vitals.health != frozenHealth || airstrikeScene.enemies.size() != frozenEnemyCount) { ++movingFrames; }
+                    vitals.health != frozenHealth || airstrikeScene.GetEnemies().size() != frozenEnemyCount) { ++movingFrames; }
                 if (airstrike.GetMoviePlayer().splashCount > 0 && splashTime == 0) { splashTime = elapsed + 16; }
                 if (elapsed == 992) {
                     glClearColor(0.04f, 0.05f, 0.07f, 1);
@@ -319,7 +319,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // projectiles. No caller-supplied aim or automatic pilot firing.
             if (!EquipControlledPlayer(tables, loaded, program, weapons[0])) { return 1; }
             ZWeaponEffects aimEffects(toc, tables, program);
-            ZCombatWorld aimScene(tables, program, enemies, player, vitals, aimEffects, loaded.playerTemplate->gameScale);
+            CLevel aimScene(tables, program, enemies, player, vitals, aimEffects, loaded.playerTemplate->gameScale);
             aimScene.Reset();
             aimScene.GetPlayer().x = 600;
             aimScene.GetPlayer().y = 650;
@@ -367,7 +367,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         session.Restart(startX, startY, startFacing);
         {
             ZWeaponEffects turretEffects(toc, tables, program);
-            ZCombatWorld turretScene(tables, program, enemies, player, vitals, turretEffects, loaded.playerTemplate->gameScale);
+            CLevel turretScene(tables, program, enemies, player, vitals, turretEffects, loaded.playerTemplate->gameScale);
             turretScene.Reset();
             ZCombatEnemy *target = turretScene.Spawn(0, 600, 460);
             if (target == nullptr) { return 1; }
@@ -389,7 +389,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 turretScene.Update(16, 0, 0, false);
                 turretPowerup.Update(16);
                 unsigned liveTurrets = 0;
-                for (const auto &actor : turretScene.enemies) {
+                for (const auto &actor : turretScene.GetEnemies()) {
                     if (actor->model.enemy.combat.turret && !actor->model.enemy.combat.removed) { ++liveTurrets; }
                 }
                 peakTurrets = std::max(peakTurrets, liveTurrets);
@@ -492,7 +492,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // Isolate impact contracts from steering: a stationary original
             // enemy receives real CBullet -> CombatScene -> script splash hits.
             ZWeaponEffects blastEffects(toc, tables, program);
-            ZCombatWorld blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
+            CLevel blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
             const unsigned grenadeBullets[] = {90, 93, 94};
             for (unsigned bulletIndex : grenadeBullets) {
                 blastScene.Reset();
@@ -704,7 +704,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             pilot->Update(16, moveX, moveY);
             session.Update(16, moveX, moveY, !withBrother || gameContext != nullptr);
             float damage = scene.damageDealt;
-            for (const auto &actor : scene.enemies) { damage += actor->model.enemy.combat.totalDamage; }
+            for (const auto &actor : scene.GetEnemies()) { damage += actor->model.enemy.combat.totalDamage; }
             stalledMs += 16;
             if (damage != previousDamage) { stalledMs = 0; previousDamage = damage; }
             if (stalledMs > 120000) {
@@ -728,7 +728,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             std::printf("[brother-check] targets=%u shots=%zu position=%.1f,%.1f hp=%.1f failures=%u\n",
                 brother.GetTargetCount(), effects.GetShotCount(), brother.x, brother.y, brother.vitals.health, checkFailures);
         }
-        if (session.GetLevel().GetWave() < targetWave || session.GetKills() == 0 || scene.invalidSpawns != 0) { ++checkFailures; }
+        if (session.GetLevel().GetWave() < targetWave || session.GetKills() == 0 || scene.GetInvalidSpawnCount() != 0) { ++checkFailures; }
         if (targetWave == session.GetLevel().GetWaveLimit() && !session.GetLevel().IsCleared()) { ++checkFailures; }
         if (scene.GetClearedWaves() != targetWave - startWave) { ++checkFailures; }
         // AI-only kills grant XP but not the human's Xplodium kill streak.
@@ -740,7 +740,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         checkFailures += props.GetFailures();
         std::printf("[prop-check] actual-hits=%u failures=%u\n", props.GetHitCount(), props.GetFailures());
         std::printf("[survival-check] wave=%d kills=%u alive=%d spawned=%u invalid=%u failures=%u\n",
-            session.GetLevel().GetWave(), session.GetKills(), session.CountEnemies(), scene.spawned, scene.invalidSpawns, checkFailures);
+            session.GetLevel().GetWave(), session.GetKills(), session.CountEnemies(), scene.GetSpawnCount(), scene.GetInvalidSpawnCount(), checkFailures);
         // CEnemySpawner::GetSpawnPointOffScreen keeps rule-driven spawns out of
         // the camera rectangle; on-screen ones would be the "in your face" case.
         if (session.GetOnScreenSpawns() != 0) { ++checkFailures; }
@@ -751,7 +751,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         std::printf("[survival-check] shots=%zu sounds=%zu player=%.1f,%.1f stun=%d brother=%d\n",
             effects.GetShotCount(), effects.GetSoundCueCount(), scene.GetPlayer().x, scene.GetPlayer().y,
             vitals.stunMs, player.weapon->brother.GetStateId());
-        for (const auto &actor : scene.enemies) {
+        for (const auto &actor : scene.GetEnemies()) {
             const ZEnemyCombat &enemy = actor->model.enemy.combat;
             if (!enemy.dead) {
                 std::printf("[survival-check] alive %s pos=%.1f,%.1f health=%.1f state=%d behaviour=%d\n",

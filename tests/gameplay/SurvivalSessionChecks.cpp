@@ -20,7 +20,7 @@ unsigned CheckLevelSounds(CLevel &level, ZWeaponEffects &effects) {
     std::printf("[level-sound-check] references=%u failures=%u\n", checked, failures);
     return failures;
 }
-unsigned CheckTriggerRoutes(CGame &session, CMap &map, ZCombatWorld &scene, float startX, float startY, float startFacing) {
+unsigned CheckTriggerRoutes(CGame &session, CMap &map, CLevel &scene, float startX, float startY, float startFacing) {
     CLevel &level = session.GetLevel();
     unsigned failures = 0, tested = 0;
     for (unsigned layerIndex = 0; layerIndex < map.GetCollisionLayerCount(); ++layerIndex) {

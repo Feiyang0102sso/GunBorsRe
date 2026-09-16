@@ -49,7 +49,7 @@ void BuildMarkers(const ZLoadedMap &loaded, ZMarkerBatch &markers,
 }
 
 /** Convert world anchors and native pixel sizes to the HUD's logical canvas. */
-void ProjectEnemyHealthBars(std::vector<ZCombatWorld::HealthBar> &bars,
+void ProjectEnemyHealthBars(std::vector<CLevel::HealthBar> &bars,
     float cameraX, float cameraY, float zoom, int width, int height) {
     for (auto &bar : bars) {
         bar.x = (bar.x - cameraX) * zoom * 1024 / width;
@@ -73,7 +73,7 @@ bool MapItemDrawsBefore(const ZMapRenderItem &left, const ZMapRenderItem &right)
  * The caller has already drawn tiles and every prop's background slot.
  */
 void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram &program,
-                const float *mapMvp, bool showProps , ZCombatWorld *scene ,
+                const float *mapMvp, bool showProps , CLevel *scene ,
                 ZPlayerModel *brotherModel , float brotherY , int viewportWidth ) {
     std::vector<ZMapRenderItem> items;
     items.reserve(loaded.props.size() + loaded.enemies.size() + loaded.players.size());
@@ -129,7 +129,7 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
             Matrix4dMultiply(mapMvp, world, item.matrix);
             items.push_back(item);
         }
-        for (const auto &actor : scene->enemies) {
+        for (const auto &actor : scene->GetEnemies()) {
             ZMapRenderItem item;
             item.y = static_cast<int>(actor->model.enemy.combat.y);
             item.enemy = &actor->model;

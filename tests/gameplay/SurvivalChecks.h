@@ -37,12 +37,12 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture);
 int CheckSurvivalPowerupCapture(SurvivalPowerupCaptureFixture fixture);
 
 unsigned CheckLevelSounds(CLevel &level, ZWeaponEffects &effects);
-unsigned CheckTriggerRoutes(CGame &session, CMap &map, ZCombatWorld &scene, float startX, float startY, float startFacing);
+unsigned CheckTriggerRoutes(CGame &session, CMap &map, CLevel &scene, float startX, float startY, float startFacing);
 
 namespace MapDetail {
 // Exercise the real SDL event queue and CWindow recognizer, including held S.
 bool PushBossCheckKey(ZWindow &window, char letter, bool repeat = false, bool checkMovement = false);
 
-unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const ZCombatWorld &scene);
+unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const CLevel &scene);
 unsigned CheckPropDamageContracts(const ZLoadedMap &map);
 }

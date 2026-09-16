@@ -6,7 +6,7 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "engine/graphics/ZMarkerBatch.h"
 #include "engine/core/ZMatrix4d.h"
@@ -35,5 +35,5 @@ struct ArenaScene {
     ZPlayerModel &player;
     ZPlayerVitals &vitals;
     ZWeaponEffects &effects;
-    ZCombatWorld &scene;
+    CLevel &scene;
 };

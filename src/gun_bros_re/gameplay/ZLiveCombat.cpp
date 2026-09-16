@@ -2,12 +2,11 @@
  * CPlayer::AddExperience/AddXplodium and StatisticPacket; evidence in tests.
  */
 #define NOMINMAX
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include <cmath>
 
-void ZCombatWorld::UpdatePeerIndicator(unsigned deltaMs, float left, float top, float width, float height) {
+void CLevel::UpdatePeerIndicator(unsigned deltaMs, float left, float top, float width, float height) {
     if ((!m_localLive && !IsDeathmatch()) || m_brother == nullptr || m_brotherModel == nullptr) { m_peerIndicatorVisible = false; return; }
     if (IsMatchSpawnPending(1)) { m_peerIndicatorVisible = false; return; }
     // CRemotePlayer::Update :229709 compares CBrother's native bounds with
@@ -30,7 +29,7 @@ void ZCombatWorld::UpdatePeerIndicator(unsigned deltaMs, float left, float top, 
     }
 }
 
-bool ZCombatWorld::SetReviveResources(const CScript &script) {
+bool CLevel::SetReviveResources(const CScript &script) {
     const auto &resources = script.GetResources();
     if (resources.size() < 4) { return false; }
     for (unsigned index = 0; index < 2; ++index) {
@@ -42,13 +41,13 @@ bool ZCombatWorld::SetReviveResources(const CScript &script) {
     return true;
 }
 
-void ZCombatWorld::SetGunConfiguration(unsigned peer, unsigned slot, const GameObjectRef &ref, unsigned masteryLimit) {
+void CLevel::SetGunConfiguration(unsigned peer, unsigned slot, const GameObjectRef &ref, unsigned masteryLimit) {
     m_gunConfigurations[peer][slot] = ref;
     m_gunMasteryLimits[peer][slot] = masteryLimit;
     if (peer == 1 && m_brotherModel != nullptr && slot == m_brotherWeaponSlot) { m_brotherModel->gunResource = ref; }
 }
 
-void ZCombatWorld::CreditAssistMastery(unsigned peer, unsigned slot, unsigned experience) {
+void CLevel::CreditAssistMastery(unsigned peer, unsigned slot, unsigned experience) {
     const auto &ref = m_gunConfigurations[peer][slot];
     const auto limit = m_gunMasteryLimits[peer][slot];
     if (ref.IsNull()) { return; }
@@ -57,27 +56,24 @@ void ZCombatWorld::CreditAssistMastery(unsigned peer, unsigned slot, unsigned ex
         if (m_peerProfile != nullptr) { m_peerProfile->AddWeaponExperience(ref, experience, limit); }
         return;
     }
-    for (auto &entry : m_weaponProgress) {
-        if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) { entry.experience += experience; return; }
-    }
-    m_weaponProgress.push_back({ref, experience, limit});
+    CreditWeaponProgress(ref, experience, limit);
 }
 
-bool ZCombatWorld::BrotherIsCloser(float x, float y) const {
+bool CLevel::BrotherIsCloser(float x, float y) const {
     if (m_brother == nullptr || IsMatchSpawnPending(1)) { return false; }
     if (IsMatchSpawnPending(0)) { return true; }
     return std::hypot(m_brother->x - x, m_brother->y - y) < std::hypot(m_actor.x - x, m_actor.y - y);
 }
-bool ZCombatWorld::BrotherTouchesPickup(float x, float y) const {
+bool CLevel::BrotherTouchesPickup(float x, float y) const {
     if ((!m_localLive && !IsDeathmatch()) || m_brother == nullptr || IsMatchSpawnPending(1) || m_brother->vitals.dead) { return false; }
     return std::hypot(x - m_brother->x, y - m_brother->y) <= m_playerRadius + 10;
 }
 
-void ZCombatWorld::ClearWaveStatistics() {
+void CLevel::ClearWaveStatistics() {
     for (auto &stats : m_multiplayer) { stats.wave = {}; }
 }
 
-void ZCombatWorld::AddPeerExperience(unsigned amount) {
+void CLevel::AddPeerExperience(unsigned amount) {
     if ((!m_localLive && !IsDeathmatch()) || m_peerProgress == nullptr || IsTeamDeathComplete()) { return; }
     const auto before = m_peerProgress->GetExperience();
     const float fraction = m_brother->vitals.health / m_brother->vitals.maximum;
@@ -90,11 +86,11 @@ void ZCombatWorld::AddPeerExperience(unsigned amount) {
     m_multiplayer[1].total.experience += earned;
 }
 
-void ZCombatWorld::AddPeerXplodium(unsigned amount) {
+void CLevel::AddPeerXplodium(unsigned amount) {
     if ((!m_localLive && !IsDeathmatch()) || IsTeamDeathComplete()) { return; }
     auto &stats = m_multiplayer[1];
     unsigned percent = 100;
-    if (m_level != nullptr) { percent = static_cast<unsigned>(std::max(0, m_level->GetXplodiumMultiplierPercent())); }
+    percent = static_cast<unsigned>(std::max(0, GetXplodiumMultiplierPercent()));
     const std::uint64_t scaled = static_cast<std::uint64_t>(amount) * percent + stats.xplodiumRemainder;
     stats.wave.xplodium += scaled / 100;
     stats.total.xplodium += scaled / 100;

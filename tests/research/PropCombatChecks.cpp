@@ -27,7 +27,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
         // This fixture isolates props; no player damage or account is needed.
         vitals.dead = true;
         ZWeaponEffects effects(toc, tables, program);
-        ZCombatWorld scene(tables, program, enemies, player, vitals, effects, 1.0f);
+        CLevel scene(tables, program, enemies, player, vitals, effects, 1.0f);
         CLevel level;
         CLevel::Template levelTemplate;
         level.Bind(levelTemplate, loaded.map);

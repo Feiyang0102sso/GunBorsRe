@@ -2,7 +2,7 @@
 #include "gun_bros_re/data/ZLocalBotFriend.h"
 using namespace MapDetail;
 bool SaveSurvivalProgress(ZSurvivalGameContext *context, const CPlayerProgress &progress,
-    const ZCombatWorld &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded ) {
+    const CLevel &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded ) {
     if (context == nullptr || !context->persistProgress) { return true; }
     // Deathmatch consumes account inventory but never advances survival waves.
     if (scene.IsDeathmatch()) {

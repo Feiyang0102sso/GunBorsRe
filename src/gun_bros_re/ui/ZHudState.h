@@ -11,7 +11,7 @@
 #include "gun_bros_re/gameplay/CLevelIndicator.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 
 enum class ZInputPadAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
     BroOps, SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks,
@@ -61,7 +61,7 @@ struct ZInputPadState {
     float brotherLabelX = 0, brotherLabelY = 0, brotherLabelAlpha = 0;
     GameObjectRef guns[2], powerup;
     std::vector<CLevelIndicator> indicators;
-    std::vector<ZCombatWorld::HealthBar> enemyHealthBars;
+    std::vector<CLevel::HealthBar> enemyHealthBars;
 };
 
 #endif

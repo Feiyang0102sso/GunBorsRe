@@ -9,11 +9,12 @@
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
 #include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/gameplay/ZPowerupScene.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
 #include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/data/CFriendPowerManager.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 
 #include <cstdio>
 #include <algorithm>
@@ -21,6 +22,8 @@
 
 // CBrother constructor :139098; CPlayer::Move uses the full radius for triggers.
 constexpr float kBrotherTriggerRadius = 22.0f;
+// CEffectLayer::AddTextEffect :66884 has twenty fixed text-effect slots.
+constexpr unsigned kTextEffectCapacity = 20;
 
 void CLevel::FocusCameraOnEnemy(float x, float y) {
     if (m_map == nullptr) { return; }
@@ -91,40 +94,38 @@ CLevel::CLevel() : m_template(nullptr), m_map(nullptr), m_unimplementedCalls(0) 
     for (std::uint32_t i = 0; i < kLevelVariableCount; ++i) {
         m_variables[i] = 0;
     }
+    for (auto &enemy : m_enemyMultipliers) {
+        for (float &multiplier : enemy) { multiplier = 1; }
+    }
 }
 
-void CLevel::AttachRuntime(CGame &game, ZCombatWorld &scene,
-    const std::vector<ZEnemyTemplateData> &catalog) {
+void CLevel::AttachRuntime(CGame &game, const std::vector<ZEnemyTemplateData> &catalog) {
     m_game = &game;
-    m_scene = &scene;
     m_catalog = &catalog;
-    scene.SetLevel(this);
+    m_objects.SetLevel(this);
 }
 
-void CLevel::BindWorldObjects(ZPropWorld *props, ZPickupScene *pickups,
-    ZWeaponEffects *effects, ZPowerupScene *powerups, ZPowerupScene *peerPowerups) {
-    m_props = props;
-    m_pickups = pickups;
-    m_effects = effects;
-    m_powerups = powerups;
-    m_peerPowerups = peerPowerups;
+void CLevel::SetViewSize(float width, float height) {
+    m_viewWidth = width;
+    m_viewHeight = height;
 }
 
 void CLevel::ResetWorld(float x, float y, float facingDegrees) {
-    if (m_scene == nullptr) { return; }
-    m_scene->Reset();
+    if (m_playerModel == nullptr) { return; }
+    Reset();
     if (m_powerups != nullptr) { m_powerups->Reset(); }
     if (m_peerPowerups != nullptr) { m_peerPowerups->Reset(); }
     if (m_pickups != nullptr) { m_pickups->Reset(); }
     if (m_props != nullptr) { m_props->Reset(); }
-    m_scene->GetPlayer().x = x;
-    m_scene->GetPlayer().y = y;
+    GetPlayer().x = x;
+    GetPlayer().y = y;
     // CBrother::Spawn :135887 writes one spawn angle to both brothers.
-    m_scene->GetPlayer().facing = facingDegrees;
-    m_scene->ResetBrotherPosition(x, y, facingDegrees);
+    GetPlayer().facing = facingDegrees;
+    ResetBrotherPosition(x, y, facingDegrees);
     m_spawnSerial = 0;
     m_closestSpawnDistance = -1;
     m_onScreenSpawns = 0;
+    BeginCombatFrame();
 }
 
 void CLevel::Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world, int startWave) {
@@ -135,7 +136,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world, 
     map.GetCamera().Reset(0.8f);
     map.UnlockAllPathNodes();
     m_world = world;
-    if (m_world == nullptr && m_scene != nullptr) { m_world = this; }
+    if (m_world == nullptr && m_playerModel != nullptr) { m_world = this; }
     m_spawner.Bind(*this, m_world);
     m_timerMs = 0;
     m_timerFunction = -1;
@@ -436,7 +437,7 @@ void CLevel::UpdateScript(int deltaMs) {
 }
 
 void CLevel::Update(int deltaMs) {
-    if (m_scene == nullptr) {
+    if (m_playerModel == nullptr) {
         UpdateScript(deltaMs);
         return;
     }
@@ -444,7 +445,7 @@ void CLevel::Update(int deltaMs) {
 }
 
 void CLevel::Update(int deltaMs, float moveX, float moveY, bool fire, bool advanceScript) {
-    if (deltaMs <= 0 || m_scene == nullptr || m_map == nullptr) { return; }
+    if (deltaMs <= 0 || m_playerModel == nullptr || m_map == nullptr) { return; }
     // CLevel::Update :121255 advances the active powerup before its pause gate.
     if (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive()) {
         m_peerPowerups->Update(deltaMs);
@@ -463,46 +464,44 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool fire, bool advan
     const int worldDeltaMs = TransformWorldElapseMS(deltaMs);
     m_map->GetCamera().Update(worldDeltaMs);
     if (m_cleared) {
-        m_scene->Update(worldDeltaMs, 0, 0, false);
+        Update(worldDeltaMs, 0, 0, false);
         UpdateCamera(worldDeltaMs);
         return;
     }
 
-    CheckForCameraChange(m_scene->GetPlayer().x, m_scene->GetPlayer().y);
+    CheckForCameraChange(GetPlayer().x, GetPlayer().y);
     if (advanceScript) { UpdateScript(deltaMs); }
-    m_scene->SetPathLayer(m_pathLayer);
-    const float previousX = m_scene->GetPlayer().x;
-    const float previousY = m_scene->GetPlayer().y;
+    const float previousX = GetPlayer().x;
+    const float previousY = GetPlayer().y;
     if (!m_playerCanMove) { moveX = 0; moveY = 0; }
     if (!m_playerCanShoot) { fire = false; }
-    m_scene->Update(worldDeltaMs, moveX, moveY, fire);
+    Update(worldDeltaMs, moveX, moveY, fire);
     UpdateMapInteractions(previousX, previousY);
 
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
     if (m_peerPowerups != nullptr) { m_peerPowerups->Update(deltaMs); }
     if (m_props != nullptr) { m_props->Update(worldDeltaMs); }
     if (m_pickups != nullptr && m_effects != nullptr) {
-        for (const ZPickupSpawn &spawn : m_scene->pickupSpawns) {
+        for (const PendingPickup &spawn : m_pendingPickups) {
             SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0);
         }
-        m_pickups->Update(worldDeltaMs, *m_scene, *m_effects);
+        m_pickups->Update(worldDeltaMs, *this, *m_effects);
         for (const ZPickupCollection &pickup : m_pickups->collections) {
             if (m_match != nullptr && pickup.objectId >= CMPMatch::PickupIdBase &&
-                !m_scene->CollectMatchWeapon(pickup.peer, pickup.objectId - CMPMatch::PickupIdBase)) {
-                ++m_scene->invalidSpawns;
+                !CollectMatchWeapon(pickup.peer, pickup.objectId - CMPMatch::PickupIdBase)) {
+                RecordInvalidSpawn();
             }
             OnPickupCollected(pickup.objectId, pickup.resource);
         }
     }
-    for (std::uint8_t event : m_scene->levelEvents) { HandleEvent(event); }
-    if (m_match != nullptr) { m_scene->UpdateDeathmatch(deltaMs); }
-    for (const auto &event : m_scene->teleports) { OnEnemyTeleport(event.objectId, event.enemy); }
-    for (const ZCombatDeath &death : m_scene->deaths) { OnEnemyKilled(death.objectId, death.enemy); }
+    for (std::uint8_t event : m_pendingLevelEvents) { HandleEvent(event); }
+    if (m_match != nullptr) { UpdateDeathmatch(deltaMs); }
+    for (const PendingTeleport &event : m_pendingTeleports) { OnEnemyTeleport(event.objectId, event.enemy); }
     UpdateCamera(worldDeltaMs);
 }
 
 void CLevel::UpdateAfterDeath(int deltaMs) {
-    if (deltaMs <= 0 || m_scene == nullptr || m_map == nullptr) { return; }
+    if (deltaMs <= 0 || m_playerModel == nullptr || m_map == nullptr) { return; }
     if (!IsDeathComplete()) {
         Update(deltaMs, 0, 0, false, true);
         return;
@@ -512,14 +511,14 @@ void CLevel::UpdateAfterDeath(int deltaMs) {
         return;
     }
     m_map->GetCamera().Update(deltaMs);
-    m_scene->Update(deltaMs, 0, 0, false);
+    Update(deltaMs, 0, 0, false);
     if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
     UpdateCamera(deltaMs);
 }
 
 bool CLevel::IsDeathComplete() const {
     if (IsPowerupMovieActive()) { return false; }
-    return m_scene != nullptr && m_scene->IsTeamDeathComplete();
+    return m_playerModel != nullptr && IsTeamDeathComplete();
 }
 
 bool CLevel::IsPowerupMovieActive() const {
@@ -630,6 +629,237 @@ void CLevel::OnEnemyKilled(int objectId, const GameObjectRef &enemy) {
     }
     m_interpreter.CallExportFunction(5, static_cast<std::int16_t>(objectId),
         static_cast<std::int16_t>(resourceIndex));
+}
+
+void CLevel::BeginCombatFrame() {
+    m_pendingLevelEvents.clear();
+    m_pendingTeleports.clear();
+    m_pendingPickups.clear();
+}
+
+void CLevel::QueueEnemyTeleport(int objectId, const GameObjectRef &enemy) {
+    m_pendingTeleports.push_back({objectId, enemy});
+}
+
+void CLevel::QueuePickupSpawn(const GameObjectRef &pickup, float x, float y) {
+    m_pendingPickups.push_back({pickup, x, y});
+}
+
+void CLevel::ResetCombatProgress() {
+    m_weaponProgress.clear();
+    m_casualties.clear();
+    m_challengeKills.clear();
+    m_challengePowerups.clear();
+    m_score = 0;
+    m_killStreak = 0;
+    m_bestKillStreak = 0;
+    m_waveXplodium = m_actor.GetXplodium();
+    m_waveHits = 0;
+    m_lastWaveBonus = 0;
+    m_perfectWaves = 0;
+    m_clearedWaves = 0;
+    m_wavePerfectResults.clear();
+}
+
+std::vector<CChallengeManager::Kill> CLevel::TakeChallengeKills() {
+    std::vector<CChallengeManager::Kill> result = std::move(m_challengeKills);
+    m_challengeKills.clear();
+    return result;
+}
+
+std::vector<GameObjectRef> CLevel::TakeChallengePowerups() {
+    std::vector<GameObjectRef> result = std::move(m_challengePowerups);
+    m_challengePowerups.clear();
+    return result;
+}
+
+void CLevel::AddMatchScore(unsigned points, unsigned streak) {
+    m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL,
+        static_cast<std::uint64_t>(m_score) + points));
+    m_killStreak = streak;
+    m_bestKillStreak = std::max(m_bestKillStreak, m_killStreak);
+}
+
+void CLevel::CreditWeaponProgress(const GameObjectRef &weapon,
+    unsigned experience, unsigned masteryLimit) {
+    for (ZWeaponCombatProgress &entry : m_weaponProgress) {
+        if (entry.resource.packHash == weapon.packHash &&
+            entry.resource.localIndex == weapon.localIndex) {
+            entry.experience += experience;
+            return;
+        }
+    }
+    m_weaponProgress.push_back({weapon, experience, masteryLimit});
+}
+
+void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
+    if (m_actor.GetProgress() == nullptr) { return; }
+    // CLevel::OnEnemyKilled :119609: offset 912 is XP, 876 is Xplodium.
+    // Multiplier attribute 2 is Xplodium; attribute 3 is XP. Both round up.
+    const GameObjectRef &ref = actor.model.enemy.combat.templateRef;
+    const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
+        GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_playerModel, 3) *
+        CFriendPowerManager::Multiplier(m_playerModel->friendCount, 5)));
+    const bool playerKill = actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId;
+    if (m_localLive) {
+        const ZCombatId owner = actor.model.enemy.combat.pendingHit.owner;
+        if (owner == kPlayerCombatId || owner == kBrotherCombatId) {
+            unsigned killer = 0;
+            if (owner == kBrotherCombatId) { killer = 1; }
+            ZMultiplayerStatistics &statistics = m_multiplayer[killer];
+            ++statistics.wave.kills;
+            ++statistics.total.kills;
+            ++statistics.streak;
+            statistics.total.bestStreak = std::max(statistics.total.bestStreak, statistics.streak);
+            const unsigned other = 1 - killer;
+            unsigned assistExperience = experience;
+            if (other == 1 && m_brotherModel != nullptr) {
+                assistExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
+                    GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_brotherModel, 3) *
+                    CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
+            }
+            unsigned assisted = 0;
+            for (unsigned slot = 0; slot < 2; ++slot) {
+                if ((actor.assistMask[other] & (1u << slot)) == 0) { continue; }
+                ++assisted;
+                ++m_multiplayer[other].wave.assists;
+                ++m_multiplayer[other].total.assists;
+                CreditAssistMastery(other, slot, assistExperience);
+            }
+            if (assisted == 0) {
+                unsigned slot = m_playerModel->gunSlot;
+                if (other == 1) { slot = m_brotherWeaponSlot; }
+                // OnEnemyKilledByBro grants mastery without a numerical assist.
+                CreditAssistMastery(other, slot, assistExperience);
+            }
+            if (killer == 1 && m_brotherModel != nullptr) {
+                const unsigned peerExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
+                    GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_brotherModel, 3) *
+                    CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
+                const unsigned peerXplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
+                    GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(*m_brotherModel, 4) *
+                    CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 6)));
+                AddPeerExperience(peerExperience);
+                AddPeerXplodium(peerXplodium);
+                if (!actor.model.enemy.combat.pendingHit.weapon.IsNull()) {
+                    CreditAssistMastery(1,
+                        actor.model.enemy.combat.pendingHit.weaponSlot, peerExperience);
+                }
+            }
+        }
+    }
+
+    bool counted = false;
+    for (ZEnemyCasualty &entry : m_casualties) {
+        if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) {
+            ++entry.count;
+            counted = true;
+            break;
+        }
+    }
+    if (!counted) { m_casualties.push_back({ref, 1, actor.data->owner}); }
+
+    const ZCombatHit &hit = actor.model.enemy.combat.pendingHit;
+    // Original CLevel::OnEnemyKilled :119912, six-byte statistic key.
+    if (playerKill || hit.owner == kBrotherCombatId) {
+        bool recorded = false;
+        for (CChallengeManager::Kill &kill : m_challengeKills) {
+            if (kill.enemy.packHash == ref.packHash && kill.enemy.localIndex == ref.localIndex &&
+                kill.bullet.packHash == hit.bullet.packHash && kill.bullet.localIndex == hit.bullet.localIndex &&
+                kill.group == m_statisticsGroup && kill.critical == hit.critical && kill.player == playerKill) {
+                ++kill.count;
+                recorded = true;
+                break;
+            }
+        }
+        if (!recorded) {
+            m_challengeKills.push_back({ref, hit.bullet, m_statisticsGroup, 1, hit.critical, playerKill});
+        }
+    }
+    if (playerKill && !hit.weapon.IsNull()) {
+        bool credited = false;
+        for (ZWeaponCombatProgress &entry : m_weaponProgress) {
+            if (entry.resource.packHash == hit.weapon.packHash &&
+                entry.resource.localIndex == hit.weapon.localIndex) {
+                entry.experience += experience;
+                credited = true;
+                break;
+            }
+        }
+        if (!credited) {
+            m_weaponProgress.push_back({hit.weapon, experience, hit.weaponMasteryLimit});
+        }
+    }
+
+    if (m_horde) {
+        // CLevel::OnEnemyKilled :119655-119802: bro kills score once, player
+        // kills twice at the current streak multiplier and advance that streak.
+        std::uint64_t points = static_cast<std::uint64_t>(experience) * (m_killStreak + 1);
+        if (playerKill) {
+            points *= 2;
+            ++m_killStreak;
+        }
+        m_bestKillStreak = std::max(m_bestKillStreak, m_killStreak);
+        m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL, m_score + points));
+        if (playerKill) { AddExperience(experience); }
+    } else if (!m_localLive || playerKill) {
+        AddExperience(experience);
+    }
+
+    // CLevel::OnEnemyKilled VA0x950AC captures the projected position once.
+    if ((!m_localLive || playerKill) && m_experienceTexts.size() < kTextEffectCapacity) {
+        const ZEnemyCombat &enemy = actor.model.enemy.combat;
+        ExperienceText text;
+        text.amount = experience;
+        text.x = static_cast<float>(static_cast<int>((enemy.x - m_textViewX) * m_textScaleX));
+        text.y = static_cast<float>(static_cast<int>((enemy.y - m_textViewY) * m_textScaleY));
+        m_experienceTexts.push_back(text);
+    }
+    if (hit.owner == kPlayerCombatId) {
+        const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
+            GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(*m_playerModel, 4) *
+            CFriendPowerManager::Multiplier(m_playerModel->friendCount, 6)));
+        AddXplodium(xplodium);
+    }
+}
+
+void CLevel::ResolveWaveReward(unsigned perfectRewardPercent) {
+    if (m_playerModel != nullptr && m_playerModel->weapon != nullptr) {
+        m_playerModel->weapon->brother.OnWaveCleared();
+    }
+    if (m_brotherModel != nullptr) { m_brotherModel->weapon->brother.OnWaveCleared(); }
+    m_lastWaveBonus = 0;
+    m_wavePerfectResults.push_back(m_vitals->hits == m_waveHits);
+    // CLevel::OnWaveCleared :116980 uses integer percentage and grants at least one.
+    if (m_vitals->hits == m_waveHits) {
+        m_lastWaveBonus = std::max<std::uint64_t>(1,
+            (m_actor.GetXplodium() - m_waveXplodium) * perfectRewardPercent / 100);
+        const std::uint64_t before = m_actor.GetXplodium();
+        AddXplodium(static_cast<unsigned>(m_lastWaveBonus));
+        m_lastWaveBonus = m_actor.GetXplodium() - before;
+        ++m_perfectWaves;
+    }
+    ++m_clearedWaves;
+    std::printf("[progress] wave reward=%llu percent=%u hits=%u perfect=%u/%u\n",
+        m_lastWaveBonus, perfectRewardPercent, m_vitals->hits - m_waveHits,
+        m_perfectWaves, m_clearedWaves);
+    m_waveXplodium = m_actor.GetXplodium();
+    m_waveHits = m_vitals->hits;
+    if (m_localLive && m_brother != nullptr) {
+        ZMultiplayerStatistics &peer = m_multiplayer[1];
+        if (m_brother->vitals.hits == peer.previousHits) {
+            const std::uint64_t bonus = std::max<std::uint64_t>(1,
+                peer.wave.xplodium * perfectRewardPercent / 100);
+            AddPeerXplodium(static_cast<unsigned>(bonus));
+            peer.wave.perfectWaves = 1;
+            ++peer.total.perfectWaves;
+        }
+        if (m_wavePerfectResults.back()) {
+            m_multiplayer[0].wave.perfectWaves = 1;
+            ++m_multiplayer[0].total.perfectWaves;
+        }
+        peer.previousHits = m_brother->vitals.hits;
+    }
 }
 
 void CLevel::SetWave(int wave) {
@@ -817,7 +1047,7 @@ void CLevel::SetTileLayerSpeed(const std::int16_t *arguments, std::uint8_t argum
 }
 
 bool CLevel::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int nodeIndex, int objectId) {
-    if (m_scene == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
+    if (m_playerModel == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
     const bool hasAuthoredRoute = layerIndex >= 0 && nodeIndex >= 0;
     std::size_t entryIndex = 0;
     while (entryIndex < m_catalog->size()) {
@@ -831,15 +1061,15 @@ bool CLevel::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int nodeInde
     if (path == nullptr || path->GetNodes().empty()) { return false; }
     const auto &nodes = path->GetNodes();
     if (nodeIndex < 0) {
-        nodeIndex = m_spawner.GetSpawnPoint(*path, m_scene->GetPlayer().x, m_scene->GetPlayer().y,
+        nodeIndex = m_spawner.GetSpawnPoint(*path, GetPlayer().x, GetPlayer().y,
             m_cameraLeft, m_cameraTop, m_cameraWidth, m_cameraHeight);
     }
     if (nodeIndex < 0 || nodeIndex >= static_cast<int>(nodes.size())) { return false; }
-    ZCombatEnemy *actor = m_scene->Spawn(entryIndex, nodes[nodeIndex].x, nodes[nodeIndex].y);
+    ZCombatEnemy *actor = Spawn(entryIndex, nodes[nodeIndex].x, nodes[nodeIndex].y);
     if (actor == nullptr) { return false; }
     if (objectId < 0) {
-        const float distance = std::hypot(m_scene->GetPlayer().x - nodes[nodeIndex].x,
-            m_scene->GetPlayer().y - nodes[nodeIndex].y);
+        const float distance = std::hypot(GetPlayer().x - nodes[nodeIndex].x,
+            GetPlayer().y - nodes[nodeIndex].y);
         if (m_closestSpawnDistance < 0 || distance < m_closestSpawnDistance) {
             m_closestSpawnDistance = distance;
         }
@@ -859,7 +1089,7 @@ void CLevel::StartObjectLayer(int layer) {
 }
 
 bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
-    if (m_scene == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
+    if (m_playerModel == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
     if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Prop)) {
         if (m_props == nullptr) { return false; }
         return m_props->Spawn(m_objectLayer, objectId);
@@ -874,7 +1104,7 @@ bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
     for (unsigned index = 0; index < m_catalog->size(); ++index) {
         const ZEnemyTemplateData &entry = (*m_catalog)[index];
         if (entry.packHash != object.packHash || entry.ordinal != object.localIndex) { continue; }
-        ZCombatEnemy *actor = m_scene->Spawn(index, object.x, object.y);
+        ZCombatEnemy *actor = Spawn(index, object.x, object.y);
         if (actor == nullptr) { return false; }
         actor->objectId = objectId;
         actor->mapPlaced = true;
@@ -889,8 +1119,8 @@ bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
 }
 
 void CLevel::SendEnemyMessage(int objectId, int message) {
-    if (m_scene == nullptr) { return; }
-    for (const auto &actor : m_scene->enemies) {
+    if (m_playerModel == nullptr) { return; }
+    for (const auto &actor : GetEnemies()) {
         if (actor->objectId != objectId) { continue; }
         const unsigned before = actor->model.enemy.GetStateId();
         actor->model.enemy.HandleMessage(message);
@@ -903,8 +1133,8 @@ void CLevel::SendEnemyMessage(int objectId, int message) {
 }
 
 void CLevel::SetEnemyPortal(int enemyId, int propId) {
-    if (m_scene == nullptr) { return; }
-    for (const auto &actor : m_scene->enemies) {
+    if (m_playerModel == nullptr) { return; }
+    for (const auto &actor : GetEnemies()) {
         if (actor->objectId != enemyId) { continue; }
         actor->model.enemy.combat.portalObjectId = propId;
         actor->model.enemy.combat.portalActive = false;
@@ -930,16 +1160,17 @@ void CLevel::PlayLevelSound(const GameObjectRef &sound) {
 }
 
 void CLevel::OnWaveCleared(unsigned perfectRewardPercent) {
+    if (m_playerModel != nullptr) { ResolveWaveReward(perfectRewardPercent); }
     if (m_game != nullptr) { m_game->OnWaveCleared(perfectRewardPercent); }
 }
 
 bool CLevel::SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) {
-    if (m_scene == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
+    if (m_playerModel == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
     if (layer < 0) { layer = m_pathLayer; }
     ILayerPath *path = m_map->GetPathLayer(layer);
     if (path == nullptr || path->GetNodes().empty()) { return false; }
     const auto &nodes = path->GetNodes();
-    if (nearby) { node = path->FindNearest(m_scene->GetPlayer().x, m_scene->GetPlayer().y); }
+    if (nearby) { node = path->FindNearest(GetPlayer().x, GetPlayer().y); }
     if (node < 0) {
         for (unsigned attempt = 0; attempt < nodes.size(); ++attempt) {
             const unsigned candidate = (m_spawnSerial + attempt) % nodes.size();
@@ -961,18 +1192,18 @@ bool CLevel::SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int ob
 }
 
 bool CLevel::SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) {
-    if (m_match == nullptr || m_scene == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
+    if (m_match == nullptr || m_playerModel == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
     ILayerPath *path = m_map->GetPathLayer(layer);
     if (path == nullptr || path->GetNodes().empty()) { return false; }
     const auto &nodes = path->GetNodes();
     const unsigned start = static_cast<unsigned>(RandomInteger(0, static_cast<std::int16_t>(nodes.size() - 1)));
     for (unsigned offset = 0; offset < nodes.size(); ++offset) {
         const auto &node = nodes[(start + offset) % nodes.size()];
-        if (node.locked || !m_scene->CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
+        if (node.locked || !CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
         float nearestX = 0;
         float nearestY = 0;
         if (m_pickups->FindNearest(node.x, node.y, nearestX, nearestY) &&
-            std::hypot(nearestX - node.x, nearestY - node.y) < m_scene->GetPlayerRadius() * 2) {
+            std::hypot(nearestX - node.x, nearestY - node.y) < GetPlayerRadius() * 2) {
             continue;
         }
         const int candidate = m_match->ChoosePickup();
@@ -983,12 +1214,12 @@ bool CLevel::SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) {
 }
 
 std::uint64_t CLevel::ResolveIndicatorTarget(int objectId) const {
-    if (m_scene == nullptr) { return 0; }
+    if (m_playerModel == nullptr) { return 0; }
     if (m_props != nullptr) {
         const unsigned key = m_props->ResolveIndicatorTarget(objectId);
         if (key != 0) { return (2ULL << 32) | key; }
     }
-    for (const auto &actor : m_scene->enemies) {
+    for (const auto &actor : GetEnemies()) {
         if (actor->objectId == objectId && !actor->model.enemy.combat.dead && !actor->model.enemy.combat.removed) {
             return actor->model.enemy.combat.id;
         }
@@ -997,14 +1228,14 @@ std::uint64_t CLevel::ResolveIndicatorTarget(int objectId) const {
 }
 
 bool CLevel::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
-    if (m_scene == nullptr) { return false; }
+    if (m_playerModel == nullptr) { return false; }
     if ((key >> 32) == 2) {
         return m_props != nullptr && m_props->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
     if ((key >> 32) == 1) {
         return m_pickups != nullptr && m_pickups->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
-    ZCombatEnemy *actor = m_scene->Find(static_cast<ZCombatId>(key));
+    const ZCombatEnemy *actor = Find(static_cast<ZCombatId>(key));
     if (actor == nullptr || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { return false; }
     x = actor->model.enemy.combat.x;
     y = actor->model.enemy.combat.y;
@@ -1012,8 +1243,8 @@ bool CLevel::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
 }
 
 bool CLevel::GetObjectPosition(int objectId, float &x, float &y) const {
-    if (m_scene == nullptr) { return false; }
-    for (const auto &actor : m_scene->enemies) {
+    if (m_playerModel == nullptr) { return false; }
+    for (const auto &actor : GetEnemies()) {
         if (actor->objectId != objectId || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { continue; }
         x = actor->model.enemy.combat.x;
         y = actor->model.enemy.combat.y;
@@ -1024,9 +1255,9 @@ bool CLevel::GetObjectPosition(int objectId, float &x, float &y) const {
 }
 
 int CLevel::CountEnemySlots(const GameObjectRef *enemy) const {
-    if (m_scene == nullptr) { return 0; }
+    if (m_playerModel == nullptr) { return 0; }
     int count = 0;
-    for (const auto &actor : m_scene->enemies) {
+    for (const auto &actor : GetEnemies()) {
         if (actor->model.enemy.combat.removed) { continue; }
         if (enemy == nullptr || (actor->data->packHash == enemy->packHash && actor->data->ordinal == enemy->localIndex)) {
             ++count;
@@ -1036,9 +1267,9 @@ int CLevel::CountEnemySlots(const GameObjectRef *enemy) const {
 }
 
 int CLevel::CountEnemies(const GameObjectRef *enemy, int objectId) const {
-    if (m_scene == nullptr) { return 0; }
+    if (m_playerModel == nullptr) { return 0; }
     int count = 0;
-    for (const auto &actor : m_scene->enemies) {
+    for (const auto &actor : GetEnemies()) {
         const ZEnemyCombat &state = actor->model.enemy.combat;
         if (state.dead || state.removed) { continue; }
         if (objectId >= 0 && actor->objectId != objectId) { continue; }
@@ -1050,13 +1281,13 @@ int CLevel::CountEnemies(const GameObjectRef *enemy, int objectId) const {
 }
 
 void CLevel::UpdateMapInteractions(float previousX, float previousY) {
-    if (m_scene == nullptr || m_map == nullptr || m_scene->IsMatchSpawnPending(0)) { return; }
+    if (m_playerModel == nullptr || m_map == nullptr || IsMatchSpawnPending(0)) { return; }
     if (m_archive) {
         const float scaleRatio = 0.8f / m_map->GetCamera().GetScale();
         const float viewWidth = m_viewWidth * scaleRatio;
         const float viewHeight = m_viewHeight * scaleRatio;
-        float left = m_scene->GetPlayer().x - viewWidth * 0.5f;
-        float top = m_scene->GetPlayer().y - viewHeight * 0.5f;
+        float left = GetPlayer().x - viewWidth * 0.5f;
+        float top = GetPlayer().y - viewHeight * 0.5f;
         const ZMapRectangle bounds = m_map->GetVisibleBounds();
         if (!bounds.IsEmpty()) {
             if (bounds.width <= viewWidth) { left = bounds.x + (bounds.width - viewWidth) * 0.5f; }
@@ -1075,7 +1306,7 @@ void CLevel::UpdateMapInteractions(float previousX, float previousY) {
         for (const ZCollisionEdge &edge : geometry.GetEdges()) {
             if (!edge.enabled) { continue; }
             const float fraction = CombatGeometry::EdgeFraction(previousX, previousY,
-                m_scene->GetPlayer().x - previousX, m_scene->GetPlayer().y - previousY,
+                GetPlayer().x - previousX, GetPlayer().y - previousY,
                 geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex],
                 kBrotherTriggerRadius);
             if (fraction < nearest) {
@@ -1094,17 +1325,19 @@ unsigned CLevel::GetPowerupCount(unsigned localIndex) const {
 }
 
 void CLevel::UpdateCamera(int deltaMs) {
-    if (m_scene == nullptr || m_map == nullptr) { return; }
+    if (m_playerModel == nullptr || m_map == nullptr) { return; }
     const ZMapRectangle bounds = m_map->GetVisibleBounds();
     const float scale = 0.8f / m_map->GetCamera().GetScale();
-    if (!m_scene->IsMatchSpawnPending(0) || !m_map->GetCamera().HasPosition()) {
-        m_map->GetCamera().UpdatePosition(m_scene->GetPlayer().x, m_scene->GetPlayer().y,
+    if (!IsMatchSpawnPending(0) || !m_map->GetCamera().HasPosition()) {
+        m_map->GetCamera().UpdatePosition(GetPlayer().x, GetPlayer().y,
             bounds.x, bounds.y, bounds.width, bounds.height, m_viewWidth * scale, m_viewHeight * scale);
     }
-    m_scene->SetViewCenter(m_map->GetCamera().GetX(), m_map->GetCamera().GetY());
+    SetViewCenter(m_map->GetCamera().GetX(), m_map->GetCamera().GetY());
     const float width = m_viewWidth * scale;
     const float height = m_viewHeight * scale;
-    m_scene->SetViewSize(width, height);
+    if (m_effects != nullptr) {
+        m_effects->SetViewBounds(GetViewCenterX(), GetViewCenterY(), width, height);
+    }
     m_cameraLeft = m_map->GetCamera().GetX() - width * 0.5f;
     m_cameraTop = m_map->GetCamera().GetY() - height * 0.5f;
     m_cameraWidth = width;

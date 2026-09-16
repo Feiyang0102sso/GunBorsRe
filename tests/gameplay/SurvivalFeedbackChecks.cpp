@@ -123,7 +123,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // has no hit handler. A dormant original turret must not swallow a
             // penetrating round before it reaches the ordinary enemy behind it.
             ZWeaponEffects probeEffects(toc, tables, program);
-            ZCombatWorld probe(tables, program, enemies, player, vitals, probeEffects, loaded.playerTemplate->gameScale);
+            CLevel probe(tables, program, enemies, player, vitals, probeEffects, loaded.playerTemplate->gameScale);
             probe.Reset();
             ZCombatEnemy *front = nullptr, *back = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
@@ -158,10 +158,10 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // is still heading towards it. Same real BULLET template, same
             // update path; only the camera rectangle is supplied here.
             ZWeaponEffects cullEffects(toc, tables, program);
-            ZCombatWorld cullScene(tables, program, enemies, player, vitals, cullEffects, loaded.playerTemplate->gameScale);
+            CLevel cullScene(tables, program, enemies, player, vitals, cullEffects, loaded.playerTemplate->gameScale);
             cullScene.Reset();
             cullScene.SetViewCenter(600, 450);
-            cullScene.SetViewSize(200, 200);  // y in [350, 550]
+            cullEffects.SetViewBounds(600, 450, 200, 200);  // y in [350, 550]
             float cullMatrix[16];
             cullScene.PlayerMatrix(cullMatrix);
             // Both start just below the view. One travels away from it, one
@@ -207,7 +207,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // centre. Check the final screen rectangle, not just its dimensions.
         {
             ZWeaponEffects anchorEffects(toc, tables, program);
-            ZCombatWorld anchorScene(tables, program, enemies, player, vitals, anchorEffects, loaded.playerTemplate->gameScale);
+            CLevel anchorScene(tables, program, enemies, player, vitals, anchorEffects, loaded.playerTemplate->gameScale);
             ZCombatEnemy *target = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 0) {
@@ -255,7 +255,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         for (unsigned kinds = 1; kinds <= 2; ++kinds) {
             std::vector<GameObjectRef> batchDeathSounds;
             ZWeaponEffects deathEffects(toc, tables, program);
-            ZCombatWorld deathScene(tables, program, enemies, player, vitals, deathEffects, loaded.playerTemplate->gameScale);
+            CLevel deathScene(tables, program, enemies, player, vitals, deathEffects, loaded.playerTemplate->gameScale);
             deathScene.Reset();
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal >= kinds) { continue; }
@@ -316,7 +316,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // ... and is audible again once that copy has finished. Its own
             // scene has no actors, so nothing else can cue a sound meanwhile.
             ZWeaponEffects windowEffects(toc, tables, program);
-            ZCombatWorld windowScene(tables, program, enemies, player, vitals, windowEffects, loaded.playerTemplate->gameScale);
+            CLevel windowScene(tables, program, enemies, player, vitals, windowEffects, loaded.playerTemplate->gameScale);
             windowScene.Reset();
             const GameObjectRef &repeated = batchDeathSounds.front();
             windowEffects.PlayMoveSound(repeated);

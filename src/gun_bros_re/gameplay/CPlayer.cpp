@@ -1,6 +1,8 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/CPlayer.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/CLevelObjectPool.h"
+#include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/gameplay/CBrotherAI.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
@@ -12,21 +14,27 @@
 constexpr float kDesktopPlayerSpeed = 220;
 
 CPlayer::CPlayer(ZPlayerModel &model, ZPlayerVitals &vitals)
-    : m_model(model), m_vitals(vitals) {}
+    : m_model(&model), m_vitals(&vitals) {}
+
+void CPlayer::BindActor(ZPlayerModel &model, ZPlayerVitals &vitals) {
+    m_model = &model;
+    m_vitals = &vitals;
+}
 
 void CPlayer::BindProgress(CPlayerProgress *progress) {
     m_progress = progress;
-    if (progress != nullptr) { m_vitals.maximum = progress->GetHealth(); }
+    if (progress != nullptr && m_vitals != nullptr) { m_vitals->maximum = progress->GetHealth(); }
 }
 
 bool CPlayer::AddExperience(unsigned amount, bool updateHealth) {
     if (m_progress == nullptr) { return false; }
-    const float fraction = m_vitals.health / m_vitals.maximum;
+    if (m_vitals == nullptr) { return false; }
+    const float fraction = m_vitals->health / m_vitals->maximum;
     const bool leveled = m_progress->AddExperience(amount);
     // CPlayer::AddExperience :101185 preserves the current health fraction.
     if (leveled && updateHealth) {
-        m_vitals.maximum = m_progress->GetHealth();
-        m_vitals.health = m_vitals.maximum * fraction;
+        m_vitals->maximum = m_progress->GetHealth();
+        m_vitals->health = m_vitals->maximum * fraction;
     }
     return leveled;
 }
@@ -47,7 +55,17 @@ std::uint64_t CPlayer::AddXplodium(unsigned amount, unsigned percent) {
 }
 
 void CPlayer::AddHealth(unsigned amount) {
-    if (!m_vitals.dead) { m_vitals.health = std::min(m_vitals.maximum, m_vitals.health + amount); }
+    if (m_vitals != nullptr && !m_vitals->dead) {
+        m_vitals->health = std::min(m_vitals->maximum, m_vitals->health + amount);
+    }
+}
+
+void CPlayer::BindLevel(CMap &map, const CCollisionData &collision,
+    CLevelObjectPool &objects, float collisionRadius) {
+    m_map = &map;
+    m_collision = &collision;
+    m_objects = &objects;
+    m_collisionRadius = collisionRadius;
 }
 
 void CPlayer::BeginMovement() {
@@ -56,14 +74,14 @@ void CPlayer::BeginMovement() {
 }
 
 bool CPlayer::UpdateMovement(int deltaMs, float moveX, float moveY) {
-    if (m_vitals.dead || m_vitals.stunMs != 0) { return false; }
+    if (m_model == nullptr || m_vitals == nullptr || m_vitals->dead || m_vitals->stunMs != 0) { return false; }
     const float length = std::hypot(moveX, moveY);
-    if (length > 0 && m_model.weapon->brother.CanMove()) {
+    if (length > 0 && m_model->weapon->brother.CanMove()) {
         // Native modifier order: CPlayer::UpdateMovement :101384; PLAYER BT
         // supplies the brother template, equipment supplies armor/gun values.
-        const float speed = kDesktopPlayerSpeed * PlayerArmorMultiplier(m_model, 2) *
-            CFriendPowerManager::Multiplier(m_model.friendCount, 2) * m_model.weapon->brother.GetFrenzyMultiplier(2) *
-            m_model.ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f;
+        const float speed = kDesktopPlayerSpeed * PlayerArmorMultiplier(*m_model, 2) *
+            CFriendPowerManager::Multiplier(m_model->friendCount, 2) * m_model->weapon->brother.GetFrenzyMultiplier(2) *
+            m_model->ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f;
         x += moveX / length * speed * deltaMs * 0.001f;
         y += moveY / length * speed * deltaMs * 0.001f;
     }
@@ -71,32 +89,36 @@ bool CPlayer::UpdateMovement(int deltaMs, float moveX, float moveY) {
 }
 
 void CPlayer::UpdateShooting(int deltaMs, bool moving, bool shoot, ZBrotherAIWorld &world) {
-    if (m_vitals.dead || m_vitals.stunMs != 0) { return; }
+    if (m_model == nullptr || m_vitals == nullptr || m_vitals->dead || m_vitals->stunMs != 0) { return; }
     // CPlayer::UpdateShooting :101312 only targets while the fire stick is
     // active. Desktop mouse-held fire supplies that intent; idle never fires.
-    if (m_model.weapon->brother.IsAutoFire()) {
+    if (m_model->weapon->brother.IsAutoFire()) {
         if (shoot) { shoot = m_autoAim.Update(deltaMs, x, y, facing, world); }
         else { m_autoAim.ClearTarget(facing); }
     } else if (m_autoAim.GetTarget() != 0) { m_autoAim.ClearTarget(facing); }
-    SetPlayerInput(m_model, moving, shoot);
+    SetPlayerInput(*m_model, moving, shoot);
 }
 
 void CPlayer::ApplyKnockback(int deltaMs, float seconds) {
-    if (forceMs > 0 && !m_vitals.dead) {
+    if (forceMs > 0 && m_vitals != nullptr && !m_vitals->dead) {
         x += forceX * seconds;
         y += forceY * seconds;
         forceMs = std::max(0, forceMs - deltaMs);
     }
 }
 
-void CPlayer::Move(const ZCombatWorld &world) {
-    const auto bounds = world.GetPlayerMovementBounds();
+void CPlayer::Move() {
+    if (m_map == nullptr || m_collision == nullptr || m_objects == nullptr) { return; }
+    const ZMapRectangle bounds = m_map->GetCameraExtent();
     // CPlayer::Move :100691-100862: bounds, enemy bodies, then map/prop edges.
-    x = std::clamp(x, bounds.left, bounds.right);
-    y = std::clamp(y, bounds.top, bounds.bottom);
-    const CBrother &player = m_model.weapon->brother;
+    x = std::clamp(x, bounds.x + m_collisionRadius,
+        bounds.x + bounds.width - m_collisionRadius);
+    y = std::clamp(y, bounds.y + m_collisionRadius,
+        bounds.y + bounds.height - m_collisionRadius);
+    if (m_model == nullptr) { return; }
+    const CBrother &player = m_model->weapon->brother;
     if (!player.CanPassEnemies()) {
-        for (const auto &actor : world.enemies) {
+        for (const auto &actor : m_objects->GetEnemies()) {
             const CEnemy &enemy = actor->model.enemy;
             if (!enemy.CanCollideWithPlayer()) { continue; }
             const ZEnemyCombat &state = enemy.combat;
@@ -116,5 +138,20 @@ void CPlayer::Move(const ZCombatWorld &world) {
             }
         }
     }
-    world.ResolveMovement(previousX, previousY, x, y, world.GetPlayerRadius());
+    const ZCollisionPoint position = m_collision->ResolveCircleMovement(
+        ZCollisionPoint(previousX, previousY),
+        ZCollisionPoint(x - previousX, y - previousY), m_collisionRadius);
+    x = position.x;
+    y = position.y;
+}
+
+void CPlayer::Update(int deltaMs, float moveX, float moveY, bool shoot,
+    ZBrotherAIWorld &world, bool moveActor) {
+    BeginMovement();
+    const bool moving = UpdateMovement(deltaMs, moveX, moveY);
+    UpdateShooting(deltaMs, moving, shoot, world);
+    const float forceSeconds = m_model->weapon->brother.GetKnockbackStepSeconds(deltaMs);
+    AdvancePlayer(*m_model, deltaMs);
+    ApplyKnockback(deltaMs, forceSeconds);
+    if (moveActor) { Move(); }
 }

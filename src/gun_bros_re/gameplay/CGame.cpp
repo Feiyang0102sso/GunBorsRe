@@ -7,13 +7,9 @@
 #include "gun_bros_re/data/Mission.h"
 #include <cstdio>
 
-CGame::CGame(ZCombatWorld &scene, CMap &map,
-    const std::vector<ZEnemyTemplateData> &catalog) : m_scene(scene), m_map(map) {
-    m_level.AttachRuntime(*this, scene, catalog);
-}
-
-void CGame::RefreshLevelObjects() {
-    m_level.BindWorldObjects(m_props, m_pickups, m_effects, m_powerups, m_peerPowerups);
+CGame::CGame(CLevel &level, CMap &map,
+    const std::vector<ZEnemyTemplateData> &catalog) : m_level(level), m_map(map) {
+    m_level.AttachRuntime(*this, catalog);
 }
 
 bool CGame::Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
@@ -58,14 +54,14 @@ bool CGame::Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack
                 m_template = std::move(candidate);
                 if (selectedLevel != nullptr) {
                     std::printf("[survival] selected explicit LEVEL %u:%u for MAP %u:%u\n", level.packHash, level.localIndex, mapPack, mapIndex);
-                    return m_scene.PreloadEnemies(m_map.GetRequirements(), m_template.script);
+                    return m_level.PreloadEnemies(m_map.GetRequirements(), m_template.script);
                 }
             }
         }
     }
     if (!requested.IsNull() && selectedLevel == nullptr) {
         std::printf("[survival] selected retail Mission LEVEL %u:%u for MAP %u:%u\n", requested.packHash, requested.localIndex, mapPack, mapIndex);
-        return m_scene.PreloadEnemies(m_map.GetRequirements(), m_template.script);
+        return m_level.PreloadEnemies(m_map.GetRequirements(), m_template.script);
     }
     std::printf("[survival] no retail survival level for requested map\n");
     return false;
@@ -103,8 +99,7 @@ void CGame::Restart(float x, float y, float facingDegrees) {
     if (m_match != nullptr) {
         m_transitionMs = 0;
         m_level.HandleEvent(2);
-        m_scene.SetPathLayer(m_level.GetPathLayer());
-        if (!m_scene.StartDeathmatch()) { ++m_scene.invalidSpawns; }
+        if (!m_level.StartDeathmatch()) { m_level.RecordInvalidSpawn(); }
         if (m_hud != nullptr) { m_hud->BeginDeathmatch(m_match->Data().killLimit); }
     }
     for (const CLayerPathLink &path : m_map.GetPathLinkLayers()) {
@@ -113,15 +108,15 @@ void CGame::Restart(float x, float y, float facingDegrees) {
 }
 
 void CGame::OnWaveCleared(unsigned perfectRewardPercent) {
-    const unsigned previousPerfect = m_scene.GetPerfectWaves();
-    m_scene.OnWaveCleared(perfectRewardPercent);
+    const bool perfect = !m_level.GetWavePerfectResults().empty() &&
+        m_level.GetWavePerfectResults().back();
     SubmitChallenges(false, true);
     // CGame::OnWaveCleared :76246 only shows this sequence for game type 1.
     if (m_hud != nullptr && !m_horde) {
         m_hud->OnWaveClear(m_level.GetRealWave() + 1,
-            m_scene.GetPerfectWaves() > previousPerfect, perfectRewardPercent, m_bossWave);
-        if (m_scene.IsLocalLive() && m_level.GetWave() + 1 < m_level.GetWaveLimit()) {
-            m_hud->BeginLiveWave(m_scene.GetMultiplayerStatistics(0), m_scene.GetMultiplayerStatistics(1));
+            perfect, perfectRewardPercent, m_bossWave);
+        if (m_level.IsLocalLive() && m_level.GetWave() + 1 < m_level.GetWaveLimit()) {
+            m_hud->BeginLiveWave(m_level.GetMultiplayerStatistics(0), m_level.GetMultiplayerStatistics(1));
         }
     }
     m_bossWave = false;
@@ -186,7 +181,7 @@ void CGame::Update(int deltaMs, float moveX, float moveY, bool fire) {
     if (deltaMs <= 0 || m_suspended) { return; }
     if (m_match != nullptr && IsFinished()) {
         if (!m_matchFading) {
-            if (!m_scene.AdvanceDeathmatchEnding(deltaMs)) { return; }
+            if (!m_level.AdvanceDeathmatchEnding(deltaMs)) { return; }
             m_matchEndingHoldMs += deltaMs;
             if (m_matchEndingHoldMs < MatchEndingHoldMs) { return; }
             m_matchFading = true;
@@ -202,7 +197,7 @@ void CGame::Update(int deltaMs, float moveX, float moveY, bool fire) {
         // InterstitialSequenceCallback :86336 emits LEVEL event 2 only after
         // the last authored Movie completes. BOKOR keeps its script clock alive.
         if (m_hud->TakeInterstitialCompletion()) {
-            if (m_scene.IsLocalLive()) { m_scene.ClearWaveStatistics(); }
+            if (m_level.IsLocalLive()) { m_level.ClearWaveStatistics(); }
             m_level.HandleEvent(2);
         }
         // CGame::Update :76581 keeps CLevel::Update running under the Movie.
@@ -244,19 +239,19 @@ void CGame::UpdateAfterDeath(int deltaMs) {
 // CGame submits wave deltas before the HUD's common interstitial sequence.
 bool CGame::SubmitChallenges(bool ended, bool waveCleared) {
     if (!m_challenges || m_challengeSessionEnded) { return true; }
-    m_challengeProfile->experience = m_scene.GetExperience();
+    m_challengeProfile->experience = m_level.GetExperience();
     CChallengeManager::Session data;
     data.level = m_levelReference;
     data.guns = m_challengeProfile->configuration.guns;
     data.gameType = 1;
-    if (m_scene.IsLocalLive()) { data.gameType = 2; }
+    if (m_level.IsLocalLive()) { data.gameType = 2; }
     // Horde is a mission type, not the cooperative GameType=2 requirement.
     data.wave = m_level.GetWave() + 1; // Original +0x4BEEC is the global wave, not modulo revolution.
     data.waveCleared = waveCleared;
-    data.perfect = !m_scene.GetWavePerfectResults().empty() && m_scene.GetWavePerfectResults().back();
+    data.perfect = !m_level.GetWavePerfectResults().empty() && m_level.GetWavePerfectResults().back();
     data.ended = ended;
-    data.kills = m_scene.TakeChallengeKills();
-    data.powerups = m_scene.TakeChallengePowerups();
+    data.kills = m_level.TakeChallengeKills();
+    data.powerups = m_level.TakeChallengePowerups();
     m_challenges->UpdateFromLevelSession(data, *m_challengeWeapons, *m_challengeProfile);
     m_challengeSessionEnded = ended;
     return m_challenges->StoreProgress(*m_challengeProfile);

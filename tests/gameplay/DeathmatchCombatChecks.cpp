@@ -67,12 +67,12 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
     auto &player = fixture.player; auto &opponent = fixture.brotherModel; auto &vitals = fixture.vitals;
     if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
     if (!scene.IsDeathmatch() || dynamic_cast<ZDeathmatchBot *>(&bot) == nullptr || !player.weapon->brother.IsDeathmatch() ||
-        !opponent.weapon->brother.IsDeathmatch() || scene.invalidSpawns != 0) { std::printf("[deathmatch-check] init failed invalid=%u\n", scene.invalidSpawns); return 1; }
+        !opponent.weapon->brother.IsDeathmatch() || scene.GetInvalidSpawnCount() != 0) { std::printf("[deathmatch-check] init failed invalid=%u\n", scene.GetInvalidSpawnCount()); return 1; }
     vitals.invincible = true; bot.vitals.invincible = true;
     const float startX = scene.GetPlayer().x, startY = scene.GetPlayer().y;
     for (unsigned time = 0; time < 35000; time += 16) { session.Update(16, 0, 0, false); }
-    std::printf("[deathmatch-check] initial supply=%u collected=%u invalid=%u sightings=%u\n", pickups.spawned, pickups.collected, scene.invalidSpawns, bot.GetTargetCount());
-    if (pickups.spawned == 0 || scene.invalidSpawns != 0) { return 1; }
+    std::printf("[deathmatch-check] initial supply=%u collected=%u invalid=%u sightings=%u\n", pickups.spawned, pickups.collected, scene.GetInvalidSpawnCount(), bot.GetTargetCount());
+    if (pickups.spawned == 0 || scene.GetInvalidSpawnCount() != 0) { return 1; }
     float supplyX = 0, supplyY = 0;
     if (pickups.FindNearest(scene.GetPlayer().x, scene.GetPlayer().y, supplyX, supplyY)) {
         scene.GetPlayer().x = supplyX; scene.GetPlayer().y = supplyY;
@@ -178,7 +178,7 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
             std::printf("[deathmatch-check] respawn failed dead=%u animation=%u timer=%u\n", bot.vitals.dead, bot.vitals.deathAnimationComplete, match.GetLife(1).respawnMs); return 1;
         }
     }
-    if (!session.IsFinished() || match.GetResult() != CMPMatch::Result::PlayerWon || scene.invalidSpawns != 0) { return 1; }
+    if (!session.IsFinished() || match.GetResult() != CMPMatch::Result::PlayerWon || scene.GetInvalidSpawnCount() != 0) { return 1; }
     // Save the copied fixture twice: kills/ore must be credited once, and
     // survival records and permanent gun selections must remain unchanged.
     const auto previousWaves = context.profile.clearedWaves;

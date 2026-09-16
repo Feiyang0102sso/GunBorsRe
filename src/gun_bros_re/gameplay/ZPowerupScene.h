@@ -5,14 +5,14 @@
 #define GUN_BROS_RE_ZPOWERUPSCENE_H
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/ZPowerupMoviePlayer.h"
 
 class ZPowerupScene {
 public:
     ZPowerupScene(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
-        ZPlayerVitals &vitals, ZCombatWorld &scene, ZWeaponEffects &effects, CProfileManager &profile, ZCombatId owner = kPlayerCombatId);
+        ZPlayerVitals &vitals, CLevel &scene, ZWeaponEffects &effects, CProfileManager &profile, ZCombatId owner = kPlayerCombatId);
     bool Init();
     void SetDeathmatch(CMPMatch *match) { m_match = match; }
     bool UseMatchConsumable(bool grenade);
@@ -61,7 +61,7 @@ private:
     ZPackTables &m_tables;
     ZPlayerModel &m_player;
     ZPlayerVitals &m_vitals;
-    ZCombatWorld &m_scene;
+    CLevel &m_scene;
     ZWeaponEffects &m_effects;
     CProfileManager &m_profile;
     ZPowerupMoviePlayer m_moviePlayer;

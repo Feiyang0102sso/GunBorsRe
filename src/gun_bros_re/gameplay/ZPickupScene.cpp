@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/ZPickupScene.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/ZWeaponEffects.h"
 #include <cstdio>
 
@@ -115,12 +115,12 @@ void ZPickupScene::UpdateEffects(int deltaMs, ZWeaponEffects &effects) {
     }
 }
 
-void ZPickupScene::Update(int deltaMs, ZCombatWorld &scene, ZWeaponEffects &effects) {
+void ZPickupScene::Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects) {
     UpdateEffects(deltaMs, effects);
     collections.clear();
     for (std::size_t index = 0; index < m_instances.size();) {
         Instance &instance = *m_instances[index];
-        instance.pickup.SetLevelContext(scene.GetLevel());
+        instance.pickup.SetLevelContext(&scene);
         const bool playerTouch = scene.TouchesPickup(instance.x, instance.y);
         bool peerTouch = scene.BrotherTouchesPickup(instance.x, instance.y);
         if (playerTouch && peerTouch) {

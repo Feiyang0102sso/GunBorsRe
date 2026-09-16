@@ -6,7 +6,7 @@
  * here are diagnostic only. Lives in src/ because the session loop writes
  * these numbers into its own performance CSV.
  */
-class ZCombatWorld;
+class CLevel;
 
 struct FlockMetrics {
     float nearestMean = 0;
@@ -15,4 +15,4 @@ struct FlockMetrics {
 };
 
 /** Mean and minimum nearest-neighbour distance over the live actors. */
-FlockMetrics MeasureFlock(const ZCombatWorld &scene);
+FlockMetrics MeasureFlock(const CLevel &scene);

@@ -52,7 +52,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
         !Equip(tables, playerData, weapons[weapon], player, program)) { return 1; }
     ZWeaponEffects effects(toc, tables, program);
-    ZCombatWorld scene(tables, program, catalog, player, vitals, effects,
+    CLevel scene(tables, program, catalog, player, vitals, effects,
         playerData.gameScale);
     
     if (onSceneReady != nullptr) {
@@ -180,7 +180,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         effects.Draw(projection, nullptr, 1, ZWeaponDrawPass::BehindPlayer);
         // Actor meshes share a depth buffer; UI and billboards are layered after.
         glEnable(GL_DEPTH_TEST);
-        for (auto &actor : scene.enemies) {
+        for (auto &actor : scene.GetEnemies()) {
             if (actor->model.enemy.combat.removed) { continue; }
             scene.EnemyMatrix(*actor, model);
             Matrix4dMultiply(projection, model, mvp);
@@ -192,7 +192,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         effects.Draw(projection, nullptr, 1, ZWeaponDrawPass::InFrontOfPlayer);
         glDisable(GL_DEPTH_TEST);
         // Every bar uses the same predicate as projectile damage filtering.
-        for (auto &actor : scene.enemies) {
+        for (auto &actor : scene.GetEnemies()) {
             CEnemy &enemy = actor->model.enemy;
             const ZEnemyCombat &state = enemy.combat;
             if (state.removed || state.dead) { continue; }
@@ -232,7 +232,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         unsigned kills = scene.kills, hits = scene.hits;
         float damage = scene.damageDealt;
         unsigned deferred = 0;
-        for (const auto &actor : scene.enemies) {
+        for (const auto &actor : scene.GetEnemies()) {
             const ZEnemyCombat &state = actor->model.enemy.combat;
             kills += state.deathCount; hits += state.hitCount;
             damage += state.totalDamage;
@@ -256,8 +256,8 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         controls.DrawLabel(line, 16, 134, hudWidth - 32, fontHeight, hudProjection);
         std::snprintf(line, sizeof(line), "Alive %zu   Kills %u   Landed hits %u", scene.AliveCount(), kills, hits);
         controls.DrawLabel(line, 16, 158, hudWidth - 32, fontHeight, hudProjection);
-        if (!scene.enemies.empty()) {
-            const ZEnemyCombat &state = scene.enemies.front()->model.enemy.combat;
+        if (!scene.GetEnemies().empty()) {
+            const ZEnemyCombat &state = scene.GetEnemies().front()->model.enemy.combat;
             std::snprintf(line, sizeof(line), "Filter %d   Target type %d", state.variables[16], state.targetType);
             controls.DrawLabel(line, 16, kInfoHeight + 8, hudWidth - 32, fontHeight, hudProjection);
         }

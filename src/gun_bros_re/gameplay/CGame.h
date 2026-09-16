@@ -6,7 +6,6 @@
 
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
 #include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/gameplay/ZPowerupScene.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
@@ -14,14 +13,19 @@
 
 class CInputPad;
 
-/** Owns one active CLevel and the HUD/session state around it. */
+/** Coordinates one active CLevel and the HUD/session state around it. */
 class CGame {
 public:
-    CGame(ZCombatWorld &scene, CMap &map, const std::vector<ZEnemyTemplateData> &catalog);
+    CGame(CLevel &level, CMap &map, const std::vector<ZEnemyTemplateData> &catalog);
     bool Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
         const GameObjectRef *selectedLevel = nullptr, bool archive = false);
     void Restart(float x, float y, float facingDegrees);
-    void SetHorde(bool enabled) { m_horde = enabled; m_archive = false; m_level.SetArchive(false); m_scene.SetHorde(enabled); }
+    void SetHorde(bool enabled) {
+        m_horde = enabled;
+        m_archive = false;
+        m_level.SetArchive(false);
+        m_level.SetHorde(enabled);
+    }
     void SetStartWave(int wave) { m_startWave = wave; }
     void SetDeathmatch(CMPMatch *match) { m_match = match; m_level.SetMatch(match); }
     void SetDialogHud(CInputPad *hud) { m_dialogHud = hud; }
@@ -49,13 +53,13 @@ public:
     void AdvanceBossSkip();
     bool IsBossSkipActive() const { return m_bossSkipActive; }
 
-    void SetProps(ZPropWorld *props) { m_props = props; RefreshLevelObjects(); }
-    void SetPowerups(ZPowerupScene *powerups) { m_powerups = powerups; RefreshLevelObjects(); }
-    void SetPeerPowerups(ZPowerupScene *powerups) { m_peerPowerups = powerups; RefreshLevelObjects(); }
+    void SetProps(ZPropWorld *props) { m_level.SetProps(props); }
+    void SetPowerups(ZPowerupScene *powerups) { m_level.SetPowerups(powerups); }
+    void SetPeerPowerups(ZPowerupScene *powerups) { m_level.SetPeerPowerups(powerups); }
     void SetPickups(ZPickupScene *pickups, ZWeaponEffects *effects) {
-        m_pickups = pickups;
         m_effects = effects;
-        RefreshLevelObjects();
+        m_level.SetPickups(pickups);
+        m_level.SetEffects(effects);
     }
     CLevel &GetLevel() { return m_level; }
     const CLevel &GetLevel() const { return m_level; }
@@ -75,7 +79,6 @@ public:
     unsigned GetPowerupCount(unsigned localIndex) const { return m_level.GetPowerupCount(localIndex); }
 
 private:
-    void RefreshLevelObjects();
     void FinishBossSkip();
     void UpdateDialog(int deltaMs);
 
@@ -86,7 +89,8 @@ private:
     std::int16_t m_bossSkipPreviousFlag = 0;
     std::chrono::steady_clock::time_point m_bossSkipStarted;
     CMPMatch *m_match = nullptr;
-    static constexpr int MatchEndingHoldMs = 100;
+    // Keep the completed BIG death presentation visible before the result fade.
+    static constexpr int MatchEndingHoldMs = 800;
     int m_matchEndingHoldMs = 0;
     bool m_matchFading = false;
     bool m_suspended = false;
@@ -96,8 +100,7 @@ private:
     GameObjectRef m_levelReference;
     bool m_challengeSessionEnded = false;
     CLevel::Template m_template;
-    CLevel m_level;
-    ZCombatWorld &m_scene;
+    CLevel &m_level;
     CMap &m_map;
     int m_transitionMs = 1200;
     int m_transitionDuration = 1200;
@@ -114,11 +117,7 @@ private:
     std::string m_dialogText;
     bool m_dialogBound = false;
     unsigned m_dialogSerial = 0;
-    ZPickupScene *m_pickups = nullptr;
     ZWeaponEffects *m_effects = nullptr;
-    ZPropWorld *m_props = nullptr;
-    ZPowerupScene *m_powerups = nullptr;
-    ZPowerupScene *m_peerPowerups = nullptr;
 };
 
 #endif

@@ -45,12 +45,12 @@ void DrawTutorialDebugNotice(ZMovieRenderer &movies, std::uint64_t ticks) {
     movies.Text(DebugConfig::Tutorial::Exit, exitX, nextLine, style.font, style.scale);
 }
 
-void PopulateSurvivalDebugInfo(ZInputPadState &state, const ZCombatWorld &scene,
+void PopulateSurvivalDebugInfo(ZInputPadState &state, const CLevel &scene,
     const ZWeaponEffects &effects, const std::string &pack, unsigned map, bool collisions) {
     char label[128];
     std::snprintf(label, sizeof(label), DebugConfig::Text::Map, pack.c_str(), map);
     state.debugMap = label;
-    if (scene.GetLevel() != nullptr) { state.levelState = scene.GetLevel()->GetStateId(); }
+    state.levelState = scene.GetStateId();
     state.projectiles = effects.GetBulletCount();
     state.particles = effects.GetParticleCount();
     state.perfectWaves = scene.GetPerfectWaves();

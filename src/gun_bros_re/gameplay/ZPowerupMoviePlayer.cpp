@@ -8,7 +8,7 @@
 #include "gun_bros_re/gameplay/CLevel.h"
 #include <cstdio>
 
-ZPowerupMoviePlayer::ZPowerupMoviePlayer(CResTOCManager &toc, ZPackTables &tables, ZCombatWorld &scene)
+ZPowerupMoviePlayer::ZPowerupMoviePlayer(CResTOCManager &toc, ZPackTables &tables, CLevel &scene)
     : m_toc(toc), m_tables(tables), m_scene(scene) {}
 
 bool ZPowerupMoviePlayer::Start(const ZPowerupEntry &entry, bool fromSelector) {
@@ -34,7 +34,7 @@ bool ZPowerupMoviePlayer::Start(const ZPowerupEntry &entry, bool fromSelector) {
         m_selectorVisible = true;
     }
     m_script.Bind(entry.data);
-    m_script.SetLevelContext(m_scene.GetLevel());
+    m_script.SetLevelContext(&m_scene);
     m_script.Equip();
     m_script.Use(fromSelector);
     m_active = true;
@@ -201,9 +201,9 @@ bool ZPowerupMoviePlayer::Draw() {
 }
 
 void ZPowerupMoviePlayer::Reset() {
-    if (m_active && m_scene.GetLevel() != nullptr) {
+    if (m_active) {
         // Cancel/restart must release the pause even without the script's exit.
-        m_scene.GetLevel()->FunctionResolver(65, nullptr, 0);
+        m_scene.FunctionResolver(65, nullptr, 0);
     }
     m_active = false;
     m_movieActive = false;

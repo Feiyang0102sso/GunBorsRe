@@ -18,7 +18,7 @@ int RunMapOcclusionCheck(const std::string &bigDirectory);
 /** Wave 50 at the reported slow position, with both brothers alive. */
 int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime = false, bool uncachedPaths = false);
 int RunPathCacheCheck();
-class ZCombatWorld;
+class CLevel;
 int RunFlockCheck(const std::string &bigDirectory);
-int CheckFlockMovement(ZCombatWorld &scene);
+int CheckFlockMovement(CLevel &scene);
 int RunFlockPerformanceCheck(const std::string &bigDirectory);

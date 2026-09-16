@@ -406,7 +406,7 @@ void BuildCollisionScene(ZLoadedMap &loaded);
 constexpr float kLevelCameraScale = 0.8f;
 
 /** Convert world anchors and native pixel sizes to the HUD's logical canvas. */
-void ProjectEnemyHealthBars(std::vector<ZCombatWorld::HealthBar> &bars,
+void ProjectEnemyHealthBars(std::vector<CLevel::HealthBar> &bars,
     float cameraX, float cameraY, float zoom, int width, int height);
 
 /** "3 player spawns, 41 enemy spawns" -- what the K overlay should show. */
@@ -488,7 +488,7 @@ bool MapItemDrawsBefore(const ZMapRenderItem &left, const ZMapRenderItem &right)
  * The caller has already drawn tiles and every prop's background slot.
  */
 void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram &program,
-                const float *mapMvp, bool showProps = true, ZCombatWorld *scene = nullptr,
+                const float *mapMvp, bool showProps = true, CLevel *scene = nullptr,
                 ZPlayerModel *brotherModel = nullptr, float brotherY = 0, int viewportWidth = 1);
 
 /** How many objects of one type a map places. */
@@ -583,4 +583,4 @@ CResPackTOC *OpenPack(CResTOCManager &tocManager, const std::string &bigDirector
 }
 
 bool SaveSurvivalProgress(ZSurvivalGameContext *context, const CPlayerProgress &progress,
-    const ZCombatWorld &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded = false );
+    const CLevel &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded = false );

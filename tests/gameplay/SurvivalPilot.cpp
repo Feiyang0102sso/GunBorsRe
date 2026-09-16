@@ -16,7 +16,7 @@ constexpr float kAttackDistance = 120;
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
 }
 
-SurvivalPilot::SurvivalPilot(ZCombatWorld &scene, const ZMapRectangle &bounds) : m_scene(scene) {
+SurvivalPilot::SurvivalPilot(CLevel &scene, const ZMapRectangle &bounds) : m_scene(scene) {
     const float margin = scene.GetPlayerRadius() + 2;
     const int columns = static_cast<int>((bounds.width - margin * 2) / kGridSpacing) + 1;
     const int rows = static_cast<int>((bounds.height - margin * 2) / kGridSpacing) + 1;
@@ -132,7 +132,7 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     m_retreatMs = std::max(0, m_retreatMs - deltaMs);
     m_noDamageMs += deltaMs;
     float damage = m_scene.damageDealt;
-    for (const auto &actor : m_scene.enemies) { damage += actor->model.enemy.combat.totalDamage; }
+    for (const auto &actor : m_scene.GetEnemies()) { damage += actor->model.enemy.combat.totalDamage; }
     if (damage != m_lastDamage) {
         m_noDamageMs = 0;
         m_lastDamage = damage;
@@ -154,7 +154,7 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     }
     float nearest = 100000;
     if (target == nullptr) {
-        for (const auto &actor : m_scene.enemies) {
+        for (const auto &actor : m_scene.GetEnemies()) {
             // Match the brother's targeting filters. Authored map actors can
             // accept collision callbacks without being combat targets.
             if (!actor->model.enemy.combat.enabled || !actor->model.enemy.combat.targetable ||

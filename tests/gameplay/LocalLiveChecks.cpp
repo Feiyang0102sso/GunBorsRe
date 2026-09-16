@@ -155,19 +155,19 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     for (unsigned elapsed = 0; elapsed < 45000 && fixture.effects.GetShotCount() == 0; elapsed += 16) {
         session.Update(16, 0, 0, false);
     }
-    if (scene.spawned == 0 || bot.GetTargetCount() == 0 || fixture.effects.GetShotCount() == 0) {
-        std::printf("[local-live-check] no combat spawned=%u targets=%u shots=%zu\n", scene.spawned, bot.GetTargetCount(), fixture.effects.GetShotCount());
+    if (scene.GetSpawnCount() == 0 || bot.GetTargetCount() == 0 || fixture.effects.GetShotCount() == 0) {
+        std::printf("[local-live-check] no combat spawned=%u targets=%u shots=%zu\n", scene.GetSpawnCount(), bot.GetTargetCount(), fixture.effects.GetShotCount());
         return 1;
     }
     const float botBefore = bot.x;
     scene.GetPlayer().x += 350;
     for (unsigned elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
     if (bot.x == botBefore) { return 1; }
-    std::printf("[local-live-check] spawned=%u targets=%u shots=%zu movement=1\n", scene.spawned, bot.GetTargetCount(), fixture.effects.GetShotCount());
+    std::printf("[local-live-check] spawned=%u targets=%u shots=%zu movement=1\n", scene.GetSpawnCount(), bot.GetTargetCount(), fixture.effects.GetShotCount());
 
     // Two weapon slots of one peer can both assist the same accepted kill.
     bool checkedAssist = false;
-    for (auto &enemy : scene.enemies) {
+    for (auto &enemy : scene.GetEnemies()) {
         auto &target = enemy->model.enemy;
         if (target.combat.dead || target.combat.health <= 0 || !target.CanReceiveProjectile(0, kBrotherCombatId)) { continue; }
         // Keep autonomous shots out of this attribution assertion, without
@@ -214,17 +214,17 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     const float pausedBotX = bot.x, pausedBotY = bot.y;
     // Corpses may already have been removed; never assume a live front().
     std::vector<std::pair<float, float>> pausedEnemies;
-    for (const auto &enemy : scene.enemies) { pausedEnemies.push_back({enemy->model.enemy.combat.x, enemy->model.enemy.combat.y}); }
+    for (const auto &enemy : scene.GetEnemies()) { pausedEnemies.push_back({enemy->model.enemy.combat.x, enemy->model.enemy.combat.y}); }
     const auto shotsBeforePause = fixture.effects.GetShotCount();
     session.SetSuspended(true);
     for (unsigned tick = 0; tick < 100; ++tick) { session.Update(16, 1, 1, true); }
-    if (scene.enemies.size() != pausedEnemies.size()) { return 1; }
+    if (scene.GetEnemies().size() != pausedEnemies.size()) { return 1; }
     if (scene.GetPlayer().x != pausedPlayerX || scene.GetPlayer().y != pausedPlayerY || bot.x != pausedBotX || bot.y != pausedBotY ||
         fixture.effects.GetShotCount() != shotsBeforePause ||
         hud->LiveWaveRemaining() != waitBefore) { return 1; }
     for (unsigned index = 0; index < pausedEnemies.size(); ++index) {
-        if (scene.enemies[index]->model.enemy.combat.x != pausedEnemies[index].first ||
-            scene.enemies[index]->model.enemy.combat.y != pausedEnemies[index].second) { return 1; }
+        if (scene.GetEnemies()[index]->model.enemy.combat.x != pausedEnemies[index].first ||
+            scene.GetEnemies()[index]->model.enemy.combat.y != pausedEnemies[index].second) { return 1; }
     }
     session.SetSuspended(false);
     for (unsigned tick = 0; tick < 60; ++tick) { session.Update(16, -1, 0, false); }
@@ -250,20 +250,20 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     clearWave.damage = 100000;
     for (unsigned elapsed = 0; elapsed < 120000 && scene.GetClearedWaves() < 2; elapsed += 16) {
         session.Update(16, 0, 0, false);
-        for (auto &enemy : scene.enemies) {
+        for (auto &enemy : scene.GetEnemies()) {
             if (!enemy->model.enemy.combat.dead) { scene.ApplyHit(enemy->model.enemy.combat.id, clearWave); }
         }
     }
-    if (scene.GetClearedWaves() < 2 || scene.invalidSpawns != 0) {
+    if (scene.GetClearedWaves() < 2 || scene.GetInvalidSpawnCount() != 0) {
         std::printf("[local-live-check] wave failure cleared=%u invalid=%u state=%d wave=%d tutorial=%d spawned=%u alive=%zu paused=%d\n",
-            scene.GetClearedWaves(), scene.invalidSpawns, session.GetLevel().GetStateId(), session.GetLevel().GetWave(),
-            session.GetLevel().GetTutorialStep(), scene.spawned, scene.AliveCount(), session.GetLevel().IsPaused());
+            scene.GetClearedWaves(), scene.GetInvalidSpawnCount(), session.GetLevel().GetStateId(), session.GetLevel().GetWave(),
+            session.GetLevel().GetTutorialStep(), scene.GetSpawnCount(), scene.AliveCount(), session.GetLevel().IsPaused());
         return 1;
     }
     std::printf("[local-live-check] cleared-waves=%u\n", scene.GetClearedWaves());
 
     // Isolate damage/revive from new waves while retaining real actor scripts.
-    scene.enemies.clear();
+    scene.GetEnemies().clear();
     scene.GetPlayer().x = fixture.startX;
     scene.GetPlayer().y = fixture.startY;
     bot.x = scene.GetPlayer().x + 50;

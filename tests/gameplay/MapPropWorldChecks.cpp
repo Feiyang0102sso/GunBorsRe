@@ -2,7 +2,7 @@
 
 namespace MapDetail {
 
-    unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const ZCombatWorld &scene) {
+    unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const CLevel &scene) {
         unsigned tested = 0, failures = 0;
         for (const ZPlacedProp &prop : map.props) {
             if (!prop.active || prop.runtime == nullptr || !prop.runtime->ChecksEntry()) { continue; }

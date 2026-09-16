@@ -71,7 +71,7 @@ using namespace ResearchDefaults;
 
 }  // namespace
 
-std::unique_ptr<ZSurvivalInputDriver> MakeResearchPilot(ZCombatWorld &scene, const ZMapRectangle &bounds) {
+std::unique_ptr<ZSurvivalInputDriver> MakeResearchPilot(CLevel &scene, const ZMapRectangle &bounds) {
     return std::make_unique<SurvivalPilot>(scene, bounds);
 }
 

@@ -2,20 +2,20 @@
  * @brief Nearest-neighbour spacing over the live actors. Diagnostic only.
  */
 #include "gun_bros_re/debug/FlockMetrics.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include <cmath>
 #include <limits>
 
-FlockMetrics MeasureFlock(const ZCombatWorld &scene) {
+FlockMetrics MeasureFlock(const CLevel &scene) {
     FlockMetrics metrics;
     float sum = 0;
     float minimum = std::numeric_limits<float>::infinity();
     unsigned count = 0;
-    for (const auto &actor : scene.enemies) {
+    for (const auto &actor : scene.GetEnemies()) {
         const auto &state = actor->model.enemy.combat;
         if (!state.enabled || state.dead || state.removed) { continue; }
         float nearest = std::numeric_limits<float>::infinity();
-        for (const auto &other : scene.enemies) {
+        for (const auto &other : scene.GetEnemies()) {
             const auto &neighbour = other->model.enemy.combat;
             if (actor == other || !neighbour.enabled || neighbour.dead || neighbour.removed) { continue; }
             const float distance = std::hypot(state.x - neighbour.x, state.y - neighbour.y);

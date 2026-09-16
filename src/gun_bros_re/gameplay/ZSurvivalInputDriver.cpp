@@ -7,7 +7,7 @@ namespace {
 ZSurvivalInputFactory inputFactory = nullptr;
 }
 void SetSurvivalInputFactory(ZSurvivalInputFactory factory) { inputFactory = factory; }
-std::unique_ptr<ZSurvivalInputDriver> CreateSurvivalInputDriver(ZCombatWorld &scene, const ZMapRectangle &bounds) {
+std::unique_ptr<ZSurvivalInputDriver> CreateSurvivalInputDriver(CLevel &scene, const ZMapRectangle &bounds) {
     if (inputFactory == nullptr) {
         std::printf("[input] no external driver installed; using platform input\n");
         return nullptr;

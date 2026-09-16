@@ -1,7 +1,6 @@
 #pragma once
 /** Connects placed CProp instances to level events and combat queries. */
 #include "gun_bros_re/gameplay/ZMapResources.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 
 namespace MapDetail {
@@ -9,7 +8,7 @@ void BuildCollisionScene(ZLoadedMap &loaded);
 /** Original script state lives beside the map instance, never in shared quads. */
 class ZMapPropWorld : public ZPropWorld {
 public:
-    ZMapPropWorld(ZLoadedMap &map, ZCombatWorld &scene, CLevel &level, ZWeaponEffects &effects)
+    ZMapPropWorld(ZLoadedMap &map, CLevel &scene, CLevel &level, ZWeaponEffects &effects)
         : m_map(map), m_scene(scene), m_level(level), m_effects(effects) {
         for (ZPlacedProp &prop : m_map.props) {
             if (prop.sprite->data.GetScript().IsPresent()) { prop.runtime = std::make_shared<CProp>(); }
@@ -87,7 +86,7 @@ private:
     std::vector<ZPlacedProp *> m_activeProps; // Stable until the next level Reset.
     const CLayerCollision *m_bodyLayer = nullptr;
     const CLayerCollision *m_bulletLayer = nullptr;
-    ZCombatWorld &m_scene;
+    CLevel &m_scene;
     CLevel &m_level;
     ZWeaponEffects &m_effects;
     unsigned m_hitCount = 0;

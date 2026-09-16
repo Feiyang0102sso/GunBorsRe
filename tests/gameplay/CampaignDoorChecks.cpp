@@ -81,7 +81,7 @@ static void RecordCacheCollections(const ZPickupScene &pickups, bool (&collected
     }
 }
 
-int CheckCampaignCache(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session, ZPickupScene &pickups) {
+int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session, ZPickupScene &pickups) {
     scene.GetPlayerVitals().invincible = true;
     bool cacheCollected[3]{};
     for (const auto &prop : map.props) {
@@ -170,7 +170,7 @@ int CheckCampaignCache(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &s
     return collected != 3;
 }
 
-int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
+int CheckCampaignPortal(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     CProp *portal = nullptr;
     float portalX = 0, portalY = 0;
@@ -184,7 +184,7 @@ int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &
     auto &level = session.GetLevel();
     // Clear actual waves; neither set a wave number nor enable the portal.
     for (int elapsed = 0; elapsed < 240000 && level.GetWave() < 10; elapsed += 16) {
-        for (const auto &actor : scene.enemies) {
+        for (const auto &actor : scene.GetEnemies()) {
             const auto &enemy = actor->model.enemy.combat;
             if (enemy.dead || enemy.removed) { continue; }
             ZCombatHit hit;
@@ -211,7 +211,7 @@ int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &
     return !session.IsFinished();
 }
 
-static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session,
+static int CheckLaterRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session,
     int cameraLayer, int platformId, unsigned requiredRescues) {
     // Visit the authored camera entry rectangle; the camera export configures
     // this area's enemy rules and number of refugees. Never invoke it directly.
@@ -234,7 +234,7 @@ static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGa
         scene.GetPlayer().y = platformY;
         const unsigned before = rescued;
         for (int elapsed = 0; elapsed < 30000; elapsed += 16) {
-            for (const auto &actor : scene.enemies) {
+            for (const auto &actor : scene.GetEnemies()) {
                 const auto &enemy = actor->model.enemy.combat;
                 if (enemy.templateRef.packHash == CStringToKey("pack1") && enemy.templateRef.localIndex == 14) {
                     if (enemy.dead) { return 1; }
@@ -249,7 +249,7 @@ static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGa
                 scene.ApplyHit(enemy.id, hit);
             }
             session.Update(16, 0, 0, false);
-            rescued += static_cast<unsigned>(scene.teleports.size());
+            rescued += static_cast<unsigned>(session.GetLevel().GetTeleportEventCount());
             if (rescued > before) { break; }
         }
     }
@@ -258,7 +258,7 @@ static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGa
     return rescued != requiredRescues;
 }
 
-int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
+int CheckCampaignRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     // Stand inside the first authored platform. The original LEVEL script
     // must spawn its refugee and open gate 42 after the teleport callback.
@@ -278,7 +278,7 @@ int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &
     for (int elapsed = 0; elapsed < 30000; elapsed += 16) {
         session.Update(16, 0, 0, false);
         bool shouldInterrupt = false;
-        for (const auto &actor : scene.enemies) {
+        for (const auto &actor : scene.GetEnemies()) {
             if (actor->objectId != 200) { continue; }
             refugeeSeen = true;
             refugeeDied = refugeeDied || actor->model.enemy.combat.dead;
@@ -295,7 +295,7 @@ int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &
             scene.GetPlayer().x += 150;
             for (int wait = 0; wait < 4000; wait += 16) { session.Update(16, 0, 0, false); }
             bool waiting = false;
-            for (const auto &actor : scene.enemies) {
+            for (const auto &actor : scene.GetEnemies()) {
                 if (actor->objectId == 200 && actor->model.enemy.GetStateId() == 7) { waiting = true; }
             }
             if (!waiting || session.CountEnemies(nullptr, 200) != 1) { return 1; }
@@ -319,7 +319,7 @@ int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &
     return 1;
 }
 
-int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session, unsigned mapIndex) {
+int CheckCampaignProgression(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session, unsigned mapIndex) {
     scene.GetPlayerVitals().invincible = true;
     if (mapIndex == 0) {
         if (CheckCampaignTargets(map, scene, session) != 0) { return 1; }
@@ -374,7 +374,7 @@ int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CG
     // Defeat actors through their own hit/death handlers; never advance LEVEL
     // state or call its death export from the test. Virtual time is bounded.
     for (int elapsed = 0; elapsed < 120000; elapsed += 16) {
-        for (auto &actor : scene.enemies) {
+        for (auto &actor : scene.GetEnemies()) {
             auto &enemy = actor->model.enemy;
             if (enemy.combat.templateRef.packHash == CStringToKey("pack1") && enemy.combat.templateRef.localIndex == 17) {
                 finalEnemySeen = true;
@@ -408,7 +408,7 @@ int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CG
     }
     std::printf("[campaign-progression-check] stalled state=%d kills=%u alive=%d spawned=%u final=%d failures=1\n",
         level.GetStateId(), scene.GetTotalKills(), session.CountEnemies(nullptr, -1), level.GetSpawner().GetSpawnCount(), finalEnemySeen);
-    for (const auto &actor : scene.enemies) {
+    for (const auto &actor : scene.GetEnemies()) {
         const auto &enemy = actor->model.enemy.combat;
         if (!enemy.dead && !enemy.removed) {
             std::printf("[campaign-progression-check] remaining object=%d ref=%08x:%u hp=%.0f xy=%.0f,%.0f\n",
@@ -418,7 +418,7 @@ int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CG
     return 1;
 }
 
-int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
+int CheckCampaignTargets(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     // Bring the authored turret into view so CLevel can spawn its placed object.
     for (unsigned layerIndex = 0; layerIndex < map.map.GetObjectLayerCount(); ++layerIndex) {
@@ -435,7 +435,7 @@ int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame 
     for (int elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
     // MAP 4 turret: trace the same segments as player projectiles, then deliver
     // damage through CombatScene so the real ENEMY hit script decides the result.
-    for (auto &actor : scene.enemies) {
+    for (auto &actor : scene.GetEnemies()) {
         auto &enemy = actor->model.enemy;
         if (enemy.combat.templateRef.packHash != CStringToKey("pack1") || enemy.combat.templateRef.localIndex != 16) { continue; }
         ZCombatHit hit;
@@ -491,7 +491,7 @@ int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame 
     return 1;
 }
 
-int CheckCampaignDoorPassage(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
+int CheckCampaignDoorPassage(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session) {
     bool entranceCrossed = false;
     for (auto &prop : map.props) {
         if (prop.objectId != 5 || prop.objectLayer != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }

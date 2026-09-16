@@ -181,7 +181,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                             grenadeWaitMs, session.GetKills(), session.CountEnemies(), checkFailures);
                     }
                     if (!barrelGateChecked) {
-                        for (const auto &actor : scene.enemies) {
+                        for (const auto &actor : scene.GetEnemies()) {
                             CEnemy &enemy = actor->model.enemy;
                             if (enemy.combat.dead || !enemy.combat.enabled) { continue; }
                             const float originalX = enemy.combat.x;
@@ -218,7 +218,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                         barrelGateChecked = true;
                     }
                     bool inGrenadeRange = false;
-                    for (const auto &actor : scene.enemies) {
+                    for (const auto &actor : scene.GetEnemies()) {
                         const auto &enemy = actor->model.enemy.combat;
                         if (enemy.dead || !enemy.enabled) { continue; }
                         const float dx = enemy.x - scene.GetPlayer().x, dy = enemy.y - scene.GetPlayer().y;
@@ -232,7 +232,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
             const bool fireGun = step != 2 && (step != 5 || grenadeWaitMs < 5000);
             session.Update(16, moveX, moveY, fireGun);
             if (barrelGateChecked && !armorBreakChecked && powerups.GetCount(13) == 0) {
-                for (const auto &actor : scene.enemies) {
+                for (const auto &actor : scene.GetEnemies()) {
                     CEnemy &enemy = actor->model.enemy;
                     if (enemy.combat.dead || !enemy.combat.enabled || enemy.GetPartCount() != 1) { continue; }
                     // ENEMY27 Flow @0xA9..0xB9 removes armor and rejects the
@@ -294,10 +294,10 @@ int CheckSurvivalHorde(SurvivalHordeFixture fixture) {
         for (int elapsed = 0; elapsed < 60000 && session.IsTransitioning(); elapsed += 16) { session.Update(16, 0, 0, false); }
         if (session.GetLevel().GetWave() < targetWave || session.GetKills() == 0 || scene.GetScore() == 0 ||
             session.GetLevel().GetObjectTimeScale() != 1 ||
-            scene.invalidSpawns != 0 || session.GetLevel().GetUnimplementedCallCount() != 0 ||
+            scene.GetInvalidSpawnCount() != 0 || session.GetLevel().GetUnimplementedCallCount() != 0 ||
             session.GetLevel().GetSpawner().GetUnsupportedCount() != 0) { ++checkFailures; }
         std::printf("[horde-check] initial=%d next=%d spawned=%u kills=%u stopwatch=%d slow=%.4f failures=%u\n",
-            initialWave, session.GetLevel().GetWave(), scene.spawned, session.GetKills(),
+            initialWave, session.GetLevel().GetWave(), scene.GetSpawnCount(), session.GetKills(),
             session.GetLevel().GetStopwatchTime(), session.GetLevel().GetObjectTimeScale(), checkFailures);
         capturePath = TestOutput::Path("horde-check-") + std::to_string(startWave) + ".png";
     }
@@ -371,9 +371,9 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
             AdvanceProps(loaded.props, 16);
             AdvanceTileLayers(loaded.map, 16);
         }
-        if (scene.spawned == 0 || session.GetKills() == 0 || scene.invalidSpawns != 0) { ++checkFailures; }
+        if (scene.GetSpawnCount() == 0 || session.GetKills() == 0 || scene.GetInvalidSpawnCount() != 0) { ++checkFailures; }
         std::printf("[campaign-check] goals=%u/%zu spawned=%u kills=%u pickups=%u cleared=%d failures=%u\n",
-            reached, goals.size(), scene.spawned, session.GetKills(), pickups.collected, session.GetLevel().IsCleared(), checkFailures);
+            reached, goals.size(), scene.GetSpawnCount(), session.GetKills(), pickups.collected, session.GetLevel().IsCleared(), checkFailures);
         capturePath = TestOutput::Path("campaign-check-") + packShortName + "-" + std::to_string(mapIndex) + ".png";
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.

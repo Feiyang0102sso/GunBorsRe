@@ -81,8 +81,8 @@
 | `gun_bros_re/gameplay/BroAIDeathmatch.cpp` | `gun_bros_re/gameplay/ZLocalCoopBot.cpp` |
 | `gun_bros_re/gameplay/BroAIDeathmatch.h` | `gun_bros_re/gameplay/ZLocalCoopBot.h` |
 | `gun_bros_re/gameplay/CombatGeometry.h` | `gun_bros_re/gameplay/ZCombatGeometry.h` |
-| `gun_bros_re/gameplay/CombatScene.cpp` | `gun_bros_re/gameplay/ZCombatWorld.cpp` |
-| `gun_bros_re/gameplay/CombatScene.h` | `gun_bros_re/gameplay/ZCombatWorld.h` |
+| `gun_bros_re/gameplay/CombatScene.cpp` | 已按职责并入 `CLevelRuntime.cpp`、`CLevelWorld.cpp`、`CLevelActors.cpp`、`CLevelProjectiles.cpp`、`CLevelCombat.cpp` |
+| `gun_bros_re/gameplay/CombatScene.h` | 已并入 `gun_bros_re/gameplay/CLevel.h`，不保留兼容门面 |
 | `gun_bros_re/gameplay/CombatTypes.h` | `gun_bros_re/gameplay/ZCombatTypes.h` |
 | `gun_bros_re/gameplay/DeathmatchBot.cpp` | `gun_bros_re/gameplay/ZDeathmatchBot.cpp` |
 | `gun_bros_re/gameplay/DeathmatchBot.h` | `gun_bros_re/gameplay/ZDeathmatchBot.h` |

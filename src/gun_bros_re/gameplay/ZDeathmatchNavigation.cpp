@@ -3,14 +3,14 @@
  * active cover, which the original static navigation mesh does not include.
  */
 #define NOMINMAX
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include <queue>
 #include <limits>
 #include <cmath>
 #include "gun_bros_re/debug/PerformanceProbe.h"
 
-bool ZCombatWorld::FindMatchRoute(float x, float y, float goalX, float goalY, std::vector<ZCollisionPoint> &route) const {
+bool CLevel::FindMatchRoute(float x, float y, float goalX, float goalY, std::vector<ZCollisionPoint> &route) const {
     PerformanceProbe::Scope timing(PerformanceProbe::counters.pathSearchMs);
     route.clear();
     if (CanBrotherWalk(x, y, goalX, goalY)) { route.emplace_back(goalX, goalY); return true; }

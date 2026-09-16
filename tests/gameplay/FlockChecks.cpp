@@ -1,6 +1,6 @@
 /** Real BIG actors must separate while pursuing the same distant target. */
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CFlock.h"
 #include <cmath>
 #include <cstdio>
@@ -19,7 +19,7 @@ public:
 };
 }
 
-int CheckFlockMovement(ZCombatWorld &scene) {
+int CheckFlockMovement(CLevel &scene) {
     scene.Reset();
     scene.GetPlayer().x = 1000;
     scene.GetPlayer().y = 450;

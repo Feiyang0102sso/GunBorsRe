@@ -206,11 +206,11 @@ int CheckArena(ArenaScene &ready) {
     for (int count = 0; count < 12; ++count) {
         if (scene.SpawnNearby(0) == nullptr) { ++failures; break; }
     }
-    for (std::size_t i = 0; i < scene.enemies.size(); ++i) {
-        const ZEnemyCombat &one = scene.enemies[i]->model.enemy.combat;
+    for (std::size_t i = 0; i < scene.GetEnemies().size(); ++i) {
+        const ZEnemyCombat &one = scene.GetEnemies()[i]->model.enemy.combat;
         if (one.x < 40 || one.x > kArenaWidth - 40 || one.y < 145 || one.y > kArenaHeight - 40) { ++failures; }
-        for (std::size_t j = i + 1; j < scene.enemies.size(); ++j) {
-            const ZEnemyCombat &other = scene.enemies[j]->model.enemy.combat;
+        for (std::size_t j = i + 1; j < scene.GetEnemies().size(); ++j) {
+            const ZEnemyCombat &other = scene.GetEnemies()[j]->model.enemy.combat;
             if (one.id == other.id || std::hypot(one.x - other.x, one.y - other.y) < 70) { ++failures; }
         }
     }
@@ -275,7 +275,7 @@ int CheckArena(ArenaScene &ready) {
         }
         const float dealt = 10000 - actor->model.enemy.combat.health;
         weaponReport << i << ',' << weapons[i].name << ',' << effects.GetShotCount() - initialShots << ','
-            << dealt << ',' << scene.spawned << ',' << weapons[i].visualOnly << '\n';
+            << dealt << ',' << scene.GetSpawnCount() << ',' << weapons[i].visualOnly << '\n';
         if (!weapons[i].visualOnly && effects.GetShotCount() == initialShots) {
             std::printf("[arena-check] FAIL weapon %zu did not fire\n", i); ++failures;
         }
@@ -376,19 +376,17 @@ int CheckArena(ArenaScene &ready) {
     scene.Reset();
     CMap multiplierMap;
     CLevel::Template multiplierTemplate;
-    CLevel multiplierLevel;
-    multiplierLevel.Bind(multiplierTemplate, multiplierMap);
+    scene.Bind(multiplierTemplate, multiplierMap);
     const std::int16_t localHealth[] = {0, 1, 384};
     const std::int16_t globalHealth[] = {1, 512};
     const std::int16_t localDamage[] = {0, 0, 384};
     const std::int16_t globalDamage[] = {0, 512};
     const std::int16_t globalSpeed[] = {4, 512};
-    multiplierLevel.FunctionResolver(54, localHealth, 3);
-    multiplierLevel.FunctionResolver(55, globalHealth, 2);
-    multiplierLevel.FunctionResolver(54, localDamage, 3);
-    multiplierLevel.FunctionResolver(55, globalDamage, 2);
-    multiplierLevel.FunctionResolver(55, globalSpeed, 2);
-    scene.SetLevel(&multiplierLevel);
+    scene.FunctionResolver(54, localHealth, 3);
+    scene.FunctionResolver(55, globalHealth, 2);
+    scene.FunctionResolver(54, localDamage, 3);
+    scene.FunctionResolver(55, globalDamage, 2);
+    scene.FunctionResolver(55, globalSpeed, 2);
     actor = scene.Spawn(0, 600, 300);
     if (actor == nullptr) { return 1; }
     CEnemy &scaledEnemy = actor->model.enemy;
@@ -406,7 +404,7 @@ int CheckArena(ArenaScene &ready) {
     std::printf("[level-multipliers] health=%.3f script=%d travel=%.3f damage=%.3f\n",
         scaledHealth, scriptHealth, scaledTravel, scaledDamage);
     scene.Reset();
-    scene.SetLevel(nullptr);
+    scene.Bind(multiplierTemplate, multiplierMap);
     // Render the same original mesh twice: plain and native-29 hit flash.
     // This catches confusing an enemy's white overlay with a gun's red heat.
     ZCombatEnemy *plain = scene.Spawn(0, 400, 450);
@@ -429,7 +427,7 @@ int CheckArena(ArenaScene &ready) {
     glEnable(GL_DEPTH_TEST);
     float renderProjection[16];
     Matrix4dOrthoTopLeft(kArenaWidth, kArenaHeight, 4000, renderProjection);
-    for (const auto &actor : scene.enemies) {
+    for (const auto &actor : scene.GetEnemies()) {
         float world[16], model[16];
         scene.EnemyMatrix(*actor, world);
         Matrix4dMultiply(renderProjection, world, model);

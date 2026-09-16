@@ -1,7 +1,7 @@
 /** Explicit tactical states. Constants tune host decisions, never gun damage. */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/ZDeathmatchBot.h"
-#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/ZPowerupScene.h"
 #include <algorithm>
 #include <cmath>
@@ -98,7 +98,7 @@ void ZDeathmatchBot::Reset(float startX, float startY, float startFacing) {
     m_route.clear(); m_routeMs = 0;
 }
 void ZDeathmatchBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world, float, float, float speedMultiplier) {
-    auto &scene = static_cast<ZCombatWorld &>(world);
+    auto &scene = static_cast<CLevel &>(world);
     if (deltaMs <= 0) { return; }
     UpdateForce(deltaMs, brother, world);
     m_moving = false;
