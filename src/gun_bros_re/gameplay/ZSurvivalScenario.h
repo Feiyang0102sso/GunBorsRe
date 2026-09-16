@@ -30,7 +30,7 @@ struct ZSurvivalState {
     ZCombatWorld & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
-    ZLevelHost & session;
+    CGame & session;
     float startX;
     float startY;
     float startFacing;

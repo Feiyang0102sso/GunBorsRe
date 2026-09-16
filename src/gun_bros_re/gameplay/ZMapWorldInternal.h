@@ -42,7 +42,7 @@
 #include "gun_bros_re/gameplay/ZPlayerModel.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/debug/CollisionOverlay.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"

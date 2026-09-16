@@ -308,7 +308,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (launch.botFriend != nullptr) { peerProgress.SetExperience(launch.botFriend->profile.experience); }
     scene.SetPeerProgress(&peerProgress);
     if (gameContext != nullptr) { gameContext->botFriend = launch.botFriend; }
-    ZLevelHost session(scene, loaded.map, enemies);
+    CGame session(scene, loaded.map, enemies);
     if (launch.deathmatch) { session.SetDeathmatch(&match); }
     session.GetLevel().SetCooperative(launch.localLive);
     CChallengeManager challenges;

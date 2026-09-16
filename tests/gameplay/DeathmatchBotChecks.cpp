@@ -32,7 +32,6 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         bot.Configure(42, *chosen[0], *chosen[1], difficulty);
         unsigned allowed = 0, excluded = 0;
         for (const auto &entry : catalog) {
-            if (!IsPlayablePowerup(entry.resource)) { continue; }
             const CStoreItem *rule = nullptr;
             for (const auto &item : store) {
                 if (item.data.type < 10 || item.data.type > 13 || item.data.objects.empty()) { continue; }
@@ -40,7 +39,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
                 if (reference.type == 17 && reference.object.packHash == entry.resource.packHash &&
                     reference.object.localIndex == entry.resource.localIndex) { rule = &item.data; break; }
             }
-            if (rule == nullptr) { return 1; }
+            if (rule == nullptr) { continue; }
             bool legal = !rule->IsExcludedFromGameType(2) && entry.data.field112 == 0;
             if (difficulty == CMPMatch::BotLevel::Normal) {
                 const auto id = entry.resource.localIndex;

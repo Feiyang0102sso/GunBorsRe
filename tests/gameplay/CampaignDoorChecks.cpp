@@ -81,7 +81,7 @@ static void RecordCacheCollections(const ZPickupScene &pickups, bool (&collected
     }
 }
 
-int CheckCampaignCache(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session, ZPickupScene &pickups) {
+int CheckCampaignCache(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session, ZPickupScene &pickups) {
     scene.GetPlayerVitals().invincible = true;
     bool cacheCollected[3]{};
     for (const auto &prop : map.props) {
@@ -170,7 +170,7 @@ int CheckCampaignCache(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHo
     return collected != 3;
 }
 
-int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
+int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     CProp *portal = nullptr;
     float portalX = 0, portalY = 0;
@@ -211,7 +211,7 @@ int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelH
     return !session.IsFinished();
 }
 
-static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session,
+static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session,
     int cameraLayer, int platformId, unsigned requiredRescues) {
     // Visit the authored camera entry rectangle; the camera export configures
     // this area's enemy rules and number of refugees. Never invoke it directly.
@@ -224,7 +224,7 @@ static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLe
         session.Update(16, 0, 0, false);
     }
     float platformX = 0, platformY = 0;
-    if (!session.GetObjectPosition(platformId, platformX, platformY)) { return 1; }
+    if (!session.GetLevel().GetObjectPosition(platformId, platformX, platformY)) { return 1; }
     unsigned rescued = 0;
     for (unsigned attempt = 0; attempt < requiredRescues; ++attempt) {
         scene.GetPlayer().x = platformX + 150;
@@ -258,7 +258,7 @@ static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLe
     return rescued != requiredRescues;
 }
 
-int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
+int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     // Stand inside the first authored platform. The original LEVEL script
     // must spawn its refugee and open gate 42 after the teleport callback.
@@ -319,7 +319,7 @@ int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelH
     return 1;
 }
 
-int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session, unsigned mapIndex) {
+int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session, unsigned mapIndex) {
     scene.GetPlayerVitals().invincible = true;
     if (mapIndex == 0) {
         if (CheckCampaignTargets(map, scene, session) != 0) { return 1; }
@@ -418,7 +418,7 @@ int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZL
     return 1;
 }
 
-int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
+int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     // Bring the authored turret into view so CLevel can spawn its placed object.
     for (unsigned layerIndex = 0; layerIndex < map.map.GetObjectLayerCount(); ++layerIndex) {
@@ -491,7 +491,7 @@ int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevel
     return 1;
 }
 
-int CheckCampaignDoorPassage(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
+int CheckCampaignDoorPassage(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, CGame &session) {
     bool entranceCrossed = false;
     for (auto &prop : map.props) {
         if (prop.objectId != 5 || prop.objectLayer != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }

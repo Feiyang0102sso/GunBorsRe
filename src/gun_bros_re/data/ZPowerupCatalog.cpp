@@ -1,16 +1,10 @@
 /** @file ZPowerupCatalog.cpp
- * @brief Read authoritative records and enumerate original use actions.
+ * @brief Read the authoritative POWERUP templates from BIG.
  */
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "engine/core/CStringToKey.h"
-#include "gun_bros_re/gameplay/CBullet.h"
-#include "gun_bros_re/gameplay/CTargetingController.h"
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
 #include <cstdio>
-#include <iomanip>
+#include <utility>
 
 bool LoadPowerupCatalog(CResTOCManager &toc, ZPackTables &tables, std::vector<ZPowerupEntry> &catalog) {
     catalog.clear();
@@ -35,10 +29,4 @@ bool LoadPowerupCatalog(CResTOCManager &toc, ZPackTables &tables, std::vector<ZP
     }
     std::printf("[powerup] catalog=%zu\n", catalog.size());
     return !catalog.empty();
-}
-
-bool IsPlayablePowerup(const GameObjectRef &resource) {
-    if (resource.packHash != CStringToKey("pack5")) { return false; }
-    const unsigned index = resource.localIndex;
-    return index == 0 || index == 1 || (index >= 5 && index <= 19);
 }

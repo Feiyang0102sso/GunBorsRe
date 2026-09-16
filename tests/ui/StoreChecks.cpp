@@ -331,10 +331,13 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             const GameObjectTypeRef &object = entry.data.objects[0];
             if (category == 1 && (!buyer.Owns(object.type, object.object) ||
                 !SameObject(Equipped(buyer, purchase.slot), object.object))) { return 1; }
-            // The first powerup is the byte-checked five-charge Speed Boost pack.
-            if (category == 2 && (buyer.GetPowerupCount(object.object) != 10 || buyer.warbucks != 0)) {
-                std::printf("[store-card-check] powerup purchase count=%u expected=10 warbucks=%llu expected=0\n",
-                    buyer.GetPowerupCount(object.object), static_cast<unsigned long long>(buyer.warbucks));
+            // The selected card and its quantity come from the current STORE
+            // ordering. This fixture buys it twice; do not assume a particular
+            // powerup ID or pack size.
+            const unsigned expectedPowerups = static_cast<unsigned>(entry.data.objects.size()) * 2;
+            if (category == 2 && (buyer.GetPowerupCount(object.object) != expectedPowerups || buyer.warbucks != 0)) {
+                std::printf("[store-card-check] powerup purchase count=%u expected=%u warbucks=%llu expected=0\n",
+                    buyer.GetPowerupCount(object.object), expectedPowerups, static_cast<unsigned long long>(buyer.warbucks));
                 return 1;
             }
             CProfileManager reloaded = profile;

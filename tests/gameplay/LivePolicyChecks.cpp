@@ -33,7 +33,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CPr
     }
     if (enemyRef.IsNull()) { return 1; }
     while (scene.enemies.size() < 11) {
-        if (!session.SpawnEnemy(enemyRef, -1, -1, -1)) { return 1; }
+        if (!session.GetLevel().SpawnEnemy(enemyRef, -1, -1, -1)) { return 1; }
     }
     // Position fixtures without updating them, so boundary decisions do not
     // depend on spawn routing, AI shots or projectile travel time.

@@ -38,7 +38,7 @@ struct SurvivalDeathFixture {
     ZCombatWorld & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
-    ZLevelHost & session;
+    CGame & session;
     float startX;
     float startY;
     float startFacing;
@@ -57,7 +57,7 @@ struct SurvivalBossFixture {
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
     ZCombatWorld & scene;
-    ZLevelHost & session;
+    CGame & session;
     float startX;
     float startY;
     float startFacing;
@@ -77,7 +77,7 @@ struct SurvivalFeedbackFixture {
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
     ZCombatWorld & scene;
-    ZLevelHost & session;
+    CGame & session;
     MapDetail::ZMapPropWorld & props;
     float startX;
     float startY;
@@ -87,7 +87,7 @@ struct SurvivalFeedbackFixture {
 struct SurvivalLevelSoundsFixture {
     unsigned & checkFailures;
     bool check;
-    ZLevelHost & session;
+    CGame & session;
     ZWeaponEffects & effects;
 };
 
@@ -101,7 +101,7 @@ struct SurvivalPropRoutesFixture {
 struct SurvivalTriggerRoutesFixture {
     unsigned & checkFailures;
     bool check;
-    ZLevelHost & session;
+    CGame & session;
     CMap & map;
     ZCombatWorld & scene;
     float startX;
@@ -139,7 +139,7 @@ struct SurvivalTutorialFixture {
     unsigned & equippedWeaponSlot;
     ZCombatWorld & scene;
     CBrotherAI & brother;
-    ZLevelHost & session;
+    CGame & session;
     ZPowerupScene & powerups;
     ZPickupScene & pickups;
     CProfileManager * pickupProfile;
@@ -174,7 +174,7 @@ struct SurvivalWavesFixture {
     ZCombatWorld & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
-    ZLevelHost & session;
+    CGame & session;
     ZPickupScene & pickups;
     MapDetail::ZMapPropWorld & props;
     bool tutorial;
@@ -193,7 +193,7 @@ struct SurvivalHordeFixture {
     ZPlayerVitals & vitals;
     MapDetail::ZLoadedMap & loaded;
     ZCombatWorld & scene;
-    ZLevelHost & session;
+    CGame & session;
     bool horde;
 };
 
@@ -207,7 +207,7 @@ struct SurvivalCampaignFixture {
     ZPlayerVitals & vitals;
     MapDetail::ZLoadedMap & loaded;
     ZCombatWorld & scene;
-    ZLevelHost & session;
+    CGame & session;
     ZPickupScene & pickups;
     bool horde;
 };
@@ -239,7 +239,7 @@ struct SurvivalSceneFixture {
     ZCombatWorld & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
-    ZLevelHost & session;
+    CGame & session;
     CInputPad & survivalHud;
     CPlayerProgress & progress;
     CMPMatch & match;

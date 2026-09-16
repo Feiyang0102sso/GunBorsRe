@@ -120,8 +120,8 @@
 | `gun_bros_re/gameplay/SurvivalProgress.cpp` | `gun_bros_re/gameplay/ZSurvivalProgress.cpp` |
 | `gun_bros_re/gameplay/SurvivalRuntime.h` | `gun_bros_re/gameplay/ZSurvivalRuntime.h` |
 | `gun_bros_re/gameplay/SurvivalScenario.h` | `gun_bros_re/gameplay/ZSurvivalScenario.h` |
-| `gun_bros_re/gameplay/SurvivalSession.cpp` | `gun_bros_re/gameplay/ZLevelHost.cpp` |
-| `gun_bros_re/gameplay/SurvivalSession.h` | `gun_bros_re/gameplay/ZLevelHost.h` |
+| `gun_bros_re/gameplay/SurvivalSession.cpp` | `gun_bros_re/gameplay/CGame.cpp`、`CLevel.cpp` |
+| `gun_bros_re/gameplay/SurvivalSession.h` | `gun_bros_re/gameplay/CGame.h`、`CLevel.h` |
 | `gun_bros_re/gameplay/WeaponEffects.cpp` | `gun_bros_re/gameplay/ZWeaponEffects.cpp` |
 | `gun_bros_re/gameplay/WeaponEffects.h` | `gun_bros_re/gameplay/ZWeaponEffects.h` |
 | `gun_bros_re/ui/GameFrontEnd.cpp` | `gun_bros_re/ui/ZGameFrontEnd.cpp` |

@@ -114,11 +114,6 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
             const auto action = hud.Pointer(state, x, y, false);
             if (action != ZInputPadAction::BuyItem || hud.SelectedItem() != &hud.m_resources.m_store[storeIndex]) { ++failures; break; }
             const auto result = profile.AcquireItem(hud.SelectedItem()->data, progress.GetLevel());
-            if (result == ZPurchaseResult::Unsupported && !IsPlayablePowerup(hud.SelectedItem()->data.objects.front().object)) {
-                std::printf("[selector-check] unsupported effect retained index=%u name=%s; no charge\n", index, hud.SelectedItem()->name.c_str());
-                bought = true;
-                break;
-            }
             if (result != ZPurchaseResult::Purchased) { std::printf("[selector-check] purchase rejected index=%u result=%u\n", index, unsigned(result)); ++failures; break; }
             ++purchases; bought = true; break;
         }

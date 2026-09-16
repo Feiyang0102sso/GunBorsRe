@@ -13,7 +13,7 @@ bool MatchesEquipmentSlot(const ZStoreEntry &entry, unsigned slot,
         // grenade prize), not a repeatable store purchase.
         if (entry.data.commonPrice == 0 && entry.data.rarePrice == 0) { return false; }
         for (const GameObjectTypeRef &object : entry.data.objects) {
-            if (object.type != 17 || !IsPlayablePowerup(object.object)) { return false; }
+            if (object.type != 17 || object.object.IsNull()) { return false; }
         }
         return true;
     }

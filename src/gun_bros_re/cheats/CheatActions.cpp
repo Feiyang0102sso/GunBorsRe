@@ -2,7 +2,7 @@
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
 #include "gun_bros_re/ui/ZMenuInternal.h"
-#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/ZPowerupScene.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include <ctime>
@@ -156,7 +156,7 @@ bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZM
 }
 
 bool ApplyCombatCheat(const std::string &cheat, ZCombatWorld &scene, ZPlayerVitals &vitals,
-    ZPowerupScene &powerups, ZLevelHost &session, ZSurvivalGameContext *context, CombatCheatResult &result,
+    ZPowerupScene &powerups, CGame &session, ZSurvivalGameContext *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
     if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
     if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }

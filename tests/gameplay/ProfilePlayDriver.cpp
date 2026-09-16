@@ -1,6 +1,6 @@
 #define NOMINMAX
 #include "gameplay/ProfilePlayDriver.h"
-#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/CBGM.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/debug/Capture.h"

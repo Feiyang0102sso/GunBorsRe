@@ -19,7 +19,6 @@ static unsigned CheckPowerupModes(CResTOCManager &toc, ZPackTables &tables, ZPow
             const auto &item = store.data;
             if (item.type < 10 || item.type > 13 || item.objects.empty() || item.objects.front().type != 17) { continue; }
             const auto &reference = item.objects.front().object;
-            if (!IsPlayablePowerup(reference)) { continue; }
             const ZPowerupEntry *entry = nullptr;
             for (const auto &candidate : catalog) {
                 if (candidate.resource.packHash == reference.packHash && candidate.resource.localIndex == reference.localIndex) { entry = &candidate; break; }
@@ -185,7 +184,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             airstrikeScene.Reset();
             // Exercise the same session update as gameplay: movie-only tests
             // cannot detect actors continuing to move during an air strike.
-            ZLevelHost airstrikeSession(airstrikeScene, loaded.map, enemies);
+            CGame airstrikeSession(airstrikeScene, loaded.map, enemies);
             if (!airstrikeSession.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
             airstrikeSession.Restart(startX, startY, startFacing);
             ZCombatEnemy *target = airstrikeScene.Spawn(0, 700, 650);

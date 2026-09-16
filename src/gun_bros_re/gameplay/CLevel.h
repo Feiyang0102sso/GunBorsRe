@@ -3,14 +3,10 @@
  * @file CLevel.h
  * @brief A level: a map plus the script that drives it.
  *
- * Port of CLevel (src/gunbros/level.cpp), cut down to what M3.4 needs.
+ * Port of CLevel (src/gunbros/level.cpp), including the active world update.
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:114771 (Template::Init),
  *            :114371 (VariableResolver), :117365 (FunctionResolver),
  *            :120988 (where CLevel binds its script and calls export 0)
- *
- * The template is shallow -- a map reference, the script, three uint16 -- and
- * the level object exists here only to be the script's host. Everything a
- * level really does (spawning, objectives, triggers, the camera) is M4 and M5.
  *
  * Most native functions are still unimplemented, and
  * calling one logs its id and arguments rather than failing. That log is the
@@ -30,8 +26,17 @@
 #include "gun_bros_re/gameplay/CLevelIndicator.h"
 
 #include <cstdint>
+#include <string>
 
+class CGame;
 class CMap;
+class CMPMatch;
+class ZCombatWorld;
+struct ZEnemyTemplateData;
+class ZPickupScene;
+class ZPowerupScene;
+class ZPropWorld;
+class ZWeaponEffects;
 
 // The CLevel functions implemented so far, all of which only touch the map.
 // Reference: :117497 (setCameraLayer), :117508 (setCollisionLayer),
@@ -51,7 +56,7 @@ constexpr std::uint8_t kLevelExportOnLevelStart = 0;
 constexpr std::uint32_t kLevelVariableCount = 8;
 
 /** A level and the script it runs. */
-class CLevel : public ZGameScriptObject {
+class CLevel : public ZGameScriptObject, private ZLevelWorld {
 public:
     bool IsManualSpawnTag(unsigned char tag) const { return m_manualSpawnTags[tag]; }
     /**
@@ -80,6 +85,17 @@ public:
     };
 
     CLevel();
+
+    /** Bind the restored level object to the current desktop world implementation. */
+    void AttachRuntime(CGame &game, ZCombatWorld &scene,
+        const std::vector<ZEnemyTemplateData> &catalog);
+    void BindWorldObjects(ZPropWorld *props, ZPickupScene *pickups,
+        ZWeaponEffects *effects, ZPowerupScene *powerups, ZPowerupScene *peerPowerups);
+    void SetMatch(CMPMatch *match) { m_match = match; SetDeathmatch(match != nullptr); }
+    void SetArchive(bool archive) { m_archive = archive; }
+    void SetViewSize(float width, float height) { m_viewWidth = width; m_viewHeight = height; }
+    void ResetWorld(float x, float y, float facingDegrees);
+    void RefreshCamera() { UpdateCamera(); }
 
     /**
      * Bind a template and its map, then run the script's start handler.
@@ -112,13 +128,18 @@ public:
     const Template &GetTemplate() const { return *m_template; }
     int GetWaveLimit() const { return m_template->waveLimit; }
     void Update(int deltaMs);
+    void Update(int deltaMs, float moveX, float moveY, bool fire, bool advanceScript);
+    void UpdateAfterDeath(int deltaMs);
+    bool IsDeathComplete() const;
+    bool IsPowerupMovieActive() const;
+    std::vector<std::string> TakePowerupUseMessages();
     /** HUD/movie completion callbacks use event class 4 in the original. */
     void HandleEvent(std::uint8_t event) {
         if (!m_cleared) { m_interpreter.HandleEvent(4, event); }
     }
     void OnEnemyKilled(int objectId, const GameObjectRef &enemy);
     void OnEnemyTeleport(int objectId, const GameObjectRef &enemy);
-    bool IsActivePortal(int objectId) const { return m_world != nullptr && m_world->IsActivePortal(objectId); }
+    bool IsActivePortal(int objectId) const override;
     void OnPickupCollected(int objectId, const GameObjectRef &pickup);
     void OnDeathmatchKill(float x, float y);
     void OnPropEvent(int objectId, const GameObjectRef &prop, bool entered);
@@ -177,6 +198,13 @@ public:
     int GetPathLayer() const { return m_pathLayer; }
     float GetEnemyMultiplier(int enemy, int attribute) const;
     float GetEnemyMultiplier(const GameObjectRef &enemy, int attribute) const;
+    int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const override;
+    bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override;
+    bool GetObjectPosition(int objectId, float &x, float &y) const override;
+    bool GetIndicatorTarget(std::uint64_t key, float &x, float &y) const override;
+    float GetClosestSpawnDistance() const { return m_closestSpawnDistance; }
+    unsigned GetOnScreenSpawns() const { return m_onScreenSpawns; }
+    unsigned GetPowerupCount(unsigned localIndex) const override;
 
     /** How many native calls were made that nothing implements. */
     std::uint32_t GetUnimplementedCallCount() const { return m_unimplementedCalls; }
@@ -195,6 +223,21 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
 
 private:
+    void UpdateScript(int deltaMs);
+    void UpdateMapInteractions(float previousX, float previousY);
+    void UpdateCamera(int deltaMs = 0);
+    int CountEnemySlots(const GameObjectRef *enemy = nullptr) const override;
+    void StartObjectLayer(int layer) override;
+    bool SpawnMapObject(const ZPlacedObject &object, int objectId) override;
+    void SendEnemyMessage(int objectId, int message) override;
+    void SendPropMessage(int objectId, int message) override;
+    void SetEnemyPortal(int enemyId, int propId) override;
+    void PlayLevelSound(const GameObjectRef &sound) override;
+    void OnWaveCleared(unsigned perfectRewardPercent) override;
+    bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) override;
+    bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) override;
+    bool SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) override;
+    std::uint64_t ResolveIndicatorTarget(int objectId) const override;
     unsigned m_kills = 0;
     bool m_tutorialEnabled = false;
     unsigned m_triggerCount = 0;
@@ -261,6 +304,25 @@ private:
     unsigned m_stat42Bits = 0; // Original CPlayerStatistics record 42, native 82.
     float m_globalEnemyMultipliers[5] = {1, 1, 1, 1, 1};
     float m_enemyMultipliers[32][5] = {};
+    CGame *m_game = nullptr;
+    ZCombatWorld *m_scene = nullptr;
+    const std::vector<ZEnemyTemplateData> *m_catalog = nullptr;
+    CMPMatch *m_match = nullptr;
+    ZPickupScene *m_pickups = nullptr;
+    ZWeaponEffects *m_effects = nullptr;
+    ZPropWorld *m_props = nullptr;
+    ZPowerupScene *m_powerups = nullptr;
+    ZPowerupScene *m_peerPowerups = nullptr;
+    unsigned m_spawnSerial = 0;
+    bool m_archive = false;
+    float m_closestSpawnDistance = -1;
+    unsigned m_onScreenSpawns = 0;
+    float m_cameraLeft = 0;
+    float m_cameraTop = 0;
+    float m_cameraWidth = 0;
+    float m_cameraHeight = 0;
+    float m_viewWidth = 572;
+    float m_viewHeight = 429;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CLEVEL_H

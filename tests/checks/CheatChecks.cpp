@@ -2,7 +2,7 @@
 #include "gun_bros_re/ui/ZMenuInternal.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
-#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/ZPowerupScene.h"
 #include "TestOutput.h"
 #include <SDL3/SDL.h>
@@ -99,7 +99,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     ZCombatWorld scene(tables, program, enemies, player, vitals, effects, 1);
     scene.SetPlayerProgress(&progress);
     CMap map;
-    ZLevelHost session(scene, map, enemies);
+    CGame session(scene, map, enemies);
     ZPowerupScene powerups(toc, tables, player, vitals, scene, effects, profile);
     ZSurvivalGameContext context{profile, savePath};
     CombatCheatResult result;

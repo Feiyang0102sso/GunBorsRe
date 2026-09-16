@@ -1,5 +1,5 @@
 /** @file ZPowerupCatalog.h
- * @brief Full consumable catalog and permanent iOS-script check.
+ * @brief Full consumable template catalog read from BIG.
  */
 #ifndef GUN_BROS_RE_ZPOWERUPCATALOG_H
 #define GUN_BROS_RE_ZPOWERUPCATALOG_H
@@ -13,6 +13,4 @@ struct ZPowerupEntry {
     std::string owner;
 };
 bool LoadPowerupCatalog(CResTOCManager &toc, ZPackTables &tables, std::vector<ZPowerupEntry> &catalog);
-/** Shared availability gate for completed desktop consumable implementations. */
-bool IsPlayablePowerup(const GameObjectRef &resource);
 #endif

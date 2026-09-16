@@ -1,16 +1,15 @@
 // Desktop-only fast-forward through the original survival Flow callbacks.
 #include "gun_bros_re/cheats/CheatConfig.h"
-#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/CGame.h"
 #include <chrono>
 #include <cstdio>
 
-bool ZLevelHost::StartBossSkip() {
+bool CGame::StartBossSkip() {
     ZPlayerVitals &player = m_scene.GetPlayerVitals();
     if (m_bossSkipActive || m_suspended || m_match != nullptr || m_scene.IsRescuePending() ||
         m_archive || m_horde || m_level.GetTutorialStep() >= 0 || player.dead ||
         m_level.IsCleared() || m_level.IsPaused() ||
-        (m_powerups != nullptr && m_powerups->IsMovieActive()) ||
-        (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive())) {
+        m_level.IsPowerupMovieActive()) {
         std::printf("[stboss] unavailable in current mode or presentation\n");
         return false;
     }
@@ -31,12 +30,11 @@ bool ZLevelHost::StartBossSkip() {
     return true;
 }
 
-void ZLevelHost::AdvanceBossSkip() {
+void CGame::AdvanceBossSkip() {
     if (!m_bossSkipActive) { return; }
     ZPlayerVitals &player = m_scene.GetPlayerVitals();
     if (m_suspended || player.dead || m_scene.IsRescuePending() || m_level.IsPaused() ||
-        (m_powerups != nullptr && m_powerups->IsMovieActive()) ||
-        (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive())) {
+        m_level.IsPowerupMovieActive()) {
         FinishBossSkip();
         return;
     }
@@ -76,7 +74,7 @@ void ZLevelHost::AdvanceBossSkip() {
     if (m_effects != nullptr) { m_effects->SetPaused(false); }
 }
 
-void ZLevelHost::FinishBossSkip() {
+void CGame::FinishBossSkip() {
     *m_level.VariableResolver(5) = m_bossSkipPreviousFlag;
     m_bossSkipActive = false;
     const bool success = m_level.GetBossIntroSerial() != m_bossSkipIntroSerial;
@@ -85,7 +83,7 @@ void ZLevelHost::FinishBossSkip() {
         success, m_bossSkipDefeated, m_bossSkipElapsedMs, static_cast<long long>(wallMs), m_level.GetWave(), m_level.GetStateId());
 }
 
-bool ZLevelHost::SkipToBoss() {
+bool CGame::SkipToBoss() {
     // Synchronous driver for permanent research checks; interactive cheats
     // call StartBossSkip and let each host frame call AdvanceBossSkip.
     if (!StartBossSkip()) { return false; }

@@ -15,6 +15,8 @@
 | `CombatScene` 的玩家状态、经验、矿石、移动、射击、击退 | `gun_bros_re/gameplay/CPlayer.*` | `CPlayer::AddExperience` 101185、`AddXplodium` 101116、`Move` 100623、`UpdateMovement` 101384、`UpdateShooting` 101314；玩家 BT。玩家状态只有一份，模型及生命状态为非拥有引用 |
 | `SurvivalSession::ChooseSpawnNode` | `CEnemySpawner::GetSpawnPoint`，`CLayerPathLink/Mesh::GetSpawnLocation` | 146098、146112、166819、168115；LEVEL 与 MAP BT。保留节点锁定、最近五点、屏外边界和随机调用顺序 |
 | 宿主击杀计数 | `CLevel::OnEnemyKilled` / `GetKills` | 119306；只在交付死亡事件时计数，Bind 重置，宿主读取同一计数 |
+| Powerup 编号白名单 | `ZPowerupScene` 的 STORE 引用、模式标志与 `CPowerup` Flow 查询 | POWERUP 2/3/4 没有专用 STORE 条目且 Flow 不提供装备入口；删除 `IsPlayablePowerup`，不再用 `pack5` 编号重复表达资源事实 |
+| `ZLevelHost` 的组合职责 | `gameplay/CGame.*`、`CLevel.*` | 原 `CGame::Update` 76355–76663、`CGame::Bind` 76803；`CLevel::UpdateNormal` 121150、`UpdateAfterDeath` 121047、`Update` 121697。`CGame` 持有 `CLevel` 并处理 HUD、对话、转场和结果；生成、对象查询、拾取、触发、相机及世界更新归 `CLevel` |
 | `SurvivalHud` 与两个 `Original*Selector` | `ui/CInputPad.*`、`CPowerUpSelector.*` | `powerUpSelector.cpp` 183797–187670；Movie BT。选择、购买提示、命中区域、滚动和动画归选择器 |
 | 面板与选择器的资源缓存 | `ui/ZHudResources.*`，状态输入 `ZHudState.h` | 桌面共享缓存；两消费者使用同一缓存，不复制 BIG 数据。删除只写不读的 `originalUi` |
 | `OriginalPromotionPopup` 的两套绑定 | `ui/CMenuInviteFriends.*`、`CMenuIncentives.*` | 248330–248861、292917–293260；文字、图标、区域和动作映射归各菜单，`ZPromotionPopup` 保留共同的章节播放和点击生命周期 |
@@ -25,7 +27,7 @@
 ### 命名
 
 - 文件变更逐项列在 [源码文件名映射](source-name-map.md)。主要宿主为 `ZWindow`、`ZAudioPlayer`、`ZMediaVideo`、`ZShaderProgram`、`ZMeshBuffer`、`ZTexture`、`ZQuadBatch`、`ZMovieRenderer`。
-- `CombatScene` → `ZCombatWorld`，`SurvivalSession` → `ZLevelHost`。这些名称描述当前桌面世界和关卡装配，不声称原版有同名类。
+- `CombatScene` → `ZCombatWorld`；原组合类 `SurvivalSession` 已删除，运行入口改用原名 `CGame` 持有 `CLevel`。`ZCombatWorld` 仍是桌面对象实现，不冒充原版类型。
 - `BroAIDeathmatch` → `ZLocalCoopBot`，PvP 策略为 `ZDeathmatchBot`；实际本地 bot 的 `SetTestBot/HasTestBot` 改为 `SetLocalBot/HasLocalBot`。
 - `OriginalProfile` / `NativeProfile` → `ZProfileImport` / `ZProfileStorage`。函数按导入、加载、保存、记录职责命名；磁盘 ID、格式和未知字段保留策略不变。
 - `CSpriteGluArchetype` → `ZSpriteArchetype`：算法来自 `CSpriteGlu::LoadArcheType`，当前独立缓存类是自建表示，不能据此捏造一个原类。
@@ -47,7 +49,7 @@
 
 ## 保留的宿主边界和未声称完成的内容
 
-- `ZCombatWorld` 仍负责共享碰撞查询、对象装配、多角色奖励协调和本地模式统计；`ZLevelHost` 保留跨对象更新顺序、HUD/音频/挑战通知和关卡模板生命周期。它们已有缩减，仍不是完整原 `CLevel` / `CGame` 的恢复。
+- `ZCombatWorld` 仍负责共享碰撞查询、对象存储、多角色奖励协调和本地模式统计；玩法更新顺序和对象调度已经归 `CLevel`，HUD、挑战和结果归 `CGame`。这恢复了原版所有权方向，但不声称已经恢复原 `CLevelObjectPool` 的完整类型布局。
 - 本轮没有改玩家桌面固定速度为原模拟摇杆加速，也没有把桌面确定性随机流冒充原全局随机发生器。相关差异写在 `CPlayer.cpp` 与 `ZRandom.h`。
 - Movie 的分类型解析职责已分离，但未恢复全部原 `CMovie*` 子类继承树；GL 资源缓存和绘制仍是桌面实现。
 - `SurvivalDevelopment` 继续承载历史研究配置；共享生命周期视图仍较宽。它们没有测试实现，进一步缩窄需结合运行入口的后续整理，不能仅靠改名宣称完成。

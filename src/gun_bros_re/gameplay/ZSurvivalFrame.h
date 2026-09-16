@@ -4,7 +4,7 @@
 
 class CInputPad;
 class CBGM;
-class ZLevelHost;
+class CGame;
 
 /** Optional caller control at real input/update/render boundaries. */
 enum class ZSurvivalFramePhase {
@@ -16,7 +16,7 @@ enum class ZSurvivalFramePhase {
 struct ZSurvivalFrame {
     CProfileManager *profile;
     CInputPad &hud;
-    ZLevelHost &session;
+    CGame &session;
     ZCombatWorld &scene;
     ZPlayerModel &player;
     ZPlayerVitals &vitals;

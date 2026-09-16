@@ -3,7 +3,7 @@
 #include "gameplay/SurvivalCheckScenario.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
-#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/ZDeathmatchBot.h"
 #include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/gameplay/ZPowerupScene.h"

@@ -3,7 +3,6 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
 #include <Windows.h>
 #include <fstream>
 #include <cstdio>
@@ -134,7 +133,7 @@ ZPurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned le
     }
     bool missing = false;
     for (const GameObjectTypeRef &ref : item.objects) {
-        if (ref.type == 17 && IsPlayablePowerup(ref.object)) {
+        if (ref.type == 17 && !ref.object.IsNull()) {
             if (award && GetPowerupCount(ref.object) >= 99) { continue; }
             if (!award && item.commonPrice == 0 && item.rarePrice == 0) { return ZPurchaseResult::Unsupported; }
             missing = true;

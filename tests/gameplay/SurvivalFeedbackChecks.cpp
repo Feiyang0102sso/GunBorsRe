@@ -55,7 +55,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             if (!duplicate) { return 1; }
             duplicate->objectId = prop.objectId;
             float afterX = 0, afterY = 0;
-            const bool retained = session.GetIndicatorTarget((2ULL << 32) | target, afterX, afterY) &&
+            const bool retained = session.GetLevel().GetIndicatorTarget((2ULL << 32) | target, afterX, afterY) &&
                 afterX == targetX && afterY == targetY;
             if (!retained) { ++checkFailures; }
             duplicate->model.enemy.combat.removed = true;

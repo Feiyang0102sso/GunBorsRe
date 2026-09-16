@@ -5,10 +5,22 @@
 
 #include "gun_bros_re/gameplay/CLevel.h"
 
+#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/ZPickupScene.h"
+#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/gameplay/ZPropWorld.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
 
 #include <cstdio>
 #include <algorithm>
+#include <cmath>
+
+// CBrother constructor :139098; CPlayer::Move uses the full radius for triggers.
+constexpr float kBrotherTriggerRadius = 22.0f;
 
 void CLevel::FocusCameraOnEnemy(float x, float y) {
     if (m_map == nullptr) { return; }
@@ -81,6 +93,40 @@ CLevel::CLevel() : m_template(nullptr), m_map(nullptr), m_unimplementedCalls(0) 
     }
 }
 
+void CLevel::AttachRuntime(CGame &game, ZCombatWorld &scene,
+    const std::vector<ZEnemyTemplateData> &catalog) {
+    m_game = &game;
+    m_scene = &scene;
+    m_catalog = &catalog;
+    scene.SetLevel(this);
+}
+
+void CLevel::BindWorldObjects(ZPropWorld *props, ZPickupScene *pickups,
+    ZWeaponEffects *effects, ZPowerupScene *powerups, ZPowerupScene *peerPowerups) {
+    m_props = props;
+    m_pickups = pickups;
+    m_effects = effects;
+    m_powerups = powerups;
+    m_peerPowerups = peerPowerups;
+}
+
+void CLevel::ResetWorld(float x, float y, float facingDegrees) {
+    if (m_scene == nullptr) { return; }
+    m_scene->Reset();
+    if (m_powerups != nullptr) { m_powerups->Reset(); }
+    if (m_peerPowerups != nullptr) { m_peerPowerups->Reset(); }
+    if (m_pickups != nullptr) { m_pickups->Reset(); }
+    if (m_props != nullptr) { m_props->Reset(); }
+    m_scene->GetPlayer().x = x;
+    m_scene->GetPlayer().y = y;
+    // CBrother::Spawn :135887 writes one spawn angle to both brothers.
+    m_scene->GetPlayer().facing = facingDegrees;
+    m_scene->ResetBrotherPosition(x, y, facingDegrees);
+    m_spawnSerial = 0;
+    m_closestSpawnDistance = -1;
+    m_onScreenSpawns = 0;
+}
+
 void CLevel::Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world, int startWave) {
     SetLevelContext(this);
     m_template = &levelTemplate;
@@ -89,7 +135,8 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world, 
     map.GetCamera().Reset(0.8f);
     map.UnlockAllPathNodes();
     m_world = world;
-    m_spawner.Bind(*this, world);
+    if (m_world == nullptr && m_scene != nullptr) { m_world = this; }
+    m_spawner.Bind(*this, m_world);
     m_timerMs = 0;
     m_timerFunction = -1;
     m_eventTimerMs = 0;
@@ -357,7 +404,7 @@ int CLevel::TransformWorldElapseMS(int deltaMs) const {
     return std::max(1, static_cast<int>(deltaMs * m_worldTimeScale));
 }
 
-void CLevel::Update(int deltaMs) {
+void CLevel::UpdateScript(int deltaMs) {
     if (deltaMs <= 0 || m_cleared) {
         return;
     }
@@ -386,6 +433,103 @@ void CLevel::Update(int deltaMs) {
         }
     }
     m_spawner.Update(deltaMs);
+}
+
+void CLevel::Update(int deltaMs) {
+    if (m_scene == nullptr) {
+        UpdateScript(deltaMs);
+        return;
+    }
+    Update(deltaMs, 0, 0, false, true);
+}
+
+void CLevel::Update(int deltaMs, float moveX, float moveY, bool fire, bool advanceScript) {
+    if (deltaMs <= 0 || m_scene == nullptr || m_map == nullptr) { return; }
+    // CLevel::Update :121255 advances the active powerup before its pause gate.
+    if (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive()) {
+        m_peerPowerups->Update(deltaMs);
+        return;
+    }
+    if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
+        m_powerups->Update(deltaMs);
+        return;
+    }
+    if (IsDeathComplete()) {
+        UpdateAfterDeath(deltaMs);
+        return;
+    }
+    if (m_paused) { return; }
+
+    const int worldDeltaMs = TransformWorldElapseMS(deltaMs);
+    m_map->GetCamera().Update(worldDeltaMs);
+    if (m_cleared) {
+        m_scene->Update(worldDeltaMs, 0, 0, false);
+        UpdateCamera(worldDeltaMs);
+        return;
+    }
+
+    CheckForCameraChange(m_scene->GetPlayer().x, m_scene->GetPlayer().y);
+    if (advanceScript) { UpdateScript(deltaMs); }
+    m_scene->SetPathLayer(m_pathLayer);
+    const float previousX = m_scene->GetPlayer().x;
+    const float previousY = m_scene->GetPlayer().y;
+    if (!m_playerCanMove) { moveX = 0; moveY = 0; }
+    if (!m_playerCanShoot) { fire = false; }
+    m_scene->Update(worldDeltaMs, moveX, moveY, fire);
+    UpdateMapInteractions(previousX, previousY);
+
+    if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
+    if (m_peerPowerups != nullptr) { m_peerPowerups->Update(deltaMs); }
+    if (m_props != nullptr) { m_props->Update(worldDeltaMs); }
+    if (m_pickups != nullptr && m_effects != nullptr) {
+        for (const ZPickupSpawn &spawn : m_scene->pickupSpawns) {
+            SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0);
+        }
+        m_pickups->Update(worldDeltaMs, *m_scene, *m_effects);
+        for (const ZPickupCollection &pickup : m_pickups->collections) {
+            if (m_match != nullptr && pickup.objectId >= CMPMatch::PickupIdBase &&
+                !m_scene->CollectMatchWeapon(pickup.peer, pickup.objectId - CMPMatch::PickupIdBase)) {
+                ++m_scene->invalidSpawns;
+            }
+            OnPickupCollected(pickup.objectId, pickup.resource);
+        }
+    }
+    for (std::uint8_t event : m_scene->levelEvents) { HandleEvent(event); }
+    if (m_match != nullptr) { m_scene->UpdateDeathmatch(deltaMs); }
+    for (const auto &event : m_scene->teleports) { OnEnemyTeleport(event.objectId, event.enemy); }
+    for (const ZCombatDeath &death : m_scene->deaths) { OnEnemyKilled(death.objectId, death.enemy); }
+    UpdateCamera(worldDeltaMs);
+}
+
+void CLevel::UpdateAfterDeath(int deltaMs) {
+    if (deltaMs <= 0 || m_scene == nullptr || m_map == nullptr) { return; }
+    if (!IsDeathComplete()) {
+        Update(deltaMs, 0, 0, false, true);
+        return;
+    }
+    if (m_powerups != nullptr && m_powerups->IsMovieActive()) {
+        m_powerups->Update(deltaMs);
+        return;
+    }
+    m_map->GetCamera().Update(deltaMs);
+    m_scene->Update(deltaMs, 0, 0, false);
+    if (m_powerups != nullptr) { m_powerups->Update(deltaMs); }
+    UpdateCamera(deltaMs);
+}
+
+bool CLevel::IsDeathComplete() const {
+    if (IsPowerupMovieActive()) { return false; }
+    return m_scene != nullptr && m_scene->IsTeamDeathComplete();
+}
+
+bool CLevel::IsPowerupMovieActive() const {
+    if (m_powerups != nullptr && m_powerups->IsMovieActive()) { return true; }
+    return m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive();
+}
+
+std::vector<std::string> CLevel::TakePowerupUseMessages() {
+    if (m_powerups == nullptr) { return {}; }
+    return m_powerups->TakeUseMessages();
 }
 
 bool CLevel::OnTrigger(int group) {
@@ -670,4 +814,305 @@ void CLevel::SetTileLayerSpeed(const std::int16_t *arguments, std::uint8_t argum
 
     std::printf("[level] setTileLayerSpeed( %d, %.4f, %.4f )\n", layerOrdinal, speedX,
                 speedY);
+}
+
+bool CLevel::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int nodeIndex, int objectId) {
+    if (m_scene == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
+    const bool hasAuthoredRoute = layerIndex >= 0 && nodeIndex >= 0;
+    std::size_t entryIndex = 0;
+    while (entryIndex < m_catalog->size()) {
+        const ZEnemyTemplateData &entry = (*m_catalog)[entryIndex];
+        if (entry.packHash == enemy.packHash && entry.ordinal == enemy.localIndex) { break; }
+        ++entryIndex;
+    }
+    if (entryIndex == m_catalog->size()) { return false; }
+    if (layerIndex < 0) { layerIndex = m_pathLayer; }
+    ILayerPath *path = m_map->GetPathLayer(layerIndex);
+    if (path == nullptr || path->GetNodes().empty()) { return false; }
+    const auto &nodes = path->GetNodes();
+    if (nodeIndex < 0) {
+        nodeIndex = m_spawner.GetSpawnPoint(*path, m_scene->GetPlayer().x, m_scene->GetPlayer().y,
+            m_cameraLeft, m_cameraTop, m_cameraWidth, m_cameraHeight);
+    }
+    if (nodeIndex < 0 || nodeIndex >= static_cast<int>(nodes.size())) { return false; }
+    ZCombatEnemy *actor = m_scene->Spawn(entryIndex, nodes[nodeIndex].x, nodes[nodeIndex].y);
+    if (actor == nullptr) { return false; }
+    if (objectId < 0) {
+        const float distance = std::hypot(m_scene->GetPlayer().x - nodes[nodeIndex].x,
+            m_scene->GetPlayer().y - nodes[nodeIndex].y);
+        if (m_closestSpawnDistance < 0 || distance < m_closestSpawnDistance) {
+            m_closestSpawnDistance = distance;
+        }
+        if (m_cameraWidth > 0 && nodes[nodeIndex].x >= m_cameraLeft && nodes[nodeIndex].y >= m_cameraTop &&
+            nodes[nodeIndex].x <= m_cameraLeft + m_cameraWidth && nodes[nodeIndex].y <= m_cameraTop + m_cameraHeight) {
+            ++m_onScreenSpawns;
+        }
+    }
+    actor->objectId = objectId;
+    if (hasAuthoredRoute) { actor->model.enemy.SetPath(path); }
+    SetIndicator(objectId, 0, actor->model.enemy.combat.id);
+    return true;
+}
+
+void CLevel::StartObjectLayer(int layer) {
+    if (m_props != nullptr) { m_props->StartLayer(layer); }
+}
+
+bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
+    if (m_scene == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
+    if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Prop)) {
+        if (m_props == nullptr) { return false; }
+        return m_props->Spawn(m_objectLayer, objectId);
+    }
+    if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Pickup)) {
+        GameObjectRef pickup;
+        pickup.packHash = object.packHash;
+        pickup.localIndex = object.localIndex;
+        return SpawnPickupAt(pickup, object.x, object.y, objectId);
+    }
+    if (object.objectType != static_cast<unsigned>(ZPlacedObjectType::Enemy)) { return true; }
+    for (unsigned index = 0; index < m_catalog->size(); ++index) {
+        const ZEnemyTemplateData &entry = (*m_catalog)[index];
+        if (entry.packHash != object.packHash || entry.ordinal != object.localIndex) { continue; }
+        ZCombatEnemy *actor = m_scene->Spawn(index, object.x, object.y);
+        if (actor == nullptr) { return false; }
+        actor->objectId = objectId;
+        actor->mapPlaced = true;
+        if (object.pathLayer != 255) { actor->model.enemy.SetPath(m_map->GetPathLayer(object.pathLayer)); }
+        SetIndicator(objectId, 0, actor->model.enemy.combat.id);
+        actor->model.enemy.combat.facing = static_cast<float>(object.facing);
+        std::printf("[survival] placed enemy id=%d tag=%u item=%u path=%u facing=%d\n",
+            objectId, object.spawnTag, object.localIndex, object.pathLayer, object.facing);
+        return true;
+    }
+    return false;
+}
+
+void CLevel::SendEnemyMessage(int objectId, int message) {
+    if (m_scene == nullptr) { return; }
+    for (const auto &actor : m_scene->enemies) {
+        if (actor->objectId != objectId) { continue; }
+        const unsigned before = actor->model.enemy.GetStateId();
+        actor->model.enemy.HandleMessage(message);
+        if (before != actor->model.enemy.GetStateId()) {
+            std::printf("[map-enemy] id=%d message=%d state=%u->%u\n",
+                objectId, message, before, actor->model.enemy.GetStateId());
+        }
+        return;
+    }
+}
+
+void CLevel::SetEnemyPortal(int enemyId, int propId) {
+    if (m_scene == nullptr) { return; }
+    for (const auto &actor : m_scene->enemies) {
+        if (actor->objectId != enemyId) { continue; }
+        actor->model.enemy.combat.portalObjectId = propId;
+        actor->model.enemy.combat.portalActive = false;
+        return;
+    }
+}
+
+void CLevel::SendPropMessage(int objectId, int message) {
+    if (m_props != nullptr) { m_props->SendMessage(objectId, message); }
+}
+
+bool CLevel::IsActivePortal(int propId) const {
+    if (m_world != nullptr && m_world != this) { return m_world->IsActivePortal(propId); }
+    return m_props != nullptr && m_props->IsActivePortal(propId);
+}
+
+void CLevel::PlayLevelSound(const GameObjectRef &sound) {
+    if (m_effects == nullptr) { return; }
+    ZGunCue cue;
+    cue.kind = ZGunCue::Kind::Sound;
+    cue.resource = sound;
+    m_effects->Emit(cue, 0, 0, 0, 0);
+}
+
+void CLevel::OnWaveCleared(unsigned perfectRewardPercent) {
+    if (m_game != nullptr) { m_game->OnWaveCleared(perfectRewardPercent); }
+}
+
+bool CLevel::SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) {
+    if (m_scene == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
+    if (layer < 0) { layer = m_pathLayer; }
+    ILayerPath *path = m_map->GetPathLayer(layer);
+    if (path == nullptr || path->GetNodes().empty()) { return false; }
+    const auto &nodes = path->GetNodes();
+    if (nearby) { node = path->FindNearest(m_scene->GetPlayer().x, m_scene->GetPlayer().y); }
+    if (node < 0) {
+        for (unsigned attempt = 0; attempt < nodes.size(); ++attempt) {
+            const unsigned candidate = (m_spawnSerial + attempt) % nodes.size();
+            if (!nodes[candidate].locked) {
+                node = candidate;
+                m_spawnSerial = candidate + 1;
+                break;
+            }
+        }
+    }
+    if (node < 0 || node >= static_cast<int>(nodes.size())) { return false; }
+    return SpawnPickupAt(pickup, nodes[node].x, nodes[node].y, objectId);
+}
+
+bool CLevel::SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) {
+    if (m_pickups == nullptr || !m_pickups->Spawn(pickup, x, y, objectId)) { return false; }
+    SetIndicator(objectId, 1, (1ULL << 32) | m_pickups->spawned);
+    return true;
+}
+
+bool CLevel::SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) {
+    if (m_match == nullptr || m_scene == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
+    ILayerPath *path = m_map->GetPathLayer(layer);
+    if (path == nullptr || path->GetNodes().empty()) { return false; }
+    const auto &nodes = path->GetNodes();
+    const unsigned start = static_cast<unsigned>(RandomInteger(0, static_cast<std::int16_t>(nodes.size() - 1)));
+    for (unsigned offset = 0; offset < nodes.size(); ++offset) {
+        const auto &node = nodes[(start + offset) % nodes.size()];
+        if (node.locked || !m_scene->CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
+        float nearestX = 0;
+        float nearestY = 0;
+        if (m_pickups->FindNearest(node.x, node.y, nearestX, nearestY) &&
+            std::hypot(nearestX - node.x, nearestY - node.y) < m_scene->GetPlayerRadius() * 2) {
+            continue;
+        }
+        const int candidate = m_match->ChoosePickup();
+        if (candidate < 0) { return false; }
+        return SpawnPickupAt(pickup, node.x, node.y, CMPMatch::PickupIdBase + candidate);
+    }
+    return false;
+}
+
+std::uint64_t CLevel::ResolveIndicatorTarget(int objectId) const {
+    if (m_scene == nullptr) { return 0; }
+    if (m_props != nullptr) {
+        const unsigned key = m_props->ResolveIndicatorTarget(objectId);
+        if (key != 0) { return (2ULL << 32) | key; }
+    }
+    for (const auto &actor : m_scene->enemies) {
+        if (actor->objectId == objectId && !actor->model.enemy.combat.dead && !actor->model.enemy.combat.removed) {
+            return actor->model.enemy.combat.id;
+        }
+    }
+    return 0;
+}
+
+bool CLevel::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
+    if (m_scene == nullptr) { return false; }
+    if ((key >> 32) == 2) {
+        return m_props != nullptr && m_props->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
+    }
+    if ((key >> 32) == 1) {
+        return m_pickups != nullptr && m_pickups->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
+    }
+    ZCombatEnemy *actor = m_scene->Find(static_cast<ZCombatId>(key));
+    if (actor == nullptr || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { return false; }
+    x = actor->model.enemy.combat.x;
+    y = actor->model.enemy.combat.y;
+    return true;
+}
+
+bool CLevel::GetObjectPosition(int objectId, float &x, float &y) const {
+    if (m_scene == nullptr) { return false; }
+    for (const auto &actor : m_scene->enemies) {
+        if (actor->objectId != objectId || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { continue; }
+        x = actor->model.enemy.combat.x;
+        y = actor->model.enemy.combat.y;
+        return true;
+    }
+    if (m_pickups != nullptr && m_pickups->GetObjectPosition(objectId, x, y)) { return true; }
+    return m_props != nullptr && m_props->GetObjectPosition(objectId, x, y);
+}
+
+int CLevel::CountEnemySlots(const GameObjectRef *enemy) const {
+    if (m_scene == nullptr) { return 0; }
+    int count = 0;
+    for (const auto &actor : m_scene->enemies) {
+        if (actor->model.enemy.combat.removed) { continue; }
+        if (enemy == nullptr || (actor->data->packHash == enemy->packHash && actor->data->ordinal == enemy->localIndex)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int CLevel::CountEnemies(const GameObjectRef *enemy, int objectId) const {
+    if (m_scene == nullptr) { return 0; }
+    int count = 0;
+    for (const auto &actor : m_scene->enemies) {
+        const ZEnemyCombat &state = actor->model.enemy.combat;
+        if (state.dead || state.removed) { continue; }
+        if (objectId >= 0 && actor->objectId != objectId) { continue; }
+        if (enemy == nullptr || (actor->data->packHash == enemy->packHash && actor->data->ordinal == enemy->localIndex)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+void CLevel::UpdateMapInteractions(float previousX, float previousY) {
+    if (m_scene == nullptr || m_map == nullptr || m_scene->IsMatchSpawnPending(0)) { return; }
+    if (m_archive) {
+        const float scaleRatio = 0.8f / m_map->GetCamera().GetScale();
+        const float viewWidth = m_viewWidth * scaleRatio;
+        const float viewHeight = m_viewHeight * scaleRatio;
+        float left = m_scene->GetPlayer().x - viewWidth * 0.5f;
+        float top = m_scene->GetPlayer().y - viewHeight * 0.5f;
+        const ZMapRectangle bounds = m_map->GetVisibleBounds();
+        if (!bounds.IsEmpty()) {
+            if (bounds.width <= viewWidth) { left = bounds.x + (bounds.width - viewWidth) * 0.5f; }
+            else { left = std::clamp(left, static_cast<float>(bounds.x), bounds.x + bounds.width - viewWidth); }
+            if (bounds.height <= viewHeight) { top = bounds.y + (bounds.height - viewHeight) * 0.5f; }
+            else { top = std::clamp(top, static_cast<float>(bounds.y), bounds.y + bounds.height - viewHeight); }
+        }
+        UpdateProximitySpawns(left, top, viewWidth, viewHeight);
+    }
+    for (unsigned index = 0; index < m_map->GetCollisionLayerCount(); ++index) {
+        const CLayerCollision &layer = m_map->GetCollisionLayer(index);
+        if (static_cast<int>(layer.GetLayerIndex()) != m_triggerLayer) { continue; }
+        const auto &geometry = layer.GetCollision();
+        float nearest = 2;
+        int group = -1;
+        for (const ZCollisionEdge &edge : geometry.GetEdges()) {
+            if (!edge.enabled) { continue; }
+            const float fraction = CombatGeometry::EdgeFraction(previousX, previousY,
+                m_scene->GetPlayer().x - previousX, m_scene->GetPlayer().y - previousY,
+                geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex],
+                kBrotherTriggerRadius);
+            if (fraction < nearest) {
+                nearest = fraction;
+                group = edge.group;
+            }
+        }
+        if (group >= 0 && nearest <= 1) { OnTrigger(group); }
+        break;
+    }
+}
+
+unsigned CLevel::GetPowerupCount(unsigned localIndex) const {
+    if (m_powerups == nullptr) { return 0; }
+    return m_powerups->GetCount(localIndex);
+}
+
+void CLevel::UpdateCamera(int deltaMs) {
+    if (m_scene == nullptr || m_map == nullptr) { return; }
+    const ZMapRectangle bounds = m_map->GetVisibleBounds();
+    const float scale = 0.8f / m_map->GetCamera().GetScale();
+    if (!m_scene->IsMatchSpawnPending(0) || !m_map->GetCamera().HasPosition()) {
+        m_map->GetCamera().UpdatePosition(m_scene->GetPlayer().x, m_scene->GetPlayer().y,
+            bounds.x, bounds.y, bounds.width, bounds.height, m_viewWidth * scale, m_viewHeight * scale);
+    }
+    m_scene->SetViewCenter(m_map->GetCamera().GetX(), m_map->GetCamera().GetY());
+    const float width = m_viewWidth * scale;
+    const float height = m_viewHeight * scale;
+    m_scene->SetViewSize(width, height);
+    m_cameraLeft = m_map->GetCamera().GetX() - width * 0.5f;
+    m_cameraTop = m_map->GetCamera().GetY() - height * 0.5f;
+    m_cameraWidth = width;
+    m_cameraHeight = height;
+    const float viewportFactor = std::min(m_viewWidth / 480.0f, m_viewHeight / 320.0f);
+    const float margin = 25 * viewportFactor * scale;
+    const float bottomMargin = 100 * viewportFactor * scale;
+    UpdateIndicators(deltaMs, m_map->GetCamera().GetX() - width * 0.5f + margin,
+        m_map->GetCamera().GetY() - height * 0.5f + margin,
+        width - 2 * margin, height - margin - bottomMargin);
 }

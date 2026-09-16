@@ -5,16 +5,18 @@ using namespace MapDetail;
 int CheckSurvivalPowerupInventory(SurvivalPowerupInventoryFixture fixture) {
     auto &researchProfile = fixture.researchProfile;
     auto & powerupStudy = fixture.powerupStudy;
-    auto & toc = fixture.toc;
 
     if (powerupStudy) {
-        GameObjectRef item;
-        item.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
-        for (unsigned index = 0; index < 20; ++index) {
-            item.localIndex = static_cast<std::uint8_t>(index);
-            if (IsPlayablePowerup(item)) { researchProfile.AddPowerup(item, 10); }
+        ZPackTables tables(fixture.toc);
+        std::vector<ZStoreEntry> store;
+        if (!LoadStoreCatalog(fixture.toc, tables, store)) { return 1; }
+        for (const auto &entry : store) {
+            if (entry.data.type < 10 || entry.data.type > 13) { continue; }
+            for (const auto &object : entry.data.objects) {
+                if (object.type == 17) { researchProfile.AddPowerup(object.object, 10); }
+            }
         }
-        std::printf("[powerup-study] isolated inventory: 10 of each supported item\n");
+        std::printf("[powerup-study] isolated inventory: 10 of each store powerup\n");
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }

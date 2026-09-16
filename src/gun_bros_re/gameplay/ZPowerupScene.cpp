@@ -16,12 +16,29 @@ ZPowerupScene::ZPowerupScene(CResTOCManager &toc, ZPackTables &tables, ZPlayerMo
 
 bool ZPowerupScene::Init() {
     if (!LoadPowerupCatalog(m_toc, m_tables, m_catalog) || !LoadStoreCatalog(m_toc, m_tables, m_store)) { return false; }
+    // The retail selector is defined by dedicated STORE records. Validate their
+    // POWERUP references instead of maintaining a second host-side ID list.
+    for (const auto &store : m_store) {
+        if (store.data.type < 10 || store.data.type > 13) { continue; }
+        for (const auto &reference : store.data.objects) {
+            if (reference.type != 17) { continue; }
+            bool found = false;
+            for (const auto &entry : m_catalog) {
+                if (entry.resource.packHash == reference.object.packHash &&
+                    entry.resource.localIndex == reference.object.localIndex) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                std::printf("[powerup] unresolved store reference resource=%08x:%u\n",
+                    reference.object.packHash, reference.object.localIndex);
+                return false;
+            }
+        }
+    }
     m_botUseRules.clear();
     for (const auto &entry : m_catalog) {
-        if (IsPlayablePowerup(entry.resource) && FindStoreItem(entry) == nullptr) {
-            std::printf("[powerup] missing mode rules resource=%08x:%u\n", entry.resource.packHash, entry.resource.localIndex);
-            return false;
-        }
         BotUseRules rules;
         // POWERUP script resources: 253 denotes a Movie dependency. Retail
         // offensive Movies are air strikes; afterDeath is a separate action.
@@ -159,13 +176,7 @@ bool ZPowerupScene::Equip(unsigned slot, const GameObjectRef &resource) {
 bool ZPowerupScene::IsSupported(const ZPowerupEntry &entry) const {
     if (!ModeAllows(entry)) { return false; }
     if (!MatchAllows(entry)) { return false; }
-    // Expose only completed hosts. Legacy Tantrum and movie/auto-fire/turret
-    // templates stay available in the full research catalogue.
-    // Auto-fire and turret now have their original targeting/spawn hosts;
-    // movie-driven items and legacy Tantrum still remain archived.
-    // Movie-driven air strikes now have real timeline/callback hosts below.
-    // Legacy Tantrum now follows its original timer/effect and expiry callbacks.
-    return IsPlayablePowerup(entry.resource);
+    return true;
 }
 
 const ZPowerupEntry *ZPowerupScene::GetSelected() const {
