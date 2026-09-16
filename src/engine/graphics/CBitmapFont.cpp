@@ -81,10 +81,10 @@ bool CBitmapFont::Init(CResPackTOC &core, unsigned index) {
         m_controls[code] = static_cast<std::int8_t>(input.ReadUInt8());
     }
     if (input.Overran() || input.Available() != 0 || !core.GetResource(texture, bytes)) { return false; }
-    PNGImage image;
+    ZPNGImage image;
     if (!PNGDecode(bytes, image) || !m_texture.Create(image)) { return false; }
     for (const auto &entry : m_glyphs) {
-        const SourceRect &rect = entry.second.source;
+        const ZSourceRect &rect = entry.second.source;
         if (unsigned(rect.x) + rect.width > image.width || unsigned(rect.y) + rect.height > image.height) { return false; }
     }
     std::printf("[font] index=%u glyphs=%u controls=%u height=%d atlas=%ux%u\n", index, glyphCount, controlCount, m_height, image.width, image.height);
@@ -104,7 +104,7 @@ float CBitmapFont::Width(const std::string &text, float scale) const {
     return std::max(maximum, width) * scale;
 }
 
-void CBitmapFont::Draw(CQuadBatch &batch, const std::string &text, float x, float y, float scale, float alpha) const {
+void CBitmapFont::Draw(ZQuadBatch &batch, const std::string &text, float x, float y, float scale, float alpha) const {
     const float startX = x;
     for (unsigned code : Codepoints(text)) {
         if (code == '\n') { x = startX; y += Height(scale); continue; }
@@ -116,7 +116,7 @@ void CBitmapFont::Draw(CQuadBatch &batch, const std::string &text, float x, floa
         const Glyph &value = glyph->second;
         batch.AddTransformedQuad(m_texture, x + value.offsetX * scale, y + value.offsetY * scale,
             value.source.width * scale, value.source.height * scale, value.source, false, false,
-            BlendMode::Alpha, 0, 0, 1, 1, 0, alpha);
+            ZBlendMode::Alpha, 0, 0, 1, 1, 0, alpha);
         x += (value.advance + m_spacing) * scale;
     }
 }

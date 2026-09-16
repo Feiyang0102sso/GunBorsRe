@@ -1,6 +1,6 @@
 /** Real BIG actors must separate while pursuing the same distant target. */
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/CombatScene.h"
+#include "gun_bros_re/gameplay/ZCombatWorld.h"
 #include "gun_bros_re/gameplay/CFlock.h"
 #include <cmath>
 #include <cstdio>
@@ -19,12 +19,12 @@ public:
 };
 }
 
-int CheckFlockMovement(CombatScene &scene) {
+int CheckFlockMovement(ZCombatWorld &scene) {
     scene.Reset();
-    scene.playerX = 1000;
-    scene.playerY = 450;
-    CombatEnemy *first = scene.Spawn(0, 600, 440);
-    CombatEnemy *second = scene.Spawn(0, 600, 460);
+    scene.GetPlayer().x = 1000;
+    scene.GetPlayer().y = 450;
+    ZCombatEnemy *first = scene.Spawn(0, 600, 440);
+    ZCombatEnemy *second = scene.Spawn(0, 600, 460);
     if (first == nullptr || second == nullptr) { return 1; }
     // Finish spawn animation before isolating the movement native from AI.
     for (int step = 0; step < 80; ++step) { scene.Update(16, 0, 0, false); }
@@ -33,7 +33,7 @@ int CheckFlockMovement(CombatScene &scene) {
     second->model.enemy.combat.x = 600;
     second->model.enemy.combat.y = 460;
     for (int step = 0; step < 60; ++step) {
-        for (CombatEnemy *actor : {first, second}) {
+        for (ZCombatEnemy *actor : {first, second}) {
             auto &state = actor->model.enemy.combat;
             state.behaviour = 0;
             state.arrivalDistance = 0;
@@ -78,9 +78,9 @@ int CheckFlockMovement(CombatScene &scene) {
     }
     if (!enemy.combat.arrived || enemy.combat.x != 700 || enemy.combat.y != 440) { ++failures; }
     // Verify the original cutoff, coincidence and removal from the next list.
-    EnemyCombat left;
-    EnemyCombat right;
-    std::vector<EnemyCombat *> neighbours = {&left, &right};
+    ZEnemyCombat left;
+    ZEnemyCombat right;
+    std::vector<ZEnemyCombat *> neighbours = {&left, &right};
     right.x = 100;
     CFlock::RefreshFlock(neighbours);
     if (left.flockX != -10 || right.flockX != 10) { ++failures; }

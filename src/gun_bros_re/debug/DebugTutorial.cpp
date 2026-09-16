@@ -1,14 +1,14 @@
 /** Menu debug replay; original LEVEL Flow still controls every tutorial step. */
 #include "gun_bros_re/debug/DebugTutorial.h"
-#include "gun_bros_re/data/NativeProfile.h"
-#include "gun_bros_re/gameplay/SurvivalGameContext.h"
+#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "gun_bros_re/gameplay/CLevel.h"
-#include "gun_bros_re/data/PackTables.h"
+#include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 
-bool PrepareDebugTutorial(CResTOCManager &toc, PackTables &tables, SurvivalGameContext &context,
-    SurvivalLaunch &launch) {
-    if (!CreateTransientNativeProfile(toc, tables, context.profile)) { return false; }
+bool PrepareDebugTutorial(CResTOCManager &toc, ZPackTables &tables, ZSurvivalGameContext &context,
+    ZSurvivalLaunch &launch) {
+    if (!CreateTransientProfile(toc, tables, context.profile)) { return false; }
     context.tutorial = true;
     context.debugTutorial = true;
     context.persistProgress = false;
@@ -16,7 +16,7 @@ bool PrepareDebugTutorial(CResTOCManager &toc, PackTables &tables, SurvivalGameC
     // Same resource chain as first launch: native survival slot -> LEVEL -> map.
     const auto &level = context.profile.nativeArchive->survivalLevels[0];
     std::vector<std::uint8_t> bytes;
-    if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, bytes)) { return false; }
+    if (!tables.ReadSectionResource(level.packHash, ZGameSection::Level, level.localIndex, bytes)) { return false; }
     CArrayInputStream input(bytes);
     CLevel::Template data;
     if (!data.Init(input) || input.Available() != 0) { return false; }

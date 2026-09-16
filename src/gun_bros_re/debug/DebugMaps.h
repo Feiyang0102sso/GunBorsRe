@@ -2,25 +2,25 @@
 /** @file DebugMaps.h
  * @brief Desktop-only BIG map selection; no retail progress is written by previews.
  */
-#include "gun_bros_re/data/MissionCatalog.h"
-class CWindow;
+#include "gun_bros_re/data/ZMissionCatalog.h"
+class ZWindow;
 class CProfileManager;
-struct SurvivalLaunch;
-struct SurvivalGameContext;
+struct ZSurvivalLaunch;
+struct ZSurvivalGameContext;
 struct DebugMapSelection {
     std::string pack;
     unsigned map = 0;
     GameObjectRef level;
-    MissionEntry mission;
+    ZMissionEntry mission;
     bool hasMission = false;
     bool ready = false;
 };
 inline constexpr int kDebugMapMenuChoice = -4;
 inline constexpr int kDebugMapSessionChoice = 2;
 inline constexpr int kDebugMapSessionComplete = 3;
-bool ShowDebugMapPicker(CResTOCManager &toc, PackTables &tables, CWindow &window, DebugMapSelection &selection,
+bool ShowDebugMapPicker(CResTOCManager &toc, ZPackTables &tables, ZWindow &window, DebugMapSelection &selection,
     const std::string &message = "");
-SurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
-    SurvivalGameContext &context);
-void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSelection &selection,
+ZSurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
+    ZSurvivalGameContext &context);
+void RunDebugMaps(const std::string &bigDirectory, ZWindow &window, DebugMapSelection &selection,
     const CProfileManager &profile);

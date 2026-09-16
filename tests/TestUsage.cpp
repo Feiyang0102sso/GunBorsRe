@@ -139,4 +139,3 @@ void PrintTestUsage() {
         "                            that first frame\n",
         kDefaultMapPack, kDefaultMapIndex, kDefaultImagePack, kDefaultImageResourceId);
 }
-

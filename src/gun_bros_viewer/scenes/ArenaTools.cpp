@@ -3,9 +3,9 @@
 #include <cstdio>
 
 namespace ArenaDetail {
-bool LoadArenaGrenades(CResTOCManager &toc, PackTables &tables,
-    std::array<PowerupEntry, 3> &grenades) {
-    std::vector<PowerupEntry> catalog;
+bool LoadArenaGrenades(CResTOCManager &toc, ZPackTables &tables,
+    std::array<ZPowerupEntry, 3> &grenades) {
+    std::vector<ZPowerupEntry> catalog;
     if (!LoadPowerupCatalog(toc, tables, catalog)) { return false; }
     // Shortcut identities only: pack5 POWERUP 13/15/14 are Grenade/Freeze G./
     // Shock G. (powerup-check.txt). Bullet refs and effects come from exports
@@ -28,7 +28,7 @@ bool LoadArenaGrenades(CResTOCManager &toc, PackTables &tables,
     return true;
 }
 
-bool ThrowArenaGrenade(CBrother &brother, const PowerupEntry &entry) {
+bool ThrowArenaGrenade(CBrother &brother, const ZPowerupEntry &entry) {
     // Do not replace the reference used by an in-flight throw animation.
     if (!brother.CanMove() || brother.HasGrenadeRequest(0)) { return false; }
     CPowerup powerup;

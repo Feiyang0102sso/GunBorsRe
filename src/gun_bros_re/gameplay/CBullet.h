@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CBullet.h
  * @brief The projectile template: a sprite, a model, and a pile of scalars.
@@ -41,14 +41,14 @@
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/data/CGameAssetRef.h"  // CGameSpriteGluRef
 #include "gun_bros_re/gameplay/CGun.h"
-#include "gun_bros_re/gameplay/CombatTypes.h"
+#include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include "gun_bros_re/gameplay/CLightningArc.h"
 
 #include <cstdint>
 #include <array>
 
 /** CBullet native12/13: authored point count, width, sample time and RGBA. */
-struct BulletRibbonSettings {
+struct ZBulletRibbonSettings {
     unsigned capacity = 0;
     float width = 0;
     unsigned intervalMs = 0;
@@ -58,7 +58,7 @@ struct BulletRibbonSettings {
 // What a CGameAssetRef holds when it points at nothing.
 constexpr std::int32_t kNoAssetId = -1;
 
-class CBullet : public GameScriptObject {
+class CBullet : public ZGameScriptObject {
 public:
     CBullet() = default;
     ~CBullet();
@@ -121,7 +121,7 @@ public:
     void ForceRemoval();
     void OnRemove();
     void OnWallCollision();
-    void OnCollision(HitResult result);
+    void OnCollision(ZHitResult result);
     float GetDamage() const;
     /** Original pseudo-height: no collision-coordinate displacement. */
     float GetTrajectoryFraction() const;
@@ -134,7 +134,7 @@ public:
     std::int16_t FunctionResolver(std::uint8_t function,
         const std::int16_t *arguments, std::uint8_t argumentCount);
     std::int16_t *VariableResolver(std::uint8_t variable);
-    std::vector<GunCue> TakeCues();
+    std::vector<ZGunCue> TakeCues();
 
     int ageMs = 0;
     int animation = 0;
@@ -148,15 +148,15 @@ public:
     bool collisionEnabled = true;
     float seekRadius = 0;
     int maximumBeamLength = 3000; // CBullet::Bind :63673; native18 overrides range.
-    BulletRibbonSettings ribbon;
-    BulletLightningSettings lightning;
+    ZBulletRibbonSettings ribbon;
+    ZBulletLightningSettings lightning;
     int zOrderGroup = 3;
 
 private:
     friend class CGun;
     CGun *m_sourceGun = nullptr;
     CScriptInterpreter m_interpreter;
-    std::vector<GunCue> m_cues;
+    std::vector<ZGunCue> m_cues;
     int m_timer = 0;
     std::uint8_t m_timerFunction = 0;
     std::int16_t m_masteryLevel = 0;

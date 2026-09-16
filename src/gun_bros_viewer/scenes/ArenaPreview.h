@@ -1,4 +1,4 @@
-/** @file Arena.h
+/** @file ArenaPreview.h
  * @brief Interactive single-template combat laboratory and repeatable checks.
  */
 #ifndef GUN_BROS_VIEWER_ARENAPREVIEW_H

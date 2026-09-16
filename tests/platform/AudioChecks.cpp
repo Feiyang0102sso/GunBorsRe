@@ -1,6 +1,6 @@
-#include "engine/platform/CAudioPlayerInternal.h"
+#include "engine/platform/ZAudioPlayerInternal.h"
 #include <chrono>
-unsigned CAudioPlayer::CheckSilentPlayback(std::uint64_t first, std::uint64_t second) {
+unsigned ZAudioPlayer::CheckSilentPlayback(std::uint64_t first, std::uint64_t second) {
     // Tests the real device/stream path without making the user's speakers play.
     StopAll();
     const float volume = m_impl->volume;

@@ -34,7 +34,7 @@ void CTargetingController::ClearTarget(float facing) {
     m_lastFacing = facing;
 }
 
-bool CTargetingController::Update(int deltaMs, float x, float y, float &facing, IBrotherAIWorld &world) {
+bool CTargetingController::Update(int deltaMs, float x, float y, float &facing, ZBrotherAIWorld &world) {
     float targetX = 0, targetY = 0;
     if (m_target != 0) {
         if (!world.GetBrotherTarget(m_target, targetX, targetY)) { ClearTarget(facing); }
@@ -79,4 +79,3 @@ bool CTargetingController::Update(int deltaMs, float x, float y, float &facing, 
     // The original keeps firing at its last bearing during reacquisition delay.
     return true;
 }
-

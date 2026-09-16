@@ -46,7 +46,7 @@ bool CMesh::Init(CArrayInputStream &stream, const CMoveSetMesh *moveSet) {
     m_texCoords.clear();
     m_frames.clear();
     m_vertexCount = 0;
-    m_bounds = MeshBounds();
+    m_bounds = ZMeshBounds();
 
     const std::uint8_t magic = stream.ReadUInt8();
     const std::uint32_t indexCount = stream.ReadUInt32();
@@ -91,7 +91,7 @@ bool CMesh::Init(CArrayInputStream &stream, const CMoveSetMesh *moveSet) {
 
     m_frames.resize(frameCount);
     for (std::uint16_t frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
-        MeshFrame &frame = m_frames[frameIndex];
+        ZMeshFrame &frame = m_frames[frameIndex];
         frame.timeMs = stream.ReadInt32();
 
         // CMesh::Init :97965 keeps timestamps but skips unused frame data.
@@ -104,7 +104,7 @@ bool CMesh::Init(CArrayInputStream &stream, const CMoveSetMesh *moveSet) {
 
         frame.bones.resize(boneCount);
         for (std::uint8_t boneIndex = 0; boneIndex < boneCount; ++boneIndex) {
-            MeshBoneTransform &bone = frame.bones[boneIndex];
+            ZMeshBoneTransform &bone = frame.bones[boneIndex];
             bone.posX = ReadFloat(stream);
             bone.posY = ReadFloat(stream);
             bone.posZ = ReadFloat(stream);
@@ -257,7 +257,7 @@ bool CMesh::GetVerticesAt(std::int32_t timeMs, std::vector<float> &out) const {
 }
 
 bool CMesh::GetNodeAt(std::int32_t timeMs, std::size_t boneIndex,
-                      MeshBoneTransform &out) const {
+                      ZMeshBoneTransform &out) const {
     // Against the name list, not against a frame's bone array: a frame skipped
     // at load time has no bones, and the names are always all there.
     if (m_frames.empty() || boneIndex >= m_boneNames.size()) {
@@ -279,8 +279,8 @@ bool CMesh::GetNodeAt(std::int32_t timeMs, std::size_t boneIndex,
         return true;
     }
 
-    const MeshBoneTransform &start = m_frames[firstFrame].bones[boneIndex];
-    MeshBoneTransform end = m_frames[secondFrame].bones[boneIndex];
+    const ZMeshBoneTransform &start = m_frames[firstFrame].bones[boneIndex];
+    ZMeshBoneTransform end = m_frames[secondFrame].bones[boneIndex];
 
     // Two unit quaternions describe the same rotation when one is the other
     // negated, and the straight-line blend below takes the short way round
@@ -312,11 +312,11 @@ bool CMesh::GetNodeAt(std::int32_t timeMs, std::size_t boneIndex,
 }
 
 void CMesh::ComputeBounds() {
-    m_bounds = MeshBounds();
+    m_bounds = ZMeshBounds();
 
     // The first frame that has vertices, not necessarily frame 0: with a move
     // set bound, the frames no move uses are left empty.
-    const MeshFrame *frame = nullptr;
+    const ZMeshFrame *frame = nullptr;
     for (std::size_t i = 0; i < m_frames.size(); ++i) {
         if (!m_frames[i].vertices.empty()) {
             frame = &m_frames[i];

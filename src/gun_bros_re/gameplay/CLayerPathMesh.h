@@ -14,14 +14,15 @@ public:
         std::array<std::uint16_t, 4> vertices{};
     };
     bool Init(CArrayInputStream &stream);
+    int GetSpawnLocation(float sourceX, float sourceY, const ZSpawnFilter &filter, ZRandom &random) const override;
     int FindNode(float x, float y) const override;
     void PropogateNodeLock(int boundary, int origin, bool locked) override;
     void UnlockNodesBetween(int first, int origin, int last) override;
     void GetConnectionPoint(int from, int to, float &x, float &y) const override;
-    const std::vector<CollisionPoint> &GetVertices() const { return m_vertices; }
+    const std::vector<ZCollisionPoint> &GetVertices() const { return m_vertices; }
     const std::vector<Quad> &GetQuads() const { return m_quads; }
 private:
-    std::vector<CollisionPoint> m_vertices;
+    std::vector<ZCollisionPoint> m_vertices;
     std::vector<Quad> m_quads;
 };
 #endif

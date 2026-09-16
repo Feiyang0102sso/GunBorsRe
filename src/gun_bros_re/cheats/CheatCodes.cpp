@@ -1,5 +1,4 @@
 #include "gun_bros_re/cheats/CheatCodes.h"
-#if GB_ENABLE_CHEATS
 #include <cstring>
 
 bool GameCheats::Consume(std::string &prefix, std::vector<std::string> &commands,
@@ -33,4 +32,3 @@ bool GameCheats::Consume(std::string &prefix, std::vector<std::string> &commands
     }
     return letter == 'c';
 }
-#endif

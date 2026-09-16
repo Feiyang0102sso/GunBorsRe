@@ -69,7 +69,7 @@ public:
     bool Evaluate(std::vector<float> &outVertices) const;
 
     /** Where one bone sits at the current moment. See CMesh::GetNodeAt. */
-    bool GetNodeAt(std::size_t boneIndex, MeshBoneTransform &out) const;
+    bool GetNodeAt(std::size_t boneIndex, ZMeshBoneTransform &out) const;
 
     /** Where the range starts, and how long it runs. Zero with no range set. */
     std::int32_t GetRangeStartMs() const { return m_rangeStartMs; }

@@ -15,19 +15,28 @@
 
 直接运行 `bin/Release/GunBrosRe.exe`；查看器和测试程序位于同目录。两种配置各自生成三个程序，测试源码仅编进 `GunBrosTests.exe`，通过统一的 src 接口执行测试。Debug 和 Tests 支持截图，Release Game/Viewer 关闭截图。不生成内部静态库，不使用其他 EXE 输出目录。
 
+
+### 源码命名与职责
+
+有原符号依据的类型沿用原名，包括 `CPlayer`、`CLevel`、`ILayerPath` 和无前缀的 `Mission`、`Planet`。自建的顶层类型及模块文件使用 `Z` 前缀；`cheats/`、`debug/` 豁免。普通成员、函数和嵌套类型按职责命名，不机械加前缀。
+
+玩家移动、射击和经验归 `CPlayer`；刷怪点选择归 `CEnemySpawner` 和路径层；输入面板与道具选择器分为 `CInputPad`、`CPowerUpSelector`。`ZCombatWorld`、`ZLevelHost` 保留桌面场景装配与跨对象协调，当前仍包含部分尚未完整归回原类的奖励和模式逻辑。详见 [重构结果](docs/source-alignment-result.md) 和 [文件映射](docs/source-name-map.md)。
+
+`BuildFeatures.h`、测试宏及强制包含的游戏头已移除。测试驱动、专用上下文和断言位于 `tests/`，通过共享生命周期和输入接口调用游戏；少量现有 UI 私有状态检查仍以 friend 声明接入。日常构建只跑短检查；500 波 LongRun 继续显式运行。
+
 VS 的 F5 默认启动 `GunBrosRe.exe`。要调试查看器或测试程序，在工程属性里把 `GbDebugTarget` 改为 `GunBrosViewer` 或 `GunBrosTests`；该值只写进被忽略的 `.vcxproj.user`，不影响构建产物。
 
 Debug 和 Release 均启用已有作弊码。VS 的 F5／Ctrl+F5 默认有声音；自动测试通过 `--mute` 显式静音。
 
 **本地 Deathmatch**：`IsConnected=1` 时，在星图选择 **DEATH MATCH → 已解锁星球 → 进入对局**；断网时与 Live 一样显示原不可用弹窗，匹配中断网取消匹配，结算再战也需连接。五张地图、五套比赛的生命、武器池、三杀胜利、复活时间和随机补给均读取原 BIG，比赛枪组随机选择。进入后在原关内商店的 **GUNS** 页选择双枪，点击下方槽位指定装备位置，点击枪卡装备并自动切换到另一槽；右侧仅显示 POWER、数值及类别。战斗中可再次打开商店换枪，道具页使用 **POWER UPS**。死亡后爆裂隐藏身体并打开倒计时商店，RESUME 或倒计时结束后复活。战斗沿用移动、鼠标射击、2/N/M 换枪、Space 暂停、R 重开及原道具快捷键；结算可 REMATCH。
 
-`DeathmatchBot` 会选择互补双枪、发现和追踪对手、侧移射击、寻找掩体、绕障碍和争夺临时武器。EXE 旁的 `GunBrosRe.cfg` 使用 **`DMBotLevel=1`（默认 Easy）、`2`（Normal）、`3`（Hard）**，修改后重启生效。此设置仅影响 DM，Live 不变。新增 Normal 后，旧配置值 `2` 对应 Normal；继续玩 Hard 请改成 `3`。
+`ZDeathmatchBot` 会选择互补双枪、发现和追踪对手、侧移射击、寻找掩体、绕障碍和争夺临时武器。EXE 旁的 `GunBrosRe.cfg` 使用 **`DMBotLevel=1`（默认 Easy）、`2`（Normal）、`3`（Hard）**，修改后重启生效。此设置仅影响 DM，Live 不变。新增 Normal 后，旧配置值 `2` 对应 Normal；继续玩 Hard 请改成 `3`。
 
 Easy 保留每命两次商店、两次标准手雷、大小血包合计两次，消耗真实库存，实际复活才重置次数；购物按原价格与余额。Normal 仅可使用标准手雷与血包，无限库存、不限次数、不打开商店，禁止其他主动道具。Hard 可使用全部 PvP 合法道具，无限库存、不购买、不打开商店。Normal 与 Hard 均保留原冷却与使用条件，无限供应不写入账户。双方沿用原盔甲和枪械熟练度，PvP 不应用 BRO BUFF。击杀、经验、矿石及实际消费写入各自账户，不推进生存波次、不覆盖永久双枪。最后击杀后完整播放死亡与爆裂，停留0.8秒，再播放原淡出。详见 [结算与难度](docs/deathmatch-ending-and-difficulty.md) 和 [Deathmatch 实现与验收](tests/deathmatch-plan.md)，专项为 `pwsh -File tests/run.ps1 -Case deathmatch-data,deathmatch,deathmatch-feedback`。当前是本地玩家对 Bot，真实联网仍未实现。
 
-`IsConnected=1`（或菜单输入 `chc` 切换）时，选择 **LIVE → 普通生存星球 → 任务 PLAY**，原匹配弹窗就绪后约 1.5 秒加入当前激活的本地 bot。进关使用原 KEYSET 的合作壁纸与 GLU_MOVIE_SPLASH 区域、每波双列统计、15 秒波间等待和多人最终结算。波间双方都可移动，最后阶段显示 5→1 倒计时；任何一方购物时双方与整个战场暂停。屏外队友有头像定位，倒地后显示原等待救援／正在救援粒子。玩家与 bot 分别保存经验、装备和道具；双方可救援，倒地时先处理原复活道具选择。机器人策略独立在 `BroAIDeathmatch.h/.cpp`，不跟随活着的玩家，会避敌、救援、每 3–6 秒请求换枪并使用库存道具。
+`IsConnected=1`（或菜单输入 `chc` 切换）时，选择 **LIVE → 普通生存星球 → 任务 PLAY**，原匹配弹窗就绪后约 1.5 秒加入当前激活的本地 bot。进关使用原 KEYSET 的合作壁纸与 GLU_MOVIE_SPLASH 区域、每波双列统计、15 秒波间等待和多人最终结算。波间双方都可移动，最后阶段显示 5→1 倒计时；任何一方购物时双方与整个战场暂停。屏外队友有头像定位，倒地后显示原等待救援／正在救援粒子。玩家与 bot 分别保存经验、装备和道具；双方可救援，倒地时先处理原复活道具选择。机器人策略独立在 `ZLocalCoopBot.h/.cpp`，不跟随活着的玩家，会避敌、救援、每 3–6 秒请求换枪并使用库存道具。
 
-联网 BROS 列表循环读取账户目录的 local-bots.cfg，可配置多个 bot 的名字、等级、装备和道具；Live 匹配当前激活的 bot，选择跨启动保存；未激活 bot 时使用配置中的第一位。Solo 选中好友后读取独立配置，始终使用原 CBrotherAI；合作策略 `BroAIDeathmatch` 仅在 Live 创建和执行，与新的 PvP 策略分开。BROS 使用原三项滚动布局及选中高光，关闭 fake connection 后恢复默认兄弟。bot 账户位于玩家存档目录下的 `local-friends/windows-test-bot-1/`，原 `1006` 只记录好友 XP 礼物，`A` 记录选中好友凭据，均不是完整好友装备档案。`brow/brok/bror` 控制测试 bot 换枪、死亡、复活；`bros/brop` 在 Live 中打开 bot 的 10 秒商店或随机用道具，所有这些命令均不作用于真人队友。Deathmatch 不允许 `bror` 绕过比赛复活。本地名单启用原 BRO BOOST 档位和实际加成；好友 XP 礼物服务尚未模拟。配置说明见 [本地机器人配置](tests/local-bots-config.md)。专项命令：`pwsh -File tests/run.ps1 -Case local-live,offline-social`，验收见 [Live 阶段记录](tests/live-mode-plan.md)。
+联网 BROS 列表循环读取账户目录的 local-bots.cfg，可配置多个 bot 的名字、等级、装备和道具；Live 匹配当前激活的 bot，选择跨启动保存；未激活 bot 时使用配置中的第一位。Solo 选中好友后读取独立配置，始终使用原 CBrotherAI；合作策略 `ZLocalCoopBot` 仅在 Live 创建和执行，与新的 PvP 策略分开。BROS 使用原三项滚动布局及选中高光，关闭 fake connection 后恢复默认兄弟。bot 账户位于玩家存档目录下的 `local-friends/windows-test-bot-1/`，原 `1006` 只记录好友 XP 礼物，`A` 记录选中好友凭据，均不是完整好友装备档案。`brow/brok/bror` 控制测试 bot 换枪、死亡、复活；`bros/brop` 在 Live 中打开 bot 的 10 秒商店或随机用道具，所有这些命令均不作用于真人队友。Deathmatch 不允许 `bror` 绕过比赛复活。本地名单启用原 BRO BOOST 档位和实际加成；好友 XP 礼物服务尚未模拟。配置说明见 [本地机器人配置](tests/local-bots-config.md)。专项命令：`pwsh -File tests/run.ps1 -Case local-live,offline-social`，验收见 [Live 阶段记录](tests/live-mode-plan.md)。
 
 `GunBrosRe.cfg` 的 `DrawFPS=1` 默认开启，缺少该字段也默认显示；设为 `0` 可隐藏。FPS 使用原 BIG 游戏字体，位于顶部等级栏左侧，从启动视频、登录菜单到战斗持续显示，不受 `DebugMode` 影响。FPS 和战斗侧栏均无黑底，菜单左侧不再重复显示 FPS，侧栏不显示快捷键说明。
 
@@ -101,7 +110,7 @@ Arena 使用纯黑背景和跟随玩家的等比例镜头，默认放大至 150%
 
 Arena 信息栏和血量数字使用与操作栏一致的 Windows 系统字体；顶部不重复显示手雷快捷键。蓝框按玩家移动限制及碰撞半径绘制，表示实际场地边界，随镜头缩放、移动，线宽保持 2 像素。
 
-展示场景全部位于 `src/gun_bros_viewer/scenes/`。主包没有新增 viewer 专用模块；地图调用现有地图模块，敌人调用 `EnemyModel`，装备调用 `PlayerModel`、`WeaponEffects`，竞技场调用 `CombatScene`。Mesh Viewer 使用完整原始帧库与原贴图引用，不运行实体拼接；没有原贴图关联的模型明确标记为未贴图。
+展示场景全部位于 `src/gun_bros_viewer/scenes/`。主包没有新增 viewer 专用模块；地图调用现有地图模块，敌人调用 `ZEnemyModel`，装备调用 `ZPlayerModel`、`ZWeaponEffects`，竞技场调用 `ZCombatWorld`。Mesh Viewer 使用完整原始帧库与原贴图引用，不运行实体拼接；没有原贴图关联的模型明确标记为未贴图。
 
 Viewer 使用 EXE 同目录的 `GunBrosViewer.cfg`，也可通过 `--config <文件>` 指定独立配置。字段、默认值、读取器和窗口标题统一在 `src/gun_bros_viewer/ViewerSettings.h/.cpp`，不再调用 `GameHostSettings`。当前支持 `WindowWidth=1600`、`WindowHeight=1200`、`EffectsVolume=3`（0–10）；窗口尺寸仍受可用桌面范围限制。已有文件保留注释和音量，缺失字段使用 viewer 默认值，旧 `DebugMode`／`IsConnected` 字段提示忽略。Tests 的研究配置另用 `GunBrosTests.cfg`，主程序仍使用 `GunBrosRe.cfg`。
 

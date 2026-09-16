@@ -5,7 +5,7 @@
 
 #include "engine/glu/sprite/CSpriteGlu.h"
 
-#include "engine/graphics/CPNG.h"
+#include "engine/graphics/ZPNG.h"
 
 #include <cstdio>
 
@@ -160,7 +160,7 @@ bool CSpriteGlu::ReadPageCounts(CResPackTOC &pack) {
     return true;
 }
 
-const CSpriteGluArchetype *CSpriteGlu::GetArchetype(std::uint8_t index) {
+const ZSpriteArchetype *CSpriteGlu::GetArchetype(std::uint8_t index) {
     if (!m_initialised || index >= m_archetypeCount) {
         return nullptr;
     }
@@ -171,7 +171,7 @@ const CSpriteGluArchetype *CSpriteGlu::GetArchetype(std::uint8_t index) {
         return nullptr;
     }
 
-    std::unique_ptr<CSpriteGluArchetype> archetype(new CSpriteGluArchetype());
+    std::unique_ptr<ZSpriteArchetype> archetype(new ZSpriteArchetype());
     std::vector<std::uint8_t> payload;
 
     const std::uint32_t treeHandle =
@@ -219,7 +219,7 @@ const CSpriteGluArchetype *CSpriteGlu::GetArchetype(std::uint8_t index) {
     return m_archetypes[index].get();
 }
 
-bool CSpriteGlu::LoadPages(std::uint8_t index, CSpriteGluArchetype &archetype) {
+bool CSpriteGlu::LoadPages(std::uint8_t index, ZSpriteArchetype &archetype) {
     // Pages are one flat run across the whole pack, so an archetype's first
     // page is the sum of everything before it. Nothing in the data says this;
     // it comes from CSpriteGlu::LoadTexturePack.
@@ -240,7 +240,7 @@ bool CSpriteGlu::LoadPages(std::uint8_t index, CSpriteGluArchetype &archetype) {
     const std::uint32_t firstPageHandle =
         m_pack->GetResValue(kBaseTexturePageName) + pageBase;
 
-    std::vector<std::unique_ptr<CTexture>> pages;
+    std::vector<std::unique_ptr<ZTexture>> pages;
     std::vector<std::uint8_t> payload;
 
     for (std::uint8_t page = 0; page < pageCount; ++page) {
@@ -250,14 +250,14 @@ bool CSpriteGlu::LoadPages(std::uint8_t index, CSpriteGluArchetype &archetype) {
             return false;
         }
 
-        PNGImage decoded;
+        ZPNGImage decoded;
         if (!PNGDecode(payload, decoded)) {
             std::printf("[spriteglu] %s archetype %u: page %u is not a PNG\n",
                         m_pack->GetShortName().c_str(), index, page);
             return false;
         }
 
-        std::unique_ptr<CTexture> texture(new CTexture());
+        std::unique_ptr<ZTexture> texture(new ZTexture());
         if (!texture->Create(decoded)) {
             return false;
         }
@@ -268,7 +268,7 @@ bool CSpriteGlu::LoadPages(std::uint8_t index, CSpriteGluArchetype &archetype) {
     return true;
 }
 
-const CTexture *CSpriteGlu::GetPrimitiveTexture(std::uint16_t spriteMapIndex) const {
+const ZTexture *CSpriteGlu::GetPrimitiveTexture(std::uint16_t spriteMapIndex) const {
     if (spriteMapIndex < m_spriteMaps.size()) { return nullptr; }
     const unsigned index = spriteMapIndex - static_cast<unsigned>(m_spriteMaps.size());
     if (index >= m_primitives.size()) { return nullptr; }
@@ -277,7 +277,7 @@ const CTexture *CSpriteGlu::GetPrimitiveTexture(std::uint16_t spriteMapIndex) co
     if (!primitive.texture) {
         // CSpritePlayer::Draw :59246 uses the low RGB24, replacing stored alpha
         // with the player's current alpha. The quad applies that alpha later.
-        PNGImage pixels;
+        ZPNGImage pixels;
         pixels.width = primitive.width;
         pixels.height = primitive.height;
         pixels.pixels.resize(static_cast<std::size_t>(pixels.width) * pixels.height * 4);
@@ -287,7 +287,7 @@ const CTexture *CSpriteGlu::GetPrimitiveTexture(std::uint16_t spriteMapIndex) co
             pixels.pixels[offset + 2] = static_cast<std::uint8_t>(primitive.color);
             pixels.pixels[offset + 3] = 255;
         }
-        auto texture = std::make_unique<CTexture>();
+        auto texture = std::make_unique<ZTexture>();
         if (!texture->Create(pixels)) { return nullptr; }
         primitive.texture = std::move(texture);
     }

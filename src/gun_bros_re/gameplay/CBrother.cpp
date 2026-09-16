@@ -268,8 +268,8 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         if (m_vitals != nullptr) { m_vitals->stunMs = 0; }
         break;
     case 11: {
-        GunCue cue;
-        cue.kind = GunCue::Kind::Effect;
+        ZGunCue cue;
+        cue.kind = ZGunCue::Kind::Effect;
         std::uint32_t ordinal = 0;
         if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
             cue.resource.localIndex = static_cast<std::uint8_t>(ordinal);
@@ -278,8 +278,8 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         break;
     }
     case 13: {
-        GunCue cue;
-        cue.kind = GunCue::Kind::Splash;
+        ZGunCue cue;
+        cue.kind = ZGunCue::Kind::Splash;
         cue.damage = arguments[0] * 10.0f;
         cue.radius = arguments[1];
         m_cues.push_back(cue);
@@ -288,8 +288,8 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
     case 14: {
         const unsigned slot = static_cast<unsigned>(arguments[0]);
         if (!CanThrowGrenade(slot)) { break; }
-        GunCue cue;
-        cue.kind = GunCue::Kind::Grenade;
+        ZGunCue cue;
+        cue.kind = ZGunCue::Kind::Grenade;
         cue.resource = m_grenades[slot];
         cue.hand = slot;
         m_cues.push_back(cue);
@@ -365,9 +365,9 @@ void CBrother::UpdateUI(std::int32_t deltaMs) {
     m_interpreter.Refresh();
 }
 
-HitResult CBrother::ReceiveDamage(float damage) {
+ZHitResult CBrother::ReceiveDamage(float damage) {
     if (!m_spawned || m_vitals == nullptr || m_vitals->dead || damage <= 0 || m_variables[3] > 0 || IsShield()) {
-        return HitResult::Ignored;
+        return ZHitResult::Ignored;
     }
     // HandleDamage (:136693) divides by the defense frenzy multiplier.
     damage /= GetFrenzyMultiplier(1);
@@ -375,7 +375,7 @@ HitResult CBrother::ReceiveDamage(float damage) {
     m_vitals->incomingDamage += damage;
     m_vitals->flash = 1;
     ++m_vitals->hits;
-    if (m_vitals->invincible) { return HitResult::Hit; }
+    if (m_vitals->invincible) { return ZHitResult::Hit; }
     // Arena still dispatches HandleDamage's event 5/4 (:136791), including
     // hurt animations. Keep finite HP for percentage-based script queries.
     if (!m_vitals->unlimitedHealth) {
@@ -383,10 +383,10 @@ HitResult CBrother::ReceiveDamage(float damage) {
     }
     if (m_vitals->health <= 0) {
         StartDeath();
-        return HitResult::Killed;
+        return ZHitResult::Killed;
     }
     m_interpreter.HandleEvent(5, 4);
-    return HitResult::Hit;
+    return ZHitResult::Hit;
 }
 
 bool CBrother::StartDeath() {
@@ -461,8 +461,8 @@ bool CBrother::OnRevive(unsigned reason) {
     return !m_vitals->dead;
 }
 
-std::vector<GunCue> CBrother::TakeCues() {
-    std::vector<GunCue> cues;
+std::vector<ZGunCue> CBrother::TakeCues() {
+    std::vector<ZGunCue> cues;
     cues.swap(m_cues);
     return cues;
 }
@@ -510,9 +510,9 @@ void CBrother::SetPowerupState(PowerupState *powerups) {
 }
 
 void CBrother::PowerupEffect(const GameObjectRef &effect, int slot, bool active) {
-    GunCue cue;
-    cue.kind = GunCue::Kind::StopTrail;
-    if (active) { cue.kind = GunCue::Kind::Trail; }
+    ZGunCue cue;
+    cue.kind = ZGunCue::Kind::StopTrail;
+    if (active) { cue.kind = ZGunCue::Kind::Trail; }
     cue.resource = effect;
     cue.hand = slot;
     m_cues.push_back(cue);

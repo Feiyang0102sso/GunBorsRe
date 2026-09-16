@@ -1,11 +1,12 @@
+#include "gun_bros_re/debug/Capture.h"
 /** @file MovieStudy.cpp
  * @brief Catalogue original UI timelines without altering any source assets.
  */
 #define NOMINMAX
 #include "TestOutput.h"
 #include "tests/research/MovieStudy.h"
-#include "engine/glu/movie/MovieRenderer.h"
-#include "engine/platform/CWindow.h"
+#include "engine/glu/movie/ZMovieRenderer.h"
+#include "engine/platform/ZWindow.h"
 #include "engine/glu/movie/CMovie.h"
 #include "engine/resources/CResTOCManager.h"
 #include <cstdio>
@@ -64,12 +65,12 @@ int RunMovieCheck(const std::string &bigDirectory) {
             }
             report << pack->GetShortName() << " movie=" << ordinal << " handle=" << base + ordinal << ' ' << movie.width << 'x' << movie.height
                 << " duration=" << movie.duration << " objects=" << movie.objects.size() << " chapters=";
-            for (unsigned chapter : movie.chapters) { report << chapter << ','; }
+            for (unsigned chapter : movie.chapter.starts) { report << chapter << ','; }
             report << '\n';
             unsigned objectIndex = 0;
-            for (const MovieObject &object : movie.objects) {
+            for (const CMovieObject &object : movie.objects) {
                 report << " object=" << objectIndex++ << " type=" << object.type << " frames=" << object.frames.size() << '\n';
-                for (const MovieKeyFrame &frame : object.frames) {
+                for (const ZMovieKeyFrame &frame : object.frames) {
                     report << "  t=" << frame.time << " xy=" << frame.x << ',' << frame.y << " wh=" << frame.width << ',' << frame.height
                         << " a=" << frame.alpha << " scale=" << frame.scaleX << ',' << frame.scaleY << " rot=" << frame.rotation
                         << " layer=" << unsigned(frame.layer) << " anchor=" << unsigned(frame.selfAnchor) << ',' << unsigned(frame.parentAnchor)
@@ -102,9 +103,9 @@ int RunMovieCheck(const std::string &bigDirectory) {
         }
     }
     if (movies == 0) { ++failures; }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Gun Bros - Original Fonts", 1024, 768)) { return 1; }
-    MovieRenderer fontRenderer;
+    ZMovieRenderer fontRenderer;
     if (!fontRenderer.Init(*core, *core)) { return 1; }
     // Inspect every authored leaf of the compatibility frame, including leaves
     // that the iterator currently discards. This is a visual regression probe.
@@ -113,7 +114,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
         if (!glu.Init(*core)) { return 1; }
         const auto *archetype = glu.GetArchetype(0);
         CSpriteIterator iterator(glu, *archetype);
-        std::vector<SpriteQuad> quads;
+        std::vector<ZSpriteQuad> quads;
         if (!iterator.Expand(172, 0, quads)) { return 1; }
         std::printf("[decoration-check] sprite=0:172 quads=%zu skipped=%u\n", quads.size(), iterator.GetSkippedPartCount());
         if (iterator.GetSkippedPartCount() != 0) { ++failures; }
@@ -131,7 +132,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
         }
         if (upper < 100 || lower < 100) { ++failures; }
         std::printf("[decoration-border-check] upper=%u lower=%u failures=%u\n", upper, lower, failures);
-        if (!GB_SAVE_FRAME(window, TestOutput::Path("powerup-border-check.png"))) { ++failures; }
+        if (!Capture::SaveFrame(window, TestOutput::Path("powerup-border-check.png"))) { ++failures; }
     }
     glClearColor(0.035f, 0.05f, 0.07f, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -140,7 +141,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
         fontRenderer.Text("FONT " + std::to_string(index), 20, 15 + index * 55.0f, 0, 0.7f);
         if (!fontRenderer.Text("GUN BROS 0123456789", 180, 15 + index * 55.0f, index, 1, 790)) { ++failures; }
     }
-    if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-fonts.png"))) { ++failures; }
+    if (!Capture::SaveFrame(window, TestOutput::Path("ui-fonts.png"))) { ++failures; }
     // MDS_BUTTON_* selects these original button backgrounds dynamically;
     // the movie alone contains only their transition/region placeholders.
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -151,14 +152,14 @@ int RunMovieCheck(const std::string &bigDirectory) {
         fontRenderer.Text("SPRITE 0:" + std::to_string(animation), x, y, 0, 0.6f);
         if (!fontRenderer.DrawSpriteFitted(0, animation, 0, x + 4, y + 25, 222, 70)) { ++failures; }
     }
-    if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-components.png"))) { ++failures; }
+    if (!Capture::SaveFrame(window, TestOutput::Path("ui-components.png"))) { ++failures; }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     for (unsigned index = 0; index < 3; ++index) {
         const float x = 60 + index * 320.0f;
         fontRenderer.Text("WAVE 5:" + std::to_string(21 + index), x, 240, 0, 0.8f);
         if (!fontRenderer.DrawSpriteFitted(5, 21 + index, 0, x, 300, 220, 220)) { ++failures; }
     }
-    if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-wave-components.png"))) { ++failures; }
+    if (!Capture::SaveFrame(window, TestOutput::Path("ui-wave-components.png"))) { ++failures; }
     // Original shop badges and card backgrounds share archetype 5 with waves.
     // Keep this contact sheet in the permanent movie check for future research.
     for (unsigned sheet = 0; sheet < 4; ++sheet) {
@@ -171,7 +172,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
             fontRenderer.Text("5:" + std::to_string(animation), x, y, 0, 0.6f);
             fontRenderer.DrawSpriteFitted(5, animation, 0, x, y + 22, 235, 115);
         }
-        if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-shop-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
+        if (!Capture::SaveFrame(window, TestOutput::Path("ui-shop-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
     }
     // Archetype 0 is the shared menu character: currency icons, mastery stars,
     // button plates. Sheeting all of it keeps icon hunts out of guesswork.
@@ -185,7 +186,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
             fontRenderer.Text("0:" + std::to_string(animation), x, y, 0, 0.6f);
             fontRenderer.DrawSpriteFitted(0, animation, 0, x, y + 22, 235, 115);
         }
-        if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-menu-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
+        if (!Capture::SaveFrame(window, TestOutput::Path("ui-menu-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
     }
     // CMenuSystem::Load pulls character 23 with the menu itself and CMenuStore
     // adds 26; between them they hold the currency icons and the mastery meter.
@@ -197,7 +198,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
         if (!fontRenderer.DrawSpriteFitted(19, cell, 0, x, y + 22, 235, 115)) { break; }
         fontRenderer.Text("19:" + std::to_string(cell), x, y, 0, 0.6f);
     }
-    if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-portrait-sprites.png"))) { ++failures; }
+    if (!Capture::SaveFrame(window, TestOutput::Path("ui-portrait-sprites.png"))) { ++failures; }
     for (unsigned character = 23; character <= 26; character += 3) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         for (unsigned cell = 0; cell < 20; ++cell) {
@@ -207,7 +208,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
             if (!fontRenderer.DrawSpriteFitted(character, cell, 0, x, y + 22, 235, 115)) { break; }
             fontRenderer.Text(std::to_string(character) + ":" + std::to_string(cell), x, y, 0, 0.6f);
         }
-        if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-currency-sprites-") + std::to_string(character) + ".png")) { ++failures; }
+        if (!Capture::SaveFrame(window, TestOutput::Path("ui-currency-sprites-") + std::to_string(character) + ".png")) { ++failures; }
     }
     // CInputPad uses archetype 1 for both sticks and the bottom-rail actions.
     for (unsigned sheet = 0; sheet < 3; ++sheet) {
@@ -219,7 +220,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
             fontRenderer.Text("1:" + std::to_string(animation), x, y, 0, 0.6f);
             fontRenderer.DrawSpriteFitted(1, animation, 600, x, y + 22, 235, 115);
         }
-        if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-hud-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
+        if (!Capture::SaveFrame(window, TestOutput::Path("ui-hud-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
     }
     for (unsigned sheet = 0; sheet < 2; ++sheet) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -231,7 +232,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
             fontRenderer.Text("REFINERY 4:" + std::to_string(animation), x, y, 0, 0.6f);
             fontRenderer.DrawSpriteFitted(4, animation, 600, x, y + 22, 235, 115);
         }
-        if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-refinery-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
+        if (!Capture::SaveFrame(window, TestOutput::Path("ui-refinery-sprites-") + std::to_string(sheet) + ".png")) { ++failures; }
     }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     fontRenderer.DrawSpriteFitted(0, 124, 200, 50, 150, 150, 150);
@@ -239,7 +240,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
         fontRenderer.Text("RADIO 1:" + std::to_string(85 + index), 245 + index * 252.0f, 100, 0, 0.7f);
         fontRenderer.DrawSpriteFitted(1, 85 + index, 600, 245 + index * 252.0f, 150, 235, 200);
     }
-    if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-radio-loading-sprites.png"))) { ++failures; }
+    if (!Capture::SaveFrame(window, TestOutput::Path("ui-radio-loading-sprites.png"))) { ++failures; }
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     for (unsigned cell = 0; cell < 20; ++cell) {
         const float x = 10 + (cell % 4) * 254.0f;
@@ -247,7 +248,7 @@ int RunMovieCheck(const std::string &bigDirectory) {
         fontRenderer.Text("SOCIAL 6:" + std::to_string(cell), x, y, 0, 0.6f);
         fontRenderer.DrawSpriteFitted(6, cell, 600, x, y + 22, 235, 115);
     }
-    if (!GB_SAVE_FRAME(window, TestOutput::Path("ui-social-sprites.png"))) { ++failures; }
+    if (!Capture::SaveFrame(window, TestOutput::Path("ui-social-sprites.png"))) { ++failures; }
     if (movies != 175) { ++failures; }
     std::printf("[movie-check] movies=%u failures=%u report=%s\n", movies, failures, TestOutput::Path("movie-check.txt").c_str());
     return failures != 0;

@@ -1,14 +1,14 @@
 /** Directed checks run the production scene, original Flow and BIG maps. */
 #define NOMINMAX
 #include "gameplay/SurvivalCheckScenario.h"
-#include "gun_bros_re/gameplay/SurvivalRuntime.h"
-#include "gun_bros_re/gameplay/SurvivalGameContext.h"
-#include "gun_bros_re/gameplay/SurvivalSession.h"
-#include "gun_bros_re/gameplay/DeathmatchBot.h"
-#include "gun_bros_re/gameplay/PickupScene.h"
-#include "gun_bros_re/gameplay/PowerupScene.h"
-#include "gun_bros_re/data/PlanetCatalog.h"
-#include "gun_bros_re/data/MissionCatalog.h"
+#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/ZPickupScene.h"
+#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/data/ZPlanetCatalog.h"
+#include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
@@ -17,28 +17,28 @@
 int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
     CResTOCManager toc;
     if (!toc.Init(directory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<PlanetEntry> planets;
+    ZPackTables tables(toc);
+    std::vector<ZPlanetEntry> planets;
     if (!LoadPlanetCatalog(toc, tables, planets)) { return 1; }
     CProfileManager source;
-    if (!LoadNativeProfile(toc, tables, source, TestOutput::Path("deathmatch-profile"), TestOutput::Fixtures())) { return 1; }
-    int CheckDeathmatchMenus(CResTOCManager &, PackTables &, CProfileManager &);
+    if (!LoadProfile(toc, tables, source, TestOutput::Path("deathmatch-profile"), TestOutput::Fixtures())) { return 1; }
+    int CheckDeathmatchMenus(CResTOCManager &, ZPackTables &, CProfileManager &);
     if (CheckDeathmatchMenus(toc, tables, source) != 0) { return 1; }
     for (unsigned index = 0; index < 5; ++index) {
-        MissionEntry mission;
+        ZMissionEntry mission;
         mission.resource = planets[index].data.object12;
         std::vector<std::uint8_t> bytes;
-        if (!tables.ReadSectionResource(mission.resource.packHash, GameSection::Mission, mission.resource.localIndex, bytes)) { return 1; }
+        if (!tables.ReadSectionResource(mission.resource.packHash, ZGameSection::Mission, mission.resource.localIndex, bytes)) { return 1; }
         CArrayInputStream input(bytes);
         if (!mission.data.Init(input) || mission.data.type != 3) { return 1; }
-        if (!tables.ReadSectionResource(mission.data.level.packHash, GameSection::Level, mission.data.level.localIndex, bytes)) { return 1; }
+        if (!tables.ReadSectionResource(mission.data.level.packHash, ZGameSection::Level, mission.data.level.localIndex, bytes)) { return 1; }
         CArrayInputStream levelInput(bytes);
         CLevel::Template level;
         if (!level.Init(levelInput)) { return 1; }
         CProfileManager profile = source;
-        SurvivalGameContext context{profile, {}};
+        ZSurvivalGameContext context{profile, {}};
         context.persistProgress = false;
-        SurvivalLaunch launch;
+        ZSurvivalLaunch launch;
         launch.bigDirectory = directory;
         launch.packShortName = tables.GetPackName(level.mapRef.packHash);
         launch.mapIndex = level.mapRef.localIndex;
@@ -62,35 +62,35 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
     return 0;
 }
 
-int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, PickupScene &pickups, PowerupScene &powerups, CProfileManager &profile, SurvivalGameContext &context) {
+int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickupScene &pickups, ZPowerupScene &powerups, CProfileManager &profile, ZSurvivalGameContext &context) {
     auto &scene = fixture.scene; auto &session = fixture.session; auto &bot = fixture.brother;
     auto &player = fixture.player; auto &opponent = fixture.brotherModel; auto &vitals = fixture.vitals;
     if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
-    if (!scene.IsDeathmatch() || dynamic_cast<DeathmatchBot *>(&bot) == nullptr || !player.weapon->brother.IsDeathmatch() ||
+    if (!scene.IsDeathmatch() || dynamic_cast<ZDeathmatchBot *>(&bot) == nullptr || !player.weapon->brother.IsDeathmatch() ||
         !opponent.weapon->brother.IsDeathmatch() || scene.invalidSpawns != 0) { std::printf("[deathmatch-check] init failed invalid=%u\n", scene.invalidSpawns); return 1; }
     vitals.invincible = true; bot.vitals.invincible = true;
-    const float startX = scene.playerX, startY = scene.playerY;
+    const float startX = scene.GetPlayer().x, startY = scene.GetPlayer().y;
     for (unsigned time = 0; time < 35000; time += 16) { session.Update(16, 0, 0, false); }
     std::printf("[deathmatch-check] initial supply=%u collected=%u invalid=%u sightings=%u\n", pickups.spawned, pickups.collected, scene.invalidSpawns, bot.GetTargetCount());
     if (pickups.spawned == 0 || scene.invalidSpawns != 0) { return 1; }
     float supplyX = 0, supplyY = 0;
-    if (pickups.FindNearest(scene.playerX, scene.playerY, supplyX, supplyY)) {
-        scene.playerX = supplyX; scene.playerY = supplyY;
+    if (pickups.FindNearest(scene.GetPlayer().x, scene.GetPlayer().y, supplyX, supplyY)) {
+        scene.GetPlayer().x = supplyX; scene.GetPlayer().y = supplyY;
         for (unsigned time = 0; time < 1000; time += 16) { session.Update(16, 0, 0, false); }
     }
     if (pickups.collected == 0) { std::printf("[deathmatch-check] pickup not collected\n"); return 1; }
     const unsigned spawned = pickups.spawned;
     for (unsigned time = 0; time < 35000; time += 16) { session.Update(16, 0, 0, false); }
     if (pickups.spawned <= spawned) { std::printf("[deathmatch-check] pickup did not respawn\n"); return 1; }
-    scene.playerX = startX; scene.playerY = startY;
+    scene.GetPlayer().x = startX; scene.GetPlayer().y = startY;
 
     // Both projectile and beam tracing must identify the opposing participant.
     for (unsigned flags : {0u, 0x100u}) {
-        CombatHit traceHit; traceHit.ownerType = 0; traceHit.flags = flags;
+        ZCombatHit traceHit; traceHit.ownerType = 0; traceHit.flags = flags;
         traceHit.owner = kPlayerCombatId;
         const auto toBot = scene.Trace(traceHit, bot.previousX, bot.previousY, bot.x - bot.previousX, bot.y - bot.previousY, 1, {});
         traceHit.owner = kBrotherCombatId;
-        const auto toPlayer = scene.Trace(traceHit, scene.playerX, scene.playerY, 0, 0, 1, {});
+        const auto toPlayer = scene.Trace(traceHit, scene.GetPlayer().x, scene.GetPlayer().y, 0, 0, 1, {});
         if (toBot.target != kBrotherCombatId || toPlayer.target != kPlayerCombatId) {
             std::printf("[deathmatch-check] trace failed flags=%u targets=%llu,%llu\n", flags, toBot.target, toPlayer.target); return 1;
         }
@@ -104,10 +104,10 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, PickupS
     }
     vitals.invincible = false; bot.vitals.invincible = false;
     for (unsigned peer = 0; peer < 2; ++peer) {
-        CombatHit blast; blast.ownerType = 0; blast.damage = 10;
-        PlayerVitals *target = &bot.vitals;
+        ZCombatHit blast; blast.ownerType = 0; blast.damage = 10;
+        ZPlayerVitals *target = &bot.vitals;
         blast.owner = kPlayerCombatId; blast.x = bot.x; blast.y = bot.y;
-        if (peer == 1) { target = &vitals; blast.owner = kBrotherCombatId; blast.x = scene.playerX; blast.y = scene.playerY; }
+        if (peer == 1) { target = &vitals; blast.owner = kBrotherCombatId; blast.x = scene.GetPlayer().x; blast.y = scene.GetPlayer().y; }
         const float before = target->health;
         scene.Splash(blast, 1, 360, 0, 0);
         if (target->health >= before || target->dead) { std::printf("[deathmatch-check] splash failed peer=%u\n", peer); return 1; }
@@ -117,9 +117,9 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, PickupS
     const float botX = bot.x, botY = bot.y;
     GameObjectRef crate; crate.packHash = CStringToKey("pack5"); crate.localIndex = 8;
     for (unsigned winner = 0; winner < 2; ++winner) {
-        scene.playerX = startX; scene.playerY = startY;
+        scene.GetPlayer().x = startX; scene.GetPlayer().y = startY;
         bot.x = startX + 5; bot.y = startY;
-        float x = scene.playerX;
+        float x = scene.GetPlayer().x;
         if (winner == 1) { x = bot.x; }
         if (!pickups.Spawn(crate, x, startY, -900)) { return 1; }
         pickups.Update(16, scene, fixture.effects);
@@ -159,14 +159,14 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, PickupS
     if (powerups.UseMatchConsumable(true) || !match.EnterShop(1) || !match.EnterShop(1) || match.EnterShop(1)) { return 1; }
 
     // Friendly fire remains disabled on the shooter; the opposing actor takes damage.
-    CombatHit hit; hit.owner = kPlayerCombatId; hit.ownerType = 0; hit.damage = 100000;
+    ZCombatHit hit; hit.owner = kPlayerCombatId; hit.ownerType = 0; hit.damage = 100000;
     vitals.invincible = false; bot.vitals.invincible = false;
-    if (scene.ApplyHit(kPlayerCombatId, hit) != HitResult::Ignored) { return 1; }
+    if (scene.ApplyHit(kPlayerCombatId, hit) != ZHitResult::Ignored) { return 1; }
     std::printf("[deathmatch-check] directed-fatal remaining=%u limit=%u health=%.1f protection=%d shield=%d\n",
         match.RemainingMs(), match.Data().seconds, bot.vitals.health, *opponent.weapon->brother.VariableResolver(3), opponent.weapon->brother.IsShield());
     for (unsigned kill = 0; kill < match.Data().killLimit; ++kill) {
         const auto fatalResult = scene.ApplyHit(kBrotherCombatId, hit);
-        if (fatalResult != HitResult::Killed) {
+        if (fatalResult != ZHitResult::Killed) {
             std::printf("[deathmatch-check] fatal hit failed result=%u match=%u health=%.1f dead=%d invincible=%d unlimited=%d protection=%d shield=%d\n",
                 unsigned(fatalResult), unsigned(match.GetResult()), bot.vitals.health, bot.vitals.dead, bot.vitals.invincible,
                 bot.vitals.unlimitedHealth, *opponent.weapon->brother.VariableResolver(3), opponent.weapon->brother.IsShield());
@@ -194,7 +194,7 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, PickupS
         if (!SaveSurvivalProgress(&context, savedProgress, scene, session.GetLevel(), accountedOre)) { return 1; }
     }
     CProfileManager reloaded = context.profile;
-    if (!ReloadNativeProfile(reloaded, context.savePath) || reloaded.statistics[37] != previousKills + match.Score(0) ||
+    if (!ReloadProfile(reloaded, context.savePath) || reloaded.statistics[37] != previousKills + match.Score(0) ||
         reloaded.experience != scene.GetExperience() || reloaded.clearedWaves != previousWaves || scene.GetScore() == 0) { return 1; }
     for (unsigned slot = 0; slot < 2; ++slot) {
         if (reloaded.configuration.guns[slot].packHash != previousGuns[slot].packHash ||
@@ -209,13 +209,13 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, PickupS
     unsigned matchTime = 0;
     for (; matchTime < 600000 && !session.IsFinished(); matchTime += 16) {
         session.Update(16, 0, 0, false);
-        if (matchTime % 60000 == 0) { static_cast<DeathmatchBot &>(bot).PrintNavigation(); }
+        if (matchTime % 60000 == 0) { static_cast<ZDeathmatchBot &>(bot).PrintNavigation(); }
     }
     std::printf("[deathmatch-check] autonomous elapsed=%u ms\n", matchTime);
     std::printf("[deathmatch-check] autonomous shots=%zu\n", fixture.effects.GetShotCount() - shots);
     std::printf("[deathmatch-check] autonomous score=%u:%u sightings=%u playerHP=%.1f bot=%.1f,%.1f player=%.1f,%.1f\n",
-        match.Score(0), match.Score(1), bot.GetTargetCount(), vitals.health, bot.x, bot.y, scene.playerX, scene.playerY);
-    static_cast<DeathmatchBot &>(bot).PrintNavigation();
+        match.Score(0), match.Score(1), bot.GetTargetCount(), vitals.health, bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y);
+    static_cast<ZDeathmatchBot &>(bot).PrintNavigation();
     bool CaptureRescueEffect(SurvivalDeathFixture &, const char *);
     if (!CaptureRescueEffect(fixture, "deathmatch-navigation.png")) { return 1; }
     if (match.GetResult() != CMPMatch::Result::BotWon) { return 1; }

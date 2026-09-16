@@ -1,11 +1,12 @@
+#include "gun_bros_re/debug/Capture.h"
 /** Exercise the original paid chambers through real Movie hit regions. */
 #include "ui/MenuChecks.h"
 #include "TestOutput.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
 
-bool FinishRefineryClick(GameMenu &view, MenuState &state, CProfileManager &profile,
+bool FinishRefineryClick(ZGameMenu &view, ZMenuState &state, CProfileManager &profile,
     const CRefinementManager::Template &data, const std::filesystem::path &path, std::int64_t now, unsigned slot) {
-    const auto *entry = OriginalMenuData("MDS_BUTTON_XPLODIUM_METER", slot);
+    const auto *entry = FindMenuData("MDS_BUTTON_XPLODIUM_METER", slot);
     const auto *button = view.movies.GetMovie(view.movies.Ordinal(entry->movies[0]));
     unsigned start = 0, end = 0;
     if (!button || !button->GetChapterRange(1, start, end) || !state.refinery.chambers[slot].clickPlaying ||
@@ -25,10 +26,10 @@ bool FinishRefineryClick(GameMenu &view, MenuState &state, CProfileManager &prof
         profile.xplodium == ore && profile.coins == coins;
 }
 
-int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
+int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZGameMenu &view,
     const CRefinementManager::Template &data) {
     struct RestoreSettings {
-        GameMenu &view;
+        ZGameMenu &view;
         bool connected = GameHostSettings().isConnected;
         bool animated;
         ~RestoreSettings() { GameHostSettings().isConnected = connected; view.animateNavigation = animated; }
@@ -36,7 +37,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     GameHostSettings().isConnected = true;
     view.animateNavigation = false;
     CProfileManager profile;
-    if (!CreateTransientNativeProfile(toc, tables, profile)) { return 1; }
+    if (!CreateTransientProfile(toc, tables, profile)) { return 1; }
     profile.refinery.Bind(data);
     profile.coins = 0;
     profile.warbucks = 0;
@@ -50,9 +51,9 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     const auto main = view.movies.Ordinal("GLU_MOVIE_EXPLODIUM");
     const auto button = view.movies.Ordinal("GLU_MOVIE_BUTTON_SMALL");
     unsigned start = 0, end = 0;
-    MovieRegion graphic, meter, touch;
+    ZMovieRegion graphic, meter, touch;
     if (!view.movies.GetMovie(button)->GetChapterRange(2, start, end) || !view.movies.Region(button, 1, end, graphic)) { return 1; }
-    MenuState state;
+    ZMenuState state;
     state.page = 3;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, data, path, now)) { return 1; }
@@ -74,8 +75,8 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     view.clock += 1000;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, data, path, now) || !DrawStorePrompt(view, state) ||
-        !GB_SAVE_FRAME(view.window, (path / "insufficient.png").string())) { return 1; }
-    state = MenuState{};
+        !Capture::SaveFrame(view.window, (path / "insufficient.png").string())) { return 1; }
+    state = ZMenuState{};
     state.page = 3;
     profile.warbucks = data.rarePrice[slot] * 2;
     view.Begin(3);
@@ -84,14 +85,14 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     view.Begin(3);
     view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
     if (!DrawRefinery(view, state, profile, data, path, now) || profile.refinery.slots[slot].state != 1 ||
-        profile.warbucks != data.rarePrice[slot] || !ReloadNativeProfile(profile, path) ||
+        profile.warbucks != data.rarePrice[slot] || !ReloadProfile(profile, path) ||
         profile.refinery.slots[slot].state != 1) { return 1; }
     if (profile.refinery.UnlockSlot(slot, profile.coins, profile.warbucks) || profile.warbucks != data.rarePrice[slot]) { return 1; }
     view.Begin(3);
     view.SetTestClick({x, y});
     if (!DrawRefinery(view, state, profile, data, path, now) || !state.refinery.chambers[slot].opening ||
         state.refinery.refineryTransfer >= 0 ||
-        !GB_SAVE_FRAME(view.window, (path / "opening-start.png").string())) { return 1; }
+        !Capture::SaveFrame(view.window, (path / "opening-start.png").string())) { return 1; }
     // The native player advances at most one step per update, even for a slow frame.
     unsigned openingFrames = 0;
     while (state.refinery.chambers[slot].opening && openingFrames < 1000) {
@@ -99,10 +100,10 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
         view.Begin(3);
         if (!DrawRefinery(view, state, profile, data, path, now)) { return 1; }
         ++openingFrames;
-        if (openingFrames == 12 && !GB_SAVE_FRAME(view.window, (path / "opening-middle.png").string())) { return 1; }
+        if (openingFrames == 12 && !Capture::SaveFrame(view.window, (path / "opening-middle.png").string())) { return 1; }
     }
     if (openingFrames == 0 || openingFrames == 1000 ||
-        !GB_SAVE_FRAME(view.window, (path / "opening-finished.png").string())) { return 1; }
+        !Capture::SaveFrame(view.window, (path / "opening-finished.png").string())) { return 1; }
     profile.xplodium = 0;
     view.Begin(3);
     view.SetTestClick({x, y});
@@ -113,7 +114,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     view.clock += 100;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, data, path, now) ||
-        !GB_SAVE_FRAME(view.window, (path / "empty-click.png").string()) ||
+        !Capture::SaveFrame(view.window, (path / "empty-click.png").string()) ||
         !FinishRefineryClick(view, state, profile, data, path, now, slot) || state.refinery.refineryTransfer >= 0) { return 1; }
     profile.xplodium = 1000;
     view.Begin(3);
@@ -129,20 +130,20 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     view.clock += 1000;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, data, path, middle) || !profile.SaveToDisk(path) ||
-        !GB_SAVE_FRAME(view.window, (path / "refining.png").string()) || !ReloadNativeProfile(profile, path) ||
+        !Capture::SaveFrame(view.window, (path / "refining.png").string()) || !ReloadProfile(profile, path) ||
         profile.refinery.slots[slot].state != 2 || profile.refinery.slots[slot].finishTime != finish) { return 1; }
     const auto *fill = view.movies.GetMovie(view.movies.Ordinal("GLU_MOVIE_BUCKET_FILL"));
     if (!fill || state.refinery.refineryFillTime[slot] != fill->duration / 2) { return 1; }
     // Compare clicked and untouched meters at the same UI and refinery clocks.
     // A refining chamber must pulse visually without collecting or restarting work.
-    MenuState untouched = state;
+    ZMenuState untouched = state;
     view.Begin(3);
     view.SetTestClick({x, y});
     if (!DrawRefinery(view, state, profile, data, path, middle)) { return 1; }
     view.clock += 100;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, data, path, middle) ||
-        !GB_SAVE_FRAME(view.window, (path / "refining-click.png").string())) { return 1; }
+        !Capture::SaveFrame(view.window, (path / "refining-click.png").string())) { return 1; }
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
     std::vector<unsigned char> clickedPixels(viewport[2] * viewport[3] * 4);
@@ -150,13 +151,13 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, clickedPixels.data());
     view.Begin(3);
     if (!DrawRefinery(view, untouched, profile, data, path, middle) ||
-        !GB_SAVE_FRAME(view.window, (path / "refining-untouched.png").string())) { return 1; }
+        !Capture::SaveFrame(view.window, (path / "refining-untouched.png").string())) { return 1; }
     glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, untouchedPixels.data());
     if (clickedPixels == untouchedPixels || state.refinery.refineryTransfer >= 0 ||
         profile.refinery.slots[slot].state != 2 || profile.refinery.slots[slot].finishTime != finish || profile.coins) {
         std::printf("[refinery-online] refining click pulse missing or changed resources\n"); return 1;
     }
-    const auto *meterEntry = OriginalMenuData("MDS_BUTTON_XPLODIUM_METER", slot);
+    const auto *meterEntry = FindMenuData("MDS_BUTTON_XPLODIUM_METER", slot);
     const auto *meterButton = view.movies.GetMovie(view.movies.Ordinal(meterEntry->movies[0]));
     unsigned pulseStart = 0, pulseEnd = 0;
     if (!meterButton || !meterButton->GetChapterRange(1, pulseStart, pulseEnd) ||
@@ -189,7 +190,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     view.clock += 375;
     view.Begin(3);
     if (!DrawRefinery(view, state, profile, data, path, finish) || profile.coins != yield ||
-        !ReloadNativeProfile(profile, path) || profile.refinery.slots[slot].state != 1 || profile.coins != yield ||
+        !ReloadProfile(profile, path) || profile.refinery.slots[slot].state != 1 || profile.coins != yield ||
         profile.refinery.CollectResources(slot, profile.coins)) { return 1; }
     // Cheat unlock includes standard timed chambers; both instant first slots stay open.
     if (!GameCheats::ApplyRefineryCheat(GameCheats::ToggleRefineryLocks, profile, now)) { return 1; }
@@ -208,7 +209,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     }
     // Every unlocked chamber, including both instant slots, animates with no ore.
     if (!GameCheats::ApplyRefineryCheat(GameCheats::ToggleRefineryLocks, profile, now)) { return 1; }
-    state = MenuState{};
+    state = ZMenuState{};
     state.page = 3;
     profile.xplodium = 0;
     view.Begin(3);
@@ -216,7 +217,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, PackTables &tables, GameMenu &view,
     const unsigned count = static_cast<unsigned>(data.minutes.size() / 2);
     for (unsigned index = 0; index < data.minutes.size(); ++index) {
         state.refinery.refineryTab = index / count;
-        MovieRegion area;
+        ZMovieRegion area;
         if (!view.movies.Region(main, index % count, state.refinery.refineryTime, area)) { return 1; }
         view.Begin(3);
         view.SetTestClick({area.x + area.width / 2, area.y + area.height / 2});

@@ -1,7 +1,7 @@
 /** Local challenge content and the original deterministic daily selection. */
 #pragma once
 #include "gun_bros_re/data/CDailyBonusTracking.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
 
 class CChallengeManager {
 public:
@@ -40,21 +40,21 @@ public:
         unsigned templateIndex = 0, progress = 0, rewardStatus = 0, completedFriends = 0;
         unsigned achieved = 0, target = 0, progressLabel = 0;
         std::string name, description;
-        std::array<DailyPrize, 3> prizes;
+        std::array<ZDailyPrize, 3> prizes;
         Counters counters;
         bool applicable = true;
     };
-    bool Load(CResTOCManager &toc, PackTables &tables);
+    bool Load(CResTOCManager &toc, ZPackTables &tables);
     std::vector<unsigned> GenerateChallengeList(unsigned cycleDay) const;
     /** Read saved cycle/progress; only an uninitialized cycle uses host time. */
-    bool Bind(CResTOCManager &toc, PackTables &tables, const CProfileManager &profile, unsigned seconds);
+    bool Bind(CResTOCManager &toc, ZPackTables &tables, const CProfileManager &profile, unsigned seconds);
     /** Apply the original forward-only network day rollover, then bind its list. */
-    bool InitProgressData(CResTOCManager &toc, PackTables &tables, CProfileManager &profile, unsigned seconds);
-    void UpdateFromLevelSession(const Session &session, const std::vector<WeaponEntry> &weapons, const CProfileManager &profile);
+    bool InitProgressData(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile, unsigned seconds);
+    void UpdateFromLevelSession(const Session &session, const std::vector<ZWeaponEntry> &weapons, const CProfileManager &profile);
     void UpdateChallengeStatusData(const CProfileManager &profile, bool ended);
     bool StoreProgress(CProfileManager &profile) const;
     /** Award one completed challenge's available tiers; caller saves the transaction. */
-    bool AwardAvailableRewards(CProfileManager &profile, const std::vector<StoreEntry> &store, unsigned &awarded);
+    bool AwardAvailableRewards(CProfileManager &profile, const std::vector<ZStoreEntry> &store, unsigned &awarded);
     unsigned cycleDay = 0;
     std::vector<Template> templates;
     std::vector<Challenge> current;

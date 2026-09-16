@@ -1,6 +1,8 @@
+#include "gameplay/ProfilePlayDriver.h"
+#include "gun_bros_re/debug/Capture.h"
 #include "ui/GameMenuStudy.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/ui/MenuInternal.h"
+#include "gun_bros_re/ui/ZMenuInternal.h"
 #include "TestOutput.h"
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/debug/DebugTutorial.h"
@@ -12,12 +14,12 @@ using namespace MenuDetail;
 int RunTutorialPlayCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
     if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    SurvivalGameContext context{profile, TestOutput::Path("tutorial-profile-check.dat"), 0};
+    ZSurvivalGameContext context{profile, TestOutput::Path("tutorial-profile-check.dat"), 0};
     context.tutorial = true;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
     CProfileManager restored;
@@ -30,29 +32,29 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     const auto nativePath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("tutorial-native-" + std::to_string(GetTickCount64()));
     CProfileManager native;
     native.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadNativeProfile(toc, tables, native, nativePath, nativePath / "absent-source")) { return 1; }
+    if (!LoadProfile(toc, tables, native, nativePath, nativePath / "absent-source")) { return 1; }
     native.firstLaunch = false;
     if (!native.SaveToDisk(nativePath)) { return 1; }
     const auto &level = native.nativeArchive->survivalLevels[0];
     std::vector<std::uint8_t> payload;
-    if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, payload)) { return 1; }
+    if (!tables.ReadSectionResource(level.packHash, ZGameSection::Level, level.localIndex, payload)) { return 1; }
     CArrayInputStream input(payload);
     CLevel::Template data;
     if (!data.Init(input) || input.Available() != 0) { return 1; }
-    SurvivalGameContext nativeContext{native, nativePath, 0};
+    ZSurvivalGameContext nativeContext{native, nativePath, 0};
     nativeContext.tutorial = true;
     if (RunSurvivalStudy(bigDirectory, tables.GetPackName(data.mapRef.packHash), data.mapRef.localIndex,
         0, -1, "", 0, false, false, true, 2, 0, &nativeContext, true) != 0) { return 1; }
     if (!native.tutorialCompleted || native.tutorialSteps != 255) { return 1; }
     const auto earnedRifle = native.configuration.guns[1];
-    if (!LoadNativeProfile(toc, tables, native, nativePath, nativePath / "absent-source") || native.firstLaunch ||
+    if (!LoadProfile(toc, tables, native, nativePath, nativePath / "absent-source") || native.firstLaunch ||
         !SameObject(native.configuration.guns[1], earnedRifle) || !native.Owns(6, earnedRifle)) { return 1; }
     // Tutorial steps are a host execution trace, not an invented original flag.
     std::printf("[tutorial-profile-check] native created-without-source original-HUD completed=1 steps=255 earned-rifle-restored=1\n");
     CProfileManager debugProfile;
     debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    SurvivalGameContext debugContext{debugProfile, {}};
-    SurvivalLaunch debugLaunch;
+    ZSurvivalGameContext debugContext{debugProfile, {}};
+    ZSurvivalLaunch debugLaunch;
     debugLaunch.bigDirectory = bigDirectory;
     if (!PrepareDebugTutorial(toc, tables, debugContext, debugLaunch) ||
         !debugContext.tutorial || !debugContext.debugTutorial || debugContext.persistProgress ||
@@ -68,7 +70,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     // Exercise ESC through the production key dispatcher with a fresh replay.
     if (!PrepareDebugTutorial(toc, tables, debugContext, debugLaunch)) { return 1; }
     debugContext.savePath = TestOutput::Path("tutorial-must-not-save");
-    CWindow debugWindow;
+    ZWindow debugWindow;
     if (!debugWindow.Open("Debug tutorial checks", 1024, 768)) { return 1; }
     debugWindow.SetEscapeCloses(false);
     SDL_Event escape{};
@@ -80,7 +82,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     debugLaunch.window = &debugWindow;
     if (RunSurvival(debugLaunch) != 0 || !debugWindow.IsOpen() ||
         std::filesystem::exists(debugContext.savePath)) { return 1; }
-    MovieRenderer debugMovies;
+    ZMovieRenderer debugMovies;
     auto &core = *toc.GetPack(toc.GetCorePackIndex());
     if (!debugMovies.Init(core, core)) { return 1; }
     for (unsigned phase = 0; phase < 2; ++phase) {
@@ -93,12 +95,12 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     }
     std::printf("[tutorial-profile-check] debug escape=1 window-open=1 no-save=1 notice-phases=2\n");
     CPlayerProgress::Template progressData;
-    std::vector<StoreEntry> store;
-    std::vector<WeaponEntry> weapons;
-    std::vector<ArmorEntry> armor;
+    std::vector<ZStoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
+    std::vector<ZArmorEntry> armor;
     if (!LoadPlayerProgress(toc, tables, progressData) || !LoadStoreCatalog(toc, tables, store) ||
         !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
-    MenuState menuState;
+    ZMenuState menuState;
     menuState.resumeAfterDebugTutorial = true;
     SDL_Event replay{};
     replay.type = SDL_EVENT_KEY_DOWN;
@@ -118,9 +120,9 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
 int RunProfilePlayCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<WeaponEntry> weapons;
+    std::vector<ZWeaponEntry> weapons;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
     CProfileManager profile;
     const unsigned core = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
@@ -131,12 +133,13 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
     gun.localIndex = static_cast<std::uint8_t>(weapons[65].ordinal);
     profile.Grant(6, gun);
     profile.configuration.guns[0] = gun;
-    SurvivalGameContext context{profile, TestOutput::Path("game-profile-check.dat"), 0};
+    ZSurvivalGameContext context{profile, TestOutput::Path("game-profile-check.dat"), 0};
     profile.warbucks = 50;
-    context.checkControls = true;
+    ProfilePlayDriver controls;
+    context.frameDriver = &controls;
     // This regression exercises real SDL transport at zero device gain.
     // Keep the host alive across both sessions, as the formal front end does.
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Profile and pause audio verification", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     CBGM music;
     music.EnableSilentValidation();
@@ -149,7 +152,7 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
     restored.Reset(core, refinement);
     if (!restored.LoadFromDisk(context.savePath) || restored.experience == 0 || restored.xplodium == 0 ||
         restored.clearedWaves[0] != 2 || restored.configuration.guns[0].packHash != gun.packHash) { return 1; }
-    SurvivalGameContext continued{restored, context.savePath, 0};
+    ZSurvivalGameContext continued{restored, context.savePath, 0};
     continued.music = &music;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 2,
         &continued, false, false, nullptr, false, &window) != 0) { return 1; }
@@ -165,15 +168,15 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
 int RunPlayerSelectCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
     if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("select-check-" + std::to_string(GetTickCount64()));
     // Missing source exercises native constructor defaults as requested.
-    if (!LoadNativeProfile(toc, tables, profile, path, {})) { return 1; }
-    GameMenu view;
+    if (!LoadProfile(toc, tables, profile, path, {})) { return 1; }
+    ZGameMenu view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_PLAYER_SELECT");
@@ -183,43 +186,43 @@ int RunPlayerSelectCheck(const std::string &bigDirectory) {
     const auto coins = profile.coins, warbucks = profile.warbucks;
     for (unsigned mode = 0; mode < 2; ++mode) {
         for (unsigned brother = 0; brother < 2; ++brother) {
-            MenuState state;
+            ZMenuState state;
             state.page = 25;
             if (mode != 0) { state.page = 29; }
             profile.firstLaunch = mode == 0;
             const auto initialBrother = profile.playerBrother;
-            MovieRegion area;
+            ZMovieRegion area;
             if (!view.movies.Region(ordinal, brother + 1, 0, area)) { return 1; }
-            const MenuTestClick click{area.x + area.width / 2, area.y + area.height / 2};
+            const ZMenuTestClick click{area.x + area.width / 2, area.y + area.height / 2};
             bool launch = false;
             view.Begin(state.page);
             view.inputEnabled = true;
             view.SetTestClick(click);
-            if (!DrawOriginalPlayerSelect(view, state, profile, path, launch) || launch ||
+            if (!DrawPlayerSelect(view, state, profile, path, launch) || launch ||
                 state.selection.playerSelection != -1 || profile.playerBrother != initialBrother) { return 1; }
             view.clock += end + 1;
             view.Begin(state.page);
             view.inputEnabled = true;
-            if (!DrawOriginalPlayerSelect(view, state, profile, path, launch)) { return 1; }
-            if (mode == 0 && brother == 0 && !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/player-select-original-ready.png"))) { return 1; }
+            if (!DrawPlayerSelect(view, state, profile, path, launch)) { return 1; }
+            if (mode == 0 && brother == 0 && !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/player-select-original-ready.png"))) { return 1; }
             view.inputEnabled = true;
             view.SetTestClick(click);
-            if (!DrawOriginalPlayerSelect(view, state, profile, path, launch) || launch ||
+            if (!DrawPlayerSelect(view, state, profile, path, launch) || launch ||
                 state.selection.playerSelection != static_cast<int>(brother) || profile.playerBrother != brother || profile.firstLaunch) { return 1; }
             unsigned selectedStart = 0, selectedEnd = 0;
             if (!movie->GetChapterRange(state.selection.playerSelectChapter, selectedStart, selectedEnd) || state.selection.playerSelectTime != selectedStart) { return 1; }
             view.clock += (selectedEnd - selectedStart) / 2;
             view.Begin(state.page);
             view.inputEnabled = true;
-            if (!DrawOriginalPlayerSelect(view, state, profile, path, launch) || launch) { return 1; }
-            if (mode == 0 && !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/player-select-original-") + std::to_string(brother) + ".png")) { return 1; }
+            if (!DrawPlayerSelect(view, state, profile, path, launch) || launch) { return 1; }
+            if (mode == 0 && !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/player-select-original-") + std::to_string(brother) + ".png")) { return 1; }
             view.clock += selectedEnd - selectedStart + 1;
             view.Begin(state.page);
-            if (!DrawOriginalPlayerSelect(view, state, profile, path, launch) || launch != (mode == 0)) { return 1; }
+            if (!DrawPlayerSelect(view, state, profile, path, launch) || launch != (mode == 0)) { return 1; }
             if (mode != 0 && state.page != 6) { return 1; }
             CProfileManager reloaded;
             reloaded.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-            if (!LoadNativeProfile(toc, tables, reloaded, path, {}) || reloaded.playerBrother != brother ||
+            if (!LoadProfile(toc, tables, reloaded, path, {}) || reloaded.playerBrother != brother ||
                 reloaded.firstLaunch || reloaded.coins != coins || reloaded.warbucks != warbucks) { return 1; }
         }
     }
@@ -231,46 +234,46 @@ int RunPlayerSelectCheck(const std::string &bigDirectory) {
 int RunPlayInteractionCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CProfileManager profile;
     const auto path = std::filesystem::path(TestOutput::Path("play-interaction-check")) / std::to_string(GetTickCount64());
-    if (!LoadNativeProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    GameMenu view;
+    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    ZGameMenu view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = true;
-    MenuState state;
+    ZMenuState state;
     unsigned failures = 0;
     for (unsigned frame = 0; frame < 150; ++frame) {
         view.clock += 16; view.Begin(0); view.SetTestClick({-1, -1});
-        if (!DrawOriginalStarMap(view, state, profile) || !DrawOriginalModeOverlay(view, state)) { return 1; }
+        if (!DrawStarMap(view, state, profile) || !DrawModeOverlay(view, state)) { return 1; }
     }
     const bool autoSelected = state.starMap.starSelectedSlot == 1 && state.starMap.starLocked;
     if (!autoSelected) { ++failures; }
     std::printf("[play-interaction] auto-selected=%d slot=%d locked=%d failures=%u\n", autoSelected, state.starMap.starSelectedSlot, state.starMap.starLocked, failures);
     const unsigned modeOrdinal = view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP");
-    MovieRegion mode;
+    ZMovieRegion mode;
     if (!view.movies.Region(modeOrdinal, 1, state.mode.modeTime, mode)) { return 1; }
     view.Begin(0); view.SetTestClick({mode.x + mode.width / 2, mode.y + mode.height / 2});
-    if (!DrawOriginalModeOverlay(view, state)) { return 1; }
+    if (!DrawModeOverlay(view, state)) { return 1; }
     const unsigned before = state.mode.modeTime;
     view.clock += 80; view.Begin(0); view.SetTestClick({-1, -1});
-    if (!DrawOriginalModeOverlay(view, state)) { return 1; }
+    if (!DrawModeOverlay(view, state)) { return 1; }
     const bool animated = state.mode.modeTime != before && state.mode.modePhase == 1;
     if (!animated || view.ModeParticleCount() == 0) { ++failures; }
-    if (!GB_SAVE_FRAME(view.window, (path / "mode-select.png").string())) { return 1; }
+    if (!Capture::SaveFrame(view.window, (path / "mode-select.png").string())) { return 1; }
     std::printf("[play-interaction] mode-intermediate=%d time=%u..%u failures=%u\n", animated, before, state.mode.modeTime, failures);
     view.clock += 3000; view.Begin(0); view.SetTestClick({-1, -1});
-    if (!DrawOriginalModeOverlay(view, state)) { return 1; }
+    if (!DrawModeOverlay(view, state)) { return 1; }
     state.Navigate(21);
     view.animateNavigation = false;
     bool launch = false;
     view.Begin(21); view.SetTestClick({-1, -1});
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     const unsigned mainOrdinal = view.movies.Ordinal("GLU_MOVIE_MISSION_MENU");
     const unsigned backOrdinal = view.movies.Ordinal("GLU_MOVIE_BACK_BUTTON");
     unsigned start = 0, end = 0;
-    MovieRegion planet, back;
+    ZMovieRegion planet, back;
     if (!view.movies.GetMovie(mainOrdinal)->GetChapterRange(0, start, end) ||
         !view.movies.Region(mainOrdinal, 0, end, planet) ||
         !view.movies.GetMovie(backOrdinal)->GetChapterRange(0, start, end)) { return 1; }
@@ -279,21 +282,21 @@ int RunPlayInteractionCheck(const std::string &bigDirectory) {
     }
     view.Begin(21); view.SetTestClick({std::max(1.0f, back.x + back.width / 2), back.y + back.height / 2});
     std::printf("[play-interaction] back-bounds=%.1f,%.1f %.1fx%.1f frame=%u mission=%u\n", back.x, back.y, back.width, back.height, end, state.missions.missionTime);
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     if (state.page != 0) { ++failures; }
     std::printf("[play-interaction] back-page=%u failures=%u\n", state.page, failures);
     state.Navigate(21); state.missions.missionBound = false;
     view.Begin(21); view.SetTestClick({-1, -1});
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     const unsigned listOrdinal = view.movies.Ordinal("GLU_MOVIE_MISSION_LIST");
-    MovieRegion viewport, first, second;
+    ZMovieRegion viewport, first, second;
     if (!view.movies.GetMovie(listOrdinal)->GetChapterRange(1, start, end) ||
         !view.movies.Region(listOrdinal, 0, start, viewport) || !view.movies.Region(listOrdinal, 1, start, first) ||
         !view.movies.Region(listOrdinal, 2, start, second)) { return 1; }
     view.clock += 16; view.Begin(21);
     view.SetTestClick({viewport.x + viewport.width / 2, viewport.y + viewport.height / 2});
     view.ExchangeClick(false); view.dragX = -(second.x - first.x) / 8;
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     const bool followsDrag = state.missions.missionListTime != start || state.missions.missionFirst != 0;
     if (!followsDrag) { ++failures; }
     std::printf("[play-interaction] list-follows-small-drag=%d time=%u rest=%u failures=%u\n", followsDrag, state.missions.missionListTime, start, failures);
@@ -301,7 +304,7 @@ int RunPlayInteractionCheck(const std::string &bigDirectory) {
     // Equal flicks must travel equally at 30/60-ish desktop frame cadences.
     float referenceDistance = 0;
     for (unsigned frameMs : {16u, 32u}) {
-        MenuScrollMotion motion;
+        ZMenuScrollMotion motion;
         float position = 0;
         motion.Update(position, 16, -stride / 2, 0, true, true, true, stride * 100, stride, end - start + 1);
         unsigned clock = 16;
@@ -316,31 +319,31 @@ int RunPlayInteractionCheck(const std::string &bigDirectory) {
         view.clock += 16; view.Begin(21);
         view.SetTestClick({viewport.x + viewport.width / 2, viewport.y + viewport.height / 2});
         view.ExchangeClick(false); view.dragX = -stride / 2;
-        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+        if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     }
     const float released = state.missions.missionPosition;
     view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     if (state.missions.missionPosition <= released || released < stride * 3) { ++failures; }
     for (unsigned frame = 0; frame < 180; ++frame) {
         view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
-        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+        if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     }
     const float maximum = (view.planetEntries[state.planet].missions.size() - 3) * stride;
     if (state.missions.missionPosition > maximum || state.missions.missionMotion.velocity != 0) { ++failures; }
-    if (!GB_SAVE_FRAME(view.window, (path / "revolutions-after-flick.png").string())) { return 1; }
+    if (!Capture::SaveFrame(view.window, (path / "revolutions-after-flick.png").string())) { return 1; }
     std::printf("[play-interaction] list-release=%.1f coast=%.1f maximum=%.1f failures=%u\n", released, state.missions.missionPosition, maximum, failures);
     // Focus a real visible REV and swipe its wave selector continuously.
-    MovieRegion card;
+    ZMovieRegion card;
     if (!view.movies.Region(listOrdinal, 1, state.missions.missionListTime, card)) { return 1; }
     view.Begin(21); view.SetTestClick({card.x + card.width / 2, card.y + card.height / 2});
-    if (!DrawOriginalMissionInfo(view, state, profile, launch) || state.missions.missionFocused < 0) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch) || state.missions.missionFocused < 0) { return 1; }
     for (unsigned frame = 0; frame < 65; ++frame) {
         view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
-        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+        if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     }
     const unsigned boxOrdinal = view.movies.Ordinal("GLU_MOVIE_MISSION_BOX");
-    MovieRegion box, waves;
+    ZMovieRegion box, waves;
     if (!view.movies.Region(boxOrdinal, 0, state.missions.missionCardTime, box)) { return 1; }
     for (const auto &region : view.movies.Regions(boxOrdinal, state.missions.missionCardTime,
         kMenuWidth / 2 - box.width / 2, kMenuHeight / 2 - box.height / 2)) {
@@ -350,23 +353,23 @@ int RunPlayInteractionCheck(const std::string &bigDirectory) {
     view.clock += 16; view.Begin(21);
     view.SetTestClick({waves.x + waves.width / 2, waves.y + waves.height / 2});
     view.ExchangeClick(false); view.dragX = waves.width * 3;
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     const float waveLeft = state.missions.wavePosition;
     view.clock += 16; view.Begin(21);
     view.SetTestClick({waves.x + waves.width / 2, waves.y + waves.height / 2});
     view.ExchangeClick(false); view.dragX = -waves.width * 5;
-    if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
     if (state.missions.wavePosition <= waveLeft || state.missions.wavePage < 2 || launch) { ++failures; }
-    if (!GB_SAVE_FRAME(view.window, (path / "waves-after-drag.png").string())) { return 1; }
+    if (!Capture::SaveFrame(view.window, (path / "waves-after-drag.png").string())) { return 1; }
     std::printf("[play-interaction] waves-before=%.1f left=%.1f right=%.1f page=%u failures=%u\n", waveBefore, waveLeft, state.missions.wavePosition, state.missions.wavePage, failures);
     // The same radial back action must close an expanded card, then the planet.
     for (unsigned press = 0; press < 2; ++press) {
         view.Begin(21); view.SetTestClick({std::max(1.0f, back.x + back.width / 2), back.y + back.height / 2});
-        if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+        if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
         if (press == 0 && !state.missions.missionClosing) { ++failures; }
         for (unsigned frame = 0; frame < 40 && state.page == 21; ++frame) {
             view.clock += 16; view.Begin(21); view.SetTestClick({-1, -1});
-            if (!DrawOriginalMissionInfo(view, state, profile, launch)) { return 1; }
+            if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
         }
     }
     if (state.page != 0) { ++failures; }
@@ -378,26 +381,26 @@ int RunPlayInteractionCheck(const std::string &bigDirectory) {
 int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CPlayerProgress::Template progress;
     CRefinementManager::Template refinement;
-    std::vector<StoreEntry> store;
-    std::vector<WeaponEntry> weapons;
-    std::vector<ArmorEntry> armor;
+    std::vector<ZStoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
+    std::vector<ZArmorEntry> armor;
     if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
         !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
         !LoadArmorCatalog(toc, tables, armor)) { return 1; }
     const auto savePath = std::filesystem::path(TestOutput::Path("audio-transitions")) / std::to_string(GetTickCount64());
     CProfileManager profile;
-    if (!LoadNativeProfile(toc, tables, profile, savePath, TestOutput::Fixtures())) { return 1; }
-    CWindow window;
+    if (!LoadProfile(toc, tables, profile, savePath, TestOutput::Fixtures())) { return 1; }
+    ZWindow window;
     if (!window.Open("Audio transition verification", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     unsigned failures = 0;
     {
-        GameMenu view(&window);
+        ZGameMenu view(&window);
         if (!view.Open(toc, tables, &profile)) { return 1; }
         view.EnableSilentPreviewAudio();
-        MovieRegion panel;
+        ZMovieRegion panel;
         if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 2, 0, panel)) { return 1; }
         for (unsigned actor = 0; actor < 2; ++actor) {
             profile.playerBrother = actor;
@@ -417,7 +420,7 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     CBGM music;
     music.EnableSilentValidation();
     if (!music.Play(0)) { return 1; }
-    MenuState state;
+    ZMenuState state;
     state.page = 2;
     unsigned starts = CBGM::GetPlaybackStarts();
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
@@ -425,7 +428,7 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     if (CBGM::GetPlaybackStarts() != starts || music.GetTrack() != 0) { ++failures; }
     std::printf("[audio-transition-check] menu retained=%d extra-starts=%u failures=%u\n",
         music.GetTrack() == 0, CBGM::GetPlaybackStarts() - starts, failures);
-    SurvivalGameContext context{profile, savePath, 0};
+    ZSurvivalGameContext context{profile, savePath, 0};
     context.music = &music;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0,
         &context, false, false, nullptr, false, &window) != 0) { return 1; }
@@ -446,7 +449,7 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     state.postGame.postGameClosing = true;
     state.postGame.postGameCloseTime = 100000;
     profile.xplodium = 1; // Explicit test fixture chooses the refinery branch.
-    const std::vector<MenuTestClick> closeTicks{{-100, -100, 16}, {-100, -100, 16}};
+    const std::vector<ZMenuTestClick> closeTicks{{-100, -100, 16}, {-100, -100, 16}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
         savePath, TestOutput::Path("audio-transition-refinery.png"), &closeTicks, false, &window, false, nullptr, &music) != -2) { return 1; }
     if (state.page != 3 || music.GetTrack() != 0) { ++failures; }
@@ -471,16 +474,16 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
 }
 
 int RunSceneTransitionCheck(const std::string &bigDirectory) {
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     const unsigned generation = window.GetSurfaceGeneration();
     const unsigned surface = window.GetSurfaceId();
     int initialX = 0, initialY = 0, initialWidth = 0, initialHeight = 0;
     window.GetPosition(initialX, initialY);
     window.GetDrawableSize(initialWidth, initialHeight);
-    PNGImage pixel;
+    ZPNGImage pixel;
     pixel.width = 1; pixel.height = 1; pixel.pixels = {23, 45, 67, 255};
-    CTexture witness;
+    ZTexture witness;
     if (!witness.Create(pixel)) { return 1; }
     unsigned failures = 0;
     for (unsigned scene = 0; scene < 4; ++scene) {

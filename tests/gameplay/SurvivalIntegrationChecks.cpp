@@ -24,16 +24,14 @@ int CheckSurvivalLevelSounds(SurvivalLevelSoundsFixture fixture) {
     auto & check = fixture.check;
     auto & session = fixture.session;
 
-    if (check) { checkFailures += session.CheckLevelSounds(); }
+    if (check) { checkFailures += CheckLevelSounds(session.GetLevel(), fixture.effects); }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
 
 int CheckSurvivalPropRoutes(SurvivalPropRoutesFixture fixture) {
     auto & checkFailures = fixture.checkFailures;
     auto & check = fixture.check;
-    auto & props = fixture.props;
-
-    if (check) { checkFailures += props.CheckEntryRoutes(); }
+    if (check) { checkFailures += CheckPropEntryRoutes(fixture.loaded, fixture.scene); }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
 
@@ -45,7 +43,7 @@ int CheckSurvivalTriggerRoutes(SurvivalTriggerRoutesFixture fixture) {
     auto & startY = fixture.startY;
     auto & startFacing = fixture.startFacing;
 
-    if (check) { checkFailures += session.CheckTriggerRoutes(startX, startY, startFacing); }
+    if (check) { checkFailures += CheckTriggerRoutes(session, fixture.map, fixture.scene, startX, startY, startFacing); }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
 
@@ -55,7 +53,7 @@ int CheckSurvivalPlacedProps(SurvivalPlacedPropsFixture fixture) {
 
     if (check) {
         // Inspect the actual placed resources, after LEVEL messages and Bind.
-        for (const PlacedProp &prop : loaded.props) {
+        for (const ZPlacedProp &prop : loaded.props) {
             if (!prop.active || prop.runtime == nullptr) { continue; }
             std::printf("[map-interaction] prop=%08x:%u id=%d pos=%.1f,%.1f state=%u removed=%d health=%.1f animations=%d,%d,%d body=%zu bullet=%zu\n",
                 prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, prop.x, prop.y,
@@ -76,16 +74,16 @@ int CheckSurvivalBrotherPose(SurvivalBrotherPoseFixture fixture) {
     auto & brotherModel = fixture.brotherModel;
 
     if (check && withBrother) {
-        const float distance = std::hypot(scene.playerX - brother.x, scene.playerY - brother.y);
+        const float distance = std::hypot(scene.GetPlayer().x - brother.x, scene.GetPlayer().y - brother.y);
         const bool separated = distance >= scene.GetPlayerRadius() * 2;
         std::printf("[brother-spawn-check] player=%.1f,%.1f brother=%.1f,%.1f distance=%.1f separated=%d\n",
-            scene.playerX, scene.playerY, brother.x, brother.y, distance, separated);
+            scene.GetPlayer().x, scene.GetPlayer().y, brother.x, brother.y, distance, separated);
         if (!separated) { ++checkFailures; }
         // The first visible frame must already use the selected idle pose,
         // even while the level intro postpones the first simulation tick.
         auto &torso = brotherModel.weapon->brother.GetTorso();
         const int torsoIndex = torso.GetMeshConfigIndex();
-        PlayerPart *part = brotherModel.parts[torsoIndex].get();
+        ZPlayerPart *part = brotherModel.parts[torsoIndex].get();
         if (brotherModel.weapon->brother.TorsoUsesWeapon()) { part = brotherModel.weapon->configs[torsoIndex].get(); }
         std::vector<float> expectedPose;
         const bool ready = torso.GetAnimation().Evaluate(expectedPose) && !expectedPose.empty() && expectedPose == part->pose;
@@ -166,8 +164,8 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
             if (step == 0) { moveX = 1; moveY = 0; }
             float pickupX = 0, pickupY = 0;
             if (pickups.GetObjectPosition(501, pickupX, pickupY)) {
-                moveX = pickupX - scene.playerX;
-                moveY = pickupY - scene.playerY;
+                moveX = pickupX - scene.GetPlayer().x;
+                moveY = pickupY - scene.GetPlayer().y;
             }
             if (step == 5 && powerups.GetCount(13) > 0) {
                 grenadeWaitMs += 16;
@@ -187,11 +185,11 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                             const float originalX = enemy.combat.x;
                             const float originalY = enemy.combat.y;
                             const float healthBefore = enemy.combat.health;
-                            const CombatId enemyId = enemy.combat.id;
+                            const ZCombatId enemyId = enemy.combat.id;
                             unsigned barrels = 0;
-                            for (PlacedProp &prop : loaded.props) {
+                            for (ZPlacedProp &prop : loaded.props) {
                                 if (!prop.active || !prop.runtime || prop.runtime->GetHealth() <= 0 ||
-                                    prop.sprite->interactiveKind != InteractivePropKind::Barrel) { continue; }
+                                    prop.sprite->interactiveKind != ZInteractivePropKind::Barrel) { continue; }
                                 // Trigger the real barrel Flow and its scene damage dispatch.
                                 enemy.combat.x = prop.x + 30;
                                 enemy.combat.y = prop.y;
@@ -199,7 +197,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                                 for (unsigned tick = 0; tick < 8; ++tick) {
                                     session.Update(16, 0, 0, false);
                                     // A regression may kill and retire the actor during Update.
-                                    const CombatEnemy *target = scene.Find(enemyId);
+                                    const ZCombatEnemy *target = scene.Find(enemyId);
                                     if (!target || target->model.enemy.combat.health != healthBefore) {
                                         std::printf("[tutorial-check] armored barrel damaged enemy object=%d\n", prop.objectId);
                                         return 1;
@@ -221,7 +219,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                     for (const auto &actor : scene.enemies) {
                         const auto &enemy = actor->model.enemy.combat;
                         if (enemy.dead || !enemy.enabled) { continue; }
-                        const float dx = enemy.x - scene.playerX, dy = enemy.y - scene.playerY;
+                        const float dx = enemy.x - scene.GetPlayer().x, dy = enemy.y - scene.GetPlayer().y;
                         moveX = dx; moveY = dy;
                         if (std::hypot(dx, dy) <= 95) { inGrenadeRange = true; moveX = 0; moveY = 0; }
                     }
@@ -322,18 +320,18 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
         // Research input pilot: visit authored pickups and trigger edges without
         // teleporting actors or directly invoking trigger/death callbacks.
         vitals.invincible = true;
-        std::vector<CollisionPoint> goals;
+        std::vector<ZCollisionPoint> goals;
         for (unsigned index = 0; index < loaded.map.GetObjectLayerCount(); ++index) {
             const CLayerObject &layer = loaded.map.GetObjectLayer(index);
             if (static_cast<int>(layer.GetLayerIndex()) != session.GetLevel().GetObjectLayer()) { continue; }
-            for (const PlacedObject &object : layer.GetObjects()) {
-                if (object.objectType == static_cast<unsigned>(PlacedObjectType::Pickup)) { goals.emplace_back(object.x, object.y); }
+            for (const ZPlacedObject &object : layer.GetObjects()) {
+                if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Pickup)) { goals.emplace_back(object.x, object.y); }
             }
         }
         for (unsigned index = 0; index < loaded.map.GetCollisionLayerCount(); ++index) {
             const CLayerCollision &layer = loaded.map.GetCollisionLayer(index);
             if (static_cast<int>(layer.GetLayerIndex()) != session.GetLevel().GetTriggerLayer()) { continue; }
-            for (const CollisionEdge &edge : layer.GetCollision().GetEdges()) {
+            for (const ZCollisionEdge &edge : layer.GetCollision().GetEdges()) {
                 const auto &a = layer.GetCollision().GetVertices()[edge.firstVertex];
                 const auto &b = layer.GetCollision().GetVertices()[edge.secondVertex];
                 const float length = std::hypot(b.x - a.x, b.y - a.y);
@@ -353,16 +351,16 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
             pilot->Update(16, moveX, moveY);
             if (goal < goals.size()) {
                 goalElapsed += 16;
-                const CollisionPoint &target = goals[goal];
+                const ZCollisionPoint &target = goals[goal];
                 float waypointX = target.x, waypointY = target.y;
-                scene.GetBrotherWaypoint(scene.playerX, scene.playerY, target.x, target.y, waypointX, waypointY);
-                moveX = waypointX - scene.playerX;
-                moveY = waypointY - scene.playerY;
-                if (std::hypot(target.x - scene.playerX, target.y - scene.playerY) < 20 || goalElapsed > 20000) {
+                scene.GetBrotherWaypoint(scene.GetPlayer().x, scene.GetPlayer().y, target.x, target.y, waypointX, waypointY);
+                moveX = waypointX - scene.GetPlayer().x;
+                moveY = waypointY - scene.GetPlayer().y;
+                if (std::hypot(target.x - scene.GetPlayer().x, target.y - scene.GetPlayer().y) < 20 || goalElapsed > 20000) {
                     const bool arrived = goalElapsed <= 20000;
                     if (arrived) { ++reached; }
                     std::printf("[campaign-check] goal=%u target=%.0f,%.0f reached=%d player=%.1f,%.1f\n",
-                        goal, target.x, target.y, arrived, scene.playerX, scene.playerY);
+                        goal, target.x, target.y, arrived, scene.GetPlayer().x, scene.GetPlayer().y);
                     ++goal;
                     goalElapsed = 0;
                 }
@@ -404,4 +402,3 @@ int CheckSurvivalPowerupCapture(SurvivalPowerupCaptureFixture fixture) {
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
-

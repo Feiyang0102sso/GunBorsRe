@@ -3,16 +3,16 @@
 #include "engine/resources/CResTOCManager.h"
 #include <cstdio>
 
-bool DetectViewerBigVersion(const std::string &bigDirectory, BigVersion &version, bool detailed) {
-    version = BigVersion::Unknown;
+bool DetectViewerBigVersion(const std::string &bigDirectory, ZBigVersion &version, bool detailed) {
+    version = ZBigVersion::Unknown;
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return false; }
-    BigVersion detected = BigVersion::Unknown;
+    ZBigVersion detected = ZBigVersion::Unknown;
     for (unsigned index = 0; index < toc.GetPackCount(); ++index) {
         CResPackTOC &pack = *toc.GetPack(index);
         CGameObjectPack objects;
         if (!objects.Init(pack)) { return false; }
-        if (detected == BigVersion::Unknown) { detected = objects.GetBigVersion(); }
+        if (detected == ZBigVersion::Unknown) { detected = objects.GetBigVersion(); }
         if (detected != objects.GetBigVersion()) {
             std::printf("[big-version] mixed formats: %s has BigVersion=%u, expected %u\n",
                 pack.GetShortName().c_str(), static_cast<unsigned>(objects.GetBigVersion()), static_cast<unsigned>(detected));
@@ -27,5 +27,5 @@ bool DetectViewerBigVersion(const std::string &bigDirectory, BigVersion &version
     version = detected;
     std::printf("[big-version] auto selected BigVersion=%u packs=%u; format family only\n",
         static_cast<unsigned>(version), toc.GetPackCount());
-    return version != BigVersion::Unknown;
+    return version != ZBigVersion::Unknown;
 }

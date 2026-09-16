@@ -22,9 +22,9 @@ class CScriptInterpreter;
 /** A return statement. */
 struct CScriptReturn {
     /** @return true always. */
-    static bool Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor);
+    static bool Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor);
 
-    static void Skip(ScriptCursor &cursor);
+    static void Skip(ZScriptCursor &cursor);
 };
 
 #endif  // GUN_BROS_RE_GLU_SCRIPT_CSCRIPTRETURN_H

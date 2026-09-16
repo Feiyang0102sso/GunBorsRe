@@ -1,8 +1,8 @@
 #include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/SurvivalRuntime.h"
+#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
 int RunFlockPerformanceCheck(const std::string &bigDirectory) {
-    SurvivalLaunch launch;
+    ZSurvivalLaunch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = "pack7";
     launch.mapIndex = 6;
@@ -15,7 +15,7 @@ int RunFlockPerformanceCheck(const std::string &bigDirectory) {
     return RunSurvivalSession(launch);
 }
 int RunFlockCheck(const std::string &bigDirectory) {
-    SurvivalLaunch launch;
+    ZSurvivalLaunch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = "pack7";
     launch.mapIndex = 6;
@@ -25,7 +25,7 @@ int RunFlockCheck(const std::string &bigDirectory) {
     return RunSurvivalSession(launch);
 }
 int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime, bool uncachedPaths) {
-    SurvivalLaunch launch;
+    ZSurvivalLaunch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = "pack2";
     launch.mapIndex = 7;
@@ -42,11 +42,11 @@ int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime, boo
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    SurvivalGameContext *gameContext, bool withBrother, bool powerupStudy,
-    const MissionEntry *archiveMission, bool performanceStudy, CWindow *sharedWindow, bool feedbackStudy,
+    ZSurvivalGameContext *gameContext, bool withBrother, bool powerupStudy,
+    const ZMissionEntry *archiveMission, bool performanceStudy, ZWindow *sharedWindow, bool feedbackStudy,
     bool bossStudy, bool deathStudy) {
 
-    SurvivalLaunch launch{bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,
+    ZSurvivalLaunch launch{bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,
         startWave, gameContext, withBrother, archiveMission, sharedWindow};
     SurvivalDevelopment development{screenshotPath, advanceMs, firePreview, showCollisions,
         check, checkWaves, powerupStudy, performanceStudy, feedbackStudy, bossStudy, deathStudy};

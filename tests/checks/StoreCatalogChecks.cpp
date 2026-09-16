@@ -1,8 +1,8 @@
-/** @file StoreCatalog.cpp
+/** @file ZStoreCatalog.cpp
  * @brief Parse and validate progression and all store records independently.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/data/Planet.h"
 #include <cstdio>
@@ -11,14 +11,14 @@
 #include <iomanip>
 #include "Checks.h"
 
-unsigned CheckCheatActions(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Template &data);
+unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &data);
 
 int RunProgressCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CPlayerProgress::Template data;
-    std::vector<StoreEntry> catalog;
+    std::vector<ZStoreEntry> catalog;
     if (!LoadPlayerProgress(toc, tables, data) || !LoadStoreCatalog(toc, tables, catalog)) { return 1; }
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("progress-check.txt"));
@@ -28,10 +28,10 @@ int RunProgressCheck(const std::string &bigDirectory) {
     failures += CheckCheatActions(toc, tables, data);
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC *pack = toc.GetPack(packIndex);
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Planet);
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::Planet);
         for (unsigned index = 0; index < count; ++index) {
             std::vector<std::uint8_t> payload;
-            if (!tables.ReadSectionResource(pack->GetPackHash(), GameSection::Planet, index, payload)) { ++failures; continue; }
+            if (!tables.ReadSectionResource(pack->GetPackHash(), ZGameSection::Planet, index, payload)) { ++failures; continue; }
             CArrayInputStream stream(payload);
             Planet planet;
             if (!planet.Init(stream) || stream.Available() != 0) { ++failures; continue; }
@@ -71,7 +71,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
     bool testedPurchase = false;
     // User regression: a consumable-containing, one-time package must never
     // charge again. Select by the original flag, not by a translated name.
-    for (const StoreEntry &entry : catalog) {
+    for (const ZStoreEntry &entry : catalog) {
         if (entry.data.singlePurchase == 0) { continue; }
         CProfileManager packageBuyer;
         packageBuyer.Reset(coreHash, refinementData);
@@ -80,20 +80,20 @@ int RunProgressCheck(const std::string &bigDirectory) {
         const auto first = packageBuyer.AcquireItem(entry.data, data.GetMaximumLevel());
         const auto balance = packageBuyer.warbucks;
         const auto second = packageBuyer.AcquireItem(entry.data, data.GetMaximumLevel());
-        const bool passed = first == PurchaseResult::Purchased && second == PurchaseResult::Owned && packageBuyer.warbucks == balance;
+        const bool passed = first == ZPurchaseResult::Purchased && second == ZPurchaseResult::Owned && packageBuyer.warbucks == balance;
         std::printf("[package-once-check] resource=%u:%u first=%u second=%u unchanged-balance=%d passed=%d\n",
             entry.ref.packHash, entry.ref.localIndex, unsigned(first), unsigned(second), packageBuyer.warbucks == balance, passed);
         if (!passed) { ++failures; }
     }
-    for (const StoreEntry &entry : catalog) {
+    for (const ZStoreEntry &entry : catalog) {
         if (entry.name != "Mad Dogs") { continue; }
         const CStoreItem &item = entry.data;
         profile.coins = item.commonPrice - 1;
-        if (profile.AcquireItem(item, 1) != PurchaseResult::InsufficientCoins ||
+        if (profile.AcquireItem(item, 1) != ZPurchaseResult::InsufficientCoins ||
             profile.coins != item.commonPrice - 1) { ++failures; }
         profile.coins = item.commonPrice;
-        if (profile.AcquireItem(item, 1) != PurchaseResult::Purchased || profile.coins != 0 ||
-            profile.AcquireItem(item, 1) != PurchaseResult::Owned) { ++failures; }
+        if (profile.AcquireItem(item, 1) != ZPurchaseResult::Purchased || profile.coins != 0 ||
+            profile.AcquireItem(item, 1) != ZPurchaseResult::Owned) { ++failures; }
         profile.configuration.guns[1] = item.objects[0].object;
         testedPurchase = true;
     }
@@ -101,15 +101,15 @@ int RunProgressCheck(const std::string &bigDirectory) {
     CProfileManager consumableBuyer;
     consumableBuyer.Reset(coreHash, refinementData);
     bool testedBundle = false;
-    for (const StoreEntry &entry : catalog) {
+    for (const ZStoreEntry &entry : catalog) {
         if (entry.name != "F.R.A.G. Grenade" || entry.data.objects.size() != 10) { continue; }
         const auto &ref = entry.data.objects[0].object;
         consumableBuyer.warbucks = entry.data.rarePrice - 1;
-        if (consumableBuyer.AcquireItem(entry.data, 1) != PurchaseResult::InsufficientWarbucks ||
+        if (consumableBuyer.AcquireItem(entry.data, 1) != ZPurchaseResult::InsufficientWarbucks ||
             consumableBuyer.GetPowerupCount(ref) != 0) { ++failures; }
         consumableBuyer.warbucks = entry.data.rarePrice * 2;
-        if (consumableBuyer.AcquireItem(entry.data, 1) != PurchaseResult::Purchased ||
-            consumableBuyer.AcquireItem(entry.data, 1) != PurchaseResult::Purchased ||
+        if (consumableBuyer.AcquireItem(entry.data, 1) != ZPurchaseResult::Purchased ||
+            consumableBuyer.AcquireItem(entry.data, 1) != ZPurchaseResult::Purchased ||
             consumableBuyer.GetPowerupCount(ref) != 20 || consumableBuyer.warbucks != 0 ||
             !consumableBuyer.ConsumePowerup(ref) || consumableBuyer.GetPowerupCount(ref) != 19 ||
             consumableBuyer.ConsumePowerup(ref, 20)) { ++failures; }
@@ -171,7 +171,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
             << " health=" << data.health[level] << '\n';
     }
     unsigned references = 0;
-    for (const StoreEntry &entry : catalog) {
+    for (const ZStoreEntry &entry : catalog) {
         const CStoreItem &item = entry.data;
         storeReport << entry.owner << " name=" << std::quoted(entry.name) << " type=" << unsigned(item.type)
             << " flags=" << unsigned(item.flags) << " level=" << item.requiredLevel
@@ -187,7 +187,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
                 << ':' << unsigned(ref.object.localIndex) << ']';
             std::vector<std::uint8_t> payload;
             if (ref.type >= kObjectTypeCount || !tables.ReadSectionResource(ref.object.packHash,
-                static_cast<GameSection>(ref.type + 1), ref.object.localIndex, payload)) { ++failures; }
+                static_cast<ZGameSection>(ref.type + 1), ref.object.localIndex, payload)) { ++failures; }
         }
         for (unsigned group = 0; group < item.statGroups.size(); ++group) {
             storeReport << " stat" << group << '=';

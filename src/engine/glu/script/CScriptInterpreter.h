@@ -28,7 +28,7 @@
 
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptCode.h"
-#include "engine/glu/script/CScriptResolver.h"
+#include "engine/glu/script/ScriptResolver.h"
 
 #include <cstdint>
 #include <vector>
@@ -83,7 +83,7 @@ public:
      * makes two objects sharing a template independent of each other. The
      * script and host must outlive the interpreter.
      */
-    void SetScript(const CScript &script, IScriptObject &host);
+    void SetScript(const CScript &script, ZScriptObject &host);
 
     bool HasScript() const;
 
@@ -175,11 +175,11 @@ public:
     void SetReturnValueRef(std::uint16_t operand) { m_returnValueRef = operand; }
 
     const CScript *GetScript() const { return m_script; }
-    IScriptObject *GetHost() const { return m_host; }
+    ZScriptObject *GetHost() const { return m_host; }
 
 private:
     const CScript *m_script;
-    IScriptObject *m_host;
+    ZScriptObject *m_host;
 
     // The current state, and its id. Null until the first SetState.
     const CScriptState *m_state;

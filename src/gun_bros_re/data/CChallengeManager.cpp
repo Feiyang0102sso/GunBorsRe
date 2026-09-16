@@ -42,18 +42,18 @@ bool CChallengeManager::Template::Init(CArrayInputStream &stream) {
     return !stream.Overran() && stream.Available() == 0;
 }
 
-bool CChallengeManager::Load(CResTOCManager &toc, PackTables &tables) {
+bool CChallengeManager::Load(CResTOCManager &toc, ZPackTables &tables) {
     templates.clear();
     packTemplates.clear();
     packTemplates.resize(toc.GetPackCount());
     for (unsigned pack = 0; pack < toc.GetPackCount(); ++pack) {
-        const unsigned count = tables.GetObjectPack(pack).GetObjectCount(static_cast<GameSection>(27));
+        const unsigned count = tables.GetObjectPack(pack).GetObjectCount(static_cast<ZGameSection>(27));
         for (unsigned index = 0; index < count; ++index) {
             Template entry;
             entry.reference.packHash = toc.GetPack(pack)->GetPackHash();
             entry.reference.localIndex = static_cast<std::uint8_t>(index);
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(entry.reference.packHash, static_cast<GameSection>(27), index, bytes)) { return false; }
+            if (!tables.ReadSectionResource(entry.reference.packHash, static_cast<ZGameSection>(27), index, bytes)) { return false; }
             CArrayInputStream stream(bytes);
             if (!entry.Init(stream)) {
                 std::printf("[challenge] invalid template pack=%08x ordinal=%u offset=%zu size=%zu\n",
@@ -100,7 +100,7 @@ std::vector<unsigned> CChallengeManager::GenerateChallengeList(unsigned day) con
     return result;
 }
 
-bool CChallengeManager::Bind(CResTOCManager &toc, PackTables &tables,
+bool CChallengeManager::Bind(CResTOCManager &toc, ZPackTables &tables,
     const CProfileManager &profile, unsigned seconds) {
     if (templates.empty() && !Load(toc, tables)) { return false; }
     std::vector<unsigned> progress, rewards, completedFriends;
@@ -194,9 +194,9 @@ bool CChallengeManager::Bind(CResTOCManager &toc, PackTables &tables,
         for (unsigned tier = 0; tier < 3; ++tier) {
             const auto &ref = entry.prizes[tier];
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(ref.packHash, static_cast<GameSection>(19), ref.localIndex, bytes)) { return false; }
+            if (!tables.ReadSectionResource(ref.packHash, static_cast<ZGameSection>(19), ref.localIndex, bytes)) { return false; }
             CArrayInputStream stream(bytes);
-            DailyPrize &prize = challenge.prizes[tier];
+            ZDailyPrize &prize = challenge.prizes[tier];
             // entries/prize_entry.bt; CPrize::Init :204736, including unused tail.
             prize.coins = stream.ReadUInt32();
             prize.warbucks = stream.ReadUInt32();

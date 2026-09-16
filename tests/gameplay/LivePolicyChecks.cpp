@@ -1,9 +1,9 @@
 /** Exercise Live decisions against the real BIG catalog and actor instances. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/LiveShopSession.h"
+#include "gun_bros_re/gameplay/ZLiveShopSession.h"
 
-int CheckLivePolicies(SurvivalDeathFixture fixture, PowerupScene &powerups, CProfileManager &profile) {
-    LiveShopSession shop;
+int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CProfileManager &profile) {
+    ZLiveShopSession shop;
     if (!shop.RequestForWave(1, 0, 0, false) || !shop.Close(1) ||
         shop.RequestForWave(1, 1000, 0, false) ||
         !shop.RequestForWave(1, 1000, 0, false, true) || !shop.Close(1) ||
@@ -40,7 +40,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, PowerupScene &powerups, CPro
     for (auto &actor : scene.enemies) {
         auto &enemy = actor->model.enemy.combat;
         enemy.dead = false; enemy.removed = false; enemy.enabled = true; enemy.health = 1;
-        enemy.x = fixture.brother.x + PowerupScene::BotGrenadeRadius + 1;
+        enemy.x = fixture.brother.x + ZPowerupScene::BotGrenadeRadius + 1;
         enemy.y = fixture.brother.y;
     }
     auto &last = scene.enemies.back()->model.enemy.combat;
@@ -61,7 +61,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, PowerupScene &powerups, CPro
         if (!powerups.SelectResource(item) || powerups.CanBotUseSelected()) { return 1; }
         first.x = fixture.brother.x;
         if (powerups.CanBotUseSelected()) { return 1; }
-        second.x = fixture.brother.x + PowerupScene::BotGrenadeRadius;
+        second.x = fixture.brother.x + ZPowerupScene::BotGrenadeRadius;
         if (!powerups.CanBotUseSelected()) { return 1; }
         second.health = 0;
         if (powerups.CanBotUseSelected()) { return 1; }
@@ -72,7 +72,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, PowerupScene &powerups, CPro
         second.enabled = false;
         if (powerups.CanBotUseSelected()) { return 1; }
         second.enabled = true;
-        first.x = second.x = fixture.brother.x + PowerupScene::BotGrenadeRadius + 1;
+        first.x = second.x = fixture.brother.x + ZPowerupScene::BotGrenadeRadius + 1;
     }
     // UseAny must skip an owned air strike at ten enemies without consuming it.
     const auto inventory = profile.powerups;

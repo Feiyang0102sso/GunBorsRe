@@ -1,12 +1,12 @@
 /** Real Live HUD, death Flow and wave progression must work together. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/ui/SurvivalHud.h"
+#include "gun_bros_re/ui/CInputPad.h"
 #include <chrono>
 
-int CheckLiveCheatProgress(SurvivalDeathFixture fixture, SurvivalHud &hud) {
+int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {
     auto &session = fixture.session;
     auto &scene = fixture.scene;
-    session.SetOriginalHud(&hud);
+    session.SetHud(&hud);
     unsigned failures = 0;
     for (unsigned downPeer = 0; downPeer < 3; ++downPeer) {
         hud.ResetNotices();
@@ -74,7 +74,7 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, SurvivalHud &hud) {
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     fixture.vitals.invincible = true;
     fixture.brother.vitals.invincible = true;
-    CombatEnemy *victim = nullptr;
+    ZCombatEnemy *victim = nullptr;
     for (unsigned elapsed = 0; elapsed < 10000 && victim == nullptr; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (auto &actor : scene.enemies) {
@@ -89,7 +89,7 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, SurvivalHud &hud) {
     std::printf("[live-cheat-progress] wait-death-delivered=%d\n", session.GetKills() > killsBeforeWait);
     if (session.GetKills() <= killsBeforeWait) { ++failures; }
     hud.ResetNotices();
-    session.SetOriginalHud(nullptr);
+    session.SetHud(nullptr);
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     return failures;
 }

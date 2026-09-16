@@ -1,6 +1,6 @@
 #pragma once
 /** Windows arena camera and consumable shortcuts; no authored combat values. */
-#include "gun_bros_re/data/PowerupCatalog.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "gun_bros_re/gameplay/CBrother.h"
 #include <algorithm>
 #include <array>
@@ -32,7 +32,7 @@ struct ArenaCamera {
     float WorldY(float pixelY) const { return y + pixelY / scale; }
 };
 
-bool LoadArenaGrenades(CResTOCManager &toc, PackTables &tables,
-    std::array<PowerupEntry, 3> &grenades);
-bool ThrowArenaGrenade(CBrother &brother, const PowerupEntry &entry);
+bool LoadArenaGrenades(CResTOCManager &toc, ZPackTables &tables,
+    std::array<ZPowerupEntry, 3> &grenades);
+bool ThrowArenaGrenade(CBrother &brother, const ZPowerupEntry &entry);
 }

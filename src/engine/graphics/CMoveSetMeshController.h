@@ -33,7 +33,7 @@
 constexpr std::int32_t kNoMoveIndex = -1;
 
 /** Move WAV cue, carrying the original pack hash and local ordinal. */
-struct MoveSoundRef {
+struct ZMoveSoundRef {
     std::uint32_t packHash = 0;
     std::uint8_t localIndex = 255;
 };
@@ -66,7 +66,7 @@ public:
     /** Collect authored WAV cues after an externally advanced UI animation. */
     void CollectSounds(std::int32_t previousMs);
     /** Direct WAV references emitted by crossed move frames (not sound templates). */
-    std::vector<MoveSoundRef> TakeSounds();
+    std::vector<ZMoveSoundRef> TakeSounds();
 
     std::int32_t GetMoveIndex() const { return m_moveIndex; }
     const CMoveSetMesh *GetMoveSet() const { return m_moveSet; }
@@ -82,7 +82,7 @@ private:
     std::vector<const CMesh *> m_meshes;
     std::int32_t m_moveIndex;
     CMeshAnimationController m_animation;
-    std::vector<MoveSoundRef> m_sounds;
+    std::vector<ZMoveSoundRef> m_sounds;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMOVESETMESHCONTROLLER_H

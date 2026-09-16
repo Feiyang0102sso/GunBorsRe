@@ -8,21 +8,21 @@
 #include "gun_bros_re/data/CPlayerConfiguration.h"
 #include "gun_bros_re/data/CStoreItem.h"
 #include "gun_bros_re/data/CRefinementManager.h"
-#include "gun_bros_re/data/NativeProfile.h"
+#include "gun_bros_re/data/ZProfileStorage.h"
 #include <optional>
 #include <filesystem>
 #include <string>
 #include <bitset>
 #include "gun_bros_re/data/CFriendPowerManager.h"
 
-enum class PurchaseResult { Purchased, Owned, LevelLocked, InsufficientCoins, InsufficientWarbucks, Unsupported };
+enum class ZPurchaseResult { Purchased, Owned, LevelLocked, InsufficientCoins, InsufficientWarbucks, Unsupported };
 
-struct PowerupInventoryEntry {
+struct ZPowerupInventoryEntry {
     GameObjectRef resource;
     unsigned count = 0;
 };
 
-struct WeaponMasteryEntry {
+struct ZWeaponMasteryEntry {
     GameObjectRef resource;
     unsigned experience = 0;
 };
@@ -47,8 +47,8 @@ public:
     unsigned ActivityProgress(unsigned index) const;
     static unsigned ActivityTarget(unsigned index);
     /** Offline equipment purchase follows level, common-else-rare, then ownership. */
-    PurchaseResult AcquireItem(const CStoreItem &item, unsigned level, bool award = false);
-    PurchaseResult AcquireCurrency(const CStoreItem &item);
+    ZPurchaseResult AcquireItem(const CStoreItem &item, unsigned level, bool award = false);
+    ZPurchaseResult AcquireCurrency(const CStoreItem &item);
 
     std::uint64_t experience = 0;
     std::uint64_t coins = 0;
@@ -66,8 +66,8 @@ public:
     CPlayerConfiguration configuration;
     CRefinementManager refinery;
     std::vector<GameObjectTypeRef> inventory;
-    std::vector<PowerupInventoryEntry> powerups;
-    std::vector<WeaponMasteryEntry> weaponMastery;
+    std::vector<ZPowerupInventoryEntry> powerups;
+    std::vector<ZWeaponMasteryEntry> weaponMastery;
     // CPackageOfferMgr Collection (1018), keyed by original STORE reference.
     std::vector<GameObjectRef> purchasedPackages;
     // Session-only adapter for the original cached store override: show OWNED
@@ -87,7 +87,7 @@ public:
     std::array<unsigned, 10> hordeBestScore{};
     unsigned stat42Bits = 0; // Authored level event bits; remote achievement reporting is separate.
     // Original client fields, independent from the older research text profile.
-    std::optional<NativeProfileArchive> nativeArchive;
+    std::optional<ZProfileArchive> nativeArchive;
     bool firstLaunch = true; // Original flag clears at player selection, not tutorial end.
     unsigned activeWeaponSlot = 0;
     std::array<std::uint8_t, 22> tutorialSeen{};

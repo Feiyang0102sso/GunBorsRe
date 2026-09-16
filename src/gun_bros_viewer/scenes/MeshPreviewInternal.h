@@ -1,7 +1,7 @@
 #pragma once
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /**
- * @file MeshPreview.cpp
+ * @file MeshPreviewInternal.h
  * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
  *
  * Four entry points over one body of knowledge:
@@ -32,23 +32,23 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/PackTables.h"
-#include "gun_bros_re/gameplay/PlayerModel.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/gameplay/CombatGeometry.h"
-#include "gun_bros_re/gameplay/WeaponEffects.h"
+#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/graphics/CMeshBuffer.h"
-#include "engine/graphics/CPNG.h"
-#include "engine/graphics/CShaderProgram.h"
-#include "engine/graphics/CTexture.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/graphics/ZMeshBuffer.h"
+#include "engine/graphics/ZPNG.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/graphics/ZTexture.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
 #include "gun_bros_re/gameplay/CBrother.h"
@@ -220,11 +220,11 @@ void EmitAssetRefs(const CGameAssetRef &meshRef, const CGameAssetRef &imageRef,
 
 /** Fetch one template resource. Returns false when the section is empty. */
 bool ReadTemplate(CResPackTOC &pack, CGameObjectPack &objectPack,
-                  GameSection section, std::uint32_t ordinal,
+                  ZGameSection section, std::uint32_t ordinal,
                   std::vector<std::uint8_t> &payload);
 
 /** Player templates: parsed whole, so their leftover count means something. */
-void WalkPlayers(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkPlayers(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                  IMeshPairSink &sink);
 
 /**
@@ -236,19 +236,19 @@ void WalkPlayers(CResPackTOC &pack, PackTables &tables, int packIndex,
  * therefore cannot check for leftover bytes. A survey shortcut, not a CEnemy
  * port: that class stays unwritten until its own milestone.
  */
-void WalkEnemies(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkEnemies(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                  IMeshPairSink &sink);
 
 /** Gun templates: a move set at the end, plus the weapon's own model. */
-void WalkGuns(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkGuns(CResPackTOC &pack, ZPackTables &tables, int packIndex,
               IMeshPairSink &sink);
 
 /** Bullet templates: a pair of asset refs, and most name neither. */
-void WalkBullets(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkBullets(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                  IMeshPairSink &sink);
 
 /** Armour templates: one model per brother, either of which may be absent. */
-void WalkArmor(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkArmor(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                IMeshPairSink &sink);
 
 /**
@@ -260,7 +260,7 @@ void WalkArmor(CResPackTOC &pack, PackTables &tables, int packIndex,
  * CMoveSetMesh::LoadMesh (:123157) and three GetResId(0x1E, ...) call sites
  * are the whole list.
  */
-void WalkMeshPairs(CResTOCManager &tocManager, PackTables &tables,
+void WalkMeshPairs(CResTOCManager &tocManager, ZPackTables &tables,
                    IMeshPairSink &sink);
 
 // ---------------------------------------------------------------------------
@@ -274,7 +274,7 @@ void ReadPngSize(const std::vector<std::uint8_t> &payload, std::uint32_t &width,
 /** Resolves each pair and prints what it landed on. */
 class ReportingSink : public IMeshPairSink {
 public:
-    explicit ReportingSink(PackTables &tables) : m_tables(tables) {}
+    explicit ReportingSink(ZPackTables &tables) : m_tables(tables) {}
 
     void OnPair(const MeshPair &pair) override {
         m_pairs++;
@@ -290,7 +290,7 @@ public:
 
         std::vector<std::uint8_t> meshPayload;
         const bool meshRead = m_tables.ReadSectionResource(
-            pair.meshPackHash, GameSection::Mesh, pair.meshOrdinal, meshPayload);
+            pair.meshPackHash, ZGameSection::Mesh, pair.meshOrdinal, meshPayload);
 
         CMesh mesh;
         bool meshParsed = false;
@@ -323,7 +323,7 @@ public:
 
         std::vector<std::uint8_t> imagePayload;
         const bool imageRead = m_tables.ReadSectionResource(
-            pair.imagePackHash, GameSection::Png, pair.imageOrdinal, imagePayload);
+            pair.imagePackHash, ZGameSection::Png, pair.imageOrdinal, imagePayload);
 
         bool isPng = false;
         if (imageRead && imagePayload.size() >= sizeof(kPngSignature)) {
@@ -367,7 +367,7 @@ public:
     }
 
 private:
-    PackTables &m_tables;
+    ZPackTables &m_tables;
     std::string m_lastOwner;
     unsigned m_pairs = 0;
     unsigned m_meshFailures = 0;
@@ -382,7 +382,7 @@ private:
  * The last column is section 31's size; the rest are the template types that
  * point into it.
  */
-void PrintTemplateCounts(CResTOCManager &tocManager, PackTables &tables);
+void PrintTemplateCounts(CResTOCManager &tocManager, ZPackTables &tables);
 
 // ---------------------------------------------------------------------------
 // The viewer
@@ -443,10 +443,10 @@ public:
     }
 
     /** Add unreferenced raw resources too; no invented atlas relationship. */
-    void AddRawMeshes(CResTOCManager &toc, PackTables &tables) {
+    void AddRawMeshes(CResTOCManager &toc, ZPackTables &tables) {
         for (std::uint32_t packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
             CResPackTOC *pack = toc.GetPack(static_cast<int>(packIndex));
-            const auto count = tables.GetObjectPack(packIndex).GetSectionSpan(GameSection::Mesh);
+            const auto count = tables.GetObjectPack(packIndex).GetSectionSpan(ZGameSection::Mesh);
             for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
                 bool found = false;
                 for (const CatalogEntry &entry : m_entries) {
@@ -478,7 +478,7 @@ private:
  */
 struct LoadedModel {
     CMesh mesh;
-    CTexture texture;
+    ZTexture texture;
 
     // The playback machinery, used only when the catalogue entry brought a
     // move set. A model named by a plain asset ref shows frame 0 and stops.
@@ -516,7 +516,7 @@ void BindMoveSet(const CatalogEntry &entry, LoadedModel &model);
  * last contents if the evaluator has nothing -- better a held pose than a
  * model that blinks out.
  */
-void UploadPose(LoadedModel &model, CMeshBuffer &buffer,
+void UploadPose(LoadedModel &model, ZMeshBuffer &buffer,
                 std::uint32_t stillFrameIndex);
 
 /**
@@ -533,7 +533,7 @@ void WarmUp(LoadedModel &model, std::uint32_t advanceMs);
 void ReportMove(const CatalogEntry &entry, const LoadedModel &model);
 
 /** Fetch and decode one catalogue entry. */
-bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out);
+bool LoadModel(ZPackTables &tables, const CatalogEntry &entry, LoadedModel &out);
 
 /** How the model is standing: the engine's own two orientations, plus drag. */
 struct Turntable {
@@ -557,7 +557,7 @@ struct Turntable {
  * instead translates to a world position and scales by whatever the caller
  * passes.
  */
-void BuildModelViewProjection(const MeshBounds &bounds, const Turntable &view,
+void BuildModelViewProjection(const ZMeshBounds &bounds, const Turntable &view,
                               int drawableWidth, int drawableHeight, float *out);
 
 // ---------------------------------------------------------------------------
@@ -635,7 +635,7 @@ private:
 };
 
 /** Assemble the player, with one of the catalogue's guns in his hand. */
-bool BuildViewerCharacter(PackTables &tables, const CharacterSink &catalog,
-                          std::size_t gunSlot, PlayerModel &out);
+bool BuildViewerCharacter(ZPackTables &tables, const CharacterSink &catalog,
+                          std::size_t gunSlot, ZPlayerModel &out);
 
 }

@@ -1,7 +1,7 @@
 /** Windows host UI only: cached system-font text, with no game UI resource data. */
 #include "gun_bros_viewer/ViewerControls.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/core/Paths.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/core/ZPaths.h"
 #define NOMINMAX
 #include <Windows.h>
 #include <SDL3/SDL.h>
@@ -95,14 +95,14 @@ std::wstring KeyLabel(const ViewerBinding &binding) {
         L"W", L"A", L"S", L"D", L"B", L"C", L"E", L"F", L"Q",
         L"1", L"2", L"3", L"4", L"5", L"6", L"7", L"8", L"9", L"I"
     };
-    static_assert(sizeof(names) / sizeof(names[0]) == static_cast<int>(KeyCode::Count));
+    static_assert(sizeof(names) / sizeof(names[0]) == static_cast<int>(ZKeyCode::Count));
     std::wstring label = names[static_cast<int>(binding.key)];
     if (binding.input == ViewerInput::Hold) { label += L" hold"; }
     return label;
 }
 }
 
-ViewerControls::ViewerControls(CWindow &window, ViewerBindingSet bindings, bool enabled)
+ViewerControls::ViewerControls(ZWindow &window, ViewerBindingSet bindings, bool enabled)
     : m_window(window), m_bindings(bindings), m_enabled(enabled) {}
 
 ViewerControls::~ViewerControls() {
@@ -135,7 +135,7 @@ const ViewerBinding *ViewerControls::Find(ViewerAction action) const {
     return nullptr;
 }
 
-bool ViewerControls::IsPressed(KeyCode key, ViewerAction action) const {
+bool ViewerControls::IsPressed(ZKeyCode key, ViewerAction action) const {
     const ViewerBinding *binding = Find(action);
     return binding != nullptr && binding->input == ViewerInput::Press && binding->key == key;
 }
@@ -191,16 +191,16 @@ bool ViewerControls::PumpEvents() {
     if (!m_window.PumpEvents()) { return false; }
     Layout();
     m_keys.clear();
-    for (KeyCode key = m_window.TakeKeyPress(); key != KeyCode::None; key = m_window.TakeKeyPress()) {
+    for (ZKeyCode key = m_window.TakeKeyPress(); key != ZKeyCode::None; key = m_window.TakeKeyPress()) {
         if (m_enabled && IsPressed(key, ViewerAction::Back)) { return false; }
         m_keys.push_back(key);
     }
     return true;
 }
 
-KeyCode ViewerControls::TakeKeyPress() {
-    if (m_keys.empty()) { return KeyCode::None; }
-    const KeyCode key = m_keys.front();
+ZKeyCode ViewerControls::TakeKeyPress() {
+    if (m_keys.empty()) { return ZKeyCode::None; }
+    const ZKeyCode key = m_keys.front();
     m_keys.erase(m_keys.begin());
     return key;
 }
@@ -238,7 +238,7 @@ float ViewerControls::TakeWheelDelta() {
     return wheel;
 }
 
-KeyCode ViewerControls::WeaponSelectionKey(KeyCode key) const {
+ZKeyCode ViewerControls::WeaponSelectionKey(ZKeyCode key) const {
     // Translate viewer bindings to the existing catalogue API's canonical commands.
     // These are API arguments, not a second set of physical viewer bindings.
     const ViewerAction categories[] = {ViewerAction::Category1, ViewerAction::Category2,
@@ -246,12 +246,12 @@ KeyCode ViewerControls::WeaponSelectionKey(KeyCode key) const {
         ViewerAction::Category6, ViewerAction::Category7};
     for (int index = 0; index < 7; ++index) {
         if (IsPressed(key, categories[index])) {
-            return static_cast<KeyCode>(static_cast<int>(KeyCode::Digit1) + index);
+            return static_cast<ZKeyCode>(static_cast<int>(ZKeyCode::Digit1) + index);
         }
     }
-    if (IsPressed(key, ViewerAction::PreviousVariant)) { return KeyCode::N; }
-    if (IsPressed(key, ViewerAction::NextVariant)) { return KeyCode::M; }
-    return KeyCode::None;
+    if (IsPressed(key, ViewerAction::PreviousVariant)) { return ZKeyCode::N; }
+    if (IsPressed(key, ViewerAction::NextVariant)) { return ZKeyCode::M; }
+    return ZKeyCode::None;
 }
 
 bool ViewerControls::Filter(void *context, const SDL_Event &event) {
@@ -371,7 +371,7 @@ bool ViewerControls::RebuildPanel() {
         canvas.Fill(0, bottom, m_panelWidth, 1, kBorder);
         canvas.Text(16, bottom, m_panelWidth - 32, kFooterHeight, L"Wheel here to scroll controls", kMuted);
     }
-    PNGImage image;
+    ZPNGImage image;
     image.width = m_panelWidth;
     image.height = m_height;
     image.pixels.resize(static_cast<std::size_t>(m_panelWidth) * m_height * 4);
@@ -407,7 +407,7 @@ void ViewerControls::DrawLabel(const std::string &text, float x, float y, int wi
         canvas.Fill(0, 0, width, height, RGB(0, 0, 0));
         canvas.Text(0, 0, width, height, wide.c_str(), RGB(255, 255, 255));
         GdiFlush();
-        PNGImage image;
+        ZPNGImage image;
         image.width = width;
         image.height = height;
         image.pixels.resize(static_cast<std::size_t>(width) * height * 4);
@@ -426,9 +426,9 @@ void ViewerControls::DrawLabel(const std::string &text, float x, float y, int wi
         label.fontHeight = fontHeight;
     }
     m_batch.Begin();
-    SourceRect source{0, 0, static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height)};
+    ZSourceRect source{0, 0, static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height)};
     m_batch.AddQuad(label.texture, x, y, static_cast<float>(width), static_cast<float>(height),
-        source, false, false, BlendMode::Alpha);
+        source, false, false, ZBlendMode::Alpha);
     m_batch.Upload();
     m_batch.Draw(m_program, projection);
 }
@@ -453,9 +453,9 @@ bool ViewerControls::Draw() {
     float projection[16];
     Matrix4dOrthoTopLeft(static_cast<float>(m_width), static_cast<float>(m_height), 1, projection);
     m_batch.Begin();
-    SourceRect source{0, 0, static_cast<std::uint16_t>(m_panelWidth), static_cast<std::uint16_t>(m_height)};
+    ZSourceRect source{0, 0, static_cast<std::uint16_t>(m_panelWidth), static_cast<std::uint16_t>(m_height)};
     m_batch.AddQuad(m_texture, static_cast<float>(m_width - m_panelWidth), 0,
-        static_cast<float>(m_panelWidth), static_cast<float>(m_height), source, false, false, BlendMode::Alpha);
+        static_cast<float>(m_panelWidth), static_cast<float>(m_height), source, false, false, ZBlendMode::Alpha);
     m_batch.Upload();
     m_batch.Draw(m_program, projection);
     glBlendFunc(sourceBlend, destinationBlend);

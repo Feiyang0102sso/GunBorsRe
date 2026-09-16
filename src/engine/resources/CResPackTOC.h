@@ -26,7 +26,7 @@
 extern const char *const kInitDataResourceName;
 
 /** One entry of a pack TOC: a name hash and what it points at. */
-struct PackTOCEntry {
+struct ZPackTOCEntry {
     std::uint32_t nameKey;  // CStringToKey of the resource name
     std::uint32_t handle;   // see the handle layout in CBigFileReader.h
 };
@@ -75,7 +75,7 @@ public:
     /** Fetch a resource by handle, following aggregates. */
     bool GetResource(std::uint32_t handle, std::vector<std::uint8_t> &out);
 
-    const std::vector<PackTOCEntry> &GetEntries() const { return m_entries; }
+    const std::vector<ZPackTOCEntry> &GetEntries() const { return m_entries; }
 
     CBigFileReader &GetReader() { return m_reader; }
 
@@ -88,7 +88,7 @@ private:
     std::uint32_t m_packHash;
 
     CBigFileReader m_reader;
-    std::vector<PackTOCEntry> m_entries;
+    std::vector<ZPackTOCEntry> m_entries;
     bool m_bound;
 };
 

@@ -1,19 +1,19 @@
 #include "gameplay/SurvivalStudy.h"
-/** @file NativeProfile.cpp
+/** @file ZProfileStorage.cpp
  * @brief Original serialized layouts; Windows file replacement is the host boundary.
  * Sources: saves/GB_save_profile.bt, save_payloads.bt and CProfileManager :202880/:203163.
  */
 #define NOMINMAX
 #include "TestOutput.h"
-#include "gun_bros_re/data/NativeProfile.h"
-#include "gun_bros_re/HostSettings.h"
+#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/ZHostSettings.h"
 #include "gun_bros_re/data/CChallengeManager.h"
-#include "gun_bros_re/data/OriginalProfile.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/gameplay/MapScene.h"
-#include "gun_bros_re/gameplay/SurvivalGameContext.h"
-#include "gun_bros_re/data/PlanetCatalog.h"
-#include "gun_bros_re/data/MissionCatalog.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/data/ZPlanetCatalog.h"
+#include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/data/Planet.h"
 #include "gun_bros_re/data/Mission.h"
@@ -31,34 +31,34 @@
 #include <cmath>
 #include <cstring>
 #include <random>
-#include "gun_bros_re/data/NativeProfileInternal.h"
-using namespace NativeProfileDetail;
+#include "gun_bros_re/data/ZProfileStorageInternal.h"
+using namespace ProfileStorageDetail;
 #include "Checks.h"
 
 int RunNativeProfileCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    NativeProfileArchive defaults;
-    if (!CreateNativeProfileArchive(toc, tables, defaults)) { return 1; }
+    ZPackTables tables(toc);
+    ZProfileArchive defaults;
+    if (!CreateProfileArchive(toc, tables, defaults)) { return 1; }
     const std::filesystem::path root = TestOutput::Path("ui-original-2026-09-09/native-profile");
     const auto empty = root / "new";
-    if (!WriteNativeProfileArchive(empty, defaults)) { return 1; }
-    NativeProfileArchive imported = defaults;
+    if (!WriteProfileArchive(empty, defaults)) { return 1; }
+    ZProfileArchive imported = defaults;
     const auto source = TestOutput::Fixtures();
     unsigned count = 0;
     for (unsigned id = kFirstStore; id <= kLastStore; ++id) {
         if (id == kUnregisteredStore) { continue; }
         const std::string filename = "-1_" + std::to_string(id);
-        NativeProfileRecord restored;
-        if (!ReadNativeProfileRecord(empty / filename, id, restored) || restored.payload != defaults.records[id - kFirstStore].payload ||
-            !ReadNativeProfileRecord(source / filename, id, imported.records[id - kFirstStore])) { return 1; }
+        ZProfileRecord restored;
+        if (!ReadProfileRecord(empty / filename, id, restored) || restored.payload != defaults.records[id - kFirstStore].payload ||
+            !ReadProfileRecord(source / filename, id, imported.records[id - kFirstStore])) { return 1; }
         ++count;
     }
     std::vector<std::uint8_t> status;
     if (!ReadBytes(source / "-1_PDST", status) || status.size() != imported.status.size()) { return 1; }
     std::copy(status.begin(), status.end(), imported.status.begin());
-    if (!WriteNativeProfileArchive(root / "imported", imported)) { return 1; }
+    if (!WriteProfileArchive(root / "imported", imported)) { return 1; }
     for (unsigned id = kFirstStore; id <= kLastStore; ++id) {
         if (id == kUnregisteredStore) { continue; }
         std::vector<std::uint8_t> written;
@@ -66,10 +66,10 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
             written != imported.records[id - kFirstStore].originalFile) { return 1; }
     }
     // Corrupt a copy. Loading must fail and retain the last valid record.
-    NativeProfileRecord preserved = imported.records[0];
+    ZProfileRecord preserved = imported.records[0];
     auto broken = preserved.originalFile;
     broken.back() ^= 1;
-    if (!ReplaceFile(root / "bad-crc", broken) || ReadNativeProfileRecord(root / "bad-crc", 1000, preserved) ||
+    if (!ReplaceFile(root / "bad-crc", broken) || ReadProfileRecord(root / "bad-crc", 1000, preserved) ||
         preserved.payload != imported.records[0].payload) { return 1; }
     std::printf("[native-profile-check] records=%u defaults-roundtrip=1 source-byte-identical=1 odd-payload=1 crc-rejection=1 failures=0\n", count);
     CRefinementManager::Template refinement;
@@ -96,7 +96,7 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
     if (changed.powerups.empty()) {
         // A test-only consumable, selected from an actual BIG type index.
         for (unsigned pack = 0; pack < toc.GetPackCount(); ++pack) {
-            if (tables.GetObjectPack(pack).GetObjectCount(GameSection::Powerup) == 0) { continue; }
+            if (tables.GetObjectPack(pack).GetObjectCount(ZGameSection::Powerup) == 0) { continue; }
             GameObjectRef ref;
             ref.packHash = toc.GetPack(pack)->GetPackHash();
             ref.localIndex = 0;
@@ -129,23 +129,23 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
         if (changed.nativeArchive->records[index].payload != imported.records[index].payload) { return 1; }
     }
     std::printf("[native-profile-check] semantic-load save-reload balances equipment tips daily stats waves mastery unknown-preserved failures=0\n");
-    std::vector<StoreEntry> store;
+    std::vector<ZStoreEntry> store;
     if (!LoadStoreCatalog(toc, tables, store)) { return 1; }
     unsigned packagesTested = 0;
-    for (const StoreEntry &entry : store) {
+    for (const ZStoreEntry &entry : store) {
         if (entry.data.singlePurchase == 0) { continue; }
         CProfileManager buyer = profile;
         buyer.purchasedPackages.clear();
         buyer.nativeArchive->records[18].payload.assign(4, 0);
         buyer.coins = static_cast<std::uint64_t>(entry.data.commonPrice) * 2;
         buyer.warbucks = static_cast<std::uint64_t>(entry.data.rarePrice) * 2;
-        if (buyer.AcquireItem(entry.data, entry.data.requiredLevel) != PurchaseResult::Purchased ||
+        if (buyer.AcquireItem(entry.data, entry.data.requiredLevel) != ZPurchaseResult::Purchased ||
             !buyer.SaveToDisk(root / "package")) { return 1; }
         // Clear memory so this proves the serialized 1018 record gates buying.
         buyer.purchasedPackages.clear();
         if (!buyer.LoadFromDisk(root / "package") || !buyer.IsPackagePurchased(entry.ref)) { return 1; }
         const auto coins = buyer.coins, warbucks = buyer.warbucks;
-        if (buyer.AcquireItem(entry.data, entry.data.requiredLevel) != PurchaseResult::Owned ||
+        if (buyer.AcquireItem(entry.data, entry.data.requiredLevel) != ZPurchaseResult::Owned ||
             buyer.coins != coins || buyer.warbucks != warbucks) { return 1; }
         const auto &payload = buyer.nativeArchive->records[18].payload;
         if (payload.size() != 18 || Get32(payload, 0) != 1 || payload[9] != 22 || Get32(payload, 14) != 0) { return 1; }
@@ -156,7 +156,7 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
     CProfileManager fresh;
     fresh.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto freshPath = root / ("launch-" + std::to_string(GetTickCount64()));
-    if (!LoadNativeProfile(toc, tables, fresh, freshPath, root / "absent-source") || !fresh.firstLaunch ||
+    if (!LoadProfile(toc, tables, fresh, freshPath, root / "absent-source") || !fresh.firstLaunch ||
         fresh.coins != 0 || fresh.warbucks != 0 || fresh.experience != 0 || fresh.inventory.empty() ||
         !SameRef(fresh.configuration.guns[1], MemoryRef(defaults.records[1].payload, 8))) { return 1; }
     const unsigned freshInventory = static_cast<unsigned>(fresh.inventory.size());
@@ -183,7 +183,7 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
     if (!ReplaceFile(freshPath / "p", optionBytes) || fresh.LoadFromDisk(freshPath) ||
         !fresh.musicEnabled || fresh.options.payload[31] != 0xA5 || !fresh.SaveToDisk(freshPath)) { return 1; }
     std::printf("[native-options-check] original-p defaults sound music three-auto-bro-states CRC unknown-byte reload failures=0\n");
-    std::vector<PlanetEntry> planets;
+    std::vector<ZPlanetEntry> planets;
     if (!LoadPlanetCatalog(toc, tables, planets)) { return 1; }
     unsigned hordeRecords = 0;
     for (const auto &planet : planets) {
@@ -192,8 +192,8 @@ int RunNativeProfileCheck(const std::string &bigDirectory) {
             if (mission.type != 2) { continue; }
             const auto &ref = planet.data.missions[index];
             // Isolated new-record fixture; source saves have no nonempty 1016.
-            if (!RecordNativeMissionWaves(fresh, mission.level, mission.value64 + 2, {true, false}) ||
-                !RecordNativeMissionScore(fresh, ref, 24000) || !RecordNativeMissionScore(fresh, ref, 12000) ||
+            if (!RecordMissionWaves(fresh, mission.level, mission.value64 + 2, {true, false}) ||
+                !RecordMissionScore(fresh, ref, 24000) || !RecordMissionScore(fresh, ref, 12000) ||
                 !fresh.SaveToDisk(freshPath) || !fresh.LoadFromDisk(freshPath)) { return 1; }
             const auto &scores = fresh.nativeArchive->records[16].payload;
             const std::size_t scoreOffset = FindRecord(scores, 14, 9, ref);
@@ -235,13 +235,13 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
     GameHostSettings().isConnected = true;
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
     if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("native-play-" + std::to_string(GetTickCount64()));
-    if (!LoadNativeProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
     for (unsigned planet = 0; planet < profile.nativeArchive->survivalLevels.size(); ++planet) {
         const CProfileManager before = profile;
         const auto planetPath = path / std::to_string(planet);
@@ -250,11 +250,11 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
         profile.perfectedWaves[planet].reset();
         const auto &level = profile.nativeArchive->survivalLevels[planet];
         std::vector<std::uint8_t> bytes;
-        if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, bytes)) { return 1; }
+        if (!tables.ReadSectionResource(level.packHash, ZGameSection::Level, level.localIndex, bytes)) { return 1; }
         CArrayInputStream input(bytes);
         CLevel::Template data;
         if (!data.Init(input) || input.Available() != 0 || !profile.SaveToDisk(planetPath)) { return 1; }
-        SurvivalGameContext context{profile, planetPath, planet};
+        ZSurvivalGameContext context{profile, planetPath, planet};
         if (RunSurvivalStudy(bigDirectory, tables.GetPackName(data.mapRef.packHash), data.mapRef.localIndex, 0, -1,
             "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
         if (!profile.LoadFromDisk(planetPath) || profile.clearedWaves[planet] != 2 || context.result.kills == 0 ||
@@ -271,11 +271,11 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
         std::printf("[native-profile-play-check] planet=%u original-equipment active-slot=%u kills=%u waves=2 saved-reloaded failures=0\n",
             planet, profile.activeWeaponSlot, context.result.kills);
     }
-    std::vector<PlanetEntry> planets;
+    std::vector<ZPlanetEntry> planets;
     if (!LoadPlanetCatalog(toc, tables, planets)) { return 1; }
     for (const auto &planet : planets) {
         if (planet.missions.empty() || planet.missions[0].type != 2) { continue; }
-        MissionEntry mission;
+        ZMissionEntry mission;
         mission.resource = planet.data.missions[0];
         mission.data = planet.missions[0];
         mission.title = planet.missionInfo[0].title;
@@ -288,7 +288,7 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
             testWaves.erase(testWaves.begin() + previousWave, testWaves.begin() + previousWave + 524);
             Put32(testWaves, 0, Get32(testWaves, 0) - 1);
         }
-        SurvivalGameContext context{profile, hordePath};
+        ZSurvivalGameContext context{profile, hordePath};
         context.hordeStart = 0;
         if (RunSurvivalStudy(bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1,
             "", 0, false, false, true, 2, mission.data.value64, &context, true, false, &mission) != 0 ||

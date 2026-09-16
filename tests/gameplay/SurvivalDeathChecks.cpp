@@ -1,3 +1,4 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -27,19 +28,19 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
         const auto captureDeath = [&](const std::string &suffix) {
-            loaded.players[0].x = scene.playerX;
-            loaded.players[0].y = scene.playerY;
-            loaded.players[0].facingDegrees = scene.facing;
+            loaded.players[0].x = scene.GetPlayer().x;
+            loaded.players[0].y = scene.GetPlayer().y;
+            loaded.players[0].facingDegrees = scene.GetPlayer().facing;
             const float zoom = GameViewCameraZoom(width, height);
             float mvp[kMatrix4dElements];
             Matrix4dOrthoTopLeft(width / zoom, height / zoom, kMapDepthRange, mvp);
-            Matrix4dTranslate(mvp, -scene.playerX + width / zoom / 2, -scene.playerY + height / zoom / 2);
+            Matrix4dTranslate(mvp, -scene.GetPlayer().x + width / zoom / 2, -scene.GetPlayer().y + height / zoom / 2);
             glViewport(0, 0, width, height);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             BuildGeometry(loaded, batch, true, true, false);
             batch.Draw(program, mvp);
             DrawMapObjects(loaded, batch, program, mvp, true, &scene, &brotherModel, brother.y, width);
-            return GB_SAVE_FRAME(window, TestOutput::Path("player-death-") + packShortName + "-" + suffix + ".png");
+            return Capture::SaveFrame(window, TestOutput::Path("player-death-") + packShortName + "-" + suffix + ".png");
         };
         for (unsigned scenario = 0; scenario < 2; ++scenario) {
             session.Restart(startX, startY, startFacing);
@@ -49,12 +50,12 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
             for (int elapsed = 0; elapsed < 5000; elapsed += 16) { session.Update(16, 0, 0, false); }
             if (scenario == 0) {
                 vitals.invincible = false;
-                CombatHit fatal;
+                ZCombatHit fatal;
                 fatal.ownerType = 1;
                 fatal.damage = 10000;
-                if (scene.ApplyHit(kPlayerCombatId, fatal) != HitResult::Killed) { ++checkFailures; }
+                if (scene.ApplyHit(kPlayerCombatId, fatal) != ZHitResult::Killed) { ++checkFailures; }
                 if (vitals.flash != 1) { ++checkFailures; }
-                if (scene.ApplyHit(kPlayerCombatId, fatal) != HitResult::Ignored) { ++checkFailures; }
+                if (scene.ApplyHit(kPlayerCombatId, fatal) != ZHitResult::Ignored) { ++checkFailures; }
             } else {
                 // Includes an autorepeated last letter, which must not complete.
                 for (char letter : std::string("stsuicid")) {
@@ -62,9 +63,9 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
                 }
                 if (!PushBossCheckKey(window, 'e', true) || !window.TakeCheatCode().empty()) { ++checkFailures; }
                 if (!PushBossCheckKey(window, 'e') || window.TakeCheatCode() != "stsuicide" || !scene.Suicide()) { ++checkFailures; }
-                if (!window.TakeCheatCode().empty() || window.IsKeyDown(KeyCode::S) || window.IsKeyDown(KeyCode::E)) { ++checkFailures; }
-                for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
-                    if (key == KeyCode::E || key == KeyCode::C) { ++checkFailures; }
+                if (!window.TakeCheatCode().empty() || window.IsKeyDown(ZKeyCode::S) || window.IsKeyDown(ZKeyCode::E)) { ++checkFailures; }
+                for (ZKeyCode key = window.TakeKeyPress(); key != ZKeyCode::None; key = window.TakeKeyPress()) {
+                    if (key == ZKeyCode::E || key == ZKeyCode::C) { ++checkFailures; }
                 }
             }
             if (!vitals.dead || vitals.deaths != 1 || session.IsDeathComplete() || !vitals.inputHidden ||
@@ -74,7 +75,7 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
             const int startTime = torso.GetAnimation().GetTimeMs();
             const int duration = torso.GetAnimation().GetRangeDurationMs();
             const auto &move = torso.GetMoveSet()->GetMoves()[torso.GetMoveIndex()];
-            const float deathX = scene.playerX, deathY = scene.playerY;
+            const float deathX = scene.GetPlayer().x, deathY = scene.GetPlayer().y;
             if (duration <= 0 || player.weapon->brother.TorsoUsesWeapon()) { ++checkFailures; }
             if (scenario == 1) {
                 // Native perturbation proves there is no fixed host death delay.
@@ -109,7 +110,7 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
                 }
             }
             if (!session.IsDeathComplete() || elapsed <= duration || !savedMiddle ||
-                scene.playerX != deathX || scene.playerY != deathY) { ++checkFailures; }
+                scene.GetPlayer().x != deathX || scene.GetPlayer().y != deathY) { ++checkFailures; }
             // The original UpdateNormal fades hit red while the death Flow runs.
             std::printf("[death-check] %s scenario=%u player-corpse-flash=%.3f\n",
                 packShortName.c_str(), scenario, vitals.flash);
@@ -121,7 +122,7 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
         session.Restart(startX, startY, startFacing);
         if (vitals.dead || vitals.deathAnimationComplete || vitals.inputHidden || session.GetLevel().GetWorldTimeScale() != 1) { ++checkFailures; }
         brother.vitals.invincible = false;
-        CombatHit fatal;
+        ZCombatHit fatal;
         fatal.ownerType = 1;
         fatal.damage = 10000;
         scene.ApplyHit(kBrotherCombatId, fatal);
@@ -142,4 +143,3 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
-

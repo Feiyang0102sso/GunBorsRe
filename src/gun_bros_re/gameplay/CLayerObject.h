@@ -33,7 +33,7 @@
  * A type id is the section number minus one, so type 19 addresses section 20
  * (PROP). Only the ones this port names are listed; map.bt has the full 28.
  */
-enum class PlacedObjectType : std::uint8_t {
+enum class ZPlacedObjectType : std::uint8_t {
     Enemy = 5,
     ParticleEffect = 11,
     Pickup = 12,
@@ -46,7 +46,7 @@ enum class PlacedObjectType : std::uint8_t {
 constexpr std::uint8_t kUntaggedSpawn = 255;
 
 /** One object placed on the map. */
-struct PlacedObject {
+struct ZPlacedObject {
     std::uint8_t objectType;
     std::uint32_t packHash;   // which pack holds the template
     std::uint8_t localIndex;  // ordinal within that pack's section
@@ -82,7 +82,7 @@ public:
 
     bool Init(CArrayInputStream &stream);
 
-    const std::vector<PlacedObject> &GetObjects() const { return m_objects; }
+    const std::vector<ZPlacedObject> &GetObjects() const { return m_objects; }
     void SetLayerIndex(unsigned index) { m_layerIndex = index; }
     unsigned GetLayerIndex() const { return m_layerIndex; }
 
@@ -92,7 +92,7 @@ public:
 private:
     std::uint16_t m_declaredCount;
     unsigned m_layerIndex = 0;
-    std::vector<PlacedObject> m_objects;
+    std::vector<ZPlacedObject> m_objects;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CLAYEROBJECT_H

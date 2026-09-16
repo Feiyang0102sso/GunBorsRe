@@ -4,11 +4,11 @@
 #define NOMINMAX
 #include "Checks.h"
 #include "TestOutput.h"
-#include "engine/graphics/PNGEncode.h"
-#include "engine/core/Paths.h"
-#include "engine/core/CMatrix4d.h"
+#include "engine/graphics/ZPNGEncode.h"
+#include "engine/core/ZPaths.h"
+#include "engine/core/ZMatrix4d.h"
 #include "engine/graphics/CBitmapFont.h"
-#include "engine/platform/CWindow.h"
+#include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include "engine/resources/CArrayInputStream.h"
 #include <cstdio>
@@ -22,7 +22,7 @@ constexpr float SampleY = 48, ScaledY = 126;
 }
 
 int RunFontBitmapCheck(const std::string &bigDirectory) {
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Gun Bros - Font Bitmap", SheetWidth, RowHeight)) { return 1; }
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
@@ -33,15 +33,15 @@ int RunFontBitmapCheck(const std::string &bigDirectory) {
     const unsigned keyCount = keys.ReadUInt16();
     if (keyCount == 0 || keyCount % 2 != 0 || keys.Available() != keyCount * 4) { return 1; }
     const unsigned fontCount = keyCount / 2;
-    CShaderProgram program;
-    CQuadBatch batch;
+    ZShaderProgram program;
+    ZQuadBatch batch;
     CBitmapFont labelFont;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0") ||
         !batch.Create(program) || !labelFont.Init(core, 0)) { return 1; }
     int width = 0, height = 0;
     window.GetDrawableSize(width, height);
     if (width < SheetWidth || height < RowHeight) { return 1; }
-    PNGImage sheet;
+    ZPNGImage sheet;
     sheet.width = width;
     sheet.height = height * fontCount;
     sheet.pixels.resize(static_cast<std::size_t>(sheet.width) * sheet.height * 4);
@@ -62,7 +62,7 @@ int RunFontBitmapCheck(const std::string &bigDirectory) {
         CBitmapFont font;
         if (!font.Init(core, index)) { return 1; }
         std::vector<std::uint8_t> atlasBytes;
-        PNGImage atlas;
+        ZPNGImage atlas;
         if (!core.GetResource(texture, atlasBytes) || !PNGDecode(atlasBytes, atlas)) { return 1; }
         const auto atlasName = "fontbitmap-atlases/font-" + std::to_string(index) + ".png";
         std::ofstream atlasFile(TestOutput::Path(atlasName), std::ios::binary);

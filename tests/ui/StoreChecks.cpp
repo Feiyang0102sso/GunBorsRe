@@ -1,23 +1,24 @@
-#include "gun_bros_re/ui/MenuInternal.h"
+#include "gun_bros_re/debug/Capture.h"
+#include "gun_bros_re/ui/ZMenuInternal.h"
 #include "TestOutput.h"
 #include "ui/MenuChecks.h"
 using namespace MenuDetail;
 
 /** Exercise real card resources and the same renderer/input path as --game.
  * All money, XP, mutated templates and profile writes below are test fixtures. */
-int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &profile,
+int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile,
     const CPlayerProgress::Template &progress, const CRefinementManager::Template &refinement,
-    const std::vector<StoreEntry> &store, const std::vector<WeaponEntry> &weapons,
-    const std::vector<ArmorEntry> &armor) {
-    MenuTestClick cardClick, purchaseClick, previewClick;
+    const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
+    const std::vector<ZArmorEntry> &armor) {
+    ZMenuTestClick cardClick, purchaseClick, previewClick;
     unsigned start = 0, end = 0;
     {
-        GameMenu probe;
+        ZGameMenu probe;
         if (!probe.Open(toc, tables)) { return 1; }
         const CMovie *mastery = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_MASTERY"));
         if (mastery == nullptr) { return 1; }
         unsigned masteryCases = 0;
-        for (const WeaponEntry &weapon : weapons) {
+        for (const ZWeaponEntry &weapon : weapons) {
             GameObjectRef weaponRef;
             weaponRef.packHash = weapon.packHash;
             weaponRef.localIndex = weapon.ordinal;
@@ -36,7 +37,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
                 if (atStart != start || belowNext < atStart || belowNext >= end || atNext <= belowNext) { return 1; }
                 if (tier == kMaxMasteryLevel - 1 && atNext != mastery->duration) { return 1; }
                 CMovie changed = *mastery;
-                for (unsigned &chapter : changed.chapters) { chapter += 13; }
+                for (unsigned &chapter : changed.chapter.starts) { chapter += 13; }
                 changed.duration += 13;
                 unsigned shifted = 0;
                 if (!StoreMasteryTarget(changed, weapon.data, upper - 1, shifted) || shifted != belowNext + 13) { return 1; }
@@ -45,7 +46,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             }
         }
         std::printf("[store-card-check] mastery tier-boundaries resource-shift cases=%u failures=0\n", masteryCases);
-        MovieRegion playerRegion;
+        ZMovieRegion playerRegion;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"), kStorePlayerRegion, 0, playerRegion)) { return 1; }
         // Follow an actual authored region, including capture beyond its edges.
         CMenuMesh rotation;
@@ -66,7 +67,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         if (!probe.DrawEquippedPlayer(toc, tables, profile, weapons, armor, 0, nullptr, &playerRegion)) { return 1; }
         // Perturb the authored region only in this fixture, across both brothers
         // and one retail gun per category. No viewport or framing constant may win.
-        MovieRegion changedRegion = playerRegion;
+        ZMovieRegion changedRegion = playerRegion;
         changedRegion.x -= 53;
         changedRegion.y += 19;
         changedRegion.width *= 0.8f;
@@ -75,7 +76,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             CProfileManager modelProfile = profile;
             modelProfile.playerBrother = brother;
             std::array<bool, kWeaponCategoryCount> checked{};
-            for (const WeaponEntry &weapon : weapons) {
+            for (const ZWeaponEntry &weapon : weapons) {
                 if (!weapon.hasStoreEntry || weapon.visualOnly || weapon.category < 0 || weapon.category >= kWeaponCategoryCount || checked[weapon.category]) { continue; }
                 GameObjectRef ref;
                 ref.packHash = weapon.packHash;
@@ -92,7 +93,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         // Imported equipment catches UI states absent from the simple fixtures.
         CProfileManager savedProfile = profile;
         const auto savedPath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("model-native-" + std::to_string(GetTickCount64()));
-        if (!LoadNativeProfile(toc, tables, savedProfile, savedPath, TestOutput::Fixtures())) { return 1; }
+        if (!LoadProfile(toc, tables, savedProfile, savedPath, TestOutput::Fixtures())) { return 1; }
         for (unsigned slot = 0; slot < 2; ++slot) {
             for (unsigned phase = 0; phase < 2; ++phase) {
                 probe.Begin(14);
@@ -101,7 +102,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
                 }
                 if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, slot, nullptr, &playerRegion)) { return 1; }
                 const auto image = TestOutput::Path("ui-original-2026-09-09/native-model-") + std::to_string(slot) + "-" + std::to_string(phase) + ".png";
-                if (!GB_SAVE_FRAME(probe.window, image)) { return 1; }
+                if (!Capture::SaveFrame(probe.window, image)) { return 1; }
                 const auto &brother = probe.GetPlayerPreview()->weapon->brother;
                 std::printf("[store-player-check] native slot=%u phase=%u state=%d torso-move=%d time=%d\n", slot, phase,
                     brother.GetStateId(), brother.GetTorso().GetMoveIndex(), brother.GetTorso().GetAnimation().GetTimeMs());
@@ -114,8 +115,8 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         for (unsigned exchange = 0; exchange < 3; ++exchange) {
             const unsigned oldSlot = probe.GetPlayerPreviewSlot();
             const unsigned targetSlot = 1 - oldSlot;
-            PlayerModel &model = *probe.GetPlayerPreview();
-            PlayerWeaponState *oldWeapon = model.uiActiveWeapon;
+            ZPlayerModel &model = *probe.GetPlayerPreview();
+            ZPlayerWeaponState *oldWeapon = model.uiActiveWeapon;
             if (oldWeapon == nullptr) { oldWeapon = model.weapon.get(); }
             probe.TakePlayerPreviewSlotChange();
             if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
@@ -143,37 +144,37 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             savedProfile.activeWeaponSlot = targetSlot;
             if (!savedProfile.SaveToDisk(savedPath)) { return 1; }
             CProfileManager restored;
-            if (!LoadNativeProfile(toc, tables, restored, savedPath, savedPath / "absent-source") || restored.activeWeaponSlot != targetSlot) { return 1; }
+            if (!LoadProfile(toc, tables, restored, savedPath, savedPath / "absent-source") || restored.activeWeaponSlot != targetSlot) { return 1; }
             probe.Begin(14);
             if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
-            if (!GB_SAVE_FRAME(probe.window, TestOutput::Path("ui-original-2026-09-09/native-model-swapped-") + std::to_string(exchange) + ".png")) { return 1; }
+            if (!Capture::SaveFrame(probe.window, TestOutput::Path("ui-original-2026-09-09/native-model-swapped-") + std::to_string(exchange) + ".png")) { return 1; }
             std::printf("[store-player-check] native-swap exchange=%u slot=%u actor-preserved=1 outgoing-torso=1 incoming-torso=1 reload=1 elapsed=%u\n",
                 exchange, targetSlot, elapsed);
         }
-        const auto *swapEntry = OriginalMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+        const auto *swapEntry = FindMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
         if (swapEntry == nullptr) { return 1; }
         const unsigned swapMovieId = probe.movies.Ordinal(swapEntry->movies[0]);
         const CMovie *swapMovie = probe.movies.GetMovie(swapMovieId);
         unsigned showStart = 0, showEnd = 0, pressStart = 0, pressEnd = 0;
         if (swapMovie == nullptr || !swapMovie->GetChapterRange(0, showStart, showEnd) ||
             !swapMovie->GetChapterRange(1, pressStart, pressEnd)) { return 1; }
-        MovieRegion swapParent, swapOrigin;
+        ZMovieRegion swapParent, swapOrigin;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"), kStoreGunSwapRegion, 0, swapParent)) { return 1; }
         // Mutated parent verifies that native placement and the child touch box
         // move together. No fitted sprite or hand-written text baseline remains.
         swapParent.x -= 31;
         swapParent.y += 17;
         if (!StoreGunSwapOrigin(probe, swapParent, swapOrigin)) { return 1; }
-        MovieRegion swapTouch;
+        ZMovieRegion swapTouch;
         bool foundTouch = false;
         for (const auto &region : probe.movies.Regions(swapMovieId, showEnd, swapOrigin.x, swapOrigin.y, true)) {
             if (region.index == 0) { swapTouch = region; foundTouch = true; }
         }
         if (!foundTouch) { return 1; }
-        MenuState swapState;
+        ZMenuState swapState;
         swapState.store.shopGunSlot = probe.GetPlayerPreviewSlot();
         const unsigned beforeSlot = swapState.store.shopGunSlot;
-        const MenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
+        const ZMenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
         probe.Begin(14); probe.clock = 1000;
         probe.SetTestClick(swapClick);
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopSwapPhase != 0 || swapState.store.shopGunSlot != beforeSlot) { return 1; }
@@ -198,24 +199,24 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         std::printf("[store-player-check] original-swap-button movie=%u region-shift=1 intro-gate=1 press-boundary=1 category-hide=1 failures=0\n", swapMovieId);
         const CMovie *movie = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX"));
         if (movie == nullptr || !movie->GetChapterRange(1, start, end)) { return 1; }
-        MovieRegion column, body;
+        ZMovieRegion column, body;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 1, probe.storeRestTime, column) ||
             !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), 0, start, body)) { return 1; }
         cardClick = {column.x + body.width / 4, column.y + body.height / 4};
-        MovieRegion content, openBody, actions, buyLabel, previewLabel;
+        ZMovieRegion content, openBody, actions, buyLabel, previewLabel;
         const unsigned card = probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
             !probe.movies.Region(card, 0, end, openBody)) { return 1; }
-        const StoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - openBody.width / 2,
+        const ZStoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - openBody.width / 2,
             content.y + content.height / 2 - openBody.height / 2, 1, end};
-        const OriginalMenuEntry *buy = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", 0);
-        const OriginalMenuEntry *preview = OriginalMenuData("MDS_BUTTON_STORE_PREVIEW", 0);
+        const ZMenuDataEntry *buy = FindMenuData("MDS_BUTTON_STORE_ITEMS", 0);
+        const ZMenuDataEntry *preview = FindMenuData("MDS_BUTTON_STORE_PREVIEW", 0);
         if (buy == nullptr || preview == nullptr || !CardRegion(probe, card, 10, face, actions) ||
             !probe.movies.Region(probe.movies.Ordinal(buy->movies[0]), 1, 0, buyLabel) ||
             !probe.movies.Region(probe.movies.Ordinal(preview->movies[0]), 1, 0, previewLabel)) { return 1; }
         purchaseClick = {actions.x + actions.width - buyLabel.width / 2, actions.y + buyLabel.height / 2};
         previewClick = {actions.x + previewLabel.width / 2, actions.y + previewLabel.height / 2};
-        MenuState animation;
+        ZMenuState animation;
         animation.store.shopDetailOpen = true;
         animation.store.shopDetailTime = start;
         probe.clock = 60;
@@ -226,12 +227,12 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         probe.clock += 1000;
         if (!AdvanceStoreCard(probe, animation, *movie) || animation.store.shopDetailOpen) { return 1; }
         CMovie changed = *movie;
-        changed.chapters[1] += 32;
-        changed.chapters[2] += 64;
+        changed.chapter.starts[1] += 32;
+        changed.chapter.starts[2] += 64;
         changed.duration += 64;
-        animation = MenuState{};
+        animation = ZMenuState{};
         animation.store.shopDetailOpen = true;
-        animation.store.shopDetailTime = changed.chapters[1];
+        animation.store.shopDetailTime = changed.chapter.starts[1];
         if (!AdvanceStoreCard(probe, animation, changed) || animation.store.shopDetailTime != end + 64) { return 1; }
         const auto mixed = FormatStoreText(probe.movies, "^f0DMG ^f112 ^f2SPD ^f3+4 ^f450\nNEXT", 1000);
         constexpr unsigned expectedFonts[] = {1, 2, 4, 3, 0};
@@ -240,7 +241,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             if (mixed[0].runs[index].font != expectedFonts[index]) { return 1; }
         }
         unsigned templates = 0;
-        for (const StoreEntry &entry : store) {
+        for (const ZStoreEntry &entry : store) {
             for (unsigned field = 3; field <= 5; ++field) {
                 const std::string original = ReadGameString(toc, entry.data.assets[field]);
                 if (original.empty()) { continue; }
@@ -253,7 +254,7 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             }
         }
         // Mutate an in-memory STORE value, then verify the display consumes it.
-        for (const StoreEntry &entry : store) {
+        for (const ZStoreEntry &entry : store) {
             if (entry.data.statGroups[1].empty()) { continue; }
             CStoreItem changedItem = entry.data;
             changedItem.statGroups[1][0] = 12345;
@@ -268,9 +269,9 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
     constexpr unsigned categoryOrder[] = {2, 0, 1};
     for (unsigned category : categoryOrder) {
         const std::string base = std::string(TestOutput::Path("store-card-")) + categories[category];
-        MenuState folded, opening, opened, closing, closed;
-        MenuState *states[] = {&folded, &opening, &opened, &closing, &closed};
-        for (MenuState *state : states) {
+        ZMenuState folded, opening, opened, closing, closed;
+        ZMenuState *states[] = {&folded, &opening, &opened, &closing, &closed};
+        for (ZMenuState *state : states) {
             state->page = 2;
             state->store.shopCategory = category;
             const char *table = nullptr;
@@ -278,17 +279,17 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             // Native STORE.type criteria; the previous fixture assumed every
             // category reused gun bit 0 and silently disabled powerup filtering.
             for (unsigned row = 2; row < rows; ++row) {
-                const auto *entry = OriginalMenuData(table, row);
+                const auto *entry = FindMenuData(table, row);
                 if (entry->action == 65 && entry->parameter < 17) { state->store.shopFilter |= 1u << entry->parameter; }
                 if (category != 2) { break; }
             }
         }
-        const std::vector<MenuTestClick> idle = {{-100, -100}};
-        const std::vector<MenuTestClick> begin = {cardClick, {-100, -100, 60}};
-        const std::vector<MenuTestClick> open = {cardClick, {-100, -100, 2500}};
-        const std::vector<MenuTestClick> reverse = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 60}};
-        const std::vector<MenuTestClick> finish = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 250}};
-        const std::vector<MenuTestClick> *clicks[] = {&idle, &begin, &open, &reverse, &finish};
+        const std::vector<ZMenuTestClick> idle = {{-100, -100}};
+        const std::vector<ZMenuTestClick> begin = {cardClick, {-100, -100, 60}};
+        const std::vector<ZMenuTestClick> open = {cardClick, {-100, -100, 2500}};
+        const std::vector<ZMenuTestClick> reverse = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 60}};
+        const std::vector<ZMenuTestClick> finish = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 250}};
+        const std::vector<ZMenuTestClick> *clicks[] = {&idle, &begin, &open, &reverse, &finish};
         constexpr const char *phases[] = {"folded", "opening", "open", "closing", "closed"};
         for (unsigned phase = 0; phase < 5; ++phase) {
             const std::string image = base + "-" + phases[phase] + ".png";
@@ -298,13 +299,13 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         if (!opening.store.shopDetailOpen || opening.store.shopDetailTime != start + 240 || !opened.store.shopDetailOpen ||
             opened.store.shopDetailTime != end || !closing.store.shopDetailClosing || closing.store.shopDetailTime != end - 240 ||
             closed.store.shopDetailOpen || opened.selectedItem < 0) { return 1; }
-        const StoreEntry &entry = store[opened.selectedItem];
+        const ZStoreEntry &entry = store[opened.selectedItem];
         if (category != 0) {
             CProfileManager buyer = profile;
             buyer.coins = 2ull * entry.data.commonPrice;
             buyer.warbucks = 2ull * entry.data.rarePrice;
-            MenuState previewState = opened;
-            const std::vector<MenuTestClick> previewActions = {{-100, -100, 2500}, previewClick};
+            ZMenuState previewState = opened;
+            const std::vector<ZMenuTestClick> previewActions = {{-100, -100, 2500}, previewClick};
             if (category == 1) {
                 if (ShowGameMenu(toc, tables, buyer, progress, refinement, store, weapons, armor, previewState,
                     TestOutput::Path("store-card-preview.dat"), base + "-preview.png", &previewActions) != -2 || !previewState.store.shopPreview ||
@@ -314,15 +315,15 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
             CProfileManager poorBuyer = profile;
             poorBuyer.coins = 0;
             poorBuyer.warbucks = 0;
-            MenuState insufficient = opened;
-            const std::vector<MenuTestClick> insufficientActions = {{-100, -100, 2500}, purchaseClick};
+            ZMenuState insufficient = opened;
+            const std::vector<ZMenuTestClick> insufficientActions = {{-100, -100, 2500}, purchaseClick};
             if (ShowGameMenu(toc, tables, poorBuyer, progress, refinement, store, weapons, armor, insufficient,
                 TestOutput::Path("store-card-insufficient.dat"), base + "-insufficient.png", &insufficientActions) != -2 ||
                 insufficient.failedPrice == 0 || insufficient.storePromptButtons == nullptr ||
                 std::string(insufficient.storePromptButtons) != "MDS_BUTTON_STORE_PROMPT") { return 1; }
             std::printf("[store-card-check] insufficient category=%s original-three-buttons=1 failures=0\n", categories[category]);
-            MenuState purchase = opened;
-            std::vector<MenuTestClick> purchaseActions = {{-100, -100, 2500}, purchaseClick};
+            ZMenuState purchase = opened;
+            std::vector<ZMenuTestClick> purchaseActions = {{-100, -100, 2500}, purchaseClick};
             if (category == 2) { purchaseActions.push_back(purchaseClick); }
             const std::filesystem::path path = base + "-purchase.dat";
             if (ShowGameMenu(toc, tables, buyer, progress, refinement, store, weapons, armor, purchase,
@@ -355,15 +356,15 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
     const auto nativeSwapPath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("store-native-click-" + std::to_string(GetTickCount64()));
     CProfileManager nativeSwapProfile;
-    if (!LoadNativeProfile(toc, tables, nativeSwapProfile, nativeSwapPath, TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, nativeSwapProfile, nativeSwapPath, TestOutput::Fixtures())) { return 1; }
     const unsigned originalSlot = nativeSwapProfile.activeWeaponSlot;
-    MenuTestClick nativeSwapClick;
+    ZMenuTestClick nativeSwapClick;
     unsigned showDuration = 0, pressDuration = 0;
     {
-        GameMenu probe;
+        ZGameMenu probe;
         if (!probe.Open(toc, tables)) { return 1; }
-        MovieRegion parent, origin;
-        const auto *entry = OriginalMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+        ZMovieRegion parent, origin;
+        const auto *entry = FindMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
         if (entry == nullptr || !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"), kStoreGunSwapRegion, 0, parent) ||
             !StoreGunSwapOrigin(probe, parent, origin)) { return 1; }
         const unsigned movieId = probe.movies.Ordinal(entry->movies[0]);
@@ -381,17 +382,17 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
         }
         if (!found) { return 1; }
     }
-    MenuState nativeSwapState;
+    ZMenuState nativeSwapState;
     nativeSwapState.page = 2;
     nativeSwapState.store.shopGunSlot = originalSlot;
     nativeSwapState.store.shopFilter = kOwnedFilterBit;
-    std::vector<MenuTestClick> nativeSwapActions{{-100, -100, 1}, {-100, -100, showDuration + 1},
+    std::vector<ZMenuTestClick> nativeSwapActions{{-100, -100, 1}, {-100, -100, showDuration + 1},
         nativeSwapClick, {-100, -100, pressDuration + 1}};
     for (unsigned frame = 0; frame < 120; ++frame) { nativeSwapActions.push_back({-100, -100, 16}); }
     if (ShowGameMenu(toc, tables, nativeSwapProfile, progress, refinement, store, weapons, armor,
         nativeSwapState, nativeSwapPath, TestOutput::Path("ui-original-2026-09-09/native-store-swap-click.png"), &nativeSwapActions) != -2) { return 1; }
     CProfileManager swapReloaded;
-    if (nativeSwapProfile.activeWeaponSlot != 1 - originalSlot || !LoadNativeProfile(toc, tables, swapReloaded,
+    if (nativeSwapProfile.activeWeaponSlot != 1 - originalSlot || !LoadProfile(toc, tables, swapReloaded,
         nativeSwapPath, nativeSwapPath / "absent-source") || swapReloaded.activeWeaponSlot != 1 - originalSlot) { return 1; }
     std::printf("[store-card-check] native real-button filtered-GUNS authored-press player-Flow active-slot=%u saved-reload=1 failures=0\n", swapReloaded.activeWeaponSlot);
     // Visual research fixture only: IMG_0800's silver/blue rifle may be the
@@ -402,14 +403,14 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
     // No rifle/laser matched IMG_0800. Include every original category: visual
     // appearance is not reliable evidence of the STORE classification.
     if (TestOutput::referenceGallery) {
-    for (const WeaponEntry &weapon : weapons) {
+    for (const ZWeaponEntry &weapon : weapons) {
         const std::string referenceKey = std::to_string(weapon.packHash) + "-" + std::to_string(weapon.ordinal);
         const auto referencePath = nativeSwapPath / "reference-gun-fixture" / referenceKey;
         CProfileManager reference;
-        if (!LoadNativeProfile(toc, tables, reference, referencePath, TestOutput::Fixtures())) { return 1; }
+        if (!LoadProfile(toc, tables, reference, referencePath, TestOutput::Fixtures())) { return 1; }
         reference.configuration.guns[reference.activeWeaponSlot].packHash = weapon.packHash;
         reference.configuration.guns[reference.activeWeaponSlot].localIndex = static_cast<std::uint8_t>(weapon.ordinal);
-        MenuState referenceState;
+        ZMenuState referenceState;
         referenceState.page = 2;
         referenceState.store.shopGunSlot = reference.activeWeaponSlot;
         const std::string referenceImage = TestOutput::Path("ui-original-2026-09-09/reference-gun-") + referenceKey + ".png";
@@ -425,19 +426,19 @@ int CheckStoreCards(CResTOCManager &toc, PackTables &tables, CProfileManager &pr
 int RunUpgradePopupCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<StoreEntry> store;
-    std::vector<WeaponEntry> weapons;
+    std::vector<ZStoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
         !LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    MenuState state;
+    ZMenuState state;
     state.page = 26;
     state.masteryWeapon = profile.configuration.guns[0];
-    const WeaponEntry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
-    const StoreEntry *item = FindWeaponStore(store, state.masteryWeapon);
+    const ZWeaponEntry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
+    const ZStoreEntry *item = FindWeaponStore(store, state.masteryWeapon);
     if (weapon == nullptr || item == nullptr || item->data.statGroups[7].size() < 2) { return 1; }
     const unsigned threshold = weapon->data.GetMasteryThreshold(0);
     const unsigned initialXP = threshold / 2;
@@ -446,7 +447,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     profile.AddWeaponExperience(state.masteryWeapon, initialXP, weapon->data.GetMasteryLimit());
     const std::filesystem::path path = TestOutput::Path("ui-original-2026-09-09/upgrade-profile.dat");
     if (!profile.SaveToDisk(path)) { return 1; }
-    GameMenu view;
+    ZGameMenu view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     const unsigned popupOrdinal = view.movies.Ordinal("GLU_MOVIE_UPGRADE_POPUP");
@@ -461,9 +462,9 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         !CMenuUpgradePopup::StarsTarget(*stars, weapon->data, threshold, upgradedTarget)) { return 1; }
 
     CMovie changedPopup = *popup, changedStars = *stars;
-    for (unsigned &chapter : changedPopup.chapters) { chapter *= 2; }
+    for (unsigned &chapter : changedPopup.chapter.starts) { chapter *= 2; }
     changedPopup.duration *= 2;
-    for (unsigned &chapter : changedStars.chapters) { chapter *= 3; }
+    for (unsigned &chapter : changedStars.chapter.starts) { chapter *= 3; }
     changedStars.duration *= 3;
     CMenuUpgradePopup mutation;
     if (!mutation.Bind(changedPopup, changedStars, weapon->data, initialXP)) { return 1; }
@@ -477,18 +478,18 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     if (mutation.StarsTime() != 123) { return 1; }
     std::printf("[upgrade-check] mutated-chapters opening-no-stars 1x-fill failures=0\n");
 
-    MovieRegion buyArea, closeArea;
+    ZMovieRegion buyArea, closeArea;
     if (!view.movies.Region(popupOrdinal, kUpgradeBuyRegion, idleStart, buyArea) ||
         !view.movies.Region(popupOrdinal, kUpgradeCloseRegion, idleStart, closeArea)) { return 1; }
-    const OriginalMenuEntry *buy = OriginalMenuData("MDS_BUTTON_STORE_UPGRADE", 2);
-    const OriginalMenuEntry *close = OriginalMenuData("MDS_BUTTON_STORE_UPGRADE", 0);
+    const ZMenuDataEntry *buy = FindMenuData("MDS_BUTTON_STORE_UPGRADE", 2);
+    const ZMenuDataEntry *close = FindMenuData("MDS_BUTTON_STORE_UPGRADE", 0);
     if (buy == nullptr || close == nullptr) { return 1; }
-    MovieRegion buyTouch, closeTouch;
+    ZMovieRegion buyTouch, closeTouch;
     bool foundBuy = false, foundClose = false;
-    for (const MovieRegion &region : view.movies.Regions(view.movies.Ordinal(buy->movies[0]), 0, buyArea.x, buyArea.y)) {
+    for (const ZMovieRegion &region : view.movies.Regions(view.movies.Ordinal(buy->movies[0]), 0, buyArea.x, buyArea.y)) {
         if (region.index == 0) { buyTouch = region; foundBuy = true; }
     }
-    for (const MovieRegion &region : view.movies.Regions(view.movies.Ordinal(close->movies[0]), 0, closeArea.x, closeArea.y)) {
+    for (const ZMovieRegion &region : view.movies.Regions(view.movies.Ordinal(close->movies[0]), 0, closeArea.x, closeArea.y)) {
         if (region.index == 0) { closeTouch = region; foundClose = true; }
     }
     if (!foundBuy || !foundClose) { return 1; }
@@ -516,7 +517,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         if (index == 9 && state.masteryPopup.GetState() != CMenuUpgradePopup::State::Ready) { return 1; }
         if (index == 12 && state.page == 26) { return 1; }
         const std::string capture = std::string(TestOutput::Path("ui-original-2026-09-09/upgrade-")) + step.name + ".png";
-        if (glGetError() != 0 || !GB_SAVE_FRAME(view.window, capture)) { return 1; }
+        if (glGetError() != 0 || !Capture::SaveFrame(view.window, capture)) { return 1; }
         view.window.Present();
         std::printf("[upgrade-check] phase=%s movie=%u stars=%u state=%u\n", step.name,
             state.masteryPopup.MovieTime(), state.masteryPopup.StarsTime(), static_cast<unsigned>(state.masteryPopup.GetState()));
@@ -563,10 +564,10 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     poorProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto fundsPath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("upgrade-funds-native-" + std::to_string(GetTickCount64()));
-    if (!LoadNativeProfile(toc, tables, poorProfile, fundsPath, TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, poorProfile, fundsPath, TestOutput::Fixtures())) { return 1; }
     poorProfile.warbucks = 0;
     poorProfile.weaponMastery.clear();
-    MenuState fundsState;
+    ZMenuState fundsState;
     fundsState.page = 26;
     fundsState.masteryWeapon = state.masteryWeapon;
     const unsigned price = static_cast<unsigned>(item->data.statGroups[7][1]);
@@ -585,7 +586,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         if (phase == 4 || phase == 9) {
             unsigned buttonRegion = 3;
             if (phase == 9) { buttonRegion = 4; }
-            MovieRegion touch;
+            ZMovieRegion touch;
             if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_POPUP"), buttonRegion,
                 fundsState.storePopup.MovieTime(), touch)) { return 1; }
             view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
@@ -601,7 +602,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         if (phase >= 11 && phase < 14 && poorProfile.warbucks != store[offer].data.rarePrice) { return 1; }
         if (phase == 3 || phase == 10 || phase == 14) {
             const auto capture = TestOutput::Path("ui-original-2026-09-09/upgrade-funds-") + std::to_string(phase) + ".png";
-            if (glGetError() != 0 || !GB_SAVE_FRAME(view.window, capture)) { return 1; }
+            if (glGetError() != 0 || !Capture::SaveFrame(view.window, capture)) { return 1; }
         }
         std::printf("[upgrade-funds-check] phase=%u pending=%u modal=%u rare=%llu xp=%u\n", phase,
             fundsState.currencyPending, fundsState.storePopup.IsActive(), poorProfile.warbucks,
@@ -614,7 +615,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     std::printf("[upgrade-funds-check] original-prompt dismiss offer wait retry-upgrade native-reload failures=0\n");
     poorProfile.configuration.guns[0] = state.masteryWeapon;
     const GameObjectRef secondGun = poorProfile.configuration.guns[1];
-    const WeaponEntry *secondWeapon = FindMasteryWeapon(weapons, secondGun);
+    const ZWeaponEntry *secondWeapon = FindMasteryWeapon(weapons, secondGun);
     std::printf("[upgrade-swap-check] second=%u:%u found=%u same=%u store=%u\n", secondGun.packHash, secondGun.localIndex,
         secondWeapon != nullptr, SameObject(secondGun, state.masteryWeapon), FindWeaponStore(store, secondGun) != nullptr);
     if (secondWeapon == nullptr || SameObject(secondGun, state.masteryWeapon)) { return 1; }
@@ -625,8 +626,8 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     poorProfile.AddWeaponExperience(secondGun, secondWeapon->data.GetMasteryThreshold(0) / 2, secondWeapon->data.GetMasteryLimit());
     for (unsigned slot : {1u, 0u}) {
         poorProfile.activeWeaponSlot = slot;
-        SurvivalGameContext context{poorProfile, fundsPath, 0};
-        MenuState resultState;
+        ZSurvivalGameContext context{poorProfile, fundsPath, 0};
+        ZMenuState resultState;
         BeginPostGame(resultState, context, weapons);
         if (!SameObject(resultState.masteryWeapon, poorProfile.configuration.guns[slot])) {
             std::printf("[upgrade-active-slot-check] expected-slot=%u selected=%u:%u\n", slot,
@@ -639,12 +640,12 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         view.clock += opening;
         view.Begin(26);
         if (!DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath) ||
-            !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-postgame-active-") + std::to_string(slot + 1) + ".png")) { return 1; }
+            !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-postgame-active-") + std::to_string(slot + 1) + ".png")) { return 1; }
         std::printf("[upgrade-active-slot-check] active=%u selected=%u:%u failures=0\n", slot,
             resultState.masteryWeapon.packHash, resultState.masteryWeapon.localIndex);
     }
     const auto fundsBeforeSwap = poorProfile.warbucks;
-    MenuState swapState;
+    ZMenuState swapState;
     swapState.page = 26;
     swapState.masteryWeapon = state.masteryWeapon;
     view.Begin(26);
@@ -656,18 +657,18 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath)) {
         std::printf("[upgrade-swap-check] ready draw failed\n"); return 1;
     }
-    MovieRegion swapArea, swapTouch;
-    const auto *swap = OriginalMenuData("MDS_BUTTON_STORE_UPGRADE", 1);
+    ZMovieRegion swapArea, swapTouch;
+    const auto *swap = FindMenuData("MDS_BUTTON_STORE_UPGRADE", 1);
     if (swap == nullptr || !view.movies.Region(popupOrdinal, 10, swapState.masteryPopup.MovieTime(), swapArea)) { return 1; }
-    // Match DrawOriginalMovieButton: child origin is the parent region center.
+    // Match DrawMovieButton: child origin is the parent region center.
     bool foundSwapTouch = false;
     for (const auto &region : view.movies.Regions(view.movies.Ordinal(swap->movies[0]), 0,
         swapArea.x + swapArea.width / 2, swapArea.y + swapArea.height / 2)) {
         if (region.index == 0) { swapTouch = region; foundSwapTouch = true; break; }
     }
     if (!foundSwapTouch) { return 1; }
-    const MenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
-    if (!GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-1.png"))) { return 1; }
+    const ZMenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
+    if (!Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-1.png"))) { return 1; }
     const unsigned beforeSwapTime = swapState.masteryPopup.MovieTime();
     std::printf("[upgrade-swap-check] click=%.1f/%.1f movie=%u state=%u alpha=%.3f input=%u xp=%u limit=%u\n", swapClick.x, swapClick.y, beforeSwapTime,
         static_cast<unsigned>(swapState.masteryPopup.GetState()), swapArea.alpha, view.inputEnabled,
@@ -685,7 +686,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     view.Begin(26);
     if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
         swapState.masteryPopup.StarsTime() != std::min(100u, swapState.masteryPopup.TargetTime())) { return 1; }
-    if (!GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap.png"))) { return 1; }
+    if (!Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap.png"))) { return 1; }
     view.Begin(26);
     view.SetTestClick(swapClick);
     if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
@@ -693,21 +694,21 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         poorProfile.warbucks != fundsBeforeSwap) { return 1; }
     view.Begin(26);
     if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
-        !GB_SAVE_FRAME(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-back-1.png"))) { return 1; }
+        !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-back-1.png"))) { return 1; }
     std::printf("[upgrade-swap-check] store-entry distinct-guns stars-reset no-reopen unchanged-loadout failures=0\n");
     return 0;
 }
 
 /** Real bank card/input/prompt path, with native saves and isolated fixtures. */
-int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Template &progress,
-    const CRefinementManager::Template &refinement, const std::vector<StoreEntry> &store,
-    const std::vector<WeaponEntry> &weapons, const std::vector<ArmorEntry> &armor) {
+int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<ZStoreEntry> &store,
+    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armor) {
     struct ConnectionRestore {
         bool previous = GameHostSettings().isConnected;
         ~ConnectionRestore() { GameHostSettings().isConnected = previous; }
     } connectionRestore;
-    MenuTestClick buyClick;
-    MenuTestClick dismissClick;
+    ZMenuTestClick buyClick;
+    ZMenuTestClick dismissClick;
     float columnPitch = 0, rowPitch = 0;
     std::vector<std::pair<int, unsigned>> currencies;
     for (unsigned index = 0; index < store.size(); ++index) {
@@ -718,12 +719,12 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
     }
     std::sort(currencies.begin(), currencies.end());
     {
-        GameMenu probe;
+        ZGameMenu probe;
         if (!probe.Open(toc, tables)) { return 1; }
-        MovieRegion slot, price, button;
-        StoreCardFace face;
+        ZMovieRegion slot, price, button;
+        ZStoreCardFace face;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), kFirstColumnRegion, probe.storeRestTime, slot)) { return 1; }
-        MovieRegion secondColumn, promptTouch;
+        ZMovieRegion secondColumn, promptTouch;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), kFirstColumnRegion + 1, probe.storeRestTime, secondColumn) ||
             !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_POPUP"), 0, 500, promptTouch)) { return 1; }
         columnPitch = secondColumn.x - slot.x;
@@ -731,13 +732,13 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
         dismissClick = {promptTouch.x + promptTouch.width / 2, promptTouch.y + promptTouch.height / 2, 100};
         face.x = slot.x;
         face.y = slot.y;
-        const auto *entry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+        const auto *entry = FindMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
         if (entry == nullptr || !CardRegion(probe, probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), kCardPriceRegion, face, price) ||
             !probe.movies.Region(probe.movies.Ordinal(entry->movies[0]), 1, 0, button)) { return 1; }
         buyClick = {price.x + price.width - button.width / 2, price.y + price.height - button.height / 2};
         constexpr unsigned parameters[] = {17, 14, 15, 16};
         for (unsigned index = 0; index < 4; ++index) {
-            entry = OriginalMenuData("MDS_BUTTON_STORE_SORT_CURRENCY", index);
+            entry = FindMenuData("MDS_BUTTON_STORE_SORT_CURRENCY", index);
             if (entry == nullptr || entry->action != 65 || entry->parameter != parameters[index]) { return 1; }
             std::printf("[bank-check] original-filter row=%u label=%s parameter=%u\n", index,
                 probe.movies.NamedString(entry->strings[0]).c_str(), entry->parameter);
@@ -751,8 +752,8 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
         CProfileManager profile;
         profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
         const auto path = root / std::to_string(phase);
-        if (!LoadNativeProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-        MenuState state;
+        if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+        ZMenuState state;
         state.page = 2;
         state.store.shopCategory = 3;
         state.store.shopGunSlot = profile.activeWeaponSlot;
@@ -762,7 +763,7 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
         if (phase == 4 || phase == 7 || phase == 8) { profile.coins = 0; profile.warbucks = 0; }
         const auto coins = profile.coins;
         const auto bucks = profile.warbucks;
-        std::vector<StoreEntry> fixture = store;
+        std::vector<ZStoreEntry> fixture = store;
         unsigned first = static_cast<unsigned>(fixture.size());
         if (phase >= 9) {
             first = currencies[phase - 9].second;
@@ -783,10 +784,10 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
             if ((state.store.shopFilter & (1u << (fixture[row.second].data.type))) != 0) { ++position; }
         }
         state.store.shopScroll = (position / 2) * columnPitch;
-        MenuTestClick cardClick = buyClick;
+        ZMenuTestClick cardClick = buyClick;
         cardClick.y += (position % 2) * rowPitch;
         if (phase == 5) { fixture[first].data.commonPrice += 321; }
-        std::vector<MenuTestClick> clicks = {cardClick, {30, 90, 2000}};
+        std::vector<ZMenuTestClick> clicks = {cardClick, {30, 90, 2000}};
         if (phase >= 3) { clicks[1] = {-100, -100, 2000}; }
         if (phase != 0) { clicks.push_back({-100, -100, 4000}); clicks.push_back({-100, -100, 1000}); }
         if (phase == 8) {
@@ -822,23 +823,23 @@ int CheckBank(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Te
 }
 
 /** Focused regression for the user's splash, package and clipped badge report. */
-int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgress::Template &progress,
-    const CRefinementManager::Template &refinement, const std::vector<StoreEntry> &store,
-    const std::vector<WeaponEntry> &weapons, const std::vector<ArmorEntry> &armor) {
+int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<ZStoreEntry> &store,
+    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armor) {
     const auto root = std::filesystem::path(TestOutput::Path("ui-feedback-2026-09-09"));
     const auto save = root / ("profile-" + std::to_string(GetTickCount64()));
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadNativeProfile(toc, tables, profile, save, TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, profile, save, TestOutput::Fixtures())) { return 1; }
     {
-        GameMenu view;
+        ZGameMenu view;
         if (!view.Open(toc, tables)) { return 1; }
-        MovieRegion viewport, column, content, badge, sprite;
+        ZMovieRegion viewport, column, content, badge, sprite;
         const unsigned scroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
         if (!view.movies.Region(scroll, 0, view.storeRestTime, viewport) ||
             !view.movies.Region(scroll, 1, view.storeRestTime, column) ||
             !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content)) { return 1; }
-        StoreCardFace face;
+        ZStoreCardFace face;
         face.x = column.x;
         face.y = column.y;
         if (!CardRegion(view, view.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), kCardBadgeRegion, face, badge) ||
@@ -852,10 +853,10 @@ int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgre
         }
     }
     for (unsigned phase = 0; phase < 4; ++phase) {
-        MenuState state;
+        ZMenuState state;
         state.page = 14;
         profile.firstLaunch = phase == 3;
-        std::vector<MenuTestClick> clicks;
+        std::vector<ZMenuTestClick> clicks;
         if (phase == 0) { clicks.push_back({-1, -1, 1200}); }
         if (phase == 1) { clicks.push_back({-1, -1, 600}); }
         if (phase >= 2) { clicks.push_back({12, 12, 16}); }
@@ -869,19 +870,19 @@ int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgre
         std::printf("[ui-feedback-check] splash-phase=%u page=%u wait blink click original-entry failures=0\n", phase, state.page);
     }
     profile.firstLaunch = false;
-    const StoreEntry *package = nullptr;
+    const ZStoreEntry *package = nullptr;
     unsigned packageIndex = 0;
     for (unsigned index = 0; index < store.size(); ++index) {
         if (store[index].data.singlePurchase != 0) { package = &store[index]; packageIndex = index; break; }
     }
     if (package == nullptr) { return 1; }
-    MenuTestClick packageCard, buyPackage;
+    ZMenuTestClick packageCard, buyPackage;
     {
-        GameMenu view;
+        ZGameMenu view;
         if (!view.Open(toc, tables)) { return 1; }
-        MovieRegion column, body, right, label;
-        StoreCardFace face;
-        const auto *entry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+        ZMovieRegion column, body, right, label;
+        ZStoreCardFace face;
+        const auto *entry = FindMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
         if (entry == nullptr || !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, view.storeRestTime, column)) { return 1; }
         face.x = column.x; face.y = column.y;
         const unsigned box = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
@@ -892,12 +893,12 @@ int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgre
         if (label.width <= right.width) { buyPackage.x = right.x + right.width / 2; }
     }
     for (unsigned phase = 0; phase < 7; ++phase) {
-        MenuState state;
+        ZMenuState state;
         state.page = 2;
         state.store.shopGunSlot = profile.activeWeaponSlot;
         if (phase == 0 || phase == 1) { state.store.shopCategory = 2; }
         if (phase == 2) { state.store.shopCategory = 1; }
-        std::vector<MenuTestClick> clicks{{-1, -1, 1000}};
+        std::vector<ZMenuTestClick> clicks{{-1, -1, 1000}};
         if (phase == 1 || phase == 2 || phase == 3 || phase == 6) { clicks.push_back(packageCard); }
         if (phase == 4) { clicks.push_back(buyPackage); }
         const auto screenshot = root / ("store-" + std::to_string(phase) + ".png");
@@ -910,7 +911,7 @@ int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgre
             // A disk reload in the same session must retain OWNED. Reset models
             // a new process before applying the original purchased-item override.
             profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-            if (!LoadNativeProfile(toc, tables, profile, save) || !profile.IsPackagePurchased(package->ref)) { return 1; }
+            if (!LoadProfile(toc, tables, profile, save) || !profile.IsPackagePurchased(package->ref)) { return 1; }
         }
         std::printf("[ui-feedback-check] store-phase=%u category=%u selected=%d package-purchased=%u failures=0\n",
             phase, state.store.shopCategory, state.selectedItem, profile.IsPackagePurchased(package->ref));
@@ -922,64 +923,64 @@ int CheckUiFeedback(CResTOCManager &toc, PackTables &tables, const CPlayerProgre
 int RunPackagePurchaseCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<StoreEntry> store;
-    std::vector<WeaponEntry> weapons;
-    std::vector<ArmorEntry> armor;
+    std::vector<ZStoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
+    std::vector<ZArmorEntry> armor;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
         !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
-    const StoreEntry *package = nullptr;
-    for (const StoreEntry &entry : store) {
+    const ZStoreEntry *package = nullptr;
+    for (const ZStoreEntry &entry : store) {
         if (entry.data.singlePurchase != 0) { package = &entry; break; }
     }
     if (package == nullptr) { return 1; }
     const auto root = std::filesystem::path(TestOutput::Path("package-purchase-check")) / std::to_string(GetTickCount64());
-    GameMenu view;
+    ZGameMenu view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = false;
     const unsigned box = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
-    MovieRegion column, content, body, right, button, actions;
+    ZMovieRegion column, content, body, right, button, actions;
     unsigned start = 0, end = 0;
-    const auto *buy = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+    const auto *buy = FindMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
     if (buy == nullptr || !view.movies.GetMovie(box)->GetChapterRange(1, start, end) ||
         !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, view.storeRestTime, column) ||
         !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
         !view.movies.Region(view.movies.Ordinal(buy->movies[0]), 1, 0, button)) { return 1; }
-    StoreCardFace folded{column.x, column.y};
+    ZStoreCardFace folded{column.x, column.y};
     if (!CardRegion(view, box, kCardBodyRegion, folded, body) || !CardRegion(view, box, kCardRightRegion, folded, right)) { return 1; }
-    const MenuTestClick openClick{body.x + 10, body.y + 10};
-    MenuTestClick foldedBuy{right.x + right.width - button.width / 2, right.y + right.height - button.height / 2};
+    const ZMenuTestClick openClick{body.x + 10, body.y + 10};
+    ZMenuTestClick foldedBuy{right.x + right.width - button.width / 2, right.y + right.height - button.height / 2};
     if (button.width <= right.width) { foldedBuy.x = right.x + right.width / 2; }
     if (!view.movies.Region(box, kCardBodyRegion, end, body)) { return 1; }
-    const StoreCardFace expanded{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
+    const ZStoreCardFace expanded{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
         content.y + content.height / 2 - body.height / 2, 1, end};
     if (!CardRegion(view, box, kCardActionRegion, expanded, actions)) { return 1; }
-    const MenuTestClick expandedBuy{actions.x + actions.width - button.width / 2, actions.y + button.height / 2};
+    const ZMenuTestClick expandedBuy{actions.x + actions.width - button.width / 2, actions.y + button.height / 2};
     unsigned failures = 0;
     for (unsigned mode = 0; mode < 2; ++mode) {
         CProfileManager profile;
         profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
         const auto save = root / std::to_string(mode);
-        if (!LoadNativeProfile(toc, tables, profile, save, root / "absent-source")) { return 1; }
+        if (!LoadProfile(toc, tables, profile, save, root / "absent-source")) { return 1; }
         profile.coins = package->data.commonPrice;
         profile.warbucks = package->data.rarePrice;
         profile.activeWeaponSlot = mode;
         const CPlayerConfiguration initialConfiguration = profile.configuration;
-        MenuState state;
+        ZMenuState state;
         state.page = 2;
         state.store.shopGunSlot = mode;
-        std::vector<MenuTestClick> clicks{{-1, -1, 1000}};
+        std::vector<ZMenuTestClick> clicks{{-1, -1, 1000}};
         if (mode == 1) { clicks.push_back(openClick); clicks.push_back({-1, -1, 1000}); clicks.push_back(expandedBuy); }
         else { clicks.push_back(foldedBuy); }
         clicks.push_back({-1, -1, 1000});
-        for (const MenuTestClick &click : clicks) {
+        for (const ZMenuTestClick &click : clicks) {
             view.clock += click.advanceMs;
             view.Begin(2); view.SetTestClick(click);
             if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
         }
-        if (!GB_SAVE_FRAME(view.window, (save / "after-purchase.png").string())) { return 1; }
+        if (!Capture::SaveFrame(view.window, (save / "after-purchase.png").string())) { return 1; }
         const bool purchased = profile.IsPackagePurchased(package->ref);
         unsigned delivered = 0, equipped = 0, gear = 0;
         for (const auto &object : package->data.objects) {
@@ -1008,11 +1009,11 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
                 ++gunIndex;
             }
             if (object.type != 2) { continue; }
-            for (const ArmorEntry &part : armor) {
+            for (const ZArmorEntry &part : armor) {
                 if (part.packHash == object.object.packHash && part.ordinal == object.object.localIndex &&
                     !SameObject(profile.configuration.armor[part.data.GetSlot()], object.object)) { ++failures; }
             }
-            for (const StoreEntry &entry : store) {
+            for (const ZStoreEntry &entry : store) {
                 if (entry.data.objects.size() == 1 && entry.data.objects[0].type == 2 &&
                     SameObject(entry.data.objects[0].object, object.object) && entry.data.displayOrder < 0) {
                     if (GetStoreDisplayOrder(entry.data, profile) < 0) { ++failures; }
@@ -1029,11 +1030,11 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         if (mode == 0) { view.SetTestClick(foldedBuy); }
         else { view.SetTestClick(expandedBuy); }
         if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
-        if (profile.AcquireItem(package->data, package->data.requiredLevel) != PurchaseResult::Owned ||
+        if (profile.AcquireItem(package->data, package->data.requiredLevel) != ZPurchaseResult::Owned ||
             profile.coins != coins || profile.warbucks != warbucks || profile.inventory.size() != inventory) { ++failures; }
         // Re-entering categories must preserve the session's OWNED card.
         for (unsigned category : {1u, 2u, 0u}) {
-            state = MenuState{};
+            state = ZMenuState{};
             state.page = 2; state.store.shopCategory = category; state.store.shopGunSlot = mode;
             view.clock += 1000;
             view.Begin(2); view.SetTestClick(openClick);
@@ -1045,7 +1046,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         if (!profile.LoadFromDisk(save) || profile.IsPackageHidden(package->ref)) { ++failures; }
         CProfileManager restarted;
         restarted.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-        if (!LoadNativeProfile(toc, tables, restarted, save, root / "absent-source") ||
+        if (!LoadProfile(toc, tables, restarted, save, root / "absent-source") ||
             !restarted.IsPackageHidden(package->ref)) { return 1; }
         for (unsigned slot = 0; slot < acquiredConfiguration.guns.size(); ++slot) {
             if (!SameObject(restarted.configuration.guns[slot], acquiredConfiguration.guns[slot])) { ++failures; }
@@ -1062,12 +1063,12 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
                 if (restarted.GetPowerupCount(object.object) != expected || profile.GetPowerupCount(object.object) != expected) { ++failures; }
             } else if (!restarted.Owns(object.type, object.object)) { ++failures; }
         }
-        state = MenuState{}; state.page = 2; state.store.shopGunSlot = mode;
+        state = ZMenuState{}; state.page = 2; state.store.shopGunSlot = mode;
         view.clock += 1000; view.Begin(2); view.SetTestClick(openClick);
         if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
         if (state.selectedItem >= 0 && static_cast<unsigned>(state.selectedItem) < store.size() &&
             SameObject(store[state.selectedItem].ref, package->ref)) { ++failures; }
-        if (!GB_SAVE_FRAME(view.window, (save / "after-restart.png").string())) { return 1; }
+        if (!Capture::SaveFrame(view.window, (save / "after-restart.png").string())) { return 1; }
         // Owned bundle-only armor remains selectable after changing equipment.
         restarted.configuration = initialConfiguration;
         std::vector<std::pair<int, unsigned>> ownedArmor;
@@ -1079,8 +1080,8 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
             if (order >= 0) { ownedArmor.push_back({order, index}); }
         }
         std::sort(ownedArmor.begin(), ownedArmor.end());
-        MovieRegion firstColumn, secondColumn, equipButton;
-        const auto *equipEntry = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
+        ZMovieRegion firstColumn, secondColumn, equipButton;
+        const auto *equipEntry = FindMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
         const unsigned scroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
         if (equipEntry == nullptr || !view.movies.Region(scroll, kFirstColumnRegion, view.storeRestTime, firstColumn) ||
             !view.movies.Region(scroll, kFirstColumnRegion + 1, view.storeRestTime, secondColumn) ||
@@ -1089,11 +1090,11 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         for (unsigned position = 0; position < ownedArmor.size(); ++position) {
             const auto &item = store[ownedArmor[position].second].data;
             if (item.displayOrder >= 0) { continue; }
-            state = MenuState{}; state.page = 2; state.store.shopCategory = 1;
+            state = ZMenuState{}; state.page = 2; state.store.shopCategory = 1;
             state.store.shopGunSlot = mode; state.store.shopFilter = kOwnedFilterBit;
             state.store.shopScroll = (position / 2) * (secondColumn.x - firstColumn.x);
-            const StoreCardFace face{firstColumn.x, firstColumn.y + (position % 2) * (firstColumn.height / 2 + 5)};
-            MovieRegion price;
+            const ZStoreCardFace face{firstColumn.x, firstColumn.y + (position % 2) * (firstColumn.height / 2 + 5)};
+            ZMovieRegion price;
             if (!CardRegion(view, box, kCardPriceRegion, face, price)) { return 1; }
             view.clock += 1000; view.Begin(2);
             view.SetTestClick({price.x + price.width - equipButton.width / 2, price.y + price.height - equipButton.height / 2});
@@ -1104,10 +1105,10 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
             if (!SameObject(restarted.configuration.armor[slot], acquiredConfiguration.armor[slot])) { ++failures; }
         }
         if (armorClicks != restoredRows) { ++failures; }
-        state = MenuState{}; state.page = 2; state.store.shopCategory = 1; state.store.shopFilter = kOwnedFilterBit; state.store.shopGunSlot = mode;
+        state = ZMenuState{}; state.page = 2; state.store.shopCategory = 1; state.store.shopFilter = kOwnedFilterBit; state.store.shopGunSlot = mode;
         view.clock += 1000; view.Begin(2); view.SetTestClick({-1, -1});
         if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save) ||
-            !GB_SAVE_FRAME(view.window, (save / "armor-re-equipped.png").string())) { return 1; }
+            !Capture::SaveFrame(view.window, (save / "armor-re-equipped.png").string())) { return 1; }
         std::printf("[package-purchase-check] expanded=%u purchased=%u detail-open=%u gear-delivered=%u/%u gear-equipped=%u/%u failures=%u\n",
             mode, purchased, state.store.shopDetailOpen, delivered, gear, equipped, gear, failures);
         std::printf("[package-purchase-check] restored-armor-rows=%u session-owned restart-hidden loadout-reloaded repeat-rejected failures=%u\n", restoredRows, failures);
@@ -1119,12 +1120,12 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
 int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool bankOnly, bool feedbackOnly) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CPlayerProgress::Template progress;
     CRefinementManager::Template refinement;
-    std::vector<StoreEntry> store;
-    std::vector<WeaponEntry> weapons;
-    std::vector<ArmorEntry> armor;
+    std::vector<ZStoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
+    std::vector<ZArmorEntry> armor;
     if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
         !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
         !LoadArmorCatalog(toc, tables, armor)) { return 1; }
@@ -1134,9 +1135,9 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
     if (feedbackOnly) { return CheckUiFeedback(toc, tables, progress, refinement, store, weapons, armor); }
     if (cardsOnly) { return CheckStoreCards(toc, tables, profile, progress, refinement, store, weapons, armor); }
     unsigned closedStart = 0, closedEnd = 0, slideStart = 0, slideEnd = 0;
-    MovieRegion closedButton, openButton, openPanel, optionLabel;
+    ZMovieRegion closedButton, openButton, openPanel, optionLabel;
     {
-        GameMenu probe;
+        ZGameMenu probe;
         if (!probe.Open(toc, tables)) { return 1; }
         const unsigned ordinal = probe.movies.Ordinal("GLU_MOVIE_SORT_BAR");
         const CMovie *movie = probe.movies.GetMovie(ordinal);
@@ -1148,13 +1149,13 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
             !probe.movies.Region(ordinal, kSortButtonRegion, slideEnd, openButton) ||
             !probe.movies.Region(ordinal, kSortPanelRegion, slideEnd, openPanel) ||
             !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_BUTTON_LG"), 1, 0, optionLabel)) { return 1; }
-        MenuState playback;
+        ZMenuState playback;
         if (!AdvanceStoreFilter(probe, playback, *movie)) { return 1; }
         playback.store.shopFilterOpen = true;
         probe.clock = (slideEnd - closedEnd) / 2;
         if (!AdvanceStoreFilter(probe, playback, *movie)) { return 1; }
         const unsigned middle = playback.store.shopFilterTime;
-        MovieRegion movingButton;
+        ZMovieRegion movingButton;
         if (!probe.movies.Region(ordinal, kSortButtonRegion, middle, movingButton) ||
             movingButton.y <= openButton.y || movingButton.y >= closedButton.y) { return 1; }
         playback.store.shopFilterOpen = false;
@@ -1169,44 +1170,44 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
         // Perturb only an in-memory copy: playback must follow changed chapters.
         // This distinguishes resource-driven bounds from the old 101/277 constants.
         CMovie changed = *movie;
-        changed.chapters[1] += 20;
-        changed.chapters[2] += 20;
-        MenuState changedPlayback;
+        changed.chapter.starts[1] += 20;
+        changed.chapter.starts[2] += 20;
+        ZMenuState changedPlayback;
         if (!AdvanceStoreFilter(probe, changedPlayback, changed) || changedPlayback.store.shopFilterTime != closedEnd + 20) { return 1; }
         changedPlayback.store.shopFilterOpen = true;
         probe.clock += changed.duration;
         if (!AdvanceStoreFilter(probe, changedPlayback, changed) || changedPlayback.store.shopFilterTime != slideEnd + 20) { return 1; }
         unsigned unusedStart = 0, unusedEnd = 0;
-        if (movie->GetChapterRange(static_cast<unsigned>(movie->chapters.size()), unusedStart, unusedEnd)) { return 1; }
+        if (movie->GetChapterRange(static_cast<unsigned>(movie->chapter.starts.size()), unusedStart, unusedEnd)) { return 1; }
         std::printf("[store-template-check] chapter-bounds moving-region reversal modified-resource failures=0\n");
     }
-    const MenuTestClick openClick{closedButton.x + closedButton.width / 2, closedButton.y + closedButton.height / 2};
-    const MenuTestClick closeClick{openButton.x + openButton.width / 2, openButton.y + openButton.height / 2};
+    const ZMenuTestClick openClick{closedButton.x + closedButton.width / 2, closedButton.y + closedButton.height / 2};
+    const ZMenuTestClick closeClick{openButton.x + openButton.width / 2, openButton.y + openButton.height / 2};
     const unsigned travel = slideEnd - closedEnd;
     const float optionX = openPanel.x + openPanel.width / 2;
     const float optionY = openPanel.y + optionLabel.height / 2;
     const float rowPitch = optionLabel.height * kSortRowSpacing;
-    MenuState closed, halfway, selected, closing, closedAgain;
+    ZMenuState closed, halfway, selected, closing, closedAgain;
     closed.page = halfway.page = selected.page = closing.page = closedAgain.page = 2;
     const std::filesystem::path profilePath = TestOutput::Path("store-template-check.dat");
-    const std::vector<MenuTestClick> idle = {{-100, -100}};
+    const std::vector<ZMenuTestClick> idle = {{-100, -100}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         closed, profilePath, TestOutput::Path("store-template-closed.png"), &idle) != -2) { return 1; }
-    const std::vector<MenuTestClick> halfwayClicks = {openClick, {-100, -100, travel / 2}};
+    const std::vector<ZMenuTestClick> halfwayClicks = {openClick, {-100, -100, travel / 2}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         halfway, profilePath, TestOutput::Path("store-template-opening.png"), &halfwayClicks) != -2 ||
         halfway.store.shopFilterTime != closedEnd + travel / 2) { return 1; }
     // Click a row's final position before it arrives: it must not select there.
-    const std::vector<MenuTestClick> selectClicks = {openClick, {optionX, optionY + 2 * rowPitch},
+    const std::vector<ZMenuTestClick> selectClicks = {openClick, {optionX, optionY + 2 * rowPitch},
         {optionX, optionY + 2 * rowPitch, travel}, {optionX, optionY + 3 * rowPitch}, {-100, -100}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         selected, profilePath, TestOutput::Path("store-template-open.png"), &selectClicks) != -2 ||
         selected.store.shopFilter != 3 || selected.store.shopFilterTime != slideEnd) { return 1; }
-    const std::vector<MenuTestClick> closingClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel / 2}};
+    const std::vector<ZMenuTestClick> closingClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel / 2}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         closing, profilePath, TestOutput::Path("store-template-closing.png"), &closingClicks) != -2 ||
         closing.store.shopFilterOpen || closing.store.shopFilterTime != slideEnd - travel / 2) { return 1; }
-    const std::vector<MenuTestClick> closeClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel}};
+    const std::vector<ZMenuTestClick> closeClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         closedAgain, profilePath, TestOutput::Path("store-template-closed-again.png"), &closeClicks) != -2 ||
         closedAgain.store.shopFilterOpen || closedAgain.store.shopFilterTime != slideStart) { return 1; }
@@ -1219,15 +1220,15 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
 int RunDualWeaponCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<StoreEntry> store;
-    std::vector<WeaponEntry> weapons;
-    std::vector<ArmorEntry> armor;
+    ZPackTables tables(toc);
+    std::vector<ZStoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
+    std::vector<ZArmorEntry> armor;
     if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
         !LoadArmorCatalog(toc, tables, armor)) { return 1; }
     const auto path = std::filesystem::path(TestOutput::Path("dual-weapon-check")) / std::to_string(GetTickCount64());
     CProfileManager profile;
-    if (!LoadNativeProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
     std::vector<unsigned> entries;
     for (unsigned index = 0; index < store.size() && entries.size() < 3; ++index) {
         const auto &item = store[index].data;
@@ -1247,18 +1248,18 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
     const GameObjectRef first = store[entries[0]].data.objects[0].object;
     const GameObjectRef second = store[entries[1]].data.objects[0].object;
     const GameObjectRef third = store[entries[2]].data.objects[0].object;
-    GameMenu view;
+    ZGameMenu view;
     if (!view.Open(toc, tables)) { return 1; }
     const unsigned card = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
     const CMovie *movie = view.movies.GetMovie(card);
     unsigned start = 0, end = 0;
-    MovieRegion content, body, actions, label;
-    const auto *equip = OriginalMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
+    ZMovieRegion content, body, actions, label;
+    const auto *equip = FindMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
     if (movie == nullptr || equip == nullptr || !movie->GetChapterRange(1, start, end) ||
         !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
         !view.movies.Region(card, 0, end, body) ||
         !view.movies.Region(view.movies.Ordinal(equip->movies[0]), 1, 0, label)) { return 1; }
-    const StoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
+    const ZStoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
         content.y + content.height / 2 - body.height / 2, 1, end};
     if (!CardRegion(view, card, kCardActionRegion, face, actions)) { return 1; }
     unsigned failures = 0;
@@ -1269,7 +1270,7 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
         for (const auto &gun : profile.configuration.guns) { if (IsStoreObjectEquipped(profile, active, gun)) { ++stamps; } }
         if (stamps != 2) { ++failures; }
         for (unsigned step = 0; step < 2; ++step) {
-            MenuState state;
+            ZMenuState state;
             state.page = 2;
             state.store.shopGunSlot = active;
             state.slot = active;
@@ -1294,11 +1295,11 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
                 state.store.shopDetailOpen = false;
                 view.Begin(2);
                 if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path) ||
-                    !GB_SAVE_FRAME(view.window, TestOutput::Path("dual-weapon-slot-") + std::to_string(active) + ".png")) { return 1; }
+                    !Capture::SaveFrame(view.window, TestOutput::Path("dual-weapon-slot-") + std::to_string(active) + ".png")) { return 1; }
             }
         }
         CProfileManager restored;
-        if (!LoadNativeProfile(toc, tables, restored, path, path / "absent-source")) { return 1; }
+        if (!LoadProfile(toc, tables, restored, path, path / "absent-source")) { return 1; }
         for (unsigned slot = 0; slot < 2; ++slot) {
             if (!SameObject(profile.configuration.guns[slot], restored.configuration.guns[slot])) { ++failures; }
         }

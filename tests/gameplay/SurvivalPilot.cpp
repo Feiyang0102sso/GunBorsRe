@@ -16,7 +16,7 @@ constexpr float kAttackDistance = 120;
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
 }
 
-SurvivalPilot::SurvivalPilot(CombatScene &scene, const MapRectangle &bounds) : m_scene(scene) {
+SurvivalPilot::SurvivalPilot(ZCombatWorld &scene, const ZMapRectangle &bounds) : m_scene(scene) {
     const float margin = scene.GetPlayerRadius() + 2;
     const int columns = static_cast<int>((bounds.width - margin * 2) / kGridSpacing) + 1;
     const int rows = static_cast<int>((bounds.height - margin * 2) / kGridSpacing) + 1;
@@ -50,20 +50,20 @@ SurvivalPilot::SurvivalPilot(CombatScene &scene, const MapRectangle &bounds) : m
     }
 }
 
-void SurvivalPilot::Plan(const CombatEnemy &target) {
+void SurvivalPilot::Plan(const ZCombatEnemy &target) {
     m_route.clear();
     m_step = 0;
     int start = -1;
     float nearest = 150;
     std::vector<int> starts;
-    const bool touching = !m_scene.HasClearPath(m_scene.playerX, m_scene.playerY,
-        m_scene.playerX, m_scene.playerY, m_scene.GetPlayerRadius() - 0.5f);
+    const bool touching = !m_scene.HasClearPath(m_scene.GetPlayer().x, m_scene.GetPlayer().y,
+        m_scene.GetPlayer().x, m_scene.GetPlayer().y, m_scene.GetPlayerRadius() - 0.5f);
     for (unsigned index = 0; index < m_nodes.size(); ++index) {
         const Node &node = m_nodes[index];
-        const float distance = std::hypot(node.x - m_scene.playerX, node.y - m_scene.playerY);
+        const float distance = std::hypot(node.x - m_scene.GetPlayer().x, node.y - m_scene.GetPlayer().y);
         if (distance < 150 && !node.neighbors.empty() &&
-            (m_scene.HasClearPath(m_scene.playerX, m_scene.playerY, node.x, node.y, m_scene.GetPlayerRadius() - 0.5f) ||
-                (touching && m_scene.CanWalkTo(m_scene.playerX, m_scene.playerY, node.x, node.y)))) {
+            (m_scene.HasClearPath(m_scene.GetPlayer().x, m_scene.GetPlayer().y, node.x, node.y, m_scene.GetPlayerRadius() - 0.5f) ||
+                (touching && m_scene.CanWalkTo(m_scene.GetPlayer().x, m_scene.GetPlayer().y, node.x, node.y)))) {
             starts.push_back(static_cast<int>(index));
             if (distance < nearest) { nearest = distance; start = static_cast<int>(index); }
         }
@@ -79,7 +79,7 @@ void SurvivalPilot::Plan(const CombatEnemy &target) {
     // actually walk straight to, instead of committing to the closest pocket.
     for (int index : starts) {
         const Node &node = m_nodes[index];
-        distances[index] = std::hypot(node.x - m_scene.playerX, node.y - m_scene.playerY);
+        distances[index] = std::hypot(node.x - m_scene.GetPlayer().x, node.y - m_scene.GetPlayer().y);
         queue.push({distances[index], index});
     }
     while (!queue.empty()) {
@@ -96,7 +96,7 @@ void SurvivalPilot::Plan(const CombatEnemy &target) {
             }
         }
     }
-    const EnemyCombat &enemy = target.model.enemy.combat;
+    const ZEnemyCombat &enemy = target.model.enemy.combat;
     const float angle = m_elapsed * 0.0003f;
     const float desiredX = enemy.x + std::cos(angle) * kAttackDistance;
     const float desiredY = enemy.y + std::sin(angle) * kAttackDistance;
@@ -121,7 +121,7 @@ void SurvivalPilot::Plan(const CombatEnemy &target) {
         unsigned reachable = 0;
         for (float distance : distances) { if (distance != infinity) { ++reachable; } }
         std::printf("[survival-pilot] retreat start=%d goal=%d reachable=%u player=%.1f,%.1f\n",
-            start, goal, reachable, m_scene.playerX, m_scene.playerY);
+            start, goal, reachable, m_scene.GetPlayer().x, m_scene.GetPlayer().y);
     }
     std::reverse(m_route.begin(), m_route.end());
 }
@@ -144,10 +144,10 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     }
     moveX = 0;
     moveY = 0;
-    CombatEnemy *target = nullptr;
+    ZCombatEnemy *target = nullptr;
     // Keep an engagement stable. Re-selecting the nearest enemy while retreating
     // can alternate between two ranged units and trap the pilot at their midpoint.
-    CombatEnemy *previousTarget = m_scene.Find(m_target);
+    ZCombatEnemy *previousTarget = m_scene.Find(m_target);
     if (previousTarget != nullptr && previousTarget->model.enemy.combat.enabled &&
         previousTarget->model.enemy.combat.targetable && previousTarget->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
         target = previousTarget;
@@ -159,25 +159,25 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
             // accept collision callbacks without being combat targets.
             if (!actor->model.enemy.combat.enabled || !actor->model.enemy.combat.targetable ||
                 !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
-            const EnemyCombat &enemy = actor->model.enemy.combat;
-            const float distance = std::hypot(enemy.x - m_scene.playerX, enemy.y - m_scene.playerY);
+            const ZEnemyCombat &enemy = actor->model.enemy.combat;
+            const float distance = std::hypot(enemy.x - m_scene.GetPlayer().x, enemy.y - m_scene.GetPlayer().y);
             if (distance < nearest) { nearest = distance; target = actor.get(); }
         }
     }
     if (target == nullptr) { return; }
-    const EnemyCombat &enemy = target->model.enemy.combat;
+    const ZEnemyCombat &enemy = target->model.enemy.combat;
     float aimX = enemy.x;
     float aimY = enemy.y;
     const unsigned partCount = target->model.enemy.GetPartCount();
     if (partCount > 1) {
         const unsigned part = static_cast<unsigned>(m_elapsed / 1800) % partCount;
-        const EnemyPart &piece = target->model.enemy.GetPart(part);
+        const ZEnemyPart &piece = target->model.enemy.GetPart(part);
         if (piece.visible && piece.radius > 0) {
             float radius = 0;
             m_scene.EnemyCircle(*target, part, aimX, aimY, radius);
         }
     }
-    m_scene.facing = std::atan2(aimY - m_scene.playerY, aimX - m_scene.playerX) * kRadiansToDegrees + 90;
+    m_scene.GetPlayer().facing = std::atan2(aimY - m_scene.GetPlayer().y, aimX - m_scene.GetPlayer().x) * kRadiansToDegrees + 90;
     if (m_planTimer <= 0 || m_target != enemy.id) {
         Plan(*target);
         m_planTimer = 1000;
@@ -185,8 +185,8 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     }
     while (m_step < m_route.size()) {
         const Node &node = m_nodes[m_route[m_step]];
-        moveX = node.x - m_scene.playerX;
-        moveY = node.y - m_scene.playerY;
+        moveX = node.x - m_scene.GetPlayer().x;
+        moveY = node.y - m_scene.GetPlayer().y;
         if (std::hypot(moveX, moveY) > 6) { return; }
         ++m_step;
     }
@@ -200,6 +200,6 @@ void SurvivalPilot::Report() const {
         static_cast<unsigned long long>(m_target), m_retreatMs);
     if (m_step < m_route.size()) {
         const Node &node = m_nodes[m_route[m_step]];
-        std::printf("[survival-pilot] destination=%.1f,%.1f player=%.1f,%.1f\n", node.x, node.y, m_scene.playerX, m_scene.playerY);
+        std::printf("[survival-pilot] destination=%.1f,%.1f player=%.1f,%.1f\n", node.x, node.y, m_scene.GetPlayer().x, m_scene.GetPlayer().y);
     }
 }

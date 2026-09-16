@@ -10,9 +10,10 @@ class CLayerPathLink : public ILayerPath {
 public:
     struct Region {
         std::vector<std::uint8_t> nodes;
-        MapRectangle bounds;
+        ZMapRectangle bounds;
     };
     bool Init(CArrayInputStream &stream);
+    int GetSpawnLocation(float sourceX, float sourceY, const ZSpawnFilter &filter, ZRandom &random) const override;
 private:
     std::vector<Region> m_regions;
 };

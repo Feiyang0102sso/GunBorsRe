@@ -1,10 +1,10 @@
 /** Original daily reward references with a local calendar adapter. */
 #ifndef GUN_BROS_RE_CDAILYBONUSTRACKING_H
 #define GUN_BROS_RE_CDAILYBONUSTRACKING_H
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/CProfileManager.h"
 
-struct DailyPrize {
+struct ZDailyPrize {
     unsigned coins = 0, warbucks = 0, experience = 0;
     std::vector<GameObjectRef> storeItems;
     CGameAssetRef image, name, description;
@@ -12,13 +12,13 @@ struct DailyPrize {
 
 class CDailyBonusTracking {
 public:
-    bool Load(CResTOCManager &toc, PackTables &tables);
+    bool Load(CResTOCManager &toc, ZPackTables &tables);
     /** Original RefreshUsageData, with seconds supplied by the host clock. */
     void RefreshUsageData(CProfileManager &profile, std::uint32_t currentSeconds) const;
     bool IsBonusAvailable(const CProfileManager &profile, std::int64_t localDay) const;
     unsigned CalculateBonus(const CProfileManager &profile, std::int64_t localDay) const;
-    bool CommitBonus(CProfileManager &profile, std::int64_t localDay, const std::vector<StoreEntry> &store) const;
-    std::vector<DailyPrize> prizes;
+    bool CommitBonus(CProfileManager &profile, std::int64_t localDay, const std::vector<ZStoreEntry> &store) const;
+    std::vector<ZDailyPrize> prizes;
     unsigned value4 = 0;
 };
 

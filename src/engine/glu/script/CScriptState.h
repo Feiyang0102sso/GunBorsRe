@@ -35,7 +35,7 @@ class CScriptInterpreter;
 constexpr std::uint8_t kNoParentState = 255;
 
 /** One of a state's export handlers -- its id and the code behind it. */
-struct ScriptStateExport {
+struct ZScriptStateExport {
     std::uint8_t id;
     CScriptCode code;
 };
@@ -52,7 +52,7 @@ public:
     /** This state's own sequence, empty when it inherits one. */
     const std::vector<std::uint8_t> &GetOwnSequence() const { return m_sequence; }
 
-    const std::vector<ScriptStateExport> &GetExports() const { return m_exports; }
+    const std::vector<ZScriptStateExport> &GetExports() const { return m_exports; }
     /** Raw state entry bytecode retained for the permanent script research harness. */
     const CScriptCode &GetEnterCode() const { return m_enterCode; }
 
@@ -83,7 +83,7 @@ public:
 private:
     std::uint8_t m_parent;
     std::vector<std::uint8_t> m_sequence;
-    std::vector<ScriptStateExport> m_exports;
+    std::vector<ZScriptStateExport> m_exports;
     CScriptCode m_enterCode;
     CScriptCode m_exitCode;
 };

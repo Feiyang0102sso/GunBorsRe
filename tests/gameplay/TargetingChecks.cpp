@@ -3,15 +3,15 @@
 #include <cmath>
 #include <cstdio>
 namespace {
-class TargetingProbeWorld : public IBrotherAIWorld {
+class TargetingProbeWorld : public ZBrotherAIWorld {
 public:
     float targetX = 100;
     bool available = true;
-    CombatId FindBrotherTarget(float x, float y, float radius) override {
+    ZCombatId FindBrotherTarget(float x, float y, float radius) override {
         if (available && std::hypot(targetX - x, y) < radius) { return 42; }
         return 0;
     }
-    bool GetBrotherTarget(CombatId id, float &x, float &y) override {
+    bool GetBrotherTarget(ZCombatId id, float &x, float &y) override {
         if (!available || id != 42) { return false; }
         x = targetX;
         y = 0;

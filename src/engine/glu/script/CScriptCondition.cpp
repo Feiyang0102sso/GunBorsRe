@@ -61,7 +61,7 @@ bool Compare(std::uint8_t comparison, std::int16_t left, std::int16_t right) {
 
 }  // namespace
 
-bool CScriptCondition::Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor) {
+bool CScriptCondition::Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor) {
     for (;;) {
         const std::uint16_t leftOperand = cursor.ReadUInt16();
         const std::uint16_t rightOperand = cursor.ReadUInt16();
@@ -97,7 +97,7 @@ bool CScriptCondition::Execute(CScriptInterpreter &interpreter, ScriptCursor &cu
     }
 }
 
-void CScriptCondition::Skip(ScriptCursor &cursor) {
+void CScriptCondition::Skip(ZScriptCursor &cursor) {
     std::uint8_t continued = 0;
     do {
         cursor.at += kScriptConditionHeaderBytes;

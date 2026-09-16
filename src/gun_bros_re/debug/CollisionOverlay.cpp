@@ -1,18 +1,18 @@
 /** Shared diagnostic drawing of the geometry consumed by movement and projectile tests. */
 #include "gun_bros_re/debug/CollisionOverlay.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "gun_bros_re/debug/DebugConfig.h"
 
 namespace {
 constexpr float kRadians = 3.14159265f / 180;
 
-void DrawLines(CMarkerBatch &markers, const CShaderProgram &program, const float *projection,
+void DrawLines(ZMarkerBatch &markers, const ZShaderProgram &program, const float *projection,
     const DebugConfig::LineStyle &style) {
     const auto &color = style.color;
     markers.Draw(program, projection, color.red, color.green, color.blue, color.alpha);
 }
 
-void Circle(CMarkerBatch &markers, float x, float y, float radius, float width) {
+void Circle(ZMarkerBatch &markers, float x, float y, float radius, float width) {
     if (radius <= 0) { return; }
     for (unsigned index = 0; index < DebugConfig::CircleSegments; ++index) {
         const float first = index * 360.0f / DebugConfig::CircleSegments * kRadians;
@@ -22,7 +22,7 @@ void Circle(CMarkerBatch &markers, float x, float y, float radius, float width) 
     }
 }
 
-void Edges(CMarkerBatch &markers, const CCollisionData &collision, bool enabled,
+void Edges(ZMarkerBatch &markers, const CCollisionData &collision, bool enabled,
     float width, float x = 0, float y = 0, float facing = 0, float scale = 1) {
     const auto &vertices = collision.GetVertices();
     const float cosine = std::cos(facing * kRadians);
@@ -38,7 +38,7 @@ void Edges(CMarkerBatch &markers, const CCollisionData &collision, bool enabled,
     }
 }
 
-void Enemy(CMarkerBatch &markers, const CEnemy &enemy, float gameScale,
+void Enemy(ZMarkerBatch &markers, const CEnemy &enemy, float gameScale,
     float x, float y, float width, bool enabled) {
     const auto &state = enemy.combat;
     if (state.removed || state.dead || !state.enabled) { return; }
@@ -56,9 +56,9 @@ void Enemy(CMarkerBatch &markers, const CEnemy &enemy, float gameScale,
 }
 }
 
-void DrawCollisionOverlay(CMarkerBatch &markers, const CShaderProgram &program,
-    const float *projection, float pixelSize, const MapDetail::LoadedMap *map,
-    const CombatScene *combat, const CBrotherAI *brother, const WeaponEffects *effects) {
+void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
+    const float *projection, float pixelSize, const MapDetail::ZLoadedMap *map,
+    const ZCombatWorld *combat, const CBrotherAI *brother, const ZWeaponEffects *effects) {
     if (map != nullptr) {
         /** Collect the exact collision scene used by player movement. */
         // Nested widths keep coincident movement / bullet / terrain edges visible.
@@ -96,7 +96,7 @@ void DrawCollisionOverlay(CMarkerBatch &markers, const CShaderProgram &program,
     }
     markers.Begin();
     if (combat != nullptr) {
-        Circle(markers, combat->playerX, combat->playerY, combat->GetPlayerRadius(), DebugConfig::Brother.width * pixelSize);
+        Circle(markers, combat->GetPlayer().x, combat->GetPlayer().y, combat->GetPlayerRadius(), DebugConfig::Brother.width * pixelSize);
         if (brother != nullptr && !brother->vitals.dead) {
             Circle(markers, brother->x, brother->y, combat->GetPlayerRadius(), DebugConfig::Brother.width * pixelSize);
         }

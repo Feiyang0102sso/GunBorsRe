@@ -5,7 +5,7 @@
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/CEnemy.h"
-#include "gun_bros_re/data/PackTables.h"
+#include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>

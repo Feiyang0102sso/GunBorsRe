@@ -4,24 +4,24 @@
  */
 #ifndef GUN_BROS_RE_SURVIVALPILOT_H
 #define GUN_BROS_RE_SURVIVALPILOT_H
-#include "gun_bros_re/gameplay/CombatScene.h"
-#include "gun_bros_re/gameplay/SurvivalInputDriver.h"
+#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
 
-class SurvivalPilot : public ISurvivalInputDriver {
+class SurvivalPilot : public ZSurvivalInputDriver {
 public:
-    SurvivalPilot(CombatScene &scene, const MapRectangle &bounds);
+    SurvivalPilot(ZCombatWorld &scene, const ZMapRectangle &bounds);
     void Update(int deltaMs, float &moveX, float &moveY) override;
     void Report() const override;
 private:
     struct Node { float x = 0; float y = 0; std::vector<int> neighbors; };
-    void Plan(const CombatEnemy &target);
-    CombatScene &m_scene;
+    void Plan(const ZCombatEnemy &target);
+    ZCombatWorld &m_scene;
     std::vector<Node> m_nodes;
     std::vector<int> m_route;
     unsigned m_step = 0;
     int m_planTimer = 0;
     int m_elapsed = 0;
-    CombatId m_target = 0;
+    ZCombatId m_target = 0;
     float m_lastDamage = 0;
     int m_noDamageMs = 0;
     int m_retreatMs = 0;

@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CBrother.h
  * @brief The player template: a script, a model set, and a shadow sprite.
@@ -31,12 +31,12 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "gun_bros_re/gameplay/CGun.h"
-#include "gun_bros_re/gameplay/CombatTypes.h"
+#include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include "engine/graphics/CMoveSetMeshController.h"
 // CGameSpriteGluRef lives here, next to its first user
 // Historical location above; now declared in original gameAssetRef module.
 
-class CBrother : public GameScriptObject {
+class CBrother : public ZGameScriptObject {
 public:
     /** Actor-owned state survives equipment changes, as in original CBrother. */
     struct PowerupState {
@@ -87,7 +87,7 @@ public:
     };
 
     CBrother();
-    void SetVitals(PlayerVitals *vitals) { m_vitals = vitals; }
+    void SetVitals(ZPlayerVitals *vitals) { m_vitals = vitals; }
     void SetPowerupState(PowerupState *powerups);
     void StartShield(const GameObjectRef &effect, int durationMs);
     void StartAutoFire(const GameObjectRef &effect, int durationSeconds);
@@ -113,7 +113,7 @@ public:
     /** CBrother constructor :139098; wall resolution uses a separate half radius. */
     float GetRadius() const { return 22.0f; }
     bool CanShoot() const { return m_spawned && m_variables[0] != 0; }
-    HitResult ReceiveDamage(float damage);
+    ZHitResult ReceiveDamage(float damage);
     /** CBrother::SetForce :137709 starts export 4, including its authored sound. */
     bool BeginKnockback(int durationMs);
     /** Sample the original force envelope before advancing this frame's timers. */
@@ -142,7 +142,7 @@ public:
     void OnGrenadeThrown(unsigned slot);
     unsigned TakeThrownGrenades(unsigned slot);
     bool HasGrenadeRequest(unsigned slot) const { return slot < 2 && (m_grenadePending[slot] || m_grenadeAnimating[slot]); }
-    std::vector<GunCue> TakeCues();
+    std::vector<ZGunCue> TakeCues();
     /** Run player and weapon scripts against decoded, stable mesh banks. */
     void Bind(const CScript &script, const CMoveSetMesh &moves,
         const std::vector<const CMesh *> &bodyMeshes, CGun &gun,
@@ -173,7 +173,7 @@ private:
     bool m_weaponSwapRequested = false;
     int m_knockbackMs = 0;
     int m_knockbackDurationMs = 0;
-    PlayerVitals *m_vitals = nullptr;
+    ZPlayerVitals *m_vitals = nullptr;
     PowerupState *m_powerups = nullptr;
     void PowerupEffect(const GameObjectRef &effect, int slot, bool active);
     GameObjectRef m_grenades[2];
@@ -181,7 +181,7 @@ private:
     unsigned m_grenadesThrown[2]{};
     bool m_grenadePending[2]{};
     bool m_grenadeAnimating[2]{};
-    std::vector<GunCue> m_cues;
+    std::vector<ZGunCue> m_cues;
     void SetShooting(bool shooting);
     bool m_triggerHeld;
     CScriptInterpreter m_interpreter;

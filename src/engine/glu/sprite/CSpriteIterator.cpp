@@ -38,29 +38,29 @@ bool TransformToFlips(std::uint8_t transform, bool &flipHorizontal,
 }
 
 /** Turn a sprite map's blend bits into the mode the batch draws it with. */
-BlendMode BlendFlagsToMode(std::uint8_t blendFlags) {
+ZBlendMode BlendFlagsToMode(std::uint8_t blendFlags) {
     // The opaque variant also modulates colour, which needs a vertex colour
     // this port's shader does not carry. The blend factors are still right.
     if ((blendFlags & kSpriteMapBlendAdditiveOpaque) != 0) {
-        return BlendMode::AdditiveOpaque;
+        return ZBlendMode::AdditiveOpaque;
     }
     if ((blendFlags & kSpriteMapBlendAdditive) != 0) {
-        return BlendMode::Additive;
+        return ZBlendMode::Additive;
     }
-    return BlendMode::Alpha;
+    return ZBlendMode::Alpha;
 }
 
 }  // namespace
 
 CSpriteIterator::CSpriteIterator(const CSpriteGlu &glu,
-                                 const CSpriteGluArchetype &archetype)
+                                 const ZSpriteArchetype &archetype)
     : m_glu(glu),
       m_archetype(archetype),
       m_skippedParts(0),
       m_unsupportedTransforms(0) {}
 
 bool CSpriteIterator::Expand(std::uint8_t animationIndex, std::uint32_t stepIndex,
-                             std::vector<SpriteQuad> &out) {
+                             std::vector<ZSpriteQuad> &out) {
     // An unused slot, which is how a prop says it has no main or foreground
     // sprite. Not an error; most props leave two of the three empty.
     if (animationIndex == kNoSpriteGluIndex) {
@@ -70,7 +70,7 @@ bool CSpriteIterator::Expand(std::uint8_t animationIndex, std::uint32_t stepInde
         return false;
     }
 
-    const SpriteAnimation &animation = m_archetype.GetAnimation(animationIndex);
+    const ZSpriteAnimation &animation = m_archetype.GetAnimation(animationIndex);
     if (stepIndex >= animation.steps.size()) {
         return false;
     }
@@ -83,9 +83,9 @@ bool CSpriteIterator::Expand(std::uint8_t animationIndex, std::uint32_t stepInde
     // Layers count down: SetFrame starts at the last part and NextSprite walks
     // backwards, so the last part is drawn first and everything else lands on
     // top of it.
-    const std::vector<FramePart> &parts = m_archetype.GetFrameParts(frameIndex);
+    const std::vector<ZFramePart> &parts = m_archetype.GetFrameParts(frameIndex);
     for (std::size_t i = parts.size(); i > 0; --i) {
-        const FramePart &part = parts[i - 1];
+        const ZFramePart &part = parts[i - 1];
         ExpandSprite(part.spriteIndex, part.offsetX, part.offsetY, out);
     }
 
@@ -94,30 +94,30 @@ bool CSpriteIterator::Expand(std::uint8_t animationIndex, std::uint32_t stepInde
 
 void CSpriteIterator::ExpandSprite(std::uint16_t spriteIndex, std::int32_t offsetX,
                                    std::int32_t offsetY,
-                                   std::vector<SpriteQuad> &out) {
+                                   std::vector<ZSpriteQuad> &out) {
     if (spriteIndex >= m_archetype.GetSpriteCount()) {
         m_skippedParts++;
         return;
     }
 
     // Sprite parts count down too, for the same reason.
-    const std::vector<SpritePart> &parts = m_archetype.GetSpriteParts(spriteIndex);
+    const std::vector<ZSpritePart> &parts = m_archetype.GetSpriteParts(spriteIndex);
     for (std::size_t i = parts.size(); i > 0; --i) {
-        const SpritePart &part = parts[i - 1];
+        const ZSpritePart &part = parts[i - 1];
 
         std::uint16_t imageIndex = 0;
         if (!m_glu.ResolveImageIndex(part.spriteMapIndex, imageIndex)) {
             // A sprite map past the table is a coloured primitive rather than
             // an image. Only pack7 has one, and nothing draws primitives yet.
             // The original RGB rectangle now has a lazy texture-backed host.
-            const CTexture *primitive = m_glu.GetPrimitiveTexture(part.spriteMapIndex);
+            const ZTexture *primitive = m_glu.GetPrimitiveTexture(part.spriteMapIndex);
             if (primitive != nullptr) {
-                SpriteQuad quad{};
+                ZSpriteQuad quad{};
                 quad.page = primitive;
                 quad.source = {0, 0, static_cast<std::uint16_t>(primitive->GetWidth()), static_cast<std::uint16_t>(primitive->GetHeight())};
                 quad.offsetX = offsetX + part.offsetX;
                 quad.offsetY = offsetY + part.offsetY;
-                quad.blend = BlendMode::Alpha;
+                quad.blend = ZBlendMode::Alpha;
                 out.push_back(quad);
                 continue;
             }
@@ -125,19 +125,19 @@ void CSpriteIterator::ExpandSprite(std::uint16_t spriteIndex, std::int32_t offse
             continue;
         }
 
-        const AtlasRect *rect = m_archetype.FindRect(imageIndex);
+        const ZAtlasRect *rect = m_archetype.FindRect(imageIndex);
         if (rect == nullptr) {
             m_skippedParts++;
             continue;
         }
 
-        const CTexture *page = m_archetype.GetPage(rect->page);
+        const ZTexture *page = m_archetype.GetPage(rect->page);
         if (page == nullptr) {
             m_skippedParts++;
             continue;
         }
 
-        SpriteQuad quad;
+        ZSpriteQuad quad;
         quad.page = page;
         quad.source.x = rect->x;
         quad.source.y = rect->y;

@@ -6,7 +6,7 @@
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/CEnemy.h"
-#include "gun_bros_re/data/PackTables.h"
+#include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -26,7 +26,7 @@ public:
         return count;
     }
 };
-unsigned CheckSpawnBudget(const CLevel::Template &data, CMap &map, PackTables &tables) {
+unsigned CheckSpawnBudget(const CLevel::Template &data, CMap &map, ZPackTables &tables) {
     CLevel level;
     LevelFlowWorld world(level, tables, map);
     level.Bind(data, map, &world, 49);
@@ -66,7 +66,7 @@ int RunLevelFlowCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
         return 1;
     }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("level-flow-check.csv"));
     if (!report) {
@@ -77,10 +77,10 @@ int RunLevelFlowCheck(const std::string &bigDirectory) {
     unsigned levels = 0;
     for (std::uint32_t packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC *pack = toc.GetPack(packIndex);
-        const std::uint32_t count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Level);
+        const std::uint32_t count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::Level);
         for (std::uint32_t index = 0; index < count; ++index) {
             std::vector<std::uint8_t> payload;
-            if (!tables.ReadSectionResource(pack->GetPackHash(), GameSection::Level, index, payload)) {
+            if (!tables.ReadSectionResource(pack->GetPackHash(), ZGameSection::Level, index, payload)) {
                 return 1;
             }
             CArrayInputStream stream(payload);
@@ -91,7 +91,7 @@ int RunLevelFlowCheck(const std::string &bigDirectory) {
             if (!data.script.IsPresent()) {
                 continue;
             }
-            if (!tables.ReadSectionResource(data.mapRef.packHash, GameSection::TileLayer, data.mapRef.localIndex, payload)) {
+            if (!tables.ReadSectionResource(data.mapRef.packHash, ZGameSection::TileLayer, data.mapRef.localIndex, payload)) {
                 return 1;
             }
             CArrayInputStream mapStream(payload);
@@ -128,7 +128,7 @@ int RunLevelFlowCheck(const std::string &bigDirectory) {
                 }
                 for (std::size_t stateIndex = 0; stateIndex < data.script.GetStates().size(); ++stateIndex) {
                     const CScriptState &state = data.script.GetStates()[stateIndex];
-                    for (const ScriptStateExport &handler : state.GetExports()) {
+                    for (const ZScriptStateExport &handler : state.GetExports()) {
                         bytecode << "state " << stateIndex << " export " << unsigned(handler.id) << " ";
                         const CScriptCode &handlerCode = handler.code;
                         for (unsigned byte = 0; byte <= handlerCode.GetByteLength(); ++byte) {

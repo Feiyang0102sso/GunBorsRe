@@ -1,10 +1,10 @@
 /** Host cheat actions shared by the menu and survival entry points. */
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
-#include "gun_bros_re/ui/MenuInternal.h"
-#include "gun_bros_re/gameplay/SurvivalSession.h"
-#include "gun_bros_re/gameplay/PowerupScene.h"
-#include "gun_bros_re/data/NativeProfile.h"
+#include "gun_bros_re/ui/ZMenuInternal.h"
+#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/data/ZProfileStorage.h"
 #include <ctime>
 
 namespace GameCheats {
@@ -84,7 +84,7 @@ bool UnlockAllWaves(CProfileManager &profile) {
     for (unsigned slot = 0; slot < cleared.size(); ++slot) {
         const GameObjectRef &ref = profile.nativeArchive->survivalLevels[slot];
         std::vector<std::uint8_t> bytes;
-        if (!profile.nativeArchive->tables->ReadSectionResource(ref.packHash, GameSection::Level, ref.localIndex, bytes)) { return false; }
+        if (!profile.nativeArchive->tables->ReadSectionResource(ref.packHash, ZGameSection::Level, ref.localIndex, bytes)) { return false; }
         CArrayInputStream input(bytes);
         CLevel::Template level;
         // level_template.bt; CLevel::Bind :121717. CMissionWaveStatus::AddWaves
@@ -111,10 +111,9 @@ void AdvanceDailyDebugDay(CProfileManager &profile, const CDailyBonusTracking &d
 }
 }
 
-bool ProcessMenuCheats(CWindow &window, CProfileManager &profile, MenuDetail::MenuState &state,
+bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZMenuState &state,
     const CDailyBonusTracking &daily, const std::filesystem::path &savePath,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
-#if GB_ENABLE_CHEATS
     for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
         if (!GameCheats::ApplyRefineryCheat(cheat, profile, MenuDetail::CurrentSeconds())) { return false; }
         if (cheat == GameCheats::ToggleRefineryLocks && state.refinery.refineryTransfer >= 0 &&
@@ -153,17 +152,15 @@ bool ProcessMenuCheats(CWindow &window, CProfileManager &profile, MenuDetail::Me
         if (!profile.SaveToDisk(savePath)) { return false; }
         std::printf("[cheat] %s\n", cheat.c_str());
     }
-#endif
     return true;
 }
 
-bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals &vitals,
-    PowerupScene &powerups, SurvivalSession &session, SurvivalGameContext *context, CombatCheatResult &result,
+bool ApplyCombatCheat(const std::string &cheat, ZCombatWorld &scene, ZPlayerVitals &vitals,
+    ZPowerupScene &powerups, ZLevelHost &session, ZSurvivalGameContext *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
-#if GB_ENABLE_CHEATS
     if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
     if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
-    if (scene.HasTestBot()) {
+    if (scene.HasLocalBot()) {
         if (cheat == GameCheats::BrotherWeapon) { scene.RequestBrotherWeaponSwap(); }
         if (cheat == GameCheats::BrotherKill) { scene.KillTestBot(); }
         if (cheat == GameCheats::BrotherRevive) { scene.ReviveTestBot(); }
@@ -212,6 +209,5 @@ bool ApplyCombatCheat(const std::string &cheat, CombatScene &scene, PlayerVitals
         if (profileChanged && !context->SaveProfile()) { return false; }
     }
     std::printf("[cheat] %s invincible=%d\n", cheat.c_str(), vitals.invincible);
-#endif
     return true;
 }

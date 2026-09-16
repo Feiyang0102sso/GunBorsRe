@@ -1,6 +1,6 @@
-#include "gun_bros_re/data/OriginalProfileInternal.h"
+#include "gun_bros_re/data/ZProfileImportInternal.h"
 
-namespace OriginalProfileDetail {
+namespace ProfileImportDetail {
 unsigned CheckStorageBoundaries(const std::filesystem::path &source, const std::filesystem::path &output) {
     std::ifstream input(source, std::ios::binary);
     if (!input) {
@@ -24,9 +24,9 @@ unsigned CheckStorageBoundaries(const std::filesystem::path &source, const std::
         fixture.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
         fixture.close();
         if (!fixture) { ++failures; continue; }
-        OriginalDataStore record;
+        ZImportedDataStore record;
         record.version = 123;
-        const bool loaded = ReadOriginalDataStore(path, record);
+        const bool loaded = ReadDataStore(path, record);
         if (test < 4 && (loaded || record.version != 123)) { ++failures; }
         if (test == 4 && (!loaded || record.crcMatches)) { ++failures; }
     }

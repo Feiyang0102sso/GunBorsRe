@@ -4,23 +4,23 @@
 #define NOMINMAX
 #endif
 #include "gun_bros_viewer/ViewerBindings.h"
-#include "engine/graphics/CQuadBatch.h"
+#include "engine/graphics/ZQuadBatch.h"
 #include <memory>
 
 class ViewerControls {
 public:
-    ViewerControls(CWindow &window, ViewerBindingSet bindings, bool enabled = true);
+    ViewerControls(ZWindow &window, ViewerBindingSet bindings, bool enabled = true);
     ~ViewerControls();
     bool Init();
     bool PumpEvents();
-    KeyCode TakeKeyPress();
-    bool IsPressed(KeyCode key, ViewerAction action) const;
+    ZKeyCode TakeKeyPress();
+    bool IsPressed(ZKeyCode key, ViewerAction action) const;
     bool IsDown(ViewerAction action) const;
     void TakeDragDelta(int &x, int &y);
     float TakeWheelDelta();
     bool GetMousePosition(float &x, float &y) const;
     /** The game catalogue still accepts its original canonical selection keys. */
-    KeyCode WeaponSelectionKey(KeyCode key) const;
+    ZKeyCode WeaponSelectionKey(ZKeyCode key) const;
     void GetDrawableSize(int &width, int &height) const;
     bool Draw();
     /** Screen-space system-font labels, cached by call order between frames. */
@@ -34,7 +34,7 @@ private:
     void Layout();
     bool RebuildPanel();
     bool InsideScene() const;
-    CWindow &m_window;
+    ZWindow &m_window;
     ViewerBindingSet m_bindings;
     bool m_enabled;
     bool m_expanded = true;
@@ -46,15 +46,15 @@ private:
     bool m_leftInScene = false, m_rightInScene = false;
     int m_dragX = 0, m_dragY = 0;
     float m_wheel = 0;
-    std::vector<KeyCode> m_keys;
-    CShaderProgram m_program;
-    CQuadBatch m_batch;
-    CTexture m_texture;
+    std::vector<ZKeyCode> m_keys;
+    ZShaderProgram m_program;
+    ZQuadBatch m_batch;
+    ZTexture m_texture;
     struct Label {
         std::string text;
         int width = 0;
         int fontHeight = 0;
-        CTexture texture;
+        ZTexture texture;
     };
     std::vector<std::unique_ptr<Label>> m_labels;
     std::size_t m_nextLabel = 0;

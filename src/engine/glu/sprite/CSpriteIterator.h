@@ -25,24 +25,24 @@
 #ifndef GUN_BROS_RE_SPRITE_GLU_CSPRITEITERATOR_H
 #define GUN_BROS_RE_SPRITE_GLU_CSPRITEITERATOR_H
 
-#include "engine/graphics/CQuadBatch.h"
-#include "engine/graphics/CTexture.h"
+#include "engine/graphics/ZQuadBatch.h"
+#include "engine/graphics/ZTexture.h"
 #include "engine/glu/sprite/CSpriteGlu.h"
-#include "engine/glu/sprite/CSpriteGluArchetype.h"
+#include "engine/glu/sprite/ZSpriteArchetype.h"
 
 #include <cstdint>
 #include <vector>
 
 /** One rectangle to draw, positioned relative to the object's own origin. */
-struct SpriteQuad {
-    const CTexture *page;
-    SourceRect source;
+struct ZSpriteQuad {
+    const ZTexture *page;
+    ZSourceRect source;
     std::int32_t offsetX;
     std::int32_t offsetY;
     bool flipHorizontal;
     bool flipVertical;
     bool rotateTexture = false;
-    BlendMode blend;
+    ZBlendMode blend;
     int Width() const { if (rotateTexture) { return source.height; } return source.width; }
     int Height() const { if (rotateTexture) { return source.width; } return source.height; }
 };
@@ -56,7 +56,7 @@ struct SpriteQuad {
  */
 class CSpriteIterator {
 public:
-    CSpriteIterator(const CSpriteGlu &glu, const CSpriteGluArchetype &archetype);
+    CSpriteIterator(const CSpriteGlu &glu, const ZSpriteArchetype &archetype);
 
     /**
      * Append every quad of one animation step to `out`.
@@ -67,7 +67,7 @@ public:
      * @return false when the animation or its frame is out of range.
      */
     bool Expand(std::uint8_t animationIndex, std::uint32_t stepIndex,
-                std::vector<SpriteQuad> &out);
+                std::vector<ZSpriteQuad> &out);
 
     /** Parts dropped because their sprite map resolved to nothing drawable. */
     std::uint32_t GetSkippedPartCount() const { return m_skippedParts; }
@@ -80,10 +80,10 @@ public:
 private:
     /** Append the quads of one sprite, offset by its frame part. */
     void ExpandSprite(std::uint16_t spriteIndex, std::int32_t offsetX,
-                      std::int32_t offsetY, std::vector<SpriteQuad> &out);
+                      std::int32_t offsetY, std::vector<ZSpriteQuad> &out);
 
     const CSpriteGlu &m_glu;
-    const CSpriteGluArchetype &m_archetype;
+    const ZSpriteArchetype &m_archetype;
 
     std::uint32_t m_skippedParts;
     std::uint32_t m_unsupportedTransforms;

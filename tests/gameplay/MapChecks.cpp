@@ -1,5 +1,6 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "TestOutput.h"
 using namespace MapDetail;
   // namespace
@@ -22,21 +23,21 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
     // Fixed research scene; scenery, collision and models still come from BIG.
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Map occlusion check", 768, 768)) { return 1; }
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    CQuadBatch batch;
-    CQuadBatch cover;
+    ZQuadBatch batch;
+    ZQuadBatch cover;
     if (!batch.Create(program) || !cover.Create(program)) { return 1; }
     unsigned failures = 0;
     unsigned occludedPixels = 0;
     const char *packs[] = {"pack2", "pack7", "pack9", "pack12"};
     const unsigned maps[] = {7, 6, 0, 0};
     for (unsigned map = 0; map < 4; ++map) {
-        LoadedMap loaded;
+        ZLoadedMap loaded;
         if (!LoadMap(toc, toc.GetPackIndexFromName(packs[map]), maps[map], loaded)) { return 1; }
         LoadProps(toc, loaded);
         LoadPlacedPlayers(toc, program, loaded);
@@ -44,19 +45,19 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
         // Find a real obstacle whose art extends above its collision footprint.
         std::size_t selected = loaded.props.size();
         float largestOverhangArea = 0;
-        const MapRectangle bounds = loaded.map.GetVisibleBounds();
+        const ZMapRectangle bounds = loaded.map.GetVisibleBounds();
         for (std::size_t i = 0; i < loaded.props.size(); ++i) {
-            const PlacedProp &prop = loaded.props[i];
+            const ZPlacedProp &prop = loaded.props[i];
             if (prop.sprite->data.GetCollision().GetVertices().empty()) { continue; }
             float collisionTop = 0;
-            for (const CollisionPoint &point : prop.sprite->data.GetCollision().GetVertices()) {
+            for (const ZCollisionPoint &point : prop.sprite->data.GetCollision().GetVertices()) {
                 collisionTop = std::min(collisionTop, point.y);
             }
             // Use walkable interior fixtures, not pieces of the outer map wall.
             if (prop.y + collisionTop - kPlayerCollisionRadius <= bounds.y ||
                 prop.x <= bounds.x || prop.x >= bounds.x + bounds.width) { continue; }
             float top = 0, left = 0, right = 0;
-            for (const SpriteQuad &quad : CurrentQuads(*MainSlotFor(prop), prop.main)) {
+            for (const ZSpriteQuad &quad : CurrentQuads(*MainSlotFor(prop), prop.main)) {
                 top = std::min(top, static_cast<float>(quad.offsetY));
                 left = std::min(left, static_cast<float>(quad.offsetX));
                 right = std::max(right, static_cast<float>(quad.offsetX + quad.source.width));
@@ -65,13 +66,13 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
             if (overhangArea > largestOverhangArea) { largestOverhangArea = overhangArea; selected = i; }
         }
         if (selected == loaded.props.size()) { return 1; }
-        PlacedProp prop = loaded.props[selected];
+        ZPlacedProp prop = loaded.props[selected];
         loaded.props.clear();
         loaded.props.push_back(prop);
         loaded.players.resize(1);
         float collisionTop = 0;
         float collisionBottom = 0;
-        for (const CollisionPoint &point : prop.sprite->data.GetCollision().GetVertices()) {
+        for (const ZCollisionPoint &point : prop.sprite->data.GetCollision().GetVertices()) {
             collisionTop = std::min(collisionTop, point.y);
             collisionBottom = std::max(collisionBottom, point.y);
         }
@@ -85,7 +86,7 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
         Matrix4dOrthoTopLeft(static_cast<float>(width), static_cast<float>(height), kMapDepthRange, mvp);
         Matrix4dTranslate(mvp, -prop.x + width * 0.5f, -prop.y + height * 0.5f);
         for (unsigned side = 0; side < 2; ++side) {
-            PlacedPlayer &player = loaded.players[0];
+            ZPlacedPlayer &player = loaded.players[0];
             player.x = prop.x;
             player.y = prop.y + collisionTop - kPlayerCollisionRadius;
             if (side == 1) { player.y = prop.y + collisionBottom + kPlayerCollisionRadius; }
@@ -96,7 +97,7 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
             std::vector<unsigned char> actual(width * height * 4);
             glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, actual.data());
             const std::string path = TestOutput::Path("map-occlusion-") + std::string(packs[map]) + "-" + std::to_string(side) + ".png";
-            if (!GB_SAVE_FRAME(window, path)) { ++failures; }
+            if (!Capture::SaveFrame(window, path)) { ++failures; }
             // Independent two-object reference: background, ordered bodies, foreground.
             // This also verifies alpha holes; no rectangular occlusion mask is used.
             BuildGeometry(loaded, batch, true, true, false);

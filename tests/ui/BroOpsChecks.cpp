@@ -1,15 +1,16 @@
+#include "gun_bros_re/debug/Capture.h"
 /** BRO-OPS regression with real templates, Movies and a disposable native save. */
 #include "ui/MenuChecks.h"
-#include "gun_bros_re/ui/SurvivalHud.h"
+#include "gun_bros_re/ui/CInputPad.h"
 #include "TestOutput.h"
 
-int CheckBroOps(GameMenu &view, CResTOCManager &toc, PackTables &tables, const CProfileManager &source) {
+int CheckBroOps(ZGameMenu &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &source) {
     CProfileManager profile = source;
     // Leave room for the actual consumable reward in this disposable profile.
     profile.powerups.clear();
     CChallengeManager manager;
-    std::vector<WeaponEntry> weapons;
-    std::vector<StoreEntry> store;
+    std::vector<ZWeaponEntry> weapons;
+    std::vector<ZStoreEntry> store;
     if (!manager.Load(toc, tables) || !LoadWeaponCatalog(toc, tables, weapons) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
     unsigned day = 25000;
     unsigned selected = 0;
@@ -141,47 +142,46 @@ int CheckBroOps(GameMenu &view, CResTOCManager &toc, PackTables &tables, const C
     const auto directory = std::filesystem::path(TestOutput::Path("bro-ops"));
     if (!profile.SaveToDisk(directory)) { return 1; }
     CProfileManager reloaded;
-    if (!LoadNativeProfile(toc, tables, reloaded, directory) || !manager.Bind(toc, tables, reloaded, seconds)) { return 1; }
+    if (!LoadProfile(toc, tables, reloaded, directory) || !manager.Bind(toc, tables, reloaded, seconds)) { return 1; }
     unsigned duplicate = 0;
     if (!manager.AwardAvailableRewards(reloaded, store, duplicate) || duplicate || reloaded.coins != profile.coins || reloaded.warbucks != profile.warbucks) { return 1; }
     // The same real content is drawn in the held and automatic overlays.
-    SurvivalHud hud;
+    CInputPad hud;
     if (!hud.Init(toc, tables)) { return 1; }
     hud.SetChallenges(&manager);
-    SurvivalHudState state;
-    state.originalUi = true;
+    ZInputPadState state;
     state.health = state.maximumHealth = 1;
-    MovieRegion button;
-    if (!hud.FindActionRegion(state, SurvivalHudAction::BroOps, button)) { return 1; }
-    MovieRegion flag;
+    ZMovieRegion button;
+    if (!hud.FindActionRegion(state, ZInputPadAction::BroOps, button)) { return 1; }
+    ZMovieRegion flag;
     view.movies.SpriteBounds(0, 170, flag);
     std::printf("[bro-ops-geometry] button=%.0f,%.0f %.0fx%.0f flag=%.0f,%.0f %.0fx%.0f\n", button.x, button.y, button.width, button.height, flag.x, flag.y, flag.width, flag.height);
     if (button.x < 0 || button.x >= 1024 || button.y < 0 || button.y >= 768) { return 1; }
     const float x = button.x + button.width / 2, y = button.y + button.height / 2;
     hud.Pointer(state, x, y, false);
-    if (hud.Pointer(state, x, y, true) != SurvivalHudAction::BroOps || !hud.IsChallengeHeld()) { return 1; }
+    if (hud.Pointer(state, x, y, true) != ZInputPadAction::BroOps || !hud.IsChallengeHeld()) { return 1; }
     hud.Advance(250);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (!hud.Draw(state) || hud.ChallengeRowsDrawn() != manager.current.size() ||
-        !GB_SAVE_FRAME(view.window, (directory / "held.png").string())) { return 1; }
+        !Capture::SaveFrame(view.window, (directory / "held.png").string())) { return 1; }
     hud.Pointer(state, x, y, false);
     if (hud.IsChallengeHeld()) { return 1; }
-    hud.OnOriginalWaveClear(1, false, 0, false);
+    hud.OnWaveClear(1, false, 0, false);
     hud.Advance(10000); // Finish only the first authored notice.
     if (hud.TakeInterstitialCompletion()) { return 1; }
     hud.Advance(250);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (!hud.Draw(state) || hud.ChallengeRowsDrawn() != manager.current.size() ||
-        !GB_SAVE_FRAME(view.window, (directory / "wave-update.png").string())) { return 1; }
+        !Capture::SaveFrame(view.window, (directory / "wave-update.png").string())) { return 1; }
     hud.Advance(10000);
     if (!hud.TakeInterstitialCompletion() || hud.HasInterstitial()) { return 1; }
     CProfileManager menuProfile = completedProfile;
     CRefinementManager::Template refinement;
-    std::vector<ArmorEntry> armor;
+    std::vector<ZArmorEntry> armor;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
-    MenuState menu;
+    ZMenuState menu;
     menu.page = 5;
-    std::vector<MenuTestClick> frames(4);
+    std::vector<ZMenuTestClick> frames(4);
     for (auto &frame : frames) { frame.advanceMs = 500; }
     if (ShowGameMenu(toc, tables, menuProfile, menuProfile.nativeArchive->progression, refinement, store, weapons, armor,
         menu, directory / "menu-profile", (directory / "reward-prompt.png").string(), &frames, true, &view.window) != -2 ||
@@ -189,7 +189,7 @@ int CheckBroOps(GameMenu &view, CResTOCManager &toc, PackTables &tables, const C
         menu.social.challenges.current[selected].rewardStatus == 0) { return 1; }
     if (!rewardedPowerup.IsNull() && menuProfile.GetPowerupCount(rewardedPowerup) == 0) { return 1; }
     GameHostSettings().isConnected = false;
-    if (hud.FindActionRegion(state, SurvivalHudAction::BroOps, button)) { return 1; }
+    if (hud.FindActionRegion(state, ZInputPadAction::BroOps, button)) { return 1; }
     GameHostSettings().isConnected = true;
     if (!manager.InitProgressData(toc, tables, profile, seconds + 86400) || manager.cycleDay != day + 1) { return 1; }
     for (const auto &value : manager.current) { if (value.progress || value.rewardStatus || value.counters.kills) { return 1; } }

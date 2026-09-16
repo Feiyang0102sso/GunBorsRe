@@ -70,7 +70,7 @@ CResTOCManager::~CResTOCManager() = default;
 
 bool CResTOCManager::ReadPackTOCFile(const std::string &path,
                                      const std::string &artSet,
-                                     std::vector<PackTOCRecord> &records) const {
+                                     std::vector<ZPackTOCRecord> &records) const {
     std::vector<std::uint8_t> data;
     if (!ReadWholeFile(path, data)) {
         std::printf("[toc] cannot open %s\n", path.c_str());
@@ -109,7 +109,7 @@ bool CResTOCManager::ReadPackTOCFile(const std::string &path,
             continue;
         }
 
-        PackTOCRecord record;
+        ZPackTOCRecord record;
         record.fullName = text.substr(0, colon);
         record.shortName = StripArtSetSuffix(record.fullName, artSet);
         record.tocResourceId = value;
@@ -142,13 +142,13 @@ bool CResTOCManager::Init(const std::string &bigDirectory, const std::string &ar
     if (!artSet.empty()) { tocPath += "_" + artSet; }
     tocPath += ".dat";
 
-    std::vector<PackTOCRecord> records;
+    std::vector<ZPackTOCRecord> records;
     if (!ReadPackTOCFile(tocPath, artSet, records)) {
         return false;
     }
 
     for (std::size_t i = 0; i < records.size(); ++i) {
-        const PackTOCRecord &record = records[i];
+        const ZPackTOCRecord &record = records[i];
 
         m_packs.push_back(std::unique_ptr<CResPackTOC>(
             new CResPackTOC(record.fullName, record.shortName)));

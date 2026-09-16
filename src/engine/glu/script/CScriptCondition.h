@@ -49,9 +49,9 @@ struct CScriptCondition {
      * Take the first arm whose comparison holds.
      * @return true when the arm's block ended the enclosing block.
      */
-    static bool Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor);
+    static bool Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor);
 
-    static void Skip(ScriptCursor &cursor);
+    static void Skip(ZScriptCursor &cursor);
 };
 
 #endif  // GUN_BROS_RE_GLU_SCRIPT_CSCRIPTCONDITION_H

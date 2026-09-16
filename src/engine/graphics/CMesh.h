@@ -60,15 +60,15 @@ constexpr std::uint32_t kFloatsPerBone = 7;
 constexpr std::uint32_t kFloatsPerVertex = 3;
 
 /** Where one bone sits on one frame. An attachment point, not a joint. */
-struct MeshBoneTransform {
+struct ZMeshBoneTransform {
     float posX, posY, posZ;
     float rotX, rotY, rotZ, rotW;
 };
 
 /** One key frame: when it happens, where the bones are, where every vertex is. */
-struct MeshFrame {
+struct ZMeshFrame {
     std::int32_t timeMs;
-    std::vector<MeshBoneTransform> bones;
+    std::vector<ZMeshBoneTransform> bones;
     std::vector<float> vertices;  // kFloatsPerVertex per vertex
 };
 
@@ -79,7 +79,7 @@ struct MeshFrame {
  * first vertex, so the box always contains the origin. Copied as-is: it is
  * what the draw scale is built on.
  */
-struct MeshBounds {
+struct ZMeshBounds {
     float minX, minY, minZ;
     float maxX, maxY, maxZ;
     float centerX, centerY, centerZ;
@@ -105,10 +105,10 @@ public:
     /** Two floats per vertex, static across every frame. */
     const std::vector<float> &GetTexCoords() const { return m_texCoords; }
 
-    const std::vector<MeshFrame> &GetFrames() const { return m_frames; }
+    const std::vector<ZMeshFrame> &GetFrames() const { return m_frames; }
 
     std::uint32_t GetVertexCount() const { return m_vertexCount; }
-    const MeshBounds &GetBounds() const { return m_bounds; }
+    const ZMeshBounds &GetBounds() const { return m_bounds; }
 
     /** Timestamp of the last frame, which is how long the animation runs. */
     std::int32_t GetDurationMs() const;
@@ -141,7 +141,7 @@ public:
      * does not have.
      */
     bool GetNodeAt(std::int32_t timeMs, std::size_t boneIndex,
-                   MeshBoneTransform &out) const;
+                   ZMeshBoneTransform &out) const;
 
     /**
      * Blend two frames' vertices into `out`, at `t` from the first to the
@@ -170,9 +170,9 @@ private:
     std::vector<std::string> m_boneNames;
     std::vector<std::uint16_t> m_indices;
     std::vector<float> m_texCoords;
-    std::vector<MeshFrame> m_frames;
+    std::vector<ZMeshFrame> m_frames;
     std::uint32_t m_vertexCount;
-    MeshBounds m_bounds;
+    ZMeshBounds m_bounds;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMESH_H

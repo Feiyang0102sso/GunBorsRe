@@ -1,19 +1,20 @@
+#include "gun_bros_re/debug/Capture.h"
 /** Real BIG regression for the local cooperative peer and original revive Flow. */
 #include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/SurvivalRuntime.h"
-#include "gun_bros_re/gameplay/BroAIDeathmatch.h"
-#include "gun_bros_re/data/MissionCatalog.h"
+#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/ZLocalCoopBot.h"
+#include "gun_bros_re/data/ZMissionCatalog.h"
 #include "TestOutput.h"
 using namespace MapDetail;
-int CheckLiveMode(CResTOCManager &toc, PackTables &tables, CProfileManager &profile);
+int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile);
 
 // A stationary enemy in open space must not make the peer zigzag every frame.
-class SteadyPeerWorld : public IBrotherAIWorld {
+class SteadyPeerWorld : public ZBrotherAIWorld {
 public:
-    CombatId FindBrotherTarget(float, float, float) override { return 1; }
-    bool GetBrotherTarget(CombatId, float &x, float &y) override { x = 350; y = 0; return true; }
+    ZCombatId FindBrotherTarget(float, float, float) override { return 1; }
+    bool GetBrotherTarget(ZCombatId, float &x, float &y) override { x = 350; y = 0; return true; }
     bool GetBrotherWaypoint(float, float, float x, float y, float &outX, float &outY) override { outX = x; outY = y; return true; }
     void ResolveBrotherForce(float, float, float &, float &) override {}
     std::vector<Threat> GetBrotherThreats() const override { return {{350, 0, 22}}; }
@@ -21,7 +22,7 @@ public:
 
 bool CheckSteadyPeer(CBrother &actor) {
     SteadyPeerWorld world;
-    BroAIDeathmatch policy;
+    ZLocalCoopBot policy;
     policy.Reset(0, 0, 0);
     float oldDX = 0, oldDY = 0;
     unsigned abruptTurns = 0;
@@ -41,44 +42,44 @@ bool CaptureRescueEffect(SurvivalDeathFixture &fixture, const char *name) {
     int width = 0, height = 0;
     fixture.window.GetDrawableSize(width, height);
     auto &scene = fixture.scene;
-    fixture.loaded.players[0].x = scene.playerX;
-    fixture.loaded.players[0].y = scene.playerY;
-    fixture.loaded.players[0].facingDegrees = scene.facing;
+    fixture.loaded.players[0].x = scene.GetPlayer().x;
+    fixture.loaded.players[0].y = scene.GetPlayer().y;
+    fixture.loaded.players[0].facingDegrees = scene.GetPlayer().facing;
     const float zoom = GameViewCameraZoom(width, height);
     float mvp[kMatrix4dElements];
     Matrix4dOrthoTopLeft(width / zoom, height / zoom, kMapDepthRange, mvp);
-    Matrix4dTranslate(mvp, -scene.playerX + width / zoom / 2, -scene.playerY + height / zoom / 2);
+    Matrix4dTranslate(mvp, -scene.GetPlayer().x + width / zoom / 2, -scene.GetPlayer().y + height / zoom / 2);
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     BuildGeometry(fixture.loaded, fixture.batch, true, true, false);
     fixture.batch.Draw(fixture.program, mvp);
-    fixture.effects.Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::BehindPlayer);
+    fixture.effects.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
     DrawMapObjects(fixture.loaded, fixture.batch, fixture.program, mvp, true, &scene,
         &fixture.brotherModel, fixture.brother.y, width);
-    fixture.effects.Draw(mvp, nullptr, kLevelCameraScale, WeaponDrawPass::InFrontOfPlayer);
-    return GB_SAVE_FRAME(fixture.window, TestOutput::Path(name));
+    fixture.effects.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer);
+    return Capture::SaveFrame(fixture.window, TestOutput::Path(name));
 }
 
 int RunLocalLiveCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CProfileManager source;
-    if (!LoadNativeProfile(toc, tables, source, TestOutput::Path("local-live-profile"), TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, source, TestOutput::Path("local-live-profile"), TestOutput::Fixtures())) { return 1; }
     if (CheckLiveMode(toc, tables, source) != 0) { return 1; }
     const auto sourceExperience = source.experience;
     const auto sourceCoins = source.coins;
     const auto sourceRecords = source.nativeArchive->records;
     CProfileManager practice = source;
-    SurvivalGameContext context{practice, {}};
+    ZSurvivalGameContext context{practice, {}};
     context.persistProgress = false;
     const auto &level = practice.nativeArchive->survivalLevels[0];
     std::vector<std::uint8_t> bytes;
-    if (!tables.ReadSectionResource(level.packHash, GameSection::Level, level.localIndex, bytes)) { return 1; }
+    if (!tables.ReadSectionResource(level.packHash, ZGameSection::Level, level.localIndex, bytes)) { return 1; }
     CArrayInputStream input(bytes);
     CLevel::Template data;
     if (!data.Init(input) || input.Available() != 0) { return 1; }
-    SurvivalLaunch launch;
+    ZSurvivalLaunch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = tables.GetPackName(data.mapRef.packHash);
     launch.mapIndex = data.mapRef.localIndex;
@@ -104,11 +105,11 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     development.localLiveCheck = true;
     if (RunSurvivalSession(launch) != 0) { return 1; }
     std::printf("[local-live-check] profile-copy=1 no-save=1\n");
-    std::vector<MissionEntry> missions;
+    std::vector<ZMissionEntry> missions;
     if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
-    const MissionEntry *horde = nullptr;
+    const ZMissionEntry *horde = nullptr;
     for (const auto &mission : missions) { if (mission.data.type == 2) { horde = &mission; break; } }
-    if (horde == nullptr || !tables.ReadSectionResource(horde->data.level.packHash, GameSection::Level, horde->data.level.localIndex, bytes)) { return 1; }
+    if (horde == nullptr || !tables.ReadSectionResource(horde->data.level.packHash, ZGameSection::Level, horde->data.level.localIndex, bytes)) { return 1; }
     CArrayInputStream hordeInput(bytes);
     CLevel::Template hordeLevel;
     if (!hordeLevel.Init(hordeInput) || hordeInput.Available() != 0) { return 1; }
@@ -126,14 +127,14 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     return 0;
 }
 
-int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
+int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     auto &scene = fixture.scene;
     auto &session = fixture.session;
     auto &bot = fixture.brother;
     auto &player = fixture.player;
     auto &vitals = fixture.vitals;
     if (!scene.IsLocalLive()) {
-        const bool originalPolicy = dynamic_cast<BroAIDeathmatch *>(&bot) == nullptr;
+        const bool originalPolicy = dynamic_cast<ZLocalCoopBot *>(&bot) == nullptr;
         std::printf("[live-regression] solo-original-policy=%d\n", originalPolicy);
         if (!originalPolicy) { return 1; }
         if (player.weapon->brother.IsCooperative() || session.GetLevel().IsCooperative() || !scene.Suicide()) { return 1; }
@@ -142,14 +143,14 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
         std::printf("[local-live-check] selected-bot-solo=1 single-player-death=1\n");
         return 0;
     }
-    if (dynamic_cast<BroAIDeathmatch *>(&bot) == nullptr) { return 1; }
+    if (dynamic_cast<ZLocalCoopBot *>(&bot) == nullptr) { return 1; }
     if (!CheckSteadyPeer(fixture.brotherModel.weapon->brother)) { return 1; }
     if (
         !player.weapon->brother.IsCooperative() || !session.GetLevel().IsCooperative()) { return 1; }
     vitals.invincible = true;
     bot.vitals.invincible = true;
     // Actual wave Flow must spawn enemies, acquire targets and emit gun shots.
-    session.SetOriginalHud(nullptr);
+    session.SetHud(nullptr);
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     for (unsigned elapsed = 0; elapsed < 45000 && fixture.effects.GetShotCount() == 0; elapsed += 16) {
         session.Update(16, 0, 0, false);
@@ -159,7 +160,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
         return 1;
     }
     const float botBefore = bot.x;
-    scene.playerX += 350;
+    scene.GetPlayer().x += 350;
     for (unsigned elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
     if (bot.x == botBefore) { return 1; }
     std::printf("[local-live-check] spawned=%u targets=%u shots=%zu movement=1\n", scene.spawned, bot.GetTargetCount(), fixture.effects.GetShotCount());
@@ -174,7 +175,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
         fixture.effects.Clear();
         bot.vitals.stunMs = 100;
         const auto id = target.combat.id;
-        CombatHit assist;
+        ZCombatHit assist;
         assist.owner = kBrotherCombatId;
         assist.weapon = fixture.brotherModel.gunResource;
         assist.damage = target.combat.health * 0.1f;
@@ -189,7 +190,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
         const auto peerXpBefore = scene.GetPeerExperience();
         const auto peerOreBefore = scene.GetMultiplayerStatistics(1).total.xplodium;
         const auto killsBefore = scene.GetMultiplayerStatistics(0).total.kills;
-        CombatHit fatal = assist;
+        ZCombatHit fatal = assist;
         fatal.owner = kPlayerCombatId;
         fatal.weapon = player.gunResource;
         fatal.damage = 100000;
@@ -206,10 +207,10 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     std::printf("[local-live-check] two-slot-assist=1 killer-reward-isolation=1\n");
 
     // Exercise the real shared session gate, including a pending wave overlay.
-    session.SetOriginalHud(hud);
+    session.SetHud(hud);
     hud->BeginLiveWave(scene.GetMultiplayerStatistics(0), scene.GetMultiplayerStatistics(1));
     const auto waitBefore = hud->LiveWaveRemaining();
-    const float pausedPlayerX = scene.playerX, pausedPlayerY = scene.playerY;
+    const float pausedPlayerX = scene.GetPlayer().x, pausedPlayerY = scene.GetPlayer().y;
     const float pausedBotX = bot.x, pausedBotY = bot.y;
     // Corpses may already have been removed; never assume a live front().
     std::vector<std::pair<float, float>> pausedEnemies;
@@ -218,7 +219,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     session.SetSuspended(true);
     for (unsigned tick = 0; tick < 100; ++tick) { session.Update(16, 1, 1, true); }
     if (scene.enemies.size() != pausedEnemies.size()) { return 1; }
-    if (scene.playerX != pausedPlayerX || scene.playerY != pausedPlayerY || bot.x != pausedBotX || bot.y != pausedBotY ||
+    if (scene.GetPlayer().x != pausedPlayerX || scene.GetPlayer().y != pausedPlayerY || bot.x != pausedBotX || bot.y != pausedBotY ||
         fixture.effects.GetShotCount() != shotsBeforePause ||
         hud->LiveWaveRemaining() != waitBefore) { return 1; }
     for (unsigned index = 0; index < pausedEnemies.size(); ++index) {
@@ -227,9 +228,9 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     }
     session.SetSuspended(false);
     for (unsigned tick = 0; tick < 60; ++tick) { session.Update(16, -1, 0, false); }
-    if (scene.playerX == pausedPlayerX && scene.playerY == pausedPlayerY) { std::printf("[live-wait-check] player blocked\n"); return 1; }
+    if (scene.GetPlayer().x == pausedPlayerX && scene.GetPlayer().y == pausedPlayerY) { std::printf("[live-wait-check] player blocked\n"); return 1; }
     if (bot.x == pausedBotX && bot.y == pausedBotY) { std::printf("[live-wait-check] peer blocked\n"); return 1; }
-    session.SetOriginalHud(nullptr);
+    session.SetHud(nullptr);
     hud->ResetNotices();
     std::printf("[live-wait-check] both-move=1 shop-freezes-actors-projectiles-timer=1\n");
     std::fflush(stdout);
@@ -244,7 +245,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     // kills during that synthetic wait have no corresponding wave transition.
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
 
-    CombatHit clearWave;
+    ZCombatHit clearWave;
     clearWave.owner = kPlayerCombatId;
     clearWave.damage = 100000;
     for (unsigned elapsed = 0; elapsed < 120000 && scene.GetClearedWaves() < 2; elapsed += 16) {
@@ -263,16 +264,16 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
 
     // Isolate damage/revive from new waves while retaining real actor scripts.
     scene.enemies.clear();
-    scene.playerX = fixture.startX;
-    scene.playerY = fixture.startY;
-    bot.x = scene.playerX + 50;
-    bot.y = scene.playerY;
+    scene.GetPlayer().x = fixture.startX;
+    scene.GetPlayer().y = fixture.startY;
+    bot.x = scene.GetPlayer().x + 50;
+    bot.y = scene.GetPlayer().y;
     if (!scene.Suicide()) { return 1; }
     for (unsigned elapsed = 0; elapsed < 8000 && !vitals.deathAnimationComplete; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (!vitals.deathAnimationComplete || session.IsFinished()) { return 1; }
     for (unsigned elapsed = 0; elapsed < 4000; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (!vitals.dead || scene.GetReviveProgress() < 0.35f || scene.GetReviveProgress() > 0.5f) {
-        std::printf("[local-live-check] rescue-hold failed progress=%.4f distance=%.1f dead=%d\n", scene.GetReviveProgress(), std::hypot(bot.x-scene.playerX,bot.y-scene.playerY),vitals.dead); return 1;
+        std::printf("[local-live-check] rescue-hold failed progress=%.4f distance=%.1f dead=%d\n", scene.GetReviveProgress(), std::hypot(bot.x-scene.GetPlayer().x,bot.y-scene.GetPlayer().y),vitals.dead); return 1;
     }
     if (scene.GetReviveEffectState() != 2) { return 1; }
     if (!CaptureRescueEffect(fixture, "live-revive-in-range.png")) { return 1; }
@@ -283,16 +284,16 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     bool placed = false;
     for (unsigned direction = 0; direction < 16; ++direction) {
         const float angle = direction * 3.14159265f / 8;
-        const float x = scene.playerX + 200 * std::cos(angle);
-        const float y = scene.playerY + 200 * std::sin(angle);
-        if (!scene.CanWalkTo(scene.playerX, scene.playerY, x, y) ||
-            !scene.CanWalkTo(x, y, scene.playerX, scene.playerY)) { continue; }
+        const float x = scene.GetPlayer().x + 200 * std::cos(angle);
+        const float y = scene.GetPlayer().y + 200 * std::sin(angle);
+        if (!scene.CanWalkTo(scene.GetPlayer().x, scene.GetPlayer().y, x, y) ||
+            !scene.CanWalkTo(x, y, scene.GetPlayer().x, scene.GetPlayer().y)) { continue; }
         bot.x = x; bot.y = y; placed = true; break;
     }
     if (!placed) { return 1; }
     std::printf("[local-live-check] rescue input move=%d walk=%d origin=%.1f,%.1f destination=%.1f,%.1f\n",
-        fixture.brotherModel.weapon->brother.CanMove(), scene.CanBrotherWalk(bot.x, bot.y, scene.playerX, scene.playerY),
-        bot.x, bot.y, scene.playerX, scene.playerY);
+        fixture.brotherModel.weapon->brother.CanMove(), scene.CanBrotherWalk(bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y),
+        bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y);
     scene.Update(16, 0, 0, false);
     if (scene.GetReviveEffectState() != 1) { return 1; }
     fixture.effects.AdvanceAmbientEffects(250);
@@ -302,7 +303,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     }
     for (unsigned elapsed = 0; elapsed < 14000 && vitals.dead; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (vitals.dead || scene.GetReviveCount() != 1 || vitals.health != vitals.maximum) {
-        std::printf("[local-live-check] rescue-return failed progress=%.4f distance=%.1f dead=%d count=%u\n",scene.GetReviveProgress(), std::hypot(bot.x-scene.playerX,bot.y-scene.playerY), vitals.dead,scene.GetReviveCount()); return 1;
+        std::printf("[local-live-check] rescue-return failed progress=%.4f distance=%.1f dead=%d count=%u\n",scene.GetReviveProgress(), std::hypot(bot.x-scene.GetPlayer().x,bot.y-scene.GetPlayer().y), vitals.dead,scene.GetReviveCount()); return 1;
     }
     for (unsigned elapsed = 0; elapsed < 7000; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (scene.GetReviveEffectState() != 0) { return 1; }
@@ -312,18 +313,18 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     auto *rescuePath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetPathLayer());
     bool distantRescue = false;
     if (rescuePath != nullptr) {
-        const int destination = rescuePath->FindNode(scene.playerX, scene.playerY);
+        const int destination = rescuePath->FindNode(scene.GetPlayer().x, scene.GetPlayer().y);
         for (unsigned nodeIndex = 0; nodeIndex < rescuePath->GetNodes().size(); ++nodeIndex) {
             const auto &node = rescuePath->GetNodes()[nodeIndex];
-            if (node.locked || std::hypot(node.x - scene.playerX, node.y - scene.playerY) < 500 ||
-                scene.CanBrotherWalk(node.x, node.y, scene.playerX, scene.playerY) ||
+            if (node.locked || std::hypot(node.x - scene.GetPlayer().x, node.y - scene.GetPlayer().y) < 500 ||
+                scene.CanBrotherWalk(node.x, node.y, scene.GetPlayer().x, scene.GetPlayer().y) ||
                 !scene.CanBrotherWalk(node.x, node.y, node.x, node.y) ||
                 rescuePath->FindNext(static_cast<int>(nodeIndex), destination) < 0) { continue; }
             bot.x = node.x; bot.y = node.y;
             if (!scene.Suicide()) { return 1; }
             for (unsigned elapsed = 0; elapsed < 60000 && vitals.dead; elapsed += 16) { scene.Update(16, 0, 0, false); }
             std::printf("[live-rescue-path] node=%u dead=%d distance=%.1f bot=%.1f,%.1f\n",
-                nodeIndex, vitals.dead, std::hypot(bot.x - scene.playerX, bot.y - scene.playerY), bot.x, bot.y);
+                nodeIndex, vitals.dead, std::hypot(bot.x - scene.GetPlayer().x, bot.y - scene.GetPlayer().y), bot.x, bot.y);
             if (vitals.dead) { return 1; }
             distantRescue = true;
             break;
@@ -331,8 +332,8 @@ int CheckLocalLive(SurvivalDeathFixture fixture, SurvivalHud *hud) {
     }
     if (!distantRescue) { std::printf("[live-rescue-path] no blocked connected fixture\n"); return 1; }
     for (unsigned elapsed = 0; elapsed < 7000; elapsed += 16) { scene.Update(16, 0, 0, false); }
-    bot.x = scene.playerX + 50;
-    bot.y = scene.playerY;
+    bot.x = scene.GetPlayer().x + 50;
+    bot.y = scene.GetPlayer().y;
     if (!fixture.brotherModel.weapon->brother.StartDeath()) { return 1; }
     for (unsigned elapsed = 0; elapsed < 20000 && bot.vitals.dead; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (bot.vitals.dead || scene.GetReviveCount() != 3) { return 1; }

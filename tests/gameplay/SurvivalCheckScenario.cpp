@@ -9,13 +9,14 @@
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/DebugMapChecks.h"
 #include "gameplay/SurvivalStudy.h"
+#include "TestOutput.h"
 
 // Declared where they are defined, in the deathmatch check translation units.
-int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, PickupScene &, PowerupScene &,
-    CProfileManager &, SurvivalGameContext &);
-int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, PowerupScene &, CProfileManager &);
-int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, PackTables &,
-    CMPMatch &, PowerupScene &, CProfileManager &);
+int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, ZPickupScene &, ZPowerupScene &,
+    CProfileManager &, ZSurvivalGameContext &);
+int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, ZPowerupScene &, CProfileManager &);
+int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, ZPackTables &,
+    CMPMatch &, ZPowerupScene &, CProfileManager &);
 
 SurvivalCheckScenario::SurvivalCheckScenario(const SurvivalDevelopment &development)
     : m_development(development) {}
@@ -85,8 +86,105 @@ int SurvivalCheckScenario::OnHorde(SurvivalHordeFixture fixture) { return CheckS
 int SurvivalCheckScenario::OnCampaign(SurvivalCampaignFixture fixture) { return CheckSurvivalCampaign(fixture); }
 int SurvivalCheckScenario::OnPowerupCapture(SurvivalPowerupCaptureFixture fixture) { return CheckSurvivalPowerupCapture(fixture); }
 
-int SurvivalCheckScenario::OnLoopStarting(CombatScene &scene, PlayerVitals &vitals) {
+int SurvivalCheckScenario::OnLoopStarting(ZCombatWorld &scene, ZPlayerVitals &vitals) {
     if (!m_development.flockCheck) { return kScenarioContinue; }
     vitals.invincible = true;
     return CheckFlockMovement(scene);
+}
+
+int SurvivalCheckScenario::OnResources(ZSurvivalResources resources) {
+    m_failures = 0;
+    return OnRewards({m_failures, m_development.check, resources.toc, resources.tables, resources.enemies, resources.vitals, resources.progressData, resources.window, resources.survivalHud, resources.program, resources.loaded, resources.player, resources.effects});
+}
+
+int SurvivalCheckScenario::OnInventory(CResTOCManager &toc, CProfileManager &profile) {
+    return OnPowerupInventory({m_development.powerupStudy, toc, profile});
+}
+
+int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) {
+    if (phase == ZSurvivalPhase::Bound) {
+        // Regression: a local default partner must never inherit premium gear.
+        if (m_development.check && state.withBrother) {
+            const auto &gun = state.brotherConfiguration.guns[0];
+            const unsigned coreHash = state.toc.GetPack(state.toc.GetCorePackIndex())->GetPackHash();
+            bool defaultEquipment = gun.packHash == coreHash && gun.localIndex == 0;
+            for (unsigned slot = 0; slot < 3; ++slot) {
+                if (state.brotherModel.armor[slot] == nullptr || PlayerArmorMultiplier(state.brotherModel, slot) != 1.0f) {
+                    defaultEquipment = false;
+                }
+            }
+            std::printf("[brother-equipment-check] gun=%08x:%u default=%d\n", gun.packHash, gun.localIndex, defaultEquipment);
+            if (!defaultEquipment) { return 1; }
+            if (!state.scene.SwapBrotherWeapon() || state.scene.GetBrotherWeaponSlot() != 1 ||
+                !state.scene.SwapBrotherWeapon() || state.scene.GetBrotherWeaponSlot() != 0) { return 1; }
+            std::printf("[brother-equipment-check] pistol-rifle-pistol=1 player-unchanged=1\n");
+        }
+        return OnSceneReady({m_failures, state.launch.packShortName, state.launch.mapIndex, state.launch.localLive, m_development.deathStudy, state.toc, state.tables, state.vitals, state.window, state.program, state.batch, state.loaded, state.player, state.effects, state.scene, state.brother, state.brotherModel, state.session, state.survivalHud, state.progress, state.match, state.pickups, state.powerups, state.peerPowerups, state.peerProfile, state.launch.gameContext, state.startX, state.startY, state.startFacing});
+    }
+    if (phase == ZSurvivalPhase::Ready) {
+        int result = -1;
+        result = OnBoss({m_failures, state.launch.packShortName, m_development.bossStudy, state.toc, state.tables, state.enemies, state.vitals, state.window, state.program, state.loaded, state.player, state.scene, state.session, state.startX, state.startY, state.startFacing});
+        if (result >= 0) { return result; }
+        result = OnFeedback({m_failures, state.capturePath, m_development.feedbackStudy, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.survivalHud, state.program, state.loaded, state.player, state.scene, state.session, state.props, state.startX, state.startY, state.startFacing});
+        if (result >= 0) { return result; }
+        result = OnLevelSounds({m_failures, m_development.check, state.session, state.effects});
+        if (result >= 0) { return result; }
+        result = OnPropRoutes({m_failures, m_development.check, state.loaded, state.scene});
+        if (result >= 0) { return result; }
+        result = OnTriggerRoutes({m_failures, m_development.check, state.session, state.loaded.map, state.scene, state.startX, state.startY, state.startFacing});
+        if (result >= 0) { return result; }
+        result = OnPlacedProps({m_development.check, state.loaded});
+        if (result >= 0) { return result; }
+        result = OnBrotherPose({m_failures, m_development.check, state.withBrother, state.scene, state.brother, state.brotherModel});
+        if (result >= 0) { return result; }
+        result = OnTutorial({m_failures, state.capturePath, m_development.check, state.launch.gameContext, state.tables, state.weapons, state.vitals, state.progress, state.program, state.loaded, state.player, state.weaponSlot, state.equippedWeaponSlot, state.scene, state.brother, state.session, state.powerups, state.pickups, state.pickupProfile, state.tutorial, state.accountedXplodium});
+        if (result >= 0) { return result; }
+        result = OnWaves({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, m_development.checkWaves, state.launch.startWave, state.launch.gameContext, state.withBrother, m_development.powerupStudy, state.launch.archiveMission, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.progress, state.window, state.program, state.loaded, state.player, state.weaponSlot, state.effects, state.scene, state.brother, state.brotherModel, state.session, state.pickups, state.props, state.tutorial, state.startX, state.startY, state.startFacing, state.packIndex, state.archiveLevel});
+        if (result >= 0) { return result; }
+        result = OnHorde({m_failures, state.capturePath, m_development.check, state.launch.startWave, state.vitals, state.loaded, state.scene, state.session, state.horde});
+        if (result >= 0) { return result; }
+        result = OnCampaign({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, state.launch.archiveMission, state.vitals, state.loaded, state.scene, state.session, state.pickups, state.horde});
+        if (result >= 0) { return result; }
+        state.finalizeProgress = m_development.check && state.horde;
+    }
+    if (phase == ZSurvivalPhase::Advanced) { return OnPowerupCapture({state.capturePath, m_development.powerupStudy, state.scene, state.powerups}); }
+    if (phase == ZSurvivalPhase::LoopStarting) { return OnLoopStarting(state.scene, state.vitals); }
+    if (phase == ZSurvivalPhase::WorldDrawn) {
+        if (m_development.check) {
+            GLint sourceBlend = 0, destinationBlend = 0;
+            glGetIntegerv(GL_BLEND_SRC, &sourceBlend);
+            glGetIntegerv(GL_BLEND_DST, &destinationBlend);
+            if (sourceBlend != GL_SRC_ALPHA || destinationBlend != GL_ONE_MINUS_SRC_ALPHA) { ++m_failures; }
+            std::printf("[render-check] after-particles blend=%x/%x failures=%u\n", sourceBlend, destinationBlend, m_failures);
+        }
+    }
+    if (phase == ZSurvivalPhase::Captured) {
+            if (m_development.check && state.horde) {
+                CRefinementManager::Template refinement;
+                if (!LoadRefinementTemplate(state.toc, state.tables, refinement)) { return 1; }
+                CProfileManager hordeProfile;
+                hordeProfile.Reset(state.toc.GetPack(state.toc.GetCorePackIndex())->GetPackHash(), refinement);
+                ZSurvivalGameContext record{hordeProfile, TestOutput::Path("horde-progress-check.dat")};
+                record.hordeStart = static_cast<int>(state.launch.startWave);
+                std::uint64_t credited = 0;
+                if (!SaveSurvivalProgress(&record, state.progress, state.scene, state.session.GetLevel(), credited) ||
+                    !SaveSurvivalProgress(&record, state.progress, state.scene, state.session.GetLevel(), credited)) { return 1; }
+                CProfileManager restored = hordeProfile;
+                if (!restored.LoadFromDisk(record.savePath) || restored.hordeBestScore[state.launch.startWave] != state.scene.GetScore() ||
+                    restored.hordeBestKills[state.launch.startWave] != state.scene.GetTotalKills() || restored.clearedWaves[0] != 0 ||
+                    restored.enemyKills[0] != 0) { ++m_failures; }
+                const unsigned points = state.scene.GetScore();
+                ZCombatHit damage;
+                damage.ownerType = 1;
+                damage.damage = 1;
+                state.scene.ApplyHit(kPlayerCombatId, damage);
+                if (state.scene.GetKillStreak() != 0 || state.scene.GetScore() != points) { ++m_failures; }
+                state.session.Restart(state.startX, state.startY, state.startFacing);
+                if (state.scene.GetScore() != 0 || state.scene.GetKillStreak() != 0 || state.session.GetKills() != 0 ||
+                    state.session.GetLevel().GetStopwatchTime() != 0 || state.session.GetLevel().GetObjectTimeScale() != 1) { ++m_failures; }
+                std::printf("[horde-check] points=%u saved=1 damage-resets-streak=1 restart=1 failures=%u\n", points, m_failures);
+            }
+        if (m_failures != 0) { return 1; }
+    }
+    return kScenarioContinue;
 }

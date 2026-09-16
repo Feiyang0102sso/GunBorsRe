@@ -1,8 +1,8 @@
-#if GB_ENABLE_CAPTURE
 #include "gun_bros_re/debug/Capture.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
-#include "engine/graphics/CPNG.h"
+#if GB_ENABLE_CAPTURE
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
+#include "engine/graphics/ZPNG.h"
 #include <cstring>
 /**
  * Read the current frame back and save it.
@@ -10,13 +10,13 @@
  * glReadPixels hands back rows bottom-up, so they are flipped on the way into
  * the image.
  */
-bool Capture::SaveFrame(const CWindow &window, const std::string &path) {
+bool Capture::SaveFrame(const ZWindow &window, const std::string &path) {
     window.DrawPresentationOverlay();
     int width = 0;
     int height = 0;
     window.GetDrawableSize(width, height);
 
-    PNGImage frame;
+    ZPNGImage frame;
     frame.width = static_cast<std::uint32_t>(width);
     frame.height = static_cast<std::uint32_t>(height);
     frame.pixels.resize(static_cast<std::size_t>(width) * height * 4);
@@ -36,5 +36,10 @@ bool Capture::SaveFrame(const CWindow &window, const std::string &path) {
     }
 
     return PNGEncode(frame, path);
+}
+#else
+// Release game/viewer products do not expose frame capture.
+bool Capture::SaveFrame(const ZWindow &, const std::string &) {
+    return false;
 }
 #endif

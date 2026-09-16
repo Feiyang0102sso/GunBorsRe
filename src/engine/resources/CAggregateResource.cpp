@@ -24,9 +24,9 @@ std::uint32_t ReadU32(const std::uint8_t *bytes) {
 }
 
 /** Cursor over a byte buffer that refuses to read past the end. */
-class ByteCursor {
+class ZByteCursor {
 public:
-    ByteCursor(const std::uint8_t *data, std::size_t size)
+    ZByteCursor(const std::uint8_t *data, std::size_t size)
         : m_data(data), m_size(size), m_position(0), m_overran(false) {}
 
     std::uint16_t ReadU16() {
@@ -129,7 +129,7 @@ bool CAggregateResource::LoadTOC(std::vector<std::uint8_t> payload) {
         return false;
     }
 
-    ByteCursor cursor(payload.data(), payload.size());
+    ZByteCursor cursor(payload.data(), payload.size());
     const std::uint16_t flags = cursor.ReadU16();
     const std::uint16_t entryCount = cursor.ReadU16();
 

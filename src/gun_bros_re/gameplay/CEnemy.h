@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CEnemy.h
  * @brief An enemy's part table, and the script functions that build it.
@@ -38,11 +38,11 @@
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "gun_bros_re/gameplay/CLinkPathFinder.h"
-#include "engine/glu/script/CScriptResolver.h"
+#include "engine/glu/script/ScriptResolver.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/graphics/CMoveSetMeshController.h"
-#include "gun_bros_re/gameplay/EnemyCombat.h"
+#include "gun_bros_re/gameplay/ZEnemyCombat.h"
 
 #include <cstdint>
 #include <vector>
@@ -71,7 +71,7 @@ constexpr std::uint8_t kEnemyScriptSetPartRadius = 0x0C;
 constexpr std::uint8_t kEnemyScriptSetPartDirection = 0x10;
 
 /** One of the eight slots, in the order Bind leaves them. */
-struct EnemyPart {
+struct ZEnemyPart {
     CMoveSetMeshController controller;
 
     // Which bone of PART 0's mesh this hangs off, or -1 for none. Part 0 is
@@ -97,10 +97,10 @@ struct EnemyPart {
     bool followsFacing = true;
     float hitFlash = 0;
 
-    EnemyPart();
+    ZEnemyPart();
 };
 
-class CEnemy : public GameScriptObject {
+class CEnemy : public ZGameScriptObject {
 public:
     CEnemy();
 
@@ -158,8 +158,8 @@ public:
     const CScriptInterpreter &GetInterpreter() const { return m_interpreter; }
 
     std::uint32_t GetPartCount() const { return m_partCount; }
-    EnemyPart &GetPart(std::size_t index) { return m_parts[index]; }
-    const EnemyPart &GetPart(std::size_t index) const { return m_parts[index]; }
+    ZEnemyPart &GetPart(std::size_t index) { return m_parts[index]; }
+    const ZEnemyPart &GetPart(std::size_t index) const { return m_parts[index]; }
 
     /**
      * Move every live part's clock on, then let the script's own animation
@@ -169,21 +169,21 @@ public:
 
     // Arena enables world simulation before loading the model. Existing model
     // viewers still execute scripts, but do not move their display objects.
-    EnemyCombat combat;
+    ZEnemyCombat combat;
     CStunController stun;
     void ConfigureTemplate(float radius, bool targetable,
         const GameObjectRef &bullet, const CCollisionData &collision);
-    void SetTarget(CombatId id, float x, float y, bool alive);
+    void SetTarget(ZCombatId id, float x, float y, bool alive);
     void SetPath(const ILayerPath *path);
-    bool CanReceiveProjectile(int ownerType, CombatId owner) const;
+    bool CanReceiveProjectile(int ownerType, ZCombatId owner) const;
     /** CEnemy::CanCollide :67243, specialized for a player (object type 0). */
     bool CanCollideWithPlayer() const;
-    HitResult ReceiveHit(const CombatHit &hit);
+    ZHitResult ReceiveHit(const ZCombatHit &hit);
     void Damage(float amount);
     bool TriggerEvent(std::uint8_t event);
     void HandleMessage(int message);
     void OnScriptStateEntered() override;
-    std::vector<EnemyAction> TakeActions();
+    std::vector<ZEnemyAction> TakeActions();
     std::size_t GetUnsupportedFunctionCount() const;
 
     // --- the script's view of this object ---
@@ -237,7 +237,7 @@ private:
     void ResolvePendingHit(bool apply);
     const CMoveSetMesh *m_moveSet;
     std::vector<const CMesh *> m_configMeshes;
-    EnemyPart m_parts[kEnemyPartSlots];
+    ZEnemyPart m_parts[kEnemyPartSlots];
 
     // Bind leaves this at one: an enemy is a single model until its script
     // says otherwise.

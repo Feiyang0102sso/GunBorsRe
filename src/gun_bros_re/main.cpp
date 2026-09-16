@@ -1,9 +1,9 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
-#include "gun_bros_re/ui/GameFrontEndInternal.h"
-#include "gun_bros_re/Config.h"
+#include "gun_bros_re/ui/ZGameFrontEndInternal.h"
+#include "gun_bros_re/ZConfig.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "engine/platform/Startup.h"
-#include "engine/core/Paths.h"
+#include "engine/platform/ZStartup.h"
+#include "engine/core/ZPaths.h"
 /** @file main.cpp
  * @brief Windows GUI application. Research tools run in a separate executable.
  */
@@ -16,11 +16,11 @@
 #include <string>
 #include <vector>
 #include <io.h>
-#include "gun_bros_re/ui/GameFrontEnd.h"
-#include "engine/platform/CWindow.h"
-#include "gun_bros_re/StartupSequence.h"
-#include "gun_bros_re/HostSettings.h"
-#include "engine/platform/CAudioPlayer.h"
+#include "gun_bros_re/ui/ZGameFrontEnd.h"
+#include "engine/platform/ZWindow.h"
+#include "gun_bros_re/ZStartupSequence.h"
+#include "gun_bros_re/ZHostSettings.h"
+#include "engine/platform/ZAudioPlayer.h"
 
 namespace {
 
@@ -33,7 +33,7 @@ int RunApplication(int argc, char **argv) {
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
         if (argument == "--game") { continue; }
-        if (argument == "--mute") { CAudioPlayer::SetMuted(true); continue; }
+        if (argument == "--mute") { ZAudioPlayer::SetMuted(true); continue; }
         if (argument == "--skip-intro") { skipIntro = true; continue; }
         if (argument == "--original-profile") { originalProfile = true; continue; }
         if (argument == "--profile" && index + 1 < argc) { profile = Paths::Resolve(std::filesystem::u8path(argv[++index])).u8string(); continue; }
@@ -54,9 +54,9 @@ int RunApplication(int argc, char **argv) {
     if (!GameHostSettings().Load(Paths::Root() / GameConfig::Filename)) { return 1; }
     // The original dial is 0..10 and a voice plays at dial x 0.1;
     // CAudioPlayer::SetEffectsGain documents the chain.
-    CAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
+    ZAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
     // One native surface survives video, loading, menu and gameplay.
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     if (!SetDebugFPS(window, GameHostSettings().drawFPS, big)) { return 1; }
     if (!skipIntro && screenshot.empty()) {
@@ -73,7 +73,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     std::printf("[application] Windows GUI process=%lu console=%u\n", GetCurrentProcessId(), GetConsoleWindow() != nullptr);
     // The Unicode Windows CRT initializes __wargv, not __argv. Convert owned
     // strings before passing the existing UTF-8 runtime entry points.
-    Utf8Arguments argv(__argc, __wargv);
+    ZUtf8Arguments argv(__argc, __wargv);
     const int result = RunApplication(argv.Count(), argv.Data());
     std::printf("[application] exit=%d\n", result);
     return result;

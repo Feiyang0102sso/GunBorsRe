@@ -5,7 +5,7 @@
 
 #include "engine/graphics/CMeshCamera.h"
 
-#include "engine/core/CMatrix4d.h"
+#include "engine/core/ZMatrix4d.h"
 
 namespace {
 
@@ -14,14 +14,14 @@ constexpr float kDegreesToRadians = 3.14159265f / 180.0f;
 
 }  // namespace
 
-MeshPart::MeshPart()
+ZMeshPart::ZMeshPart()
     : attachment(),
       extraAngleDegrees(0.0f),
       extraAxisX(0.0f),
       extraAxisY(0.0f),
       extraAxisZ(0.0f) {}
 
-void MeshCameraBuildPartMatrix(const MeshPart &part, const float *base,
+void MeshCameraBuildPartMatrix(const ZMeshPart &part, const float *base,
                                float *out) {
     float translation[kMatrix4dElements];
     Matrix4dTranslation(part.attachment.posX, part.attachment.posY,

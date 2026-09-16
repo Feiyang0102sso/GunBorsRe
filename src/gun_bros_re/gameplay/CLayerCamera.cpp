@@ -8,8 +8,8 @@
 namespace {
 
 /** Read one rectangle: x, y, width, height, all int16. */
-MapRectangle ReadRectangle(CArrayInputStream &stream) {
-    MapRectangle rectangle;
+ZMapRectangle ReadRectangle(CArrayInputStream &stream) {
+    ZMapRectangle rectangle;
     rectangle.x = stream.ReadInt16();
     rectangle.y = stream.ReadInt16();
     rectangle.width = stream.ReadInt16();

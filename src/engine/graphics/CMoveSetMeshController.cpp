@@ -29,7 +29,7 @@ bool CMoveSetMeshController::SetMove(std::int32_t moveIndex) {
         return false;
     }
 
-    const MeshMove &move = m_moveSet->GetMoves()[moveIndex];
+    const ZMeshMove &move = m_moveSet->GetMoves()[moveIndex];
 
     // Asking again for the move already playing is normally a no-op, which is
     // what keeps a held key from restarting the walk cycle every frame. Two
@@ -63,7 +63,7 @@ void CMoveSetMeshController::Update(std::int32_t deltaMs) {
         return;
     }
 
-    const MeshMove &move = m_moveSet->GetMoves()[m_moveIndex];
+    const ZMeshMove &move = m_moveSet->GetMoves()[m_moveIndex];
 
     std::int32_t step = deltaMs;
     if (move.speed != 1.0f) {
@@ -93,7 +93,7 @@ void CMoveSetMeshController::Update(std::int32_t deltaMs) {
 void CMoveSetMeshController::CollectSounds(std::int32_t previousMs) {
     m_sounds.clear();
     if (m_moveSet == nullptr || m_moveIndex == kNoMoveIndex) { return; }
-    const MeshMove &move = m_moveSet->GetMoves()[m_moveIndex];
+    const ZMeshMove &move = m_moveSet->GetMoves()[m_moveIndex];
 
     // TODO: the original also asks CMoveSetMesh::GetSound whether a sound
     // frame falls in the window this update just crossed, and queues it.
@@ -102,11 +102,11 @@ void CMoveSetMeshController::CollectSounds(std::int32_t previousMs) {
     // cue in [previous, current), and the owning viewer plays its direct WAV.
     const CMesh *mesh = m_animation.GetMesh();
     if (mesh == nullptr) { return; }
-    for (const MoveSound &sound : move.sounds) {
+    for (const ZMoveSound &sound : move.sounds) {
         if (sound.frame >= mesh->GetFrames().size() || sound.soundId == 255) { continue; }
         const std::int32_t time = mesh->GetFrames()[sound.frame].timeMs;
         if (time >= previousMs && time < m_animation.GetTimeMs()) {
-            MoveSoundRef cue;
+            ZMoveSoundRef cue;
             cue.packHash = m_moveSet->GetPackHash();
             cue.localIndex = sound.soundId;
             m_sounds.push_back(cue);
@@ -115,8 +115,8 @@ void CMoveSetMeshController::CollectSounds(std::int32_t previousMs) {
     }
 }
 
-std::vector<MoveSoundRef> CMoveSetMeshController::TakeSounds() {
-    std::vector<MoveSoundRef> sounds;
+std::vector<ZMoveSoundRef> CMoveSetMeshController::TakeSounds() {
+    std::vector<ZMoveSoundRef> sounds;
     sounds.swap(m_sounds);
     return sounds;
 }

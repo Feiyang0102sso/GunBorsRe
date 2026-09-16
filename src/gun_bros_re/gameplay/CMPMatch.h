@@ -3,7 +3,7 @@
  * The Bot life budget is a user-requested Windows rule, not BIG data.
  */
 #pragma once
-#include "gun_bros_re/data/PackTables.h"
+#include "gun_bros_re/data/ZPackTables.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include <array>
 #include <random>
@@ -62,4 +62,4 @@ private:
     std::mt19937 m_random;
 };
 
-bool LoadMPMatches(CResTOCManager &toc, PackTables &tables, std::vector<CMPMatch::Entry> &entries);
+bool LoadMPMatches(CResTOCManager &toc, ZPackTables &tables, std::vector<CMPMatch::Entry> &entries);

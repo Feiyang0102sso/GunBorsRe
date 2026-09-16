@@ -1,11 +1,11 @@
 #pragma once
-class PackTables;
+class ZPackTables;
 class CPlayerProgress;
-class CombatScene;
+class ZCombatWorld;
 class CLevel;
-struct PlayerModel;
-struct SurvivalGameContext;
+struct ZPlayerModel;
+struct ZSurvivalGameContext;
 int RunDebugMapProfileCheck();
-int CheckDebugMapProfile(PackTables &tables, const PlayerModel &player,
-    const CPlayerProgress &progress, SurvivalGameContext &context, const CombatScene &scene, const CLevel &level);
+int CheckDebugMapProfile(ZPackTables &tables, const ZPlayerModel &player,
+    const CPlayerProgress &progress, ZSurvivalGameContext &context, const ZCombatWorld &scene, const CLevel &level);
 int RunCampaignContentCheck();

@@ -1,10 +1,10 @@
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gameplay/SurvivalChecks.h"
 
 namespace MapDetail {
 
-    unsigned MapPropWorld::CheckEntryRoutes() {
+    unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const ZCombatWorld &scene) {
         unsigned tested = 0, failures = 0;
-        for (PlacedProp &prop : m_map.props) {
+        for (const ZPlacedProp &prop : map.props) {
             if (!prop.active || prop.runtime == nullptr || !prop.runtime->ChecksEntry()) { continue; }
             const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
             if (vertices.empty()) { ++failures; continue; }
@@ -15,7 +15,7 @@ namespace MapDetail {
             unsigned routes = 0;
             for (const auto &point : vertices) {
                 const float dx = prop.x + point.x - x, dy = prop.y + point.y - y;
-                if (m_scene.CanWalkTo(x + dx * 2, y + dy * 2, x, y)) { ++routes; }
+                if (scene.CanWalkTo(x + dx * 2, y + dy * 2, x, y)) { ++routes; }
             }
             std::printf("[map-entry-check] prop=%08x:%u id=%d centre=%.1f,%.1f vertices=%zu routes=%u\n",
                 prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, x, y, vertices.size(), routes);
@@ -26,9 +26,9 @@ namespace MapDetail {
         return failures;
     }
 
-    unsigned MapPropWorld::CheckDamageContracts() {
+    unsigned CheckPropDamageContracts(const ZLoadedMap &map) {
         unsigned tested = 0, failures = 0;
-        for (const PlacedProp &prop : m_map.props) {
+        for (const ZPlacedProp &prop : map.props) {
             if (!prop.active || prop.runtime == nullptr || prop.runtime->GetHealth() <= 0) { continue; }
             // Independent instance: checking a barrel must not damage the
             // account or change its real level-script progress.

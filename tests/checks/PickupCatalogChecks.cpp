@@ -1,16 +1,17 @@
-#include "engine/core/Paths.h"
-/** @file PickupCatalog.cpp
+#include "gun_bros_re/debug/Capture.h"
+#include "engine/core/ZPaths.h"
+/** @file ZPickupCatalog.cpp
  * @brief Verify the entire wire payload and every real collection export.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/PickupCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/gameplay/PickupScene.h"
+#include "gun_bros_re/data/ZPickupCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "engine/graphics/CBitmapFont.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
-#include "gun_bros_re/gameplay/WeaponEffects.h"
-#include "engine/platform/CWindow.h"
-#include "engine/core/CMatrix4d.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/core/ZMatrix4d.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -20,14 +21,14 @@
 int RunPickupCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<PickupEntry> catalog;
+    ZPackTables tables(toc);
+    std::vector<ZPickupEntry> catalog;
     if (!LoadPickupCatalog(toc, tables, catalog)) { return 1; }
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("pickup-check.txt"));
     unsigned failures = 0;
     unsigned collectedActions = 0;
-    for (const PickupEntry &entry : catalog) {
+    for (const ZPickupEntry &entry : catalog) {
         CPickup pickup;
         pickup.Bind(entry.data);
         if (!pickup.Collect() || !pickup.IsCollected()) { ++failures; }
@@ -39,22 +40,22 @@ int RunPickupCheck(const std::string &bigDirectory) {
         if (!entry.data.particleEffect.IsNull()) {
             report << " effect=" << tables.GetPackName(entry.data.particleEffect.packHash) << ':' << unsigned(entry.data.particleEffect.localIndex);
             std::vector<std::uint8_t> payload;
-            if (!tables.ReadSectionResource(entry.data.particleEffect.packHash, GameSection::ParticleEffect,
+            if (!tables.ReadSectionResource(entry.data.particleEffect.packHash, ZGameSection::ParticleEffect,
                 entry.data.particleEffect.localIndex, payload)) { ++failures; }
             CParticleEffect effect;
             CArrayInputStream effectStream(payload);
             if (!effect.Init(effectStream) || effectStream.Available() != 0) { ++failures; }
-            for (const ParticleEmitterTemplate &emitter : effect.GetEmitters()) {
+            for (const ZParticleEmitterTemplate &emitter : effect.GetEmitters()) {
                 report << " emitter=" << emitter.startSeconds << ':' << emitter.endSeconds
                     << " interval=" << emitter.intervalMinimumSeconds << ':' << emitter.intervalMaximumSeconds;
             }
         }
-        for (const PickupAction &action : actions) {
+        for (const ZPickupAction &action : actions) {
             ++collectedActions;
             report << " [kind=" << static_cast<int>(action.kind) << " value=" << action.amount;
             if (!action.resource.IsNull()) {
-                GameSection section = GameSection::StoreItem;
-                if (action.kind == PickupAction::Kind::Sound) { section = GameSection::SoundEffect; }
+                ZGameSection section = ZGameSection::StoreItem;
+                if (action.kind == ZPickupAction::Kind::Sound) { section = ZGameSection::SoundEffect; }
                 std::vector<std::uint8_t> payload;
                 if (!tables.ReadSectionResource(action.resource.packHash, section, action.resource.localIndex, payload)) { ++failures; }
                 report << " ref=" << tables.GetPackName(action.resource.packHash) << ':' << unsigned(action.resource.localIndex);
@@ -68,20 +69,20 @@ int RunPickupCheck(const std::string &bigDirectory) {
 }
 
 int RunPickupRenderCheck(const std::string &bigDirectory) {
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Gun Bros - Pickup Research", 1200, 900)) { return 1; }
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    CShaderProgram program;
+    ZPackTables tables(toc);
+    ZShaderProgram program;
     const char *directory = Paths::Shaders().c_str();
     if (!program.Load(directory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    PickupScene pickups(toc, tables, program);
-    WeaponEffects effects(toc, tables, program);
-    CQuadBatch labels;
+    ZPickupScene pickups(toc, tables, program);
+    ZWeaponEffects effects(toc, tables, program);
+    ZQuadBatch labels;
     CBitmapFont font;
     if (!pickups.Init() || !labels.Create(program) || !font.Init(*toc.GetPack(toc.GetCorePackIndex()), 0)) { return 1; }
-    std::vector<PickupEntry> catalog;
+    std::vector<ZPickupEntry> catalog;
     if (!LoadPickupCatalog(toc, tables, catalog)) { return 1; }
     labels.Begin();
     font.Draw(labels, "ORIGINAL PICKUPS - ALL NINE TEMPLATES", 26, 18, 0.7f);
@@ -111,7 +112,7 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
     labels.Upload();
     labels.Draw(program, projection);
     std::filesystem::create_directories(TestOutput::Path(""));
-    if (glGetError() != 0 || !GB_SAVE_FRAME(window, TestOutput::Path("pickup-render-check.png"))) { return 1; }
+    if (glGetError() != 0 || !Capture::SaveFrame(window, TestOutput::Path("pickup-render-check.png"))) { return 1; }
     window.Present();
     const std::size_t livingParticles = effects.GetParticleCount();
     pickups.Reset();

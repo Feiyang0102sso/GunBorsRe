@@ -81,7 +81,7 @@ CLevel::CLevel() : m_template(nullptr), m_map(nullptr), m_unimplementedCalls(0) 
     }
 }
 
-void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *world, int startWave) {
+void CLevel::Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world, int startWave) {
     SetLevelContext(this);
     m_template = &levelTemplate;
     m_map = &map;
@@ -124,6 +124,7 @@ void CLevel::Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *wo
     m_objectTimeScale = 1;
     m_worldTimeScale = 1;
     m_statisticsGroup = 0;
+    m_kills = 0;
     for (unsigned &kills : m_statisticsKills) { kills = 0; }
     m_stat42Bits = 0;
     m_unimplementedCalls = 0;
@@ -405,9 +406,9 @@ void CLevel::UpdateProximitySpawns(float left, float top, float width, float hei
         const auto &objects = layer.GetObjects();
         m_spawnedObjects.resize(objects.size(), false);
         for (unsigned index = 0; index < objects.size(); ++index) {
-            const PlacedObject &object = objects[index];
+            const ZPlacedObject &object = objects[index];
             if (m_spawnedObjects[index] || m_manualSpawnTags[object.spawnTag]) { continue; }
-            if (object.objectType != static_cast<unsigned>(PlacedObjectType::Prop) &&
+            if (object.objectType != static_cast<unsigned>(ZPlacedObjectType::Prop) &&
                 (object.x < left - 200 || object.x > left + width + 200 ||
                  object.y < top - 200 || object.y > top + height + 200)) { continue; }
             if (m_world->SpawnMapObject(object, index)) { m_spawnedObjects[index] = true; }
@@ -434,7 +435,7 @@ void CLevel::SpawnMapObjects(int tag, int objectId) {
 
 bool CLevel::GetStringResource(int index, CGameAssetRef &out) const {
     if (m_template == nullptr || index < 0 || index >= static_cast<int>(m_template->script.GetResources().size())) { return false; }
-    const ScriptResourceRef &ref = m_template->script.GetResources()[index];
+    const ZScriptResourceRef &ref = m_template->script.GetResources()[index];
     if (ref.sectionOrType != 254) { return false; }
     out.packHash = ref.packHash;
     out.assetId = ref.resourceId;
@@ -461,13 +462,15 @@ bool CLevel::GetResource(int index, GameObjectRef &out) const {
     if (m_template == nullptr || index < 0 || index >= static_cast<int>(m_template->script.GetResources().size())) {
         return false;
     }
-    const ScriptResourceRef &ref = m_template->script.GetResources()[index];
+    const ZScriptResourceRef &ref = m_template->script.GetResources()[index];
     out.packHash = ref.packHash;
     out.localIndex = static_cast<std::uint8_t>(ref.resourceId);
     return !out.IsNull() && out.localIndex != kNoLocalIndex;
 }
 
 void CLevel::OnEnemyKilled(int objectId, const GameObjectRef &enemy) {
+    // Count delivered deaths once, including the event that clears the level.
+    ++m_kills;
     if (m_template == nullptr || m_cleared) {
         return;
     }
@@ -475,7 +478,7 @@ void CLevel::OnEnemyKilled(int objectId, const GameObjectRef &enemy) {
     int resourceIndex = -1;
     const auto &resources = m_template->script.GetResources();
     for (std::size_t index = 0; index < resources.size(); ++index) {
-        const ScriptResourceRef &ref = resources[index];
+        const ZScriptResourceRef &ref = resources[index];
         if (ref.packHash == enemy.packHash && ref.resourceId == enemy.localIndex && ref.sectionOrType == 5) {
             resourceIndex = static_cast<int>(index);
             break;
@@ -494,7 +497,7 @@ void CLevel::SetWave(int wave) {
     m_variables[0] = static_cast<std::int16_t>(wave);
 }
 
-static bool ContainsCameraPoint(const MapRectangle &bounds, int x, int y) {
+static bool ContainsCameraPoint(const ZMapRectangle &bounds, int x, int y) {
     return bounds.width != 0 && bounds.height != 0 && x >= bounds.x && y >= bounds.y &&
         x <= bounds.x + bounds.width && y <= bounds.y + bounds.height;
 }

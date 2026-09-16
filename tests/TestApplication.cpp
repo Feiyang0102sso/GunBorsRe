@@ -6,7 +6,7 @@
 #include "gun_bros_viewer/scenes/MapPreview.h"
 #include "tests/research/SurvivalStudyHost.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /**
  * @file main.cpp
  * @brief Entry point. Picks a milestone harness and runs it.
@@ -31,21 +31,21 @@
 #include "gun_bros_viewer/scenes/EnemyPreview.h"
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
 #include "tests/checks/M5LevelFlow.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/ui/GameFrontEnd.h"
-#include "gun_bros_re/data/PickupCatalog.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/ui/ZGameFrontEnd.h"
+#include "gun_bros_re/data/ZPickupCatalog.h"
 #include "tests/checks/PropCatalog.h"
-#include "gun_bros_re/data/PowerupCatalog.h"
-#include "gun_bros_re/data/MissionCatalog.h"
-#include "gun_bros_re/data/OriginalProfile.h"
-#include "gun_bros_re/data/NativeProfile.h"
-#include "engine/platform/CAudioPlayer.h"
-#include "gun_bros_re/StartupSequence.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/ZMissionCatalog.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZProfileStorage.h"
+#include "engine/platform/ZAudioPlayer.h"
+#include "gun_bros_re/ZStartupSequence.h"
 #include "tests/research/MovieStudy.h"
-#include "gun_bros_re/ui/SurvivalHud.h"
-#include "gun_bros_re/HostSettings.h"
+#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ZHostSettings.h"
 #include "gun_bros_re/data/CDailyBonusTracking.h"
 
 #include <cstdio>
@@ -59,7 +59,6 @@ int OpenGameMenu(const std::string &bigDirectory, const std::string &screenshotP
     return RunGameMenuStudy(bigDirectory, screenshotPath, page, originalProfile, profilePath);
 }
 
-
 using namespace ResearchDefaults;
 
 /**
@@ -72,7 +71,7 @@ using namespace ResearchDefaults;
 
 }  // namespace
 
-std::unique_ptr<ISurvivalInputDriver> MakeResearchPilot(CombatScene &scene, const MapRectangle &bounds) {
+std::unique_ptr<ZSurvivalInputDriver> MakeResearchPilot(ZCombatWorld &scene, const ZMapRectangle &bounds) {
     return std::make_unique<SurvivalPilot>(scene, bounds);
 }
 
@@ -238,7 +237,7 @@ int RunTestApplication(int argc, char **argv) {
             return 0;
         }
         if (std::strcmp(argument, "--mute") == 0) {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             continue;
         }
         if (std::strcmp(argument, "--profile") == 0 && i + 1 < argc) {
@@ -261,7 +260,6 @@ else if (std::strcmp(argument, "--movie-gallery") == 0) {
         } 
 else if (std::strcmp(argument, "--hud-check") == 0) { checkHud = true; }
 
-        
 else if (std::strcmp(argument, "--movie-check") == 0) {
             checkMovies = true;
         }
@@ -673,15 +671,15 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     if (!GameHostSettings().Load(configPath)) { return 1; }
     // The original dial is 0..10 and a voice plays at dial x 0.1;
     // CAudioPlayer::SetEffectsGain documents the chain.
-    CAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
+    ZAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
 
     // Nothing on the command line means nobody typed one: ask instead.
-    if (CAudioPlayer::IsMuted()) {
+    if (ZAudioPlayer::IsMuted()) {
         std::printf("[audio] muted: playback streams disabled\n");
     }
     // Retail startup now enters the game; the historical menu above is explicit.
     if (modeArgumentCount == 0 || researchMenu) { PrintTestUsage(); return 0; }
-    BigVersion bigVersion = BigVersion::Unknown;
+    ZBigVersion bigVersion = ZBigVersion::Unknown;
     if (inspectBigVersion || (!introStudy && !checkMedia)) {
         if (!DetectViewerBigVersion(bigDirectory, bigVersion, inspectBigVersion)) { return 1; }
     }
@@ -821,9 +819,9 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     if (runM2) {
         return RunTextureStudy(bigDirectory, imagePackName, imageResourceId, screenshotPath);
     }
-    MapViewMode mapViewMode = MapViewMode::Preview;
+    ZMapViewMode mapViewMode = ZMapViewMode::Preview;
     if (runGameView) {
-        mapViewMode = MapViewMode::GameView;
+        mapViewMode = ZMapViewMode::GameView;
     }
     return RunMapPreview(bigDirectory, mapPackName, mapIndex, screenshotPath,
                     advanceMs, showSpawns, showCollisions, mapViewMode, gunIndex, firePreview);

@@ -1,9 +1,9 @@
-#include "gun_bros_re/data/MissionCatalogInternal.h"
+#include "gun_bros_re/data/ZMissionCatalogInternal.h"
 
 namespace MissionCatalogDetail {
 unsigned CheckMissionMap(const CLevel::Template &data, CMap &map, std::ofstream &report) {
     CLevel level;
-    MissionProbeWorld world;
+    ZMissionProbeWorld world;
     level.Bind(data, map, &world);
     unsigned failures = 0;
     std::int16_t args[3] = {1, 0, 0};
@@ -43,7 +43,7 @@ unsigned CheckMissionMap(const CLevel::Template &data, CMap &map, std::ofstream 
         const CLayerObject &layer = map.GetObjectLayer(index);
         if (static_cast<int>(layer.GetLayerIndex()) != level.GetObjectLayer()) { continue; }
         unsigned objectId = 0;
-        for (const PlacedObject &object : layer.GetObjects()) {
+        for (const ZPlacedObject &object : layer.GetObjects()) {
             report << " object=" << objectId++ << " type=" << unsigned(object.objectType)
                 << " tag=" << unsigned(object.spawnTag) << " xy=" << object.x << ',' << object.y
                 << " path=" << unsigned(object.pathLayer) << '\n';
@@ -52,7 +52,7 @@ unsigned CheckMissionMap(const CLevel::Template &data, CMap &map, std::ofstream 
     for (unsigned index = 0; index < map.GetCollisionLayerCount(); ++index) {
         const CLayerCollision &layer = map.GetCollisionLayer(index);
         if (static_cast<int>(layer.GetLayerIndex()) != level.GetTriggerLayer()) { continue; }
-        for (const CollisionEdge &edge : layer.GetCollision().GetEdges()) {
+        for (const ZCollisionEdge &edge : layer.GetCollision().GetEdges()) {
             const auto &a = layer.GetCollision().GetVertices()[edge.firstVertex];
             const auto &b = layer.GetCollision().GetVertices()[edge.secondVertex];
             report << " trigger=" << unsigned(edge.group) << " from=" << a.x << ',' << a.y << " to=" << b.x << ',' << b.y << '\n';

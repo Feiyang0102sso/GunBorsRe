@@ -4,8 +4,8 @@
  */
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/debug/SurvivalDebug.h"
-#include "gun_bros_re/HostSettings.h"
-#include "engine/platform/GLLoader.h"
+#include "gun_bros_re/ZHostSettings.h"
+#include "engine/platform/ZGLLoader.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "TestOutput.h"
 #include <SDL3/SDL.h>
@@ -25,11 +25,11 @@ bool PushKey(Uint32 type, SDL_Keycode key, SDL_Keymod modifiers, bool repeat = f
 }
 
 int CheckDebugInput() {
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Debug input checks", 640, 480)) { return 1; }
     window.SetEscapeCloses(false);
     if (!window.PumpEvents()) { return 1; }
-    while (window.TakeKeyPress() != KeyCode::None) {}
+    while (window.TakeKeyPress() != ZKeyCode::None) {}
     unsigned failures = 0;
     const bool previousDebugMode = GameHostSettings().debugMode;
     GameHostSettings().debugMode = true;
@@ -42,7 +42,7 @@ int CheckDebugInput() {
         PushKey(SDL_EVENT_KEY_DOWN, shifted, SDL_KMOD_LSHIFT);
         PushKey(SDL_EVENT_KEY_UP, released, SDL_KMOD_NONE);
         window.PumpEvents();
-        const KeyCode key = window.TakeKeyPress();
+        const ZKeyCode key = window.TakeKeyPress();
         bool toggled = GameDebugKeys::TogglesCollision(key, window);
         if (scan == SDL_SCANCODE_I) { toggled = GameDebugKeys::TogglesInfo(key, window); }
         std::printf("[shift-repro] scan=%u shifted=%u key=%u toggled=%d\n", scan, shifted, key, toggled);
@@ -60,7 +60,7 @@ int CheckDebugInput() {
         PushKey(SDL_EVENT_KEY_UP, key, SDL_KMOD_NONE);
     }
     window.PumpEvents();
-    if (window.TakeCheatCode() != GameCheats::Money || window.TakeKeyPress() != KeyCode::None) { ++failures; }
+    if (window.TakeCheatCode() != GameCheats::Money || window.TakeKeyPress() != ZKeyCode::None) { ++failures; }
     // Every configured sequence completes once, with repeated key-downs ignored.
     for (const char *command : GameCheats::Commands) {
         for (const char *letter = command; *letter != '\0'; ++letter) {
@@ -70,7 +70,7 @@ int CheckDebugInput() {
         }
         window.PumpEvents();
         if (window.TakeCheatCode() != command || !window.TakeCheatCode().empty()) { ++failures; }
-        while (window.TakeKeyPress() != KeyCode::None) {}
+        while (window.TakeKeyPress() != ZKeyCode::None) {}
     }
     // Removed commands must no longer produce actions.
     for (const char *command : {"chh", "chi", "chunlock"}) {
@@ -80,7 +80,7 @@ int CheckDebugInput() {
         }
         window.PumpEvents();
         if (!window.TakeCheatCode().empty()) { ++failures; }
-        while (window.TakeKeyPress() != KeyCode::None) {}
+        while (window.TakeKeyPress() != ZKeyCode::None) {}
     }
     // Both Shift sides must survive release before the consumer drains the queue.
     const SDL_Keymod modifiers[] = {SDL_KMOD_LSHIFT, SDL_KMOD_RSHIFT, SDL_KMOD_NONE};
@@ -88,32 +88,32 @@ int CheckDebugInput() {
         if (!PushKey(SDL_EVENT_KEY_DOWN, SDLK_T, modifier) ||
             !PushKey(SDL_EVENT_KEY_DOWN, SDLK_T, modifier, true) ||
             !PushKey(SDL_EVENT_KEY_UP, SDLK_T, SDL_KMOD_NONE) || !window.PumpEvents()) { return 1; }
-        const KeyCode key = window.TakeKeyPress();
-        if (key != KeyCode::T || GameDebugKeys::StartsTutorial(key, window) != (modifier != SDL_KMOD_NONE) ||
-            window.TakeKeyPress() != KeyCode::None || !window.TakeCheatCode().empty()) { ++failures; }
+        const ZKeyCode key = window.TakeKeyPress();
+        if (key != ZKeyCode::T || GameDebugKeys::StartsTutorial(key, window) != (modifier != SDL_KMOD_NONE) ||
+            window.TakeKeyPress() != ZKeyCode::None || !window.TakeCheatCode().empty()) { ++failures; }
     }
     for (SDL_Keymod modifier : modifiers) {
         if (!PushKey(SDL_EVENT_KEY_DOWN, SDLK_M, modifier) ||
             !PushKey(SDL_EVENT_KEY_DOWN, SDLK_M, modifier, true) ||
             !PushKey(SDL_EVENT_KEY_UP, SDLK_M, SDL_KMOD_NONE) ||
             !window.PumpEvents()) { return 1; }
-        const KeyCode key = window.TakeKeyPress();
+        const ZKeyCode key = window.TakeKeyPress();
         const bool expected = modifier != SDL_KMOD_NONE;
         if (key != GameDebugKeys::MapBrowser || GameDebugKeys::OpensMapBrowser(key, window) != expected ||
-            window.IsKeyDown(KeyCode::M) || window.TakeKeyPress() != KeyCode::None) { ++failures; }
+            window.IsKeyDown(ZKeyCode::M) || window.TakeKeyPress() != ZKeyCode::None) { ++failures; }
     }
     // The configuration is the only availability gate for all debug shortcuts.
     const auto debugConfigPath = TestOutput::Path("debug-key-gate.cfg");
     for (unsigned enabled = 0; enabled < 2; ++enabled) {
         { std::ofstream config(debugConfigPath); config << "DebugMode=" << enabled << '\n'; }
-        HostSettings settings;
+        ZHostSettings settings;
         if (!settings.Load(debugConfigPath)) { return 1; }
         GameHostSettings().debugMode = settings.debugMode;
         for (SDL_Keycode letter : {SDLK_C, SDLK_I, SDLK_M, SDLK_T, SDLK_F3}) {
             PushKey(SDL_EVENT_KEY_DOWN, letter, SDL_KMOD_LSHIFT);
             PushKey(SDL_EVENT_KEY_UP, letter, SDL_KMOD_NONE);
             if (!window.PumpEvents()) { return 1; }
-            const KeyCode key = window.TakeKeyPress();
+            const ZKeyCode key = window.TakeKeyPress();
             bool active = false;
             if (letter == SDLK_C) { active = GameDebugKeys::TogglesCollision(key, window); }
             if (letter == SDLK_I) { active = GameDebugKeys::TogglesInfo(key, window); }
@@ -126,40 +126,40 @@ int CheckDebugInput() {
     }
     GameHostSettings().debugMode = true;
     const SDL_Keycode arrows[] = {SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT};
-    const KeyCode actions[] = {GameDebugKeys::MapPrevious, GameDebugKeys::MapNext,
+    const ZKeyCode actions[] = {GameDebugKeys::MapPrevious, GameDebugKeys::MapNext,
         GameDebugKeys::MapPreviousPage, GameDebugKeys::MapNextPage};
     for (unsigned index = 0; index < 4; ++index) {
         if (!PushKey(SDL_EVENT_KEY_DOWN, arrows[index], SDL_KMOD_NONE) ||
             !PushKey(SDL_EVENT_KEY_UP, arrows[index], SDL_KMOD_NONE) || !window.PumpEvents()) { return 1; }
-        if (window.TakeKeyPress() != actions[index] || window.TakeKeyPress() != KeyCode::None) { ++failures; }
+        if (window.TakeKeyPress() != actions[index] || window.TakeKeyPress() != ZKeyCode::None) { ++failures; }
     }
     for (SDL_Keycode hotkey : {SDLK_C, SDLK_I}) {
         for (SDL_Keymod modifier : modifiers) {
             if (!PushKey(SDL_EVENT_KEY_DOWN, hotkey, modifier) ||
                 !PushKey(SDL_EVENT_KEY_DOWN, hotkey, modifier, true) ||
                 !PushKey(SDL_EVENT_KEY_UP, hotkey, SDL_KMOD_NONE) || !window.PumpEvents()) { return 1; }
-            const KeyCode key = window.TakeKeyPress();
+            const ZKeyCode key = window.TakeKeyPress();
             bool toggled = GameDebugKeys::TogglesCollision(key, window);
             if (hotkey == SDLK_I) { toggled = GameDebugKeys::TogglesInfo(key, window); }
-            if (toggled != (modifier != SDL_KMOD_NONE) || window.TakeKeyPress() != KeyCode::None) { ++failures; }
+            if (toggled != (modifier != SDL_KMOD_NONE) || window.TakeKeyPress() != ZKeyCode::None) { ++failures; }
         }
     }
     // Missing DrawFPS preserves the enabled default; all four flag combinations are independent.
     const std::string configPath = TestOutput::Path("overlay.cfg");
     { std::ofstream config(configPath); config << "DebugMode=0\n"; }
-    HostSettings defaults;
+    ZHostSettings defaults;
     if (!defaults.Load(configPath) || !defaults.drawFPS || !defaults.drawDebugInfo) { ++failures; }
     if (defaults.dmBotLevel != 1) { ++failures; }
     for (int level : {-1, 0, 1, 2, 3, 4}) {
         { std::ofstream config(configPath); config << "DMBotLevel = " << level << " # DM only\n"; }
-        HostSettings settings;
+        ZHostSettings settings;
         const bool valid = level >= 1 && level <= 3;
         if (settings.Load(configPath) != valid || (valid && settings.dmBotLevel != level)) { ++failures; }
     }
     for (unsigned debug = 0; debug < 2; ++debug) {
         for (unsigned fps = 0; fps < 2; ++fps) {
             { std::ofstream config(configPath); config << "DebugMode=" << debug << "\nDrawFPS=" << fps << "\n"; }
-            HostSettings settings;
+            ZHostSettings settings;
             if (!settings.Load(configPath) || settings.drawFPS != (fps != 0) || settings.debugMode != (debug != 0)) { ++failures; }
             if (!SetDebugFPS(window, settings.drawFPS)) { return 1; }
             glDisable(GL_SCISSOR_TEST);

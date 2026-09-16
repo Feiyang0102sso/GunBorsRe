@@ -6,7 +6,7 @@
 #include "gun_bros_re/gameplay/CCollisionData.h"
 
 void CCollisionData::SetGroupEnabled(int group, bool enabled) {
-    for (CollisionEdge &edge : m_edges) {
+    for (ZCollisionEdge &edge : m_edges) {
         if (edge.group == group) { edge.enabled = enabled; }
     }
 }
@@ -41,13 +41,13 @@ bool CCollisionData::Load(CArrayInputStream &stream) {
     for (std::uint16_t i = 0; i < vertexCount; ++i) {
         const float x = static_cast<float>(stream.ReadInt32());
         const float y = static_cast<float>(stream.ReadInt32());
-        m_vertices.push_back(CollisionPoint(x, y));
+        m_vertices.push_back(ZCollisionPoint(x, y));
     }
 
     const std::uint16_t edgeCount = stream.ReadUInt16();
     m_edges.reserve(edgeCount);
     for (std::uint16_t i = 0; i < edgeCount; ++i) {
-        CollisionEdge edge;
+        ZCollisionEdge edge;
         edge.group = stream.ReadUInt8();
         edge.firstVertex = stream.ReadUInt16();
         edge.secondVertex = stream.ReadUInt16();
@@ -63,7 +63,7 @@ bool CCollisionData::Load(CArrayInputStream &stream) {
     }
 
     for (std::size_t i = 0; i < m_edges.size(); ++i) {
-        const CollisionEdge &edge = m_edges[i];
+        const ZCollisionEdge &edge = m_edges[i];
         if (edge.firstVertex >= m_vertices.size() ||
             edge.secondVertex >= m_vertices.size()) {
             std::printf("[collision] edge %zu names vertex %u -> %u; only %zu exist\n",
@@ -94,15 +94,15 @@ bool CCollisionData::AppendTranslated(const CCollisionData &source,
 
     m_vertices.reserve(combinedVertexCount);
     for (std::size_t i = 0; i < source.m_vertices.size(); ++i) {
-        const CollisionPoint &vertex = source.m_vertices[i];
+        const ZCollisionPoint &vertex = source.m_vertices[i];
         m_vertices.push_back(
-            CollisionPoint(vertex.x + offsetX, vertex.y + offsetY));
+            ZCollisionPoint(vertex.x + offsetX, vertex.y + offsetY));
     }
 
     m_edges.reserve(m_edges.size() + source.m_edges.size());
     for (std::size_t i = 0; i < source.m_edges.size(); ++i) {
-        const CollisionEdge &sourceEdge = source.m_edges[i];
-        CollisionEdge edge = sourceEdge;
+        const ZCollisionEdge &sourceEdge = source.m_edges[i];
+        ZCollisionEdge edge = sourceEdge;
         edge.firstVertex = static_cast<std::uint16_t>(
             firstVertex + sourceEdge.firstVertex);
         edge.secondVertex = static_cast<std::uint16_t>(
@@ -113,10 +113,10 @@ bool CCollisionData::AppendTranslated(const CCollisionData &source,
     return true;
 }
 
-CollisionPoint CCollisionData::ResolveCircleMovement(
-    const CollisionPoint &start, const CollisionPoint &movement,
+ZCollisionPoint CCollisionData::ResolveCircleMovement(
+    const ZCollisionPoint &start, const ZCollisionPoint &movement,
     float radius) const {
-    CollisionPoint position = start;
+    ZCollisionPoint position = start;
     if (radius <= 0.0f || m_edges.empty()) {
         position.x += movement.x;
         position.y += movement.y;
@@ -127,7 +127,7 @@ CollisionPoint CCollisionData::ResolveCircleMovement(
     const float stepY = movement.y / static_cast<float>(kMovementSubsteps);
 
     for (int step = 0; step < kMovementSubsteps; ++step) {
-        const CollisionPoint previous = position;
+        const ZCollisionPoint previous = position;
         position.x += stepX;
         position.y += stepY;
 
@@ -143,21 +143,21 @@ CollisionPoint CCollisionData::ResolveCircleMovement(
 }
 
 bool CCollisionData::ResolveNearestPenetration(
-    const CollisionPoint &previous, CollisionPoint &position,
+    const ZCollisionPoint &previous, ZCollisionPoint &position,
     float radius) const {
     float nearestDistanceSquared = std::numeric_limits<float>::max();
     float nearestX = 0.0f;
     float nearestY = 0.0f;
-    const CollisionEdge *nearestEdge = nullptr;
+    const ZCollisionEdge *nearestEdge = nullptr;
 
     for (std::size_t i = 0; i < m_edges.size(); ++i) {
-        const CollisionEdge &edge = m_edges[i];
+        const ZCollisionEdge &edge = m_edges[i];
         if (!edge.enabled) {
             continue;
         }
 
-        const CollisionPoint &first = m_vertices[edge.firstVertex];
-        const CollisionPoint &second = m_vertices[edge.secondVertex];
+        const ZCollisionPoint &first = m_vertices[edge.firstVertex];
+        const ZCollisionPoint &second = m_vertices[edge.secondVertex];
         const float edgeX = second.x - first.x;
         const float edgeY = second.y - first.y;
         const float edgeLengthSquared = edgeX * edgeX + edgeY * edgeY;
@@ -197,8 +197,8 @@ bool CCollisionData::ResolveNearestPenetration(
     float distance = std::sqrt(nearestDistanceSquared);
 
     if (distance <= kMinimumLengthSquared) {
-        const CollisionPoint &first = m_vertices[nearestEdge->firstVertex];
-        const CollisionPoint &second = m_vertices[nearestEdge->secondVertex];
+        const ZCollisionPoint &first = m_vertices[nearestEdge->firstVertex];
+        const ZCollisionPoint &second = m_vertices[nearestEdge->secondVertex];
         normalX = -(second.y - first.y);
         normalY = second.x - first.x;
         distance = std::sqrt(normalX * normalX + normalY * normalY);

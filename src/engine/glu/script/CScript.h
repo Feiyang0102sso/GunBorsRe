@@ -47,12 +47,12 @@ constexpr std::uint32_t kScriptReservedBytes = 6;
  * and an id -- the same indirection game object references use, so a script
  * can point into another pack.
  */
-struct ScriptResourceRef {
+struct ZScriptResourceRef {
     std::uint32_t packHash;
     std::uint8_t sectionOrType;  // read by Load; no reader found in the engine
     std::uint32_t resourceId;
 
-    ScriptResourceRef() : packHash(0), sectionOrType(255), resourceId(255) {}
+    ZScriptResourceRef() : packHash(0), sectionOrType(255), resourceId(255) {}
 };
 
 /** A loaded script program. */
@@ -81,7 +81,7 @@ public:
         return m_secondaryTable;
     }
 
-    const std::vector<ScriptResourceRef> &GetResources() const { return m_resources; }
+    const std::vector<ZScriptResourceRef> &GetResources() const { return m_resources; }
 
     const std::vector<std::vector<std::int16_t>> &GetDataBlocks() const {
         return m_dataBlocks;
@@ -105,7 +105,7 @@ private:
     bool m_present;
     std::vector<std::uint8_t> m_exportFunctions;
     std::vector<std::uint8_t> m_secondaryTable;
-    std::vector<ScriptResourceRef> m_resources;
+    std::vector<ZScriptResourceRef> m_resources;
     std::vector<std::vector<std::int16_t>> m_dataBlocks;
     std::vector<std::int16_t> m_variableInitialValues;
     std::vector<CScriptState> m_states;

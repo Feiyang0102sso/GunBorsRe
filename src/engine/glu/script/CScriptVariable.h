@@ -41,9 +41,9 @@ constexpr std::uint8_t kScriptVarDataBlockFlag = 0x80;
 /** A variable statement. */
 struct CScriptVariable {
     /** @return false always -- an assignment never ends the block. */
-    static bool Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor);
+    static bool Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor);
 
-    static void Skip(ScriptCursor &cursor);
+    static void Skip(ZScriptCursor &cursor);
 };
 
 #endif  // GUN_BROS_RE_GLU_SCRIPT_CSCRIPTVARIABLE_H

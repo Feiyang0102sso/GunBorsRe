@@ -34,10 +34,10 @@ struct CScriptEvent {
      * Run the handler if its id matches.
      * @return whatever the handler's block returned, or false if it did not match.
      */
-    static bool Evaluate(CScriptInterpreter &interpreter, ScriptCursor &cursor,
+    static bool Evaluate(CScriptInterpreter &interpreter, ZScriptCursor &cursor,
                          std::uint16_t eventId);
 
-    static void Skip(ScriptCursor &cursor);
+    static void Skip(ZScriptCursor &cursor);
 };
 
 #endif  // GUN_BROS_RE_GLU_SCRIPT_CSCRIPTEVENT_H

@@ -1,11 +1,11 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/debug/DebugConfig.h"
-#include "engine/core/Paths.h"
-#include "engine/core/CMatrix4d.h"
+#include "engine/core/ZPaths.h"
+#include "engine/core/ZMatrix4d.h"
 #include "engine/resources/CResTOCManager.h"
 #include <cstdio>
 
-bool SetDebugFPS(CWindow &window, bool enabled, const std::string &bigDirectory) {
+bool SetDebugFPS(ZWindow &window, bool enabled, const std::string &bigDirectory) {
     if (!enabled) { window.SetPresentationOverlay(nullptr); return true; }
     if (window.HasPresentationOverlay()) { return true; }
     std::string directory = bigDirectory;

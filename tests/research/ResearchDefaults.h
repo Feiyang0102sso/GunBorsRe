@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 #include <cstdint>
 namespace ResearchDefaults {
 // Regression hosts exercise game flags; never parse or overwrite viewer preferences.

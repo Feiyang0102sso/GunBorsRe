@@ -29,7 +29,7 @@ std::uint32_t BitMaskFor(std::int16_t bitIndex) {
 
 }  // namespace
 
-bool CScriptVariable::Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor) {
+bool CScriptVariable::Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor) {
     const std::uint16_t destinationOperand = cursor.ReadUInt16();
     const std::uint8_t operation = cursor.ReadUInt8();
 
@@ -103,7 +103,7 @@ bool CScriptVariable::Execute(CScriptInterpreter &interpreter, ScriptCursor &cur
     return false;
 }
 
-void CScriptVariable::Skip(ScriptCursor &cursor) {
+void CScriptVariable::Skip(ZScriptCursor &cursor) {
     const std::uint8_t *start = cursor.at;
     const std::uint8_t operation = start[2];
 

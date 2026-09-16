@@ -18,7 +18,7 @@
 #define GUN_BROS_RE_GUN_BROS_CGAMEOBJECTPACK_H
 
 #include "engine/resources/CResPackTOC.h"
-#include "gun_bros_re/data/BigVersions.h"
+#include "gun_bros_re/data/ZBigVersions.h"
 
 #include <cstdint>
 #include <string>
@@ -37,7 +37,7 @@ extern const char *const kObjectScriptCountsName;
  * Only the ones M3 needs are named; the full list is in
  * _Big_tool/sections.md section 6.3.
  */
-enum class GameSection {
+enum class ZGameSection {
     Armor = 3,
     Bullet = 4,
     Enemy = 6,
@@ -79,8 +79,8 @@ public:
     /** Read the keyset and the counts resource out of an already-bound pack. */
     bool Init(CResPackTOC &pack);
 
-    bool IsInitialised() const { return m_version != BigVersion::Unknown; }
-    BigVersion GetBigVersion() const { return m_version; }
+    bool IsInitialised() const { return m_version != ZBigVersion::Unknown; }
+    ZBigVersion GetBigVersion() const { return m_version; }
     std::uint32_t GetSectionCount() const { return static_cast<std::uint32_t>(m_sectionBases.size()); }
     std::uint32_t GetTypeCount() const { return static_cast<std::uint32_t>(m_objectCounts.size()); }
     std::uint32_t GetStringCount() const { return static_cast<std::uint32_t>(m_stringHandles.size()); }
@@ -95,7 +95,7 @@ public:
      * @param localIndex Ordinal within it, as stored in a template.
      * @return the handle, or 0 when the section or ordinal is out of range.
      */
-    std::uint32_t GetHandle(GameSection section, std::uint32_t localIndex) const;
+    std::uint32_t GetHandle(ZGameSection section, std::uint32_t localIndex) const;
 
     /**
      * How many objects a section holds.
@@ -104,10 +104,10 @@ public:
      * bases are one apart may still hold zero objects, with a single empty
      * resource standing in as a placeholder.
      */
-    std::uint32_t GetObjectCount(GameSection section) const;
+    std::uint32_t GetObjectCount(ZGameSection section) const;
 
     /** Base handle of a section, for diagnostics. */
-    std::uint32_t GetSectionBase(GameSection section) const;
+    std::uint32_t GetSectionBase(ZGameSection section) const;
 
     /**
      * How many handles a section spans: the distance to the next base.
@@ -117,12 +117,12 @@ public:
      * section holding nothing still owns one empty resource -- so a caller
      * has to be ready for an empty payload.
      */
-    std::uint32_t GetSectionSpan(GameSection section) const;
+    std::uint32_t GetSectionSpan(ZGameSection section) const;
 
 private:
     /** GameSection uses the latest names; trailing asset sections shift in older BIGs. */
-    std::size_t GetSectionIndex(GameSection section) const;
-    BigVersion m_version = BigVersion::Unknown;
+    std::size_t GetSectionIndex(ZGameSection section) const;
+    ZBigVersion m_version = ZBigVersion::Unknown;
     std::vector<std::uint32_t> m_sectionBases;
     std::vector<std::uint8_t> m_objectCounts;
     std::vector<std::uint32_t> m_stringHandles;

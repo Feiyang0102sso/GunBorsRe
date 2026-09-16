@@ -12,13 +12,13 @@
 #include "engine/glu/script/CScriptReturn.h"
 #include "engine/glu/script/CScriptVariable.h"
 
-std::uint8_t ScriptCursor::ReadUInt8() {
+std::uint8_t ZScriptCursor::ReadUInt8() {
     const std::uint8_t value = *at;
     at += 1;
     return value;
 }
 
-std::uint16_t ScriptCursor::ReadUInt16() {
+std::uint16_t ZScriptCursor::ReadUInt16() {
     const std::uint16_t low = at[0];
     const std::uint16_t high = at[1];
     at += 2;
@@ -63,12 +63,12 @@ std::uint8_t CScriptCode::GetStatementCount() const {
     return m_bytes[1];
 }
 
-void CScriptCode::Skip(ScriptCursor &cursor) {
+void CScriptCode::Skip(ZScriptCursor &cursor) {
     const std::uint8_t length = cursor.at[0];
     cursor.at += static_cast<std::size_t>(length) + 1;
 }
 
-bool CScriptCode::Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor) {
+bool CScriptCode::Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor) {
     // Step over the length byte, then take the statement count.
     cursor.at += 1;
     const std::uint8_t statementCount = cursor.ReadUInt8();
@@ -118,11 +118,11 @@ bool CScriptCode::Execute(CScriptInterpreter &interpreter) const {
     if (start == nullptr) {
         return false;
     }
-    ScriptCursor cursor(start);
+    ZScriptCursor cursor(start);
     return Execute(interpreter, cursor);
 }
 
-bool CScriptCode::Evaluate(CScriptInterpreter &interpreter, ScriptCursor &cursor,
+bool CScriptCode::Evaluate(CScriptInterpreter &interpreter, ZScriptCursor &cursor,
                            std::uint16_t eventId) {
     cursor.at += 1;
     const std::uint8_t statementCount = cursor.ReadUInt8();
@@ -164,6 +164,6 @@ bool CScriptCode::Evaluate(CScriptInterpreter &interpreter, std::uint16_t eventI
     if (start == nullptr) {
         return false;
     }
-    ScriptCursor cursor(start);
+    ZScriptCursor cursor(start);
     return Evaluate(interpreter, cursor, eventId);
 }

@@ -6,30 +6,36 @@
  * which check runs — and every assertion those checks make — lives on this
  * side of the boundary.
  */
-#include "gun_bros_re/gameplay/SurvivalScenario.h"
+#include "gameplay/SurvivalFixtures.h"
 #include "gun_bros_re/debug/SurvivalDevelopment.h"
 
 /** Routes each session hook to the check the development record selected. */
-class SurvivalCheckScenario : public ISurvivalScenario {
+class SurvivalCheckScenario : public ZSurvivalScenario {
 public:
     explicit SurvivalCheckScenario(const SurvivalDevelopment &development);
 
-    int OnRewards(SurvivalRewardsFixture fixture) override;
-    int OnPowerupInventory(SurvivalPowerupInventoryFixture fixture) override;
-    int OnSceneReady(SurvivalSceneFixture fixture) override;
-    int OnBoss(SurvivalBossFixture fixture) override;
-    int OnFeedback(SurvivalFeedbackFixture fixture) override;
-    int OnLevelSounds(SurvivalLevelSoundsFixture fixture) override;
-    int OnPropRoutes(SurvivalPropRoutesFixture fixture) override;
-    int OnTriggerRoutes(SurvivalTriggerRoutesFixture fixture) override;
-    int OnPlacedProps(SurvivalPlacedPropsFixture fixture) override;
-    int OnBrotherPose(SurvivalBrotherPoseFixture fixture) override;
-    int OnTutorial(SurvivalTutorialFixture fixture) override;
-    int OnWaves(SurvivalWavesFixture fixture) override;
-    int OnHorde(SurvivalHordeFixture fixture) override;
-    int OnCampaign(SurvivalCampaignFixture fixture) override;
-    int OnPowerupCapture(SurvivalPowerupCaptureFixture fixture) override;
-    int OnLoopStarting(CombatScene &scene, PlayerVitals &vitals) override;
+    int OnResources(ZSurvivalResources resources) override;
+    int OnInventory(CResTOCManager &toc, CProfileManager &profile) override;
+    int OnStage(ZSurvivalPhase phase, ZSurvivalState &state) override;
+
+private:
+    unsigned m_failures = 0;
+    int OnRewards(SurvivalRewardsFixture fixture);
+    int OnPowerupInventory(SurvivalPowerupInventoryFixture fixture);
+    int OnSceneReady(SurvivalSceneFixture fixture);
+    int OnBoss(SurvivalBossFixture fixture);
+    int OnFeedback(SurvivalFeedbackFixture fixture);
+    int OnLevelSounds(SurvivalLevelSoundsFixture fixture);
+    int OnPropRoutes(SurvivalPropRoutesFixture fixture);
+    int OnTriggerRoutes(SurvivalTriggerRoutesFixture fixture);
+    int OnPlacedProps(SurvivalPlacedPropsFixture fixture);
+    int OnBrotherPose(SurvivalBrotherPoseFixture fixture);
+    int OnTutorial(SurvivalTutorialFixture fixture);
+    int OnWaves(SurvivalWavesFixture fixture);
+    int OnHorde(SurvivalHordeFixture fixture);
+    int OnCampaign(SurvivalCampaignFixture fixture);
+    int OnPowerupCapture(SurvivalPowerupCaptureFixture fixture);
+    int OnLoopStarting(ZCombatWorld &scene, ZPlayerVitals &vitals);
 
 private:
     const SurvivalDevelopment &m_development;
@@ -39,7 +45,7 @@ private:
  * Declare it next to the record; both must outlive the session call. */
 struct DevelopmentBinding {
     SurvivalCheckScenario scenario;
-    DevelopmentBinding(SurvivalLaunch &launch, const SurvivalDevelopment &development)
+    DevelopmentBinding(ZSurvivalLaunch &launch, const SurvivalDevelopment &development)
         : scenario(development) {
         launch.development = &development;
         launch.scenario = &scenario;

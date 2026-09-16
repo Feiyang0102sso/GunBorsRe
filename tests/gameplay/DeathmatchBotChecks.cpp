@@ -1,13 +1,13 @@
 /** Hard DM uses real PvP rules and Flow with virtual inventory; Easy stays limited. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/DeathmatchBot.h"
+#include "gun_bros_re/gameplay/ZDeathmatchBot.h"
 #include "engine/core/CStringToKey.h"
 
-int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, PackTables &tables,
-    CMPMatch &match, PowerupScene &powerups, CProfileManager &profile) {
+int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
+    CMPMatch &match, ZPowerupScene &powerups, CProfileManager &profile) {
     auto &session = fixture.session;
     auto &scene = fixture.scene;
-    auto &bot = static_cast<DeathmatchBot &>(fixture.brother);
+    auto &bot = static_cast<ZDeathmatchBot &>(fixture.brother);
     const auto previousInventory = profile.powerups;
     profile.powerups.clear();
     // Run the same real inventory/cooldown checks for both unlimited difficulties.
@@ -16,12 +16,12 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
         if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
         fixture.vitals.invincible = true; bot.vitals.invincible = true;
-        std::vector<PowerupEntry> catalog;
-        std::vector<StoreEntry> store;
-        std::vector<WeaponEntry> weapons;
+        std::vector<ZPowerupEntry> catalog;
+        std::vector<ZStoreEntry> store;
+        std::vector<ZWeaponEntry> weapons;
         if (!LoadPowerupCatalog(toc, tables, catalog) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
         if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
-        const WeaponEntry *chosen[2]{};
+        const ZWeaponEntry *chosen[2]{};
         for (unsigned slot = 0; slot < 2; ++slot) {
             const auto &gun = scene.MatchGun(1, slot);
             for (const auto &weapon : weapons) {

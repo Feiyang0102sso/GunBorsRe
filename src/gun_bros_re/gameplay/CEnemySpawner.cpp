@@ -1,11 +1,12 @@
 /** @file CEnemySpawner.cpp
  * @brief CEnemySpawner rules from iOS :146174-146945 and spawner.link.
  */
+#include "gun_bros_re/gameplay/ILayerPath.h"
 #include "gun_bros_re/gameplay/CEnemySpawner.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include <cstdio>
 
-void CEnemySpawner::Bind(CLevel &level, IEnemySpawnWorld *world) {
+void CEnemySpawner::Bind(CLevel &level, ZLevelWorld *world) {
     m_level = &level;
     m_world = world;
     m_spawnCount = 0;
@@ -175,4 +176,38 @@ std::int16_t CEnemySpawner::FunctionResolver(std::uint8_t function,
         break;
     }
     return 0;
+}
+
+/**
+ * Where a rule-driven spawn appears.
+ *
+ * CEnemySpawner::GetSpawnPoint :146098 picks between two rules. With an
+ * explicit node list (DisableAllNodes + EnableNode) it is
+ * GetSpawnPointSpecific :146576: one of the listed nodes, uniformly at random,
+ * with no other test. Otherwise it is GetSpawnPointOffScreen :146112, which
+ * hands CLayerPathLink::GetSpawnLocation :166819 the player's position
+ * (GetSpawnSource :147224) and an offscreen filter built from the camera
+ * rectangle grown by ten units on each side (SetupSpawnFilter :147283).
+ *
+ * GetSpawnLocation walks every node, drops the locked ones and the ones the
+ * filter rejects for being on screen, and feeds the rest to a DistanceList
+ * :167261 that keeps the five nearest to the player. One of those five is then
+ * chosen at random -- so enemies arrive from just outside the view, never in
+ * the player's face, and never from the far side of the map.
+ *
+ * No node qualifying is an ordinary outcome: the original spawns nothing that
+ * tick and the rule tries again on the next one.
+ */
+int CEnemySpawner::GetSpawnPoint(const ILayerPath &path, float sourceX, float sourceY,
+    float cameraLeft, float cameraTop, float cameraWidth, float cameraHeight) {
+    if (!m_allNodes) {
+        if (m_enabledNodes.empty()) { return -1; }
+        const int pick = m_level->RandomInteger(0, static_cast<std::int16_t>(m_enabledNodes.size() - 1));
+        return m_enabledNodes[pick];
+    }
+    // CEnemySpawner::SetupSpawnFilter :147283 expands the camera by ten units.
+    const ZSpawnFilter filter{cameraLeft - 10, cameraTop - 10,
+        cameraLeft + cameraWidth + 10, cameraTop + cameraHeight + 10,
+        cameraWidth > 0 && cameraHeight > 0};
+    return path.GetSpawnLocation(sourceX, sourceY, filter, m_level->GetRandom());
 }

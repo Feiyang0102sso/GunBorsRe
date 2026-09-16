@@ -1,6 +1,7 @@
 /** @file CLayerPathMesh.cpp
  * @brief Wire format and centre calculation from iOS :167381-167560.
  */
+#include "engine/core/ZRandom.h"
 #include "gun_bros_re/gameplay/CLayerPathMesh.h"
 
 void CLayerPathMesh::PropogateNodeLock(int boundary, int origin, bool locked) {
@@ -57,8 +58,8 @@ int CLayerPathMesh::FindNode(float x, float y) const {
         bool positive = false, negative = false;
         const Quad &quad = m_quads[index];
         for (unsigned side = 0; side < 4; ++side) {
-            const CollisionPoint &a = m_vertices[quad.vertices[side]];
-            const CollisionPoint &b = m_vertices[quad.vertices[(side + 1) % 4]];
+            const ZCollisionPoint &a = m_vertices[quad.vertices[side]];
+            const ZCollisionPoint &b = m_vertices[quad.vertices[(side + 1) % 4]];
             const float cross = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
             if (cross > 0.01f) { positive = true; }
             if (cross < -0.01f) { negative = true; }
@@ -78,7 +79,7 @@ bool CLayerPathMesh::Init(CArrayInputStream &stream) {
     m_nodes.clear();
     m_nodes.resize(nodeCount);
     for (unsigned index = 0; index < vertexCount; ++index) {
-        CollisionPoint point;
+        ZCollisionPoint point;
         point.x = static_cast<float>(stream.ReadInt16());
         point.y = static_cast<float>(stream.ReadInt16());
         m_vertices.push_back(point);
@@ -103,4 +104,21 @@ bool CLayerPathMesh::Init(CArrayInputStream &stream) {
         m_quads.push_back(quad);
     }
     return !stream.Overran() && refs == neighbourRefCount;
+}
+
+int CLayerPathMesh::GetSpawnLocation(float, float, const ZSpawnFilter &filter, ZRandom &random) const {
+    const auto &nodes = m_nodes;
+    if (nodes.empty()) { return -1; }
+    // CLayerPathMesh::GetSpawnLocation :168115 starts at a random polygon
+    // and scans cyclically for the first unlocked, offscreen centre.
+    // Link layers below instead choose among the five nearest nodes.
+    const unsigned start = static_cast<unsigned>(random.Integer(0, static_cast<std::int16_t>(nodes.size())));
+    for (unsigned offset = 0; offset < nodes.size(); ++offset) {
+        const std::size_t index = (start + offset) % nodes.size();
+        const auto &node = nodes[index];
+        if (node.locked) { continue; }
+        if (!filter.Accepts(node.x, node.y)) { continue; }
+        return static_cast<int>(index);
+    }
+    return -1;
 }

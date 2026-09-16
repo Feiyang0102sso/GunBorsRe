@@ -1,4 +1,5 @@
-#include "engine/core/Paths.h"
+#include "gun_bros_re/debug/Capture.h"
+#include "engine/core/ZPaths.h"
 /**
  * @file M2Texture.cpp
  * @brief M2 milestone harness: a PNG out of a .big, on screen.
@@ -11,10 +12,10 @@
 
 #include "tests/research/TextureStudy.h"
 
-#include "engine/graphics/CPNG.h"
-#include "engine/graphics/CShaderProgram.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
+#include "engine/graphics/ZPNG.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
 #include "engine/resources/CResTOCManager.h"
 
 #include <cstdio>
@@ -61,7 +62,7 @@ void MakeOrthoTopLeft(float width, float height, float *matrix) {
 }
 
 /** Upload an RGBA8 image as a texture. Returns 0 on failure. */
-GLuint CreateTexture(const PNGImage &image) {
+GLuint CreateTexture(const ZPNGImage &image) {
     GLuint texture = 0;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -86,7 +87,7 @@ GLuint CreateTexture(const PNGImage &image) {
 
 /** Fetch a PNG resource out of a pack and decode it. */
 bool LoadImageFromPack(const std::string &bigDirectory, const std::string &packShortName,
-                       std::uint32_t resourceId, PNGImage &image) {
+                       std::uint32_t resourceId, ZPNGImage &image) {
     CResTOCManager tocManager;
     if (!tocManager.InitAuto(bigDirectory)) {
         return false;
@@ -123,19 +124,19 @@ int RunTextureStudy(const std::string &bigDirectory, const std::string &packShor
     std::printf("=== M2: a PNG from a .big, on screen ===\n\n");
 
     // --- the image, before any GL exists ---
-    PNGImage image;
+    ZPNGImage image;
     if (!LoadImageFromPack(bigDirectory, packShortName, resourceId, image)) {
         return 1;
     }
 
     // --- window and context ---
-    CWindow window;
+    ZWindow window;
     if (!window.Open("gun_bros_re -- M2", kDefaultWindowWidth, kDefaultWindowHeight)) {
         return 1;
     }
 
     // --- shaders ---
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
         return 1;
     }
@@ -240,7 +241,7 @@ int RunTextureStudy(const std::string &bigDirectory, const std::string &packShor
             // Grab before the swap, while the finished frame is still the
             // back buffer glReadPixels reads from.
             if (!screenshotPath.empty()) {
-                if (!GB_SAVE_FRAME(window, screenshotPath)) {
+                if (!Capture::SaveFrame(window, screenshotPath)) {
                     return 1;
                 }
                 window.Present();

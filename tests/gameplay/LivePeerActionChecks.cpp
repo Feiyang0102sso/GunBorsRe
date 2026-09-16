@@ -4,19 +4,19 @@
 #include "gun_bros_re/cheats/CheatConfig.h"
 #include "TestOutput.h"
 
-int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, PackTables &tables,
-    PowerupScene &playerPowerups, PowerupScene &peerPowerups, CProfileManager &peerProfile) {
+int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
+    ZPowerupScene &playerPowerups, ZPowerupScene &peerPowerups, CProfileManager &peerProfile) {
     auto &scene = fixture.scene;
     auto &session = fixture.session;
     auto &bot = fixture.brother;
     CPlayerProgress::Template progressData;
     CPlayerProgress progress;
     const auto cheatSavePath = std::filesystem::path(TestOutput::Path("runtime-cheat-save"));
-    SurvivalGameContext cheatContext{peerProfile, cheatSavePath};
+    ZSurvivalGameContext cheatContext{peerProfile, cheatSavePath};
     auto command = [&](const char *code, CombatCheatResult &result) {
         return ApplyCombatCheat(code, scene, fixture.vitals, playerPowerups, session, &cheatContext, result, progressData, progress);
     };
-    scene.SetTestBot(false);
+    scene.SetLocalBot(false);
     CombatCheatResult result;
     for (const char *code : {"brow", "brok", "bror", "bros", "brop"}) {
         if (!command(code, result) || bot.vitals.dead || result.botShop || result.botPowerup) { return 1; }
@@ -25,7 +25,7 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, Pack
         std::printf("[live-peer-actions] runtime cheat unexpectedly saved account\n");
         return 1;
     }
-    scene.SetTestBot(true);
+    scene.SetLocalBot(true);
     if (!command("bros", result) || result.botShop != scene.IsLocalLive()) { return 1; }
     if (!command("brop", result) || result.botPowerup != scene.IsLocalLive()) { return 1; }
     if (!command("brok", result) || !bot.vitals.dead || fixture.vitals.dead) { return 1; }
@@ -41,7 +41,7 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, Pack
     for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.IsMovieActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
     if (peerPowerups.IsMovieActive() || playerPowerups.consumed != playerConsumed || peerPowerups.failures != 0) { return 1; }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
-    std::vector<PowerupEntry> catalog;
+    std::vector<ZPowerupEntry> catalog;
     if (!LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
     GameObjectRef revive;
     for (const auto &entry : catalog) {

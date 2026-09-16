@@ -29,7 +29,7 @@ bool CMoveSetMesh::Init(CArrayInputStream &stream) {
     const std::uint8_t moveCount = stream.ReadUInt8();
     m_moves.resize(moveCount);
     for (std::uint8_t i = 0; i < moveCount; ++i) {
-        MeshMove &move = m_moves[i];
+        ZMeshMove &move = m_moves[i];
         move.meshConfigIndex = stream.ReadUInt8();
         move.firstFrame = stream.ReadUInt16();
         move.lastFrame = stream.ReadUInt16();

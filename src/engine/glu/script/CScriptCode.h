@@ -48,10 +48,10 @@ constexpr std::uint8_t kScriptOpReturn = 5;
  * The original passes a two-word stack structure holding the block and a
  * moving byte pointer; only the pointer is ever read, so only it is here.
  */
-struct ScriptCursor {
+struct ZScriptCursor {
     const std::uint8_t *at;
 
-    explicit ScriptCursor(const std::uint8_t *start) : at(start) {}
+    explicit ZScriptCursor(const std::uint8_t *start) : at(start) {}
 
     std::uint8_t ReadUInt8();
     std::uint16_t ReadUInt16();
@@ -83,7 +83,7 @@ public:
      *         a return. The caller passes that up so an enclosing condition
      *         stops too.
      */
-    static bool Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor);
+    static bool Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor);
 
     /** Convenience form: run this block from its start. */
     bool Execute(CScriptInterpreter &interpreter) const;
@@ -96,14 +96,14 @@ public:
      * executed. This is why an event handler is inert during Execute -- the
      * two passes split the block between them.
      */
-    static bool Evaluate(CScriptInterpreter &interpreter, ScriptCursor &cursor,
+    static bool Evaluate(CScriptInterpreter &interpreter, ZScriptCursor &cursor,
                          std::uint16_t eventId);
 
     /** Convenience form: evaluate this block from its start. */
     bool Evaluate(CScriptInterpreter &interpreter, std::uint16_t eventId) const;
 
     /** Step the cursor over a whole block without running it. */
-    static void Skip(ScriptCursor &cursor);
+    static void Skip(ZScriptCursor &cursor);
 
 private:
     // The block exactly as stored: byte 0 is the length, byte 1 the statement

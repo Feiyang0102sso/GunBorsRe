@@ -6,9 +6,9 @@
 int RunDailyBonusCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<StoreEntry> store;
+    std::vector<ZStoreEntry> store;
     CDailyBonusTracking daily;
     if (!daily.Load(toc, tables) || !LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
     CProfileManager profile;

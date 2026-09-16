@@ -35,7 +35,7 @@
 #define GUN_BROS_RE_SPRITE_GLU_CSPRITEGLU_H
 
 #include "engine/resources/CResPackTOC.h"
-#include "engine/glu/sprite/CSpriteGluArchetype.h"
+#include "engine/glu/sprite/ZSpriteArchetype.h"
 
 #include <cstdint>
 #include <memory>
@@ -58,7 +58,7 @@ constexpr std::uint8_t kSpriteMapBlendAdditive = 0x40;
 constexpr std::uint8_t kSpriteMapBlendAdditiveOpaque = 0x80;
 
 /** Which slot on the atlas a sprite map draws, how it is flipped, how it blends. */
-struct SpriteMap {
+struct ZSpriteMap {
     std::uint16_t imageSlot;   // index into the image slot table
     std::uint8_t transform;    // flip and rotate bits
     std::uint8_t blendFlags;
@@ -94,7 +94,7 @@ public:
      * Needs a GL context, because loading one uploads its atlas pages.
      * Returns null when the index is out of range or the load fails.
      */
-    const CSpriteGluArchetype *GetArchetype(std::uint8_t index);
+    const ZSpriteArchetype *GetArchetype(std::uint8_t index);
 
     /**
      * Turn a sprite map index into the image index an archetype can look up.
@@ -111,7 +111,7 @@ public:
 
     /** The sprite map's blend bits, or 0 when the index is out of range. */
     std::uint8_t GetSpriteMapBlendFlags(std::uint16_t spriteMapIndex) const;
-    const CTexture *GetPrimitiveTexture(std::uint16_t spriteMapIndex) const;
+    const ZTexture *GetPrimitiveTexture(std::uint16_t spriteMapIndex) const;
 
 private:
     /** Read SPRITEGLU__BINARY_GLOBAL into the tables. */
@@ -121,26 +121,26 @@ private:
     bool ReadPageCounts(CResPackTOC &pack);
 
     /** Decode and upload one archetype's atlas pages. */
-    bool LoadPages(std::uint8_t index, CSpriteGluArchetype &archetype);
+    bool LoadPages(std::uint8_t index, ZSpriteArchetype &archetype);
 
     CResPackTOC *m_pack;
     bool m_initialised;
 
     std::uint8_t m_archetypeCount;
     std::vector<std::uint16_t> m_imageSlots;  // image slot -> image index
-    std::vector<SpriteMap> m_spriteMaps;
+    std::vector<ZSpriteMap> m_spriteMaps;
     struct Primitive {
         std::uint32_t color = 0;
         std::uint16_t width = 0, height = 0;
         std::uint8_t type = 0;
-        mutable std::unique_ptr<CTexture> texture;
+        mutable std::unique_ptr<ZTexture> texture;
     };
     std::vector<Primitive> m_primitives;
 
     // How many atlas pages each archetype owns, and where its run starts.
     std::vector<std::uint8_t> m_pagesPerArchetype;
 
-    std::vector<std::unique_ptr<CSpriteGluArchetype>> m_archetypes;
+    std::vector<std::unique_ptr<ZSpriteArchetype>> m_archetypes;
     std::vector<bool> m_archetypeFailed;  // do not retry a bad load every frame
 };
 

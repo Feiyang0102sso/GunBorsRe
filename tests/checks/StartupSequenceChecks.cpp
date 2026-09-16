@@ -1,42 +1,43 @@
-#include "engine/core/Paths.h"
-/** @file StartupSequence.cpp
+#include "engine/core/ZPaths.h"
+#include "engine/graphics/ZPNGEncode.h"
+/** @file ZStartupSequence.cpp
  * @brief Read original intro video/audio directly; never substitute a still logo.
  */
 #define NOMINMAX
 #include "TestOutput.h"
-#include "gun_bros_re/StartupSequence.h"
-#include "engine/platform/CMediaDecoder.h"
-#include "engine/platform/CWindow.h"
-#include "engine/graphics/CQuadBatch.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/platform/CAudioPlayer.h"
+#include "gun_bros_re/ZStartupSequence.h"
+#include "engine/platform/ZMediaDecoder.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/graphics/ZQuadBatch.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/platform/ZAudioPlayer.h"
 #include "gun_bros_re/gameplay/CBGM.h"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
-#include "gun_bros_re/StartupSequenceInternal.h"
+#include "gun_bros_re/ZStartupSequenceInternal.h"
 using namespace StartupSequenceDetail;
 #include "Checks.h"
 
 int RunMediaCheck() {
     unsigned failures = 0;
     for (unsigned track = 0; track < 7; ++track) {
-        MediaAudio audio;
+        ZMediaAudio audio;
         if (!DecodeMediaAudio(Paths::Root() / Paths::AudioDirectory / CBGM::TrackName(track), audio)) { ++failures; continue; }
         bool nonzero = false;
         for (std::uint8_t sample : audio.samples) { if (sample != 0) { nonzero = true; break; } }
         if (!nonzero || audio.samples.size() < audio.sampleRate * audio.channels * 2) { ++failures; }
     }
-    MediaAudio logoAudio;
+    ZMediaAudio logoAudio;
     if (!DecodeMediaAudio(kLogoDirectory / "glu_logo_audio.wav", logoAudio)) { ++failures; }
-    CMediaVideo video;
+    ZMediaVideo video;
     if (!video.Open(kLogoDirectory / "glu_logo_landscape.m4v")) { return 1; }
     unsigned frames = 0;
     bool ended = false;
     std::uint64_t timestamp = 0;
     std::uint64_t previousTimestamp = 0;
     while (!ended) {
-        PNGImage image;
+        ZPNGImage image;
         if (!video.ReadFrame(image, timestamp, ended)) { return 1; }
         if (ended) { break; }
         if (timestamp < previousTimestamp || image.pixels.size() != image.width * image.height * 4) { ++failures; }

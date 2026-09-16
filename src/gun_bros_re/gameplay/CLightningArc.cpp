@@ -27,7 +27,7 @@ void CLightningArc::GenerateArc(std::vector<Vertex> &points, unsigned first,
     GenerateArc(points, middle, count - count / 2, randomState);
 }
 
-void CLightningArc::Update(const BulletLightningSettings &settings, int deltaMs,
+void CLightningArc::Update(const ZBulletLightningSettings &settings, int deltaMs,
     std::uint32_t &randomState) {
     if (settings.revision != m_settings.revision) {
         m_settings = settings;

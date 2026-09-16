@@ -41,19 +41,19 @@
 constexpr float kMoveSpeedScale = 1.0f / 65536.0f;
 
 /** One model the character can put on screen, and the atlas it wears. */
-struct MeshConfig {
+struct ZMeshConfig {
     std::uint8_t meshOrdinal;   // ordinal into section 31
     std::uint8_t imageOrdinal;  // ordinal into section 29
 };
 
 /** A sound the move fires when its animation reaches a frame. */
-struct MoveSound {
+struct ZMoveSound {
     std::uint16_t frame;
     std::uint8_t soundId;
 };
 
 /** One animation: a frame range of one mesh, played at some speed. */
-struct MeshMove {
+struct ZMeshMove {
     std::uint8_t meshConfigIndex;
     std::uint16_t firstFrame;
     std::uint16_t lastFrame;
@@ -67,7 +67,7 @@ struct MeshMove {
     // TODO: offset 12 of the move record -- nothing in the decompile reads it.
     std::uint32_t unknown;
 
-    std::vector<MoveSound> sounds;
+    std::vector<ZMoveSound> sounds;
 };
 
 /**
@@ -80,8 +80,8 @@ public:
     bool Init(CArrayInputStream &stream);
 
     std::uint32_t GetPackHash() const { return m_packHash; }
-    const std::vector<MeshConfig> &GetMeshConfigs() const { return m_meshConfigs; }
-    const std::vector<MeshMove> &GetMoves() const { return m_moves; }
+    const std::vector<ZMeshConfig> &GetMeshConfigs() const { return m_meshConfigs; }
+    const std::vector<ZMeshMove> &GetMoves() const { return m_moves; }
 
     /**
      * Whether any move covers this mesh frame.
@@ -94,8 +94,8 @@ public:
 
 private:
     std::uint32_t m_packHash;
-    std::vector<MeshConfig> m_meshConfigs;
-    std::vector<MeshMove> m_moves;
+    std::vector<ZMeshConfig> m_meshConfigs;
+    std::vector<ZMeshMove> m_moves;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMOVESETMESH_H

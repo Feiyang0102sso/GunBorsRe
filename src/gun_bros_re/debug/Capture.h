@@ -1,8 +1,7 @@
-#ifdef __cplusplus
 #pragma once
 #include <string>
-#include "engine/graphics/PNGEncode.h"
-class CWindow;
+#include "engine/graphics/ZPNGEncode.h"
+class ZWindow;
 namespace Capture {
     /**
      * Read the drawn frame back and write it out as a PNG.
@@ -12,8 +11,5 @@ namespace Capture {
      * before Present.
      */
 
-bool SaveFrame(const CWindow &window, const std::string &path);
+bool SaveFrame(const ZWindow &window, const std::string &path);
 }
-#define GB_SAVE_FRAME(window, path) Capture::SaveFrame(window, path)
-
-#endif

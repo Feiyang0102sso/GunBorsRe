@@ -1,5 +1,5 @@
 #include "gun_bros_viewer/scenes/MapTurretPreview.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 using namespace MapDetail;
 
 namespace {
@@ -10,18 +10,18 @@ namespace {
 enum class TurretState { Idle, Active, Off, Charging, Count };
 }
 
-void MapTurretPreview::Bind(LoadedMap &map) {
+void MapTurretPreview::Bind(ZLoadedMap &map) {
     m_enemies.clear();
     m_indicators.clear();
     m_state = 0;
     const auto packHash = CStringToKey("pack9");
-    for (PlacedEnemy &placed : map.enemies) {
+    for (ZPlacedEnemy &placed : map.enemies) {
         if (placed.templateData->packHash == packHash && placed.templateData->ordinal == 0) {
             m_enemies.push_back(&placed.model->enemy);
         }
     }
     if (m_enemies.empty()) { return; }
-    for (PlacedProp &prop : map.props) {
+    for (ZPlacedProp &prop : map.props) {
         if (prop.sprite->resource.packHash != packHash || prop.sprite->resource.localIndex != 47) { continue; }
         prop.runtime = std::make_shared<CProp>();
         prop.runtime->Bind(prop.sprite->data, &prop.sprite->durations);
@@ -47,7 +47,7 @@ void MapTurretPreview::ApplyState() {
     }
     // Enter original states; their sequences still own opening, closing and playback.
     for (CEnemy *enemy : m_enemies) { enemy->SetState(static_cast<std::uint8_t>(enemyState)); }
-    for (PlacedProp *prop : m_indicators) {
+    for (ZPlacedProp *prop : m_indicators) {
         prop->runtime->SetResearchState(static_cast<std::uint8_t>(indicatorState));
     }
     Update(0);
@@ -55,7 +55,7 @@ void MapTurretPreview::ApplyState() {
 }
 
 void MapTurretPreview::Update(int deltaMs) {
-    for (PlacedProp *prop : m_indicators) {
+    for (ZPlacedProp *prop : m_indicators) {
         prop->runtime->Update(deltaMs, false);
         prop->background = prop->runtime->GetPlayer(0);
         prop->main = prop->runtime->GetPlayer(1);

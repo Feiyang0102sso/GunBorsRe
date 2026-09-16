@@ -1,14 +1,14 @@
-#include "engine/core/Paths.h"
-/** @file ArmorCatalog.cpp
+#include "engine/core/ZPaths.h"
+/** @file ZArmorCatalog.cpp
  * @brief Verify every armour script, model and texture from original archives.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "engine/graphics/CPNG.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "engine/graphics/ZPNG.h"
 #include "engine/graphics/CMesh.h"
-#include "gun_bros_re/gameplay/PlayerModel.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "engine/core/CMatrix4d.h"
+#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "engine/core/ZMatrix4d.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -20,8 +20,8 @@ int RunArmorCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
         return 1;
     }
-    PackTables tables(toc);
-    std::vector<ArmorEntry> catalog;
+    ZPackTables tables(toc);
+    std::vector<ZArmorEntry> catalog;
     if (!LoadArmorCatalog(toc, tables, catalog)) {
         return 1;
     }
@@ -34,7 +34,7 @@ int RunArmorCheck(const std::string &bigDirectory) {
     unsigned failures = 0;
     unsigned meshCount = 0;
     for (std::size_t index = 0; index < catalog.size(); ++index) {
-        const ArmorEntry &entry = catalog[index];
+        const ZArmorEntry &entry = catalog[index];
         unsigned entryFailures = 0;
         CArmor equipped;
         equipped.Bind(entry.data);
@@ -57,7 +57,7 @@ int RunArmorCheck(const std::string &bigDirectory) {
             std::vector<std::uint8_t> payload;
             if (entry.data.HasMesh(part)) {
                 const CGameAssetRef &ref = entry.data.GetMeshRef(part);
-                if (!tables.ReadSectionResource(ref.packHash, GameSection::Mesh, ref.assetId, payload)) {
+                if (!tables.ReadSectionResource(ref.packHash, ZGameSection::Mesh, ref.assetId, payload)) {
                     ++entryFailures;
                 } else {
                     CArrayInputStream stream(payload);
@@ -70,8 +70,8 @@ int RunArmorCheck(const std::string &bigDirectory) {
             }
             const CGameAssetRef &image = entry.data.GetLoadedImageRef(part);
             if (image.assetId >= 0 && !image.IsNull()) {
-                PNGImage decoded;
-                if (!tables.ReadSectionResource(image.packHash, GameSection::Png, image.assetId, payload) ||
+                ZPNGImage decoded;
+                if (!tables.ReadSectionResource(image.packHash, ZGameSection::Png, image.assetId, payload) ||
                     !PNGDecode(payload, decoded)) {
                     ++entryFailures;
                 }
@@ -106,23 +106,23 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
         return 1;
     }
-    PackTables tables(toc);
-    std::vector<ArmorEntry> catalog;
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData data;
+    ZPackTables tables(toc);
+    std::vector<ZArmorEntry> catalog;
+    std::vector<ZWeaponEntry> weapons;
+    ZPlayerTemplateData data;
     if (!LoadArmorCatalog(toc, tables, catalog) || !LoadWeaponCatalog(toc, tables, weapons) ||
         !FindPlayerTemplate(toc, tables, data)) {
         return 1;
     }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Armor rendering regression", 640, 480)) {
         return 1;
     }
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
         return 1;
     }
-    PlayerModel player;
+    ZPlayerModel player;
     if (!BuildPlayerBody(tables, data.moveSet, player)) {
         return 1;
     }
@@ -148,10 +148,10 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
             AdvancePlayer(player, 160);
             PosePlayer(player);
             const std::uint32_t slot = catalog[index].data.GetSlot();
-            const PlayerArmorState &armor = *player.armor[slot];
+            const ZPlayerArmorState &armor = *player.armor[slot];
             for (std::uint32_t part = 0; part < kArmorVariantCount; ++part) {
                 if (armor.parts[part]) {
-                    MeshBoneTransform attachment;
+                    ZMeshBoneTransform attachment;
                     if (!player.weapon->brother.GetTorso().GetAnimation().GetNodeAt(
                         armor.parts[part]->boneIndex, attachment)) {
                         ++failures;

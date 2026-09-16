@@ -25,9 +25,9 @@ std::uint32_t ReadU32(const std::uint8_t *bytes) {
  * Sequential reader over a decompressed resource payload.
  * Reads past the end yield zero and latch an error flag.
  */
-class PayloadReader {
+class ZPayloadReader {
 public:
-    explicit PayloadReader(const std::vector<std::uint8_t> &data)
+    explicit ZPayloadReader(const std::vector<std::uint8_t> &data)
         : m_data(data), m_position(0), m_overran(false) {}
 
     std::uint32_t ReadU32() {
@@ -84,7 +84,7 @@ bool CResPackTOC::Bind(const std::string &bigDirectory, std::uint32_t tocResourc
         return false;
     }
 
-    PayloadReader reader(payload);
+    ZPayloadReader reader(payload);
     const std::uint32_t entryCount = reader.ReadU32();
     if (entryCount * 8 > reader.Remaining()) {
         std::printf("[pack] %s: TOC claims %u entries but holds %zu bytes\n",
@@ -131,7 +131,7 @@ bool CResPackTOC::LoadInitData() {
         return false;
     }
 
-    PayloadReader reader(payload);
+    ZPayloadReader reader(payload);
 
     // A leading uint32 array the engine keeps but never reads back.
     const std::uint32_t leadingCount = reader.ReadU32();

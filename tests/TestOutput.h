@@ -1,4 +1,4 @@
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /** @file TestOutput.h
  * @brief Host-only output paths for the existing research checks.
  * The driver supplies one absolute directory per case. No game resource values
@@ -47,5 +47,3 @@ inline std::string Path(const std::string &relativeName) {
 }
 
 #endif
-
-

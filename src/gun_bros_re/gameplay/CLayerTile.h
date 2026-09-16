@@ -30,7 +30,7 @@ constexpr std::uint8_t kTileFlagFlipVertical = 0x02;
 constexpr float kLayerSpeedScale = -0.05f;
 
 /** One cell of the grid. */
-struct TileCell {
+struct ZTileCell {
     std::uint8_t tileId;  // 255 means empty, draw nothing
     std::uint8_t flags;
 };
@@ -92,12 +92,12 @@ public:
      * Cell at a canvas position, wrapping when the layer is smaller than the
      * canvas. Both coordinates are in tiles.
      */
-    const TileCell &GetCell(std::uint32_t column, std::uint32_t row) const;
+    const ZTileCell &GetCell(std::uint32_t column, std::uint32_t row) const;
 
 private:
     std::uint16_t m_width;
     std::uint16_t m_height;
-    std::vector<TileCell> m_cells;
+    std::vector<ZTileCell> m_cells;
 
     // Drift, in tiles per second and in tiles. Zero unless a level script asks
     // for it, which is the case for six of the twenty-two maps.
@@ -107,7 +107,7 @@ private:
     float m_offsetY;
 
     // Returned for lookups on an empty layer, so callers never see a null.
-    static const TileCell s_emptyCell;
+    static const ZTileCell s_emptyCell;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CLAYERTILE_H

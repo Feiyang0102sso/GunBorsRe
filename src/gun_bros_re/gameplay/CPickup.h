@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /** @file CPickup.h
  * @brief Original pickup template and collection script, independent of drawing.
  */
@@ -7,14 +7,14 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 
-struct PickupAction {
+struct ZPickupAction {
     enum class Kind { Xplodium, Experience, Health, Sound, StoreItem };
     Kind kind = Kind::Xplodium;
     int amount = 0;
     GameObjectRef resource;
 };
 
-class CPickup : public GameScriptObject {
+class CPickup : public ZGameScriptObject {
 public:
     /** CPickup::Template::Init :99591; section 13, original object type 12. */
     struct Template {
@@ -30,7 +30,7 @@ public:
     bool Collect();
     bool IsCollected() const { return m_collected; }
     unsigned GetUnsupportedCount() const { return m_unsupported; }
-    std::vector<PickupAction> TakeActions();
+    std::vector<ZPickupAction> TakeActions();
     std::int16_t FunctionResolver(std::uint8_t function,
         const std::int16_t *arguments, std::uint8_t argumentCount);
 private:
@@ -38,6 +38,6 @@ private:
     CScriptInterpreter m_interpreter;
     bool m_collected = false;
     unsigned m_unsupported = 0;
-    std::vector<PickupAction> m_actions;
+    std::vector<ZPickupAction> m_actions;
 };
 #endif

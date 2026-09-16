@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CLevel.h
  * @brief A level: a map plus the script that drives it.
@@ -24,7 +24,7 @@
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptInterpreter.h"
-#include "engine/glu/script/CScriptResolver.h"
+#include "engine/glu/script/ScriptResolver.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/gameplay/CEnemySpawner.h"
 #include "gun_bros_re/gameplay/CLevelIndicator.h"
@@ -51,7 +51,7 @@ constexpr std::uint8_t kLevelExportOnLevelStart = 0;
 constexpr std::uint32_t kLevelVariableCount = 8;
 
 /** A level and the script it runs. */
-class CLevel : public GameScriptObject {
+class CLevel : public ZGameScriptObject {
 public:
     bool IsManualSpawnTag(unsigned char tag) const { return m_manualSpawnTags[tag]; }
     /**
@@ -90,7 +90,7 @@ public:
      *
      * The template and map must outlive the level.
      */
-    void Bind(const Template &levelTemplate, CMap &map, IEnemySpawnWorld *world = nullptr, int startWave = 0);
+    void Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world = nullptr, int startWave = 0);
 
     /**
      * Seed the stream CGame natives 1 and 2 draw from for this level's script.
@@ -109,6 +109,7 @@ public:
     std::int16_t *TutorialStepVariable() { return &m_tutorialStep; }
     void TutorialAdvance();
     bool CanBrotherShoot() const { return m_brotherCanShoot; }
+    const Template &GetTemplate() const { return *m_template; }
     int GetWaveLimit() const { return m_template->waveLimit; }
     void Update(int deltaMs);
     /** HUD/movie completion callbacks use event class 4 in the original. */
@@ -141,6 +142,7 @@ public:
     void RemoveIndicator(int objectId);
     void UpdateIndicators(int deltaMs, float left, float top, float width, float height);
     const std::vector<CLevelIndicator> &GetIndicators() const { return m_indicators; }
+    unsigned GetKills() const { return m_kills; }
     int GetWave() const { return m_variables[0]; }
     /** DrawEnemyHealthBars :120501 reads Flow variable 4, not GetRevolution. */
     bool HasLargeEnemyHealthBars() const { return m_variables[4] != 0; }
@@ -193,6 +195,7 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
 
 private:
+    unsigned m_kills = 0;
     bool m_tutorialEnabled = false;
     unsigned m_triggerCount = 0;
     std::int16_t m_tutorialStep = -1;
@@ -221,7 +224,7 @@ private:
 
     std::uint32_t m_unimplementedCalls;
     CEnemySpawner m_spawner;
-    IEnemySpawnWorld *m_world = nullptr;
+    ZLevelWorld *m_world = nullptr;
     int m_timerMs = 0;
     int m_timerFunction = -1;
     int m_eventTimerMs = 0;

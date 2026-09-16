@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /** @file CMissionScriptContext.h
  * @brief Collect requirements by executing the original Mission export 2.
  * Mission::FunctionResolver :163806, GetLevelRequirement :163847, IsLocked :164280.
@@ -10,7 +10,7 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include <cstdio>
 
-class CMissionScriptContext : public GameScriptObject {
+class CMissionScriptContext : public ZGameScriptObject {
 public:
     struct Requirement {
         GameObjectRef object;

@@ -36,7 +36,7 @@ void CMeshAnimationController::SetRange(std::int32_t firstFrame,
         return;
     }
 
-    const std::vector<MeshFrame> &frames = m_mesh->GetFrames();
+    const std::vector<ZMeshFrame> &frames = m_mesh->GetFrames();
     if (firstFrame < 0 || lastFrame < 0 ||
         static_cast<std::size_t>(firstFrame) >= frames.size() ||
         static_cast<std::size_t>(lastFrame) >= frames.size()) {
@@ -54,7 +54,7 @@ void CMeshAnimationController::SetFrame(std::int32_t frameIndex) {
         return;
     }
 
-    const std::vector<MeshFrame> &frames = m_mesh->GetFrames();
+    const std::vector<ZMeshFrame> &frames = m_mesh->GetFrames();
     if (static_cast<std::size_t>(frameIndex) >= frames.size()) {
         return;
     }
@@ -113,7 +113,7 @@ bool CMeshAnimationController::Evaluate(std::vector<float> &outVertices) const {
 }
 
 bool CMeshAnimationController::GetNodeAt(std::size_t boneIndex,
-                                         MeshBoneTransform &out) const {
+                                         ZMeshBoneTransform &out) const {
     if (m_mesh == nullptr) {
         return false;
     }

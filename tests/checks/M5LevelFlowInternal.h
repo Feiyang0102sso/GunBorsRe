@@ -6,7 +6,7 @@
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/CEnemy.h"
-#include "gun_bros_re/data/PackTables.h"
+#include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -14,7 +14,7 @@
 
 namespace M5LevelFlowDetail {
 
-class IndicatorWorld : public IEnemySpawnWorld {
+class IndicatorWorld : public ZLevelWorld {
 public:
     bool SpawnEnemy(const GameObjectRef &, int, int, int) override { return false; }
     int CountEnemies(const GameObjectRef *, int) const override { return 0; }
@@ -27,9 +27,9 @@ public:
 unsigned CheckCameraScale();
 
 /** A script test world: validate enemy resources, then finish them after 1s. */
-class LevelFlowWorld : public IEnemySpawnWorld {
+class LevelFlowWorld : public ZLevelWorld {
 public:
-    LevelFlowWorld(CLevel &level, PackTables &tables, CMap &map) : m_level(level), m_tables(tables), m_map(map) {}
+    LevelFlowWorld(CLevel &level, ZPackTables &tables, CMap &map) : m_level(level), m_tables(tables), m_map(map) {}
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override {
         if (layer >= 0) {
             CLayerPathLink *path = m_map.GetPathLinkLayer(layer);
@@ -40,7 +40,7 @@ public:
             }
         }
         std::vector<std::uint8_t> payload;
-        if (!m_tables.ReadSectionResource(enemy.packHash, GameSection::Enemy, enemy.localIndex, payload)) {
+        if (!m_tables.ReadSectionResource(enemy.packHash, ZGameSection::Enemy, enemy.localIndex, payload)) {
             ++failures;
             return false;
         }
@@ -63,7 +63,7 @@ public:
     }
     void PlayLevelSound(const GameObjectRef &sound) override {
         std::vector<std::uint8_t> payload;
-        if (!m_tables.ReadSectionResource(sound.packHash, GameSection::SoundEffect, sound.localIndex, payload)) {
+        if (!m_tables.ReadSectionResource(sound.packHash, ZGameSection::SoundEffect, sound.localIndex, payload)) {
             ++failures;
             return;
         }
@@ -71,7 +71,7 @@ public:
         CGameAssetRef wav;
         wav.Init(stream);
         if (stream.Overran() || wav.assetId < 0 ||
-            !m_tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, payload)) { ++failures; }
+            !m_tables.ReadSectionResource(wav.packHash, ZGameSection::Wav, wav.assetId, payload)) { ++failures; }
         ++sounds;
     }
     void Update(int deltaMs) {
@@ -99,7 +99,7 @@ private:
         int ageMs = 0;
     };
     CLevel &m_level;
-    PackTables &m_tables;
+    ZPackTables &m_tables;
     CMap &m_map;
     std::vector<Entry> m_enemies;
 };

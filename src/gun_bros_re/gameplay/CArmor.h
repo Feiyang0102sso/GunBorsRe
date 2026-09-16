@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CArmor.h
  * @brief The armour template: two model variants, one per brother.
@@ -50,7 +50,7 @@ constexpr std::uint32_t kArmorVariantCount = 2;
 constexpr std::uint32_t kArmorSlotCount = 4;
 constexpr std::uint32_t kArmorAttributeCount = 5;
 
-class CArmor : public GameScriptObject {
+class CArmor : public ZGameScriptObject {
 public:
     class Template {
     public:

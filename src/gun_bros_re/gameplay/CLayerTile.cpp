@@ -9,7 +9,7 @@
 
 #include <cstdio>
 
-const TileCell CLayerTile::s_emptyCell = {kEmptyTileId, 0};
+const ZTileCell CLayerTile::s_emptyCell = {kEmptyTileId, 0};
 
 CLayerTile::CLayerTile()
     : m_width(0),
@@ -63,7 +63,7 @@ bool CLayerTile::Init(CArrayInputStream &stream) {
     return true;
 }
 
-const TileCell &CLayerTile::GetCell(std::uint32_t column, std::uint32_t row) const {
+const ZTileCell &CLayerTile::GetCell(std::uint32_t column, std::uint32_t row) const {
     if (m_width == 0 || m_height == 0) {
         return s_emptyCell;
     }

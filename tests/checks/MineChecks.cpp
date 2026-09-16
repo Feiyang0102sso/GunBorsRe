@@ -1,50 +1,50 @@
 /** Real BIG mine scripts, animated firing, and original map boundary regression. */
 #define NOMINMAX
-#include "engine/core/Paths.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "gun_bros_re/gameplay/WeaponEffects.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "engine/core/ZPaths.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include <cstdio>
 #include <cmath>
 
 /** Observe real projectile splash dispatch without unrelated enemy scheduling. */
-class MineCheckWorld : public IProjectileWorld {
+class MineCheckWorld : public ZProjectileWorld {
 public:
     unsigned explosions = 0;
     float damage = 0;
-    CombatTrace Trace(const CombatHit &, float, float, float, float, float,
-        const std::vector<CombatId> &) override { return {}; }
-    HitResult ApplyHit(CombatId, const CombatHit &) override { return HitResult::Hit; }
-    void Splash(const CombatHit &hit, float, float, float, int) override {
+    ZCombatTrace Trace(const ZCombatHit &, float, float, float, float, float,
+        const std::vector<ZCombatId> &) override { return {}; }
+    ZHitResult ApplyHit(ZCombatId, const ZCombatHit &) override { return ZHitResult::Hit; }
+    void Splash(const ZCombatHit &hit, float, float, float, int) override {
         ++explosions;
         damage += hit.damage;
     }
-    void SpawnFromProjectile(const GameObjectRef &, const CombatHit &) override {}
-    bool FindTarget(const CombatHit &, float, float &, float &) override { return false; }
-    bool Anchor(CombatId, int, int, float &, float &, float &, float &) override { return false; }
+    void SpawnFromProjectile(const GameObjectRef &, const ZCombatHit &) override {}
+    bool FindTarget(const ZCombatHit &, float, float &, float &) override { return false; }
+    bool Anchor(ZCombatId, int, int, float &, float &, float &, float &) override { return false; }
 };
 
 int RunMineCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData playerTemplate;
+    ZPackTables tables(toc);
+    std::vector<ZWeaponEntry> weapons;
+    ZPlayerTemplateData playerTemplate;
     if (!LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Mine diagnostic", 800, 600)) { return 1; }
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    WeaponEffects effects(toc, tables, program);
+    ZWeaponEffects effects(toc, tables, program);
     MineCheckWorld world;
     effects.SetCombatWorld(&world);
     float identity[16], model[16];
     Matrix4dIdentity(identity);
-    MapDetail::LoadedMap map;
+    MapDetail::ZLoadedMap map;
     if (!MapDetail::LoadMap(toc, toc.GetPackIndexFromName("pack2"), 7, map)) { return 1; }
     MapDetail::BuildCollisionScene(map);
     unsigned failures = 0;
@@ -53,7 +53,7 @@ int RunMineCheck(const std::string &bigDirectory) {
         if (entry.name != "Load Dropper" && entry.name != "Deuce Dropper X90" && entry.name != "Eggsecutioner" && !ordinaryBullet) { continue; }
         effects.Clear();
         const std::size_t startingShots = effects.GetShotCount();
-        PlayerModel player;
+        ZPlayerModel player;
         if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
             !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
             !CreatePlayerBuffers(player, program)) { return 1; }
@@ -156,7 +156,7 @@ int RunMineCheck(const std::string &bigDirectory) {
         if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
             !CreatePlayerBuffers(player, program)) { return 1; }
         {
-            PlayerModel other;
+            ZPlayerModel other;
             if (!BuildPlayerBody(tables, playerTemplate.moveSet, other) ||
                 !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, other) ||
                 !CreatePlayerBuffers(other, program)) { return 1; }

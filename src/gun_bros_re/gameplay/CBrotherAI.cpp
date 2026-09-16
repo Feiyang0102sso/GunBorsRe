@@ -46,7 +46,7 @@ void CBrotherAI::Reset(float startX, float startY, float startFacing) {
     m_random.seed(0xB6400);
 }
 
-void CBrotherAI::UpdateTarget(int deltaMs, IBrotherAIWorld &world, bool &shooting) {
+void CBrotherAI::UpdateTarget(int deltaMs, ZBrotherAIWorld &world, bool &shooting) {
     float targetX = 0;
     float targetY = 0;
     if (m_target != 0) {
@@ -84,7 +84,7 @@ void CBrotherAI::UpdateTarget(int deltaMs, IBrotherAIWorld &world, bool &shootin
     shooting = true;
 }
 
-void CBrotherAI::UpdateForce(int deltaMs, CBrother &brother, IBrotherAIWorld &world) {
+void CBrotherAI::UpdateForce(int deltaMs, CBrother &brother, ZBrotherAIWorld &world) {
     previousX = x;
     previousY = y;
     if (!vitals.dead && m_forceMs > 0) {
@@ -96,7 +96,7 @@ void CBrotherAI::UpdateForce(int deltaMs, CBrother &brother, IBrotherAIWorld &wo
     }
 }
 
-void CBrotherAI::Update(int deltaMs, CBrother &brother, IBrotherAIWorld &world,
+void CBrotherAI::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world,
     float playerX, float playerY, float speedMultiplier) {
     UpdateForce(deltaMs, brother, world);
     if (vitals.dead || vitals.stunMs > 0) {

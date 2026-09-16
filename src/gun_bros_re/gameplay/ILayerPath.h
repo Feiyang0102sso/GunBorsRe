@@ -10,9 +10,23 @@
 #include <map>
 #include <utility>
 
+class ZRandom;
+
+/** Desktop value form of the original offscreen spawn filter. */
+struct ZSpawnFilter {
+    float left, top, right, bottom;
+    bool enabled;
+    bool Accepts(float x, float y) const {
+        if (!enabled) { return true; }
+        return x < left || x > right || y < top || y > bottom;
+    }
+};
+
 class ILayerPath {
 public:
     virtual ~ILayerPath() = default;
+    /** Native path layers own their distinct spawn search algorithms. */
+    virtual int GetSpawnLocation(float sourceX, float sourceY, const ZSpawnFilter &filter, ZRandom &random) const { return -1; }
     struct Node {
         float x = 0;
         float y = 0;

@@ -5,8 +5,8 @@
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/debug/DebugMaps.h"
-#include "gun_bros_re/gameplay/SurvivalRuntime.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 
 enum class CampaignCheck { Doors, Targets, Progression, Rescue, Portal, Cache };
 
@@ -14,19 +14,19 @@ static int RunCampaignCheck(unsigned levelIndex, CampaignCheck check) {
     const std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     CResTOCManager toc;
     if (!toc.Init(big, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<MissionEntry> missions;
+    ZPackTables tables(toc);
+    std::vector<ZMissionEntry> missions;
     if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
     for (const auto &mission : missions) {
         // Original pack2 Mission 14 -> LEVEL 3 enables object 5 on level start.
         if (tables.GetPackName(mission.resource.packHash) != "pack2" ||
             mission.data.level.packHash != CStringToKey("pack2") || mission.data.level.localIndex != levelIndex) { continue; }
         std::vector<std::uint8_t> bytes;
-        if (!tables.ReadSectionResource(mission.data.level.packHash, GameSection::Level, mission.data.level.localIndex, bytes)) { return 1; }
+        if (!tables.ReadSectionResource(mission.data.level.packHash, ZGameSection::Level, mission.data.level.localIndex, bytes)) { return 1; }
         CArrayInputStream input(bytes);
         CLevel::Template level;
         if (!level.Init(input) || input.Available() != 0) { return 1; }
-        SurvivalLaunch launch;
+        ZSurvivalLaunch launch;
         launch.bigDirectory = big;
         launch.packShortName = tables.GetPackName(level.mapRef.packHash);
         launch.mapIndex = level.mapRef.localIndex;
@@ -60,7 +60,7 @@ int RunCampaignLava2Check() {
     selection.map = 2;
     selection.level.packHash = CStringToKey("pack2");
     selection.level.localIndex = 2;
-    SurvivalLaunch launch;
+    ZSurvivalLaunch launch;
     launch.bigDirectory = (Paths::Root() / Paths::BigDirectory).u8string();
     launch.packShortName = selection.pack;
     launch.mapIndex = selection.map;
@@ -75,13 +75,13 @@ int RunCampaignTargetCheck() {
     return RunCampaignCheck(0, CampaignCheck::Targets);
 }
 
-static void RecordCacheCollections(const PickupScene &pickups, bool (&collected)[3]) {
+static void RecordCacheCollections(const ZPickupScene &pickups, bool (&collected)[3]) {
     for (const auto &pickup : pickups.collections) {
         if (pickup.objectId >= 84 && pickup.objectId <= 86) { collected[pickup.objectId - 84] = true; }
     }
 }
 
-int CheckCampaignCache(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session, PickupScene &pickups) {
+int CheckCampaignCache(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session, ZPickupScene &pickups) {
     scene.GetPlayerVitals().invincible = true;
     bool cacheCollected[3]{};
     for (const auto &prop : map.props) {
@@ -92,9 +92,9 @@ int CheckCampaignCache(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSe
         for (const auto &point : vertices) { centerX += point.x; centerY += point.y; }
         centerX = prop.x + centerX / vertices.size();
         centerY = prop.y + centerY / vertices.size();
-        scene.playerX = centerX + 100;
-        scene.playerY = centerY;
-        CombatHit hit;
+        scene.GetPlayer().x = centerX + 100;
+        scene.GetPlayer().y = centerY;
+        ZCombatHit hit;
         hit.owner = kPlayerCombatId;
         hit.ownerType = 0;
         hit.damage = 100;
@@ -127,35 +127,35 @@ int CheckCampaignCache(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSe
         normalX /= normalLength;
         normalY /= normalLength;
         if (normalX < 0) { normalX = -normalX; normalY = -normalY; }
-        scene.playerX = centerX + normalX * 100;
-        scene.playerY = prop.y + passageY / passagePoints + normalY * 100;
-        for (int elapsed = 0; elapsed < 12000 && scene.playerX >= centerX - 80; elapsed += 16) {
+        scene.GetPlayer().x = centerX + normalX * 100;
+        scene.GetPlayer().y = prop.y + passageY / passagePoints + normalY * 100;
+        for (int elapsed = 0; elapsed < 12000 && scene.GetPlayer().x >= centerX - 80; elapsed += 16) {
             session.Update(16, -normalX, -normalY, false);
             RecordCacheCollections(pickups, cacheCollected);
         }
         std::printf("[campaign-cache-check] passage xy=%.0f,%.0f wall-x=%.0f target-y=%.0f state=%u\n",
-            scene.playerX, scene.playerY, centerX, prop.y + passageY / passagePoints, prop.runtime->GetStateId());
-        if (scene.playerX >= centerX - 30) {
+            scene.GetPlayer().x, scene.GetPlayer().y, centerX, prop.y + passageY / passagePoints, prop.runtime->GetStateId());
+        if (scene.GetPlayer().x >= centerX - 30) {
             for (const auto &edge : map.collisionScene.GetEdges()) {
                 if (!edge.enabled) { continue; }
                 const auto &a = map.collisionScene.GetVertices()[edge.firstVertex];
                 const auto &b = map.collisionScene.GetVertices()[edge.secondVertex];
-                if (scene.playerX < std::min(a.x, b.x) - 30 || scene.playerX > std::max(a.x, b.x) + 30 ||
-                    scene.playerY < std::min(a.y, b.y) - 30 || scene.playerY > std::max(a.y, b.y) + 30) { continue; }
+                if (scene.GetPlayer().x < std::min(a.x, b.x) - 30 || scene.GetPlayer().x > std::max(a.x, b.x) + 30 ||
+                    scene.GetPlayer().y < std::min(a.y, b.y) - 30 || scene.GetPlayer().y > std::max(a.y, b.y) + 30) { continue; }
                 std::printf("[campaign-cache-check] nearby collision %.0f,%.0f -> %.0f,%.0f group=%u\n", a.x, a.y, b.x, b.y, edge.group);
             }
         }
-        if (scene.playerX >= centerX - 30 || session.IsFinished()) { return 1; }
+        if (scene.GetPlayer().x >= centerX - 30 || session.IsFinished()) { return 1; }
         break;
     }
     for (unsigned layerIndex = 0; layerIndex < map.map.GetObjectLayerCount(); ++layerIndex) {
         const auto &objects = map.map.GetObjectLayer(layerIndex).GetObjects();
         for (unsigned objectId = 84; objectId <= 86 && objectId < objects.size(); ++objectId) {
             const auto &object = objects[objectId];
-            if (object.objectType != static_cast<unsigned>(PlacedObjectType::Pickup)) { return 1; }
+            if (object.objectType != static_cast<unsigned>(ZPlacedObjectType::Pickup)) { return 1; }
             for (int elapsed = 0; elapsed < 10000 && !cacheCollected[objectId - 84]; elapsed += 16) {
-                const float dx = object.x - scene.playerX;
-                const float dy = object.y - scene.playerY;
+                const float dx = object.x - scene.GetPlayer().x;
+                const float dy = object.y - scene.GetPlayer().y;
                 const float distance = std::hypot(dx, dy);
                 if (distance < 1) { session.Update(16, 0, 0, false); }
                 else { session.Update(16, dx / distance, dy / distance, false); }
@@ -170,7 +170,7 @@ int CheckCampaignCache(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSe
     return collected != 3;
 }
 
-int CheckCampaignPortal(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session) {
+int CheckCampaignPortal(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
     scene.GetPlayerVitals().invincible = true;
     CProp *portal = nullptr;
     float portalX = 0, portalY = 0;
@@ -187,7 +187,7 @@ int CheckCampaignPortal(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalS
         for (const auto &actor : scene.enemies) {
             const auto &enemy = actor->model.enemy.combat;
             if (enemy.dead || enemy.removed) { continue; }
-            CombatHit hit;
+            ZCombatHit hit;
             hit.owner = kPlayerCombatId;
             hit.ownerType = 0;
             hit.damage = 100000.0f;
@@ -199,19 +199,19 @@ int CheckCampaignPortal(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalS
     }
     if (level.GetWave() != 10 || portal->GetStateId() != 1 || session.IsFinished()) { return 1; }
     std::printf("[campaign-portal-check] wave=%d portal enabled, mission still active\n", level.GetWave());
-    scene.playerX = portalX;
-    scene.playerY = portalY;
+    scene.GetPlayer().x = portalX;
+    scene.GetPlayer().y = portalY;
     for (int elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
-    scene.playerX = portalX + 150;
+    scene.GetPlayer().x = portalX + 150;
     for (int elapsed = 0; elapsed < 2500; elapsed += 16) { session.Update(16, 0, 0, false); }
     if (session.IsFinished() || portal->GetStateId() != 1) { return 1; }
-    scene.playerX = portalX;
+    scene.GetPlayer().x = portalX;
     for (int elapsed = 0; elapsed < 4000 && !session.IsFinished(); elapsed += 16) { session.Update(16, 0, 0, false); }
     std::printf("[campaign-portal-check] leave cancels, return completes finished=%d failures=%d\n", session.IsFinished(), !session.IsFinished());
     return !session.IsFinished();
 }
 
-static int CheckLaterRescue(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session,
+static int CheckLaterRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session,
     int cameraLayer, int platformId, unsigned requiredRescues) {
     // Visit the authored camera entry rectangle; the camera export configures
     // this area's enemy rules and number of refugees. Never invoke it directly.
@@ -219,19 +219,19 @@ static int CheckLaterRescue(MapDetail::LoadedMap &map, CombatScene &scene, Survi
         const auto &camera = map.map.GetCameraLayer(index);
         if (camera.GetLayerIndex() != static_cast<unsigned>(cameraLayer)) { continue; }
         const auto &bounds = camera.GetSecondaryBounds();
-        scene.playerX = bounds.x + bounds.width * 0.5f;
-        scene.playerY = bounds.y + bounds.height * 0.5f;
+        scene.GetPlayer().x = bounds.x + bounds.width * 0.5f;
+        scene.GetPlayer().y = bounds.y + bounds.height * 0.5f;
         session.Update(16, 0, 0, false);
     }
     float platformX = 0, platformY = 0;
     if (!session.GetObjectPosition(platformId, platformX, platformY)) { return 1; }
     unsigned rescued = 0;
     for (unsigned attempt = 0; attempt < requiredRescues; ++attempt) {
-        scene.playerX = platformX + 150;
-        scene.playerY = platformY;
+        scene.GetPlayer().x = platformX + 150;
+        scene.GetPlayer().y = platformY;
         session.Update(16, 0, 0, false);
-        scene.playerX = platformX;
-        scene.playerY = platformY;
+        scene.GetPlayer().x = platformX;
+        scene.GetPlayer().y = platformY;
         const unsigned before = rescued;
         for (int elapsed = 0; elapsed < 30000; elapsed += 16) {
             for (const auto &actor : scene.enemies) {
@@ -241,7 +241,7 @@ static int CheckLaterRescue(MapDetail::LoadedMap &map, CombatScene &scene, Survi
                     continue;
                 }
                 if (enemy.dead || enemy.removed) { continue; }
-                CombatHit hit;
+                ZCombatHit hit;
                 hit.owner = kPlayerCombatId;
                 hit.ownerType = 0;
                 hit.damage = 100000.0f;
@@ -258,14 +258,14 @@ static int CheckLaterRescue(MapDetail::LoadedMap &map, CombatScene &scene, Survi
     return rescued != requiredRescues;
 }
 
-int CheckCampaignRescue(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session) {
+int CheckCampaignRescue(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
     scene.GetPlayerVitals().invincible = true;
     // Stand inside the first authored platform. The original LEVEL script
     // must spawn its refugee and open gate 42 after the teleport callback.
     for (const auto &prop : map.props) {
         if (prop.objectId != 84 || prop.runtime == nullptr) { continue; }
-        scene.playerX = prop.x;
-        scene.playerY = prop.y;
+        scene.GetPlayer().x = prop.x;
+        scene.GetPlayer().y = prop.y;
         break;
     }
     bool refugeeSeen = false;
@@ -291,15 +291,15 @@ int CheckCampaignRescue(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalS
         }
         if (shouldInterrupt) {
             // Do not hold an actor-vector iterator across scene updates.
-            const float platformX = scene.playerX;
-            scene.playerX += 150;
+            const float platformX = scene.GetPlayer().x;
+            scene.GetPlayer().x += 150;
             for (int wait = 0; wait < 4000; wait += 16) { session.Update(16, 0, 0, false); }
             bool waiting = false;
             for (const auto &actor : scene.enemies) {
                 if (actor->objectId == 200 && actor->model.enemy.GetStateId() == 7) { waiting = true; }
             }
             if (!waiting || session.CountEnemies(nullptr, 200) != 1) { return 1; }
-            scene.playerX = platformX;
+            scene.GetPlayer().x = platformX;
             interrupted = true;
             std::printf("[campaign-rescue-check] leaving pad interrupted teleport; returning\n");
         }
@@ -319,7 +319,7 @@ int CheckCampaignRescue(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalS
     return 1;
 }
 
-int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session, unsigned mapIndex) {
+int CheckCampaignProgression(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session, unsigned mapIndex) {
     scene.GetPlayerVitals().invincible = true;
     if (mapIndex == 0) {
         if (CheckCampaignTargets(map, scene, session) != 0) { return 1; }
@@ -331,9 +331,9 @@ int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, Surv
             const auto &layer = map.map.GetObjectLayer(index);
             if (layer.GetLayerIndex() != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }
             const auto &objects = layer.GetObjects();
-            if (objects.size() <= 113 || objects[113].objectType != static_cast<unsigned>(PlacedObjectType::Pickup)) { return 1; }
-            scene.playerX = objects[113].x;
-            scene.playerY = objects[113].y;
+            if (objects.size() <= 113 || objects[113].objectType != static_cast<unsigned>(ZPlacedObjectType::Pickup)) { return 1; }
+            scene.GetPlayer().x = objects[113].x;
+            scene.GetPlayer().y = objects[113].y;
         }
         session.Update(16, 0, 0, false);
         if (session.GetLevel().GetStateId() != 3) { return 1; }
@@ -342,11 +342,11 @@ int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, Surv
         // that the LEVEL has created a live actor or fired its start trigger.
         std::printf("[campaign-lava2-check] initial state=%d alive=%d triggers=%u xy=%.0f,%.0f\n",
             session.GetLevel().GetStateId(), session.CountEnemies(nullptr, -1),
-            session.GetLevel().GetTriggerCount(), scene.playerX, scene.playerY);
+            session.GetLevel().GetTriggerCount(), scene.GetPlayer().x, scene.GetPlayer().y);
         for (int elapsed = 0; elapsed < 3000; elapsed += 16) { session.Update(16, 0, 0, false); }
         std::printf("[campaign-lava2-check] idle start state=%d alive=%d triggers=%u xy=%.0f,%.0f\n",
             session.GetLevel().GetStateId(), session.CountEnemies(nullptr, -1),
-            session.GetLevel().GetTriggerCount(), scene.playerX, scene.playerY);
+            session.GetLevel().GetTriggerCount(), scene.GetPlayer().x, scene.GetPlayer().y);
         // Enter the original start trigger; never invoke the LEVEL export.
         for (unsigned index = 0; index < map.map.GetCollisionLayerCount(); ++index) {
             const auto &layer = map.map.GetCollisionLayer(index);
@@ -356,8 +356,8 @@ int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, Surv
                 if (edge.group != 0) { continue; }
                 const auto &first = geometry.GetVertices()[edge.firstVertex];
                 const auto &second = geometry.GetVertices()[edge.secondVertex];
-                scene.playerX = (first.x + second.x) * 0.5f;
-                scene.playerY = (first.y + second.y) * 0.5f;
+                scene.GetPlayer().x = (first.x + second.x) * 0.5f;
+                scene.GetPlayer().y = (first.y + second.y) * 0.5f;
                 session.Update(16, 0, -1, false);
                 break;
             }
@@ -381,7 +381,7 @@ int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, Surv
             }
             if (enemy.combat.dead || enemy.combat.removed) { continue; }
             if (mapIndex == 3 || mapIndex == 2) { finalEnemySeen = true; }
-            CombatHit hit;
+            ZCombatHit hit;
             hit.owner = kPlayerCombatId;
             hit.ownerType = 0;
             hit.damage = 100000.0f;
@@ -397,12 +397,12 @@ int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, Surv
                 level.GetSpawner().GetSpawnCount(), finalEnemySeen, level.IsCleared());
         }
         if (level.IsCleared()) {
-            const float previousY = scene.playerY;
+            const float previousY = scene.GetPlayer().y;
             session.Update(100, 0, 1, false);
             const bool finished = session.IsFinished();
             const int failures = !finalEnemySeen || !finished;
             std::printf("[campaign-progression-check] MAP %u complete final=%d moved=%.1f finished=%d failures=%d\n",
-                mapIndex, finalEnemySeen, scene.playerY - previousY, finished, failures);
+                mapIndex, finalEnemySeen, scene.GetPlayer().y - previousY, finished, failures);
             return failures;
         }
     }
@@ -418,17 +418,17 @@ int CheckCampaignProgression(MapDetail::LoadedMap &map, CombatScene &scene, Surv
     return 1;
 }
 
-int CheckCampaignTargets(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session) {
+int CheckCampaignTargets(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
     scene.GetPlayerVitals().invincible = true;
     // Bring the authored turret into view so CLevel can spawn its placed object.
     for (unsigned layerIndex = 0; layerIndex < map.map.GetObjectLayerCount(); ++layerIndex) {
         const auto &layer = map.map.GetObjectLayer(layerIndex);
         if (layer.GetLayerIndex() != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }
         for (const auto &object : layer.GetObjects()) {
-            if (object.objectType == static_cast<unsigned>(PlacedObjectType::Enemy) &&
+            if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Enemy) &&
                 object.packHash == CStringToKey("pack1") && object.localIndex == 16) {
-                scene.playerX = object.x;
-                scene.playerY = object.y + 140.0f;
+                scene.GetPlayer().x = object.x;
+                scene.GetPlayer().y = object.y + 140.0f;
             }
         }
     }
@@ -438,7 +438,7 @@ int CheckCampaignTargets(MapDetail::LoadedMap &map, CombatScene &scene, Survival
     for (auto &actor : scene.enemies) {
         auto &enemy = actor->model.enemy;
         if (enemy.combat.templateRef.packHash != CStringToKey("pack1") || enemy.combat.templateRef.localIndex != 16) { continue; }
-        CombatHit hit;
+        ZCombatHit hit;
         hit.owner = kPlayerCombatId;
         hit.ownerType = 0;
         hit.damage = 1000;
@@ -463,7 +463,7 @@ int CheckCampaignTargets(MapDetail::LoadedMap &map, CombatScene &scene, Survival
         for (const auto &vertex : vertices) { centerX += vertex.x; centerY += vertex.y; }
         centerX = prop.x + centerX / vertices.size();
         centerY = prop.y + centerY / vertices.size();
-        CombatHit hit;
+        ZCombatHit hit;
         hit.owner = kPlayerCombatId;
         hit.ownerType = 0;
         hit.damage = 1000;
@@ -478,11 +478,11 @@ int CheckCampaignTargets(MapDetail::LoadedMap &map, CombatScene &scene, Survival
     for (int elapsed = 0; elapsed < 2000; elapsed += 16) { session.Update(16, 0, 0, false); }
     for (auto &prop : map.props) {
         if (!prop.active || prop.objectId != 41 || prop.runtime == nullptr) { continue; }
-        scene.playerX = prop.x;
-        scene.playerY = prop.y + 140;
+        scene.GetPlayer().x = prop.x;
+        scene.GetPlayer().y = prop.y + 140;
         for (int elapsed = 0; elapsed < 3000; elapsed += 16) {
             session.Update(16, 0, -1, false);
-            if (scene.playerY < prop.y - 60) {
+            if (scene.GetPlayer().y < prop.y - 60) {
                 std::printf("[campaign-target-check] MAP 0 switch destroyed / gate crossed failures=0\n");
                 return 0;
             }
@@ -491,7 +491,7 @@ int CheckCampaignTargets(MapDetail::LoadedMap &map, CombatScene &scene, Survival
     return 1;
 }
 
-int CheckCampaignDoorPassage(MapDetail::LoadedMap &map, CombatScene &scene, SurvivalSession &session) {
+int CheckCampaignDoorPassage(MapDetail::ZLoadedMap &map, ZCombatWorld &scene, ZLevelHost &session) {
     bool entranceCrossed = false;
     for (auto &prop : map.props) {
         if (prop.objectId != 5 || prop.objectLayer != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }
@@ -500,19 +500,19 @@ int CheckCampaignDoorPassage(MapDetail::LoadedMap &map, CombatScene &scene, Surv
         const float destinationY = prop.y + 160;
         std::printf("[campaign-door-check] gate=%08x:%u id=%d at=%.1f,%.1f player=%.1f,%.1f state=%u entry=%d\n",
             prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, prop.x, prop.y,
-            scene.playerX, scene.playerY, prop.runtime->GetStateId(), prop.runtime->ChecksEntry());
+            scene.GetPlayer().x, scene.GetPlayer().y, prop.runtime->GetStateId(), prop.runtime->ChecksEntry());
         unsigned previousState = prop.runtime->GetStateId();
         for (int elapsed = 0; elapsed < 12000; elapsed += 16) {
-            float moveX = prop.x - scene.playerX;
-            float moveY = destinationY - scene.playerY;
+            float moveX = prop.x - scene.GetPlayer().x;
+            float moveY = destinationY - scene.GetPlayer().y;
             const float distance = std::hypot(moveX, moveY);
             if (distance > 1) { moveX /= distance; moveY /= distance; }
             session.Update(16, moveX, moveY, false);
             if (previousState != prop.runtime->GetStateId()) {
                 previousState = prop.runtime->GetStateId();
-                std::printf("[campaign-door-check] elapsed=%d gate-state=%u player=%.1f,%.1f\n", elapsed, previousState, scene.playerX, scene.playerY);
+                std::printf("[campaign-door-check] elapsed=%d gate-state=%u player=%.1f,%.1f\n", elapsed, previousState, scene.GetPlayer().x, scene.GetPlayer().y);
             }
-            if (scene.playerY >= destinationY - 20) {
+            if (scene.GetPlayer().y >= destinationY - 20) {
                 std::printf("[campaign-door-check] crossed gate elapsed=%d failures=0\n", elapsed);
                 entranceCrossed = true;
                 break;
@@ -520,7 +520,7 @@ int CheckCampaignDoorPassage(MapDetail::LoadedMap &map, CombatScene &scene, Surv
         }
         if (entranceCrossed) { break; }
         std::printf("[campaign-door-check] blocked gate-state=%u entry=%d player=%.1f,%.1f target=%.1f failures=1\n",
-            prop.runtime->GetStateId(), prop.runtime->ChecksEntry(), scene.playerX, scene.playerY, destinationY);
+            prop.runtime->GetStateId(), prop.runtime->ChecksEntry(), scene.GetPlayer().x, scene.GetPlayer().y, destinationY);
         return 1;
     }
     if (!entranceCrossed) { return 1; }
@@ -529,12 +529,12 @@ int CheckCampaignDoorPassage(MapDetail::LoadedMap &map, CombatScene &scene, Surv
     for (auto &prop : map.props) {
         if (prop.objectId != 4 || prop.objectLayer != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }
         if (!prop.active || prop.runtime == nullptr) { return 1; }
-        scene.playerX = prop.x;
-        scene.playerY = prop.y + 140;
+        scene.GetPlayer().x = prop.x;
+        scene.GetPlayer().y = prop.y + 140;
         const unsigned before = session.GetLevel().GetTriggerCount();
         for (int elapsed = 0; elapsed < 2000; elapsed += 16) {
             session.Update(16, 0, -1, false);
-            if (scene.playerY < prop.y - 60) {
+            if (scene.GetPlayer().y < prop.y - 60) {
                 std::printf("[campaign-door-check] crossed locked gate without key failures=1\n");
                 return 1;
             }
@@ -554,9 +554,9 @@ int CheckCampaignDoorPassage(MapDetail::LoadedMap &map, CombatScene &scene, Surv
         const auto &layer = map.map.GetObjectLayer(index);
         if (layer.GetLayerIndex() != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }
         const auto &objects = layer.GetObjects();
-        if (objects.size() <= 114 || objects[114].objectType != static_cast<unsigned>(PlacedObjectType::Pickup)) { return 1; }
-        scene.playerX = objects[114].x;
-        scene.playerY = objects[114].y;
+        if (objects.size() <= 114 || objects[114].objectType != static_cast<unsigned>(ZPlacedObjectType::Pickup)) { return 1; }
+        scene.GetPlayer().x = objects[114].x;
+        scene.GetPlayer().y = objects[114].y;
         placedAtKey = true;
     }
     if (!placedAtKey) { return 1; }
@@ -564,19 +564,19 @@ int CheckCampaignDoorPassage(MapDetail::LoadedMap &map, CombatScene &scene, Surv
     for (auto &prop : map.props) {
         if (prop.objectId != 4 || prop.objectLayer != static_cast<unsigned>(session.GetLevel().GetObjectLayer())) { continue; }
         if (!prop.active || prop.runtime == nullptr) { return 1; }
-        scene.playerX = prop.x;
-        scene.playerY = prop.y + 140;
+        scene.GetPlayer().x = prop.x;
+        scene.GetPlayer().y = prop.y + 140;
         const unsigned before = session.GetLevel().GetTriggerCount();
         for (int elapsed = 0; elapsed < 6000; elapsed += 16) {
             session.Update(16, 0, -1, false);
-            if (scene.playerY < prop.y - 60) {
+            if (scene.GetPlayer().y < prop.y - 60) {
                 std::printf("[campaign-door-check] key/trigger/gate crossed state=%u triggers=%u failures=0\n",
                     prop.runtime->GetStateId(), session.GetLevel().GetTriggerCount() - before);
                 return 0;
             }
         }
         std::printf("[campaign-door-check] key/trigger/gate blocked state=%u triggers=%u player=%.1f,%.1f gate=%.1f,%.1f failures=1\n",
-            prop.runtime->GetStateId(), session.GetLevel().GetTriggerCount() - before, scene.playerX, scene.playerY, prop.x, prop.y);
+            prop.runtime->GetStateId(), session.GetLevel().GetTriggerCount() - before, scene.GetPlayer().x, scene.GetPlayer().y, prop.x, prop.y);
         return 1;
     }
     return 1;

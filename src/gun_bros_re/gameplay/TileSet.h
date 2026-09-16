@@ -24,7 +24,7 @@
 constexpr std::uint8_t kEmptyTileId = 255;
 
 /** One tile: a rectangle on one of the atlases. */
-struct TileRect {
+struct ZTileRect {
     std::uint8_t imageIndex;
     std::uint16_t x;
     std::uint16_t y;
@@ -45,7 +45,7 @@ public:
     bool Init(CArrayInputStream &stream);
 
     const std::vector<CGameAssetRef> &GetImages() const { return m_images; }
-    const std::vector<TileRect> &GetTiles() const { return m_tiles; }
+    const std::vector<ZTileRect> &GetTiles() const { return m_tiles; }
 
     std::uint32_t GetTileCount() const {
         return static_cast<std::uint32_t>(m_tiles.size());
@@ -62,7 +62,7 @@ public:
 
 private:
     std::vector<CGameAssetRef> m_images;
-    std::vector<TileRect> m_tiles;
+    std::vector<ZTileRect> m_tiles;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_TILESET_H

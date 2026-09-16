@@ -2,8 +2,8 @@
 #define NOMINMAX
 #include "gun_bros_re/debug/SurvivalDebug.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "gun_bros_re/ui/SurvivalHud.h"
-#include "gun_bros_re/HostSettings.h"
+#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ZHostSettings.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include <cstdio>
 #include <cstdarg>
@@ -20,7 +20,7 @@ void AddLine(std::vector<std::string> &lines, const char *format, ...) {
 }
 }
 
-bool HandleDebugKey(KeyCode key, const CWindow &window, bool &showCollisions) {
+bool HandleDebugKey(ZKeyCode key, const ZWindow &window, bool &showCollisions) {
     if (GameDebugKeys::TogglesCollision(key, window)) {
         showCollisions = !showCollisions;
         std::printf("[debug] collisions=%d\n", showCollisions);
@@ -34,7 +34,7 @@ bool HandleDebugKey(KeyCode key, const CWindow &window, bool &showCollisions) {
     return false;
 }
 
-void DrawTutorialDebugNotice(MovieRenderer &movies, std::uint64_t ticks) {
+void DrawTutorialDebugNotice(ZMovieRenderer &movies, std::uint64_t ticks) {
     const auto &style = DebugConfig::Sidebar;
     const float titleX = (DebugConfig::CanvasWidth - movies.TextWidth(DebugConfig::Tutorial::Notice, style.font, style.scale)) * 0.5f;
     const float exitX = (DebugConfig::CanvasWidth - movies.TextWidth(DebugConfig::Tutorial::Exit, style.font, style.scale)) * 0.5f;
@@ -45,8 +45,8 @@ void DrawTutorialDebugNotice(MovieRenderer &movies, std::uint64_t ticks) {
     movies.Text(DebugConfig::Tutorial::Exit, exitX, nextLine, style.font, style.scale);
 }
 
-void PopulateSurvivalDebugInfo(SurvivalHudState &state, const CombatScene &scene,
-    const WeaponEffects &effects, const std::string &pack, unsigned map, bool collisions) {
+void PopulateSurvivalDebugInfo(ZInputPadState &state, const ZCombatWorld &scene,
+    const ZWeaponEffects &effects, const std::string &pack, unsigned map, bool collisions) {
     char label[128];
     std::snprintf(label, sizeof(label), DebugConfig::Text::Map, pack.c_str(), map);
     state.debugMap = label;
@@ -59,7 +59,7 @@ void PopulateSurvivalDebugInfo(SurvivalHudState &state, const CombatScene &scene
     state.showCollisions = collisions;
 }
 
-void PopulateDebugBuffs(SurvivalHudState &state, const PlayerModel &player) {
+void PopulateDebugBuffs(ZInputPadState &state, const ZPlayerModel &player) {
     state.buffs.clear();
     const int buffTimers[] = {player.powerups.shieldMs, player.powerups.frenzyMs[0],
         player.powerups.frenzyMs[1], player.powerups.frenzyMs[2], player.powerups.autoFireMs, player.powerups.legacyFrenzyMs};
@@ -74,7 +74,7 @@ void PopulateDebugBuffs(SurvivalHudState &state, const PlayerModel &player) {
     if (player.weapon->brother.IsTurretActive()) { state.buffs += "   "; state.buffs += DebugConfig::Text::Turret; }
 }
 
-void DrawSurvivalDebugInfo(MovieRenderer &movies, const SurvivalHudState &state) {
+void DrawSurvivalDebugInfo(ZMovieRenderer &movies, const ZInputPadState &state) {
     if (!GameHostSettings().debugMode || !GameHostSettings().drawDebugInfo) { return; }
     const auto &style = DebugConfig::Sidebar;
     using namespace DebugConfig::Text;

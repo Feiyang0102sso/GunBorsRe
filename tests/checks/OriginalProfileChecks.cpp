@@ -1,28 +1,28 @@
 #include "gameplay/SurvivalStudy.h"
-/** @file OriginalProfile.cpp
+/** @file ZProfileImport.cpp
  * @brief Native storage envelope and proven data layouts; source files stay read-only.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/OriginalProfile.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "engine/core/CCrc32.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/CLevel.h"
-#include "gun_bros_re/gameplay/SurvivalGameContext.h"
-#include "gun_bros_re/gameplay/MapScene.h"
+#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/gameplay/ZMapScene.h"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
-#include "gun_bros_re/data/OriginalProfileInternal.h"
-using namespace OriginalProfileDetail;
+#include "gun_bros_re/data/ZProfileImportInternal.h"
+using namespace ProfileImportDetail;
 #include "Checks.h"
 
 int RunOriginalProfileCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CPlayerProgress::Template progressData;
     if (!LoadPlayerProgress(toc, tables, progressData)) { return 1; }
     const std::filesystem::path source = TestOutput::Fixtures();
@@ -38,8 +38,8 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
     if (paths.empty()) { std::printf("[original-save-check] no source records\n"); return 1; }
     unsigned failures = 0, crcMismatches = 0;
     for (const auto &path : paths) {
-        OriginalDataStore record;
-        if (!ReadOriginalDataStore(path, record)) { ++failures; report << path.filename().string() << " invalid envelope\n"; continue; }
+        ZImportedDataStore record;
+        if (!ReadDataStore(path, record)) { ++failures; report << path.filename().string() << " invalid envelope\n"; continue; }
         if (!record.crcMatches) { ++crcMismatches; }
         const std::string name = path.filename().string();
         report << name << " version=" << record.version << " size-even-lower-bound=" << record.minimumSize
@@ -131,13 +131,13 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
 int RunOriginalProfilePlayCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
     if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     profile.tutorialCompleted = true;
-    if (!ImportOriginalProfile(toc, tables, profile, TestOutput::Fixtures())) { return 1; }
+    if (!ImportProfile(toc, tables, profile, TestOutput::Fixtures())) { return 1; }
     CProfileManager capCheck = profile;
     const GameObjectRef mainGun = profile.configuration.guns[0];
     const unsigned originalMastery = profile.GetWeaponExperience(mainGun);
@@ -153,7 +153,7 @@ int RunOriginalProfilePlayCheck(const std::string &bigDirectory) {
         restored.inventory.size() != 8 || restored.weaponMastery.size() != 4 ||
         restored.GetWeaponExperience(restored.configuration.guns[0]) < 800000) { return 1; }
     for (unsigned waves : restored.clearedWaves) { if (waves != 500) { return 1; } }
-    SurvivalGameContext context{restored, save, 0};
+    ZSurvivalGameContext context{restored, save, 0};
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
     if (!restored.LoadFromDisk(save)) { return 1; }
     for (const auto &entry : profile.weaponMastery) {

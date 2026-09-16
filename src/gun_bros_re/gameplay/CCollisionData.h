@@ -15,16 +15,16 @@
 #include <vector>
 
 /** One point in map world coordinates. */
-struct CollisionPoint {
+struct ZCollisionPoint {
     float x;
     float y;
 
-    CollisionPoint() : x(0.0f), y(0.0f) {}
-    CollisionPoint(float pointX, float pointY) : x(pointX), y(pointY) {}
+    ZCollisionPoint() : x(0.0f), y(0.0f) {}
+    ZCollisionPoint(float pointX, float pointY) : x(pointX), y(pointY) {}
 };
 
 /** One collision edge joining two points. */
-struct CollisionEdge {
+struct ZCollisionEdge {
     std::uint8_t group;
     std::uint16_t firstVertex;
     std::uint16_t secondVertex;
@@ -67,20 +67,20 @@ public:
      * This prevents ordinary frame movement from tunnelling through a wall and
      * naturally leaves the unblocked part of a diagonal movement as wall slide.
      */
-    CollisionPoint ResolveCircleMovement(const CollisionPoint &start,
-                                         const CollisionPoint &movement,
+    ZCollisionPoint ResolveCircleMovement(const ZCollisionPoint &start,
+                                         const ZCollisionPoint &movement,
                                          float radius) const;
 
-    const std::vector<CollisionPoint> &GetVertices() const { return m_vertices; }
-    const std::vector<CollisionEdge> &GetEdges() const { return m_edges; }
+    const std::vector<ZCollisionPoint> &GetVertices() const { return m_vertices; }
+    const std::vector<ZCollisionEdge> &GetEdges() const { return m_edges; }
 
 private:
-    bool ResolveNearestPenetration(const CollisionPoint &previous,
-                                   CollisionPoint &position,
+    bool ResolveNearestPenetration(const ZCollisionPoint &previous,
+                                   ZCollisionPoint &position,
                                    float radius) const;
 
-    std::vector<CollisionPoint> m_vertices;
-    std::vector<CollisionEdge> m_edges;
+    std::vector<ZCollisionPoint> m_vertices;
+    std::vector<ZCollisionEdge> m_edges;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CCOLLISIONDATA_H

@@ -1,6 +1,6 @@
 /** Compare one real cover transition at fixed time under historical dock widths. */
 #include "TestOutput.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 using namespace MapDetail;
@@ -8,21 +8,21 @@ using namespace MapDetail;
 int RunCoverScaleStudy(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Cover scale comparison", 1440, 900)) { return 1; }
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    CQuadBatch batch;
+    ZQuadBatch batch;
     if (!batch.Create(program)) { return 1; }
-    LoadedMap loaded;
+    ZLoadedMap loaded;
     std::size_t selected = 0;
     bool found = false;
-    for (const CatalogMap &entry : BuildCatalog(toc)) {
-        LoadedMap candidate;
+    for (const ZCatalogMap &entry : BuildCatalog(toc)) {
+        ZLoadedMap candidate;
         if (!LoadMap(toc, entry.packIndex, entry.mapIndex, candidate)) { return 1; }
         LoadProps(toc, candidate);
         for (std::size_t index = 0; index < candidate.props.size(); ++index) {
-            if (candidate.props[index].sprite->interactiveKind == InteractivePropKind::Cover) {
+            if (candidate.props[index].sprite->interactiveKind == ZInteractivePropKind::Cover) {
                 selected = index;
                 found = true;
                 break;
@@ -34,12 +34,12 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
         break;
     }
     if (!found) { return 1; }
-    const PlacedProp cover = loaded.props[selected];
+    const ZPlacedProp cover = loaded.props[selected];
     loaded.props.clear();
     loaded.props.push_back(cover);
     // State 1 and a fixed random salt exercise the same original transition twice.
-    SetCoverState(loaded, static_cast<CoverState>(1));
-    StartTransitionParticles(toc, loaded, InteractivePropKind::Cover, 1);
+    SetCoverState(loaded, static_cast<ZCoverState>(1));
+    StartTransitionParticles(toc, loaded, ZInteractivePropKind::Cover, 1);
     for (unsigned time = 0; time < 400; time += 16) { AdvanceParticleEffects(loaded, 16); }
     std::size_t particles = 0;
     float worldRadius = 0;
@@ -58,7 +58,7 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
     const char *names[] = {"no-dock", "old-dock", "large-text-dock"};
     float previousZoom = 0;
     for (unsigned index = 0; index < 3; ++index) {
-        Camera camera = FitCamera(loaded, width - dockWidths[index], height);
+        ZMapCamera camera = FitCamera(loaded, width - dockWidths[index], height);
         // Centre the same prop in every capture; only projection scale changes.
         camera.x = cover.x - width / camera.zoom * 0.5f;
         camera.y = cover.y - height / camera.zoom * 0.5f;

@@ -37,13 +37,13 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         if (!PushBossCheckKey(window, 's', true) || !window.TakeCheatCode().empty()) { ++checkFailures; }
         if (!PushBossCheckKey(window, 's')) { return 1; }
         const std::string bossCode = window.TakeCheatCode();
-        if (bossCode != "stboss" || !window.TakeCheatCode().empty() || window.IsKeyDown(KeyCode::S)) { ++checkFailures; }
+        if (bossCode != "stboss" || !window.TakeCheatCode().empty() || window.IsKeyDown(ZKeyCode::S)) { ++checkFailures; }
         std::printf("[stboss-input-check] code=%s repeats-ignored=1 released-s=%d failures=%u\n",
-            bossCode.c_str(), !window.IsKeyDown(KeyCode::S), checkFailures);
+            bossCode.c_str(), !window.IsKeyDown(ZKeyCode::S), checkFailures);
         if (bossCode != "stboss" || !session.SkipToBoss()) { return 1; }
         const unsigned introBeforeRepeat = session.GetLevel().GetBossIntroSerial();
         if (session.SkipToBoss() || session.GetLevel().GetBossIntroSerial() != introBeforeRepeat) { ++checkFailures; }
-        CombatEnemy *boss = nullptr;
+        ZCombatEnemy *boss = nullptr;
         for (auto &actor : scene.enemies) {
             if (actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { boss = actor.get(); }
         }
@@ -51,7 +51,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             std::printf("[boss-check] %s missing scripted boss state=%d\n", packShortName.c_str(), session.GetLevel().GetStateId());
             return 1;
         }
-        const CombatId bossId = boss->model.enemy.combat.id;
+        const ZCombatId bossId = boss->model.enemy.combat.id;
         CCamera &camera = loaded.map.GetCamera();
         // Compare the real camera with the original target operation at the
         // same authored bounds. This also permits legitimate edge clamping.
@@ -59,11 +59,11 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         expected.SetTarget(boss->model.enemy.combat.x, boss->model.enemy.combat.y);
         expected.SetCameraMode(2);
         CCamera actual = camera;
-        const MapRectangle bounds = loaded.map.GetVisibleBounds();
+        const ZMapRectangle bounds = loaded.map.GetVisibleBounds();
         actual.Update(1000);
         expected.Update(1000);
-        actual.UpdatePosition(scene.playerX, scene.playerY, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
-        expected.UpdatePosition(scene.playerX, scene.playerY, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
+        actual.UpdatePosition(scene.GetPlayer().x, scene.GetPlayer().y, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
+        expected.UpdatePosition(scene.GetPlayer().x, scene.GetPlayer().y, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
         const float targetError = std::hypot(actual.GetX() - expected.GetX(), actual.GetY() - expected.GetY());
         if (camera.GetMode() != 2 || targetError > 0.01f) { ++checkFailures; }
         std::printf("[boss-check] %s camera-error=%.3f boss=%s\n", packShortName.c_str(), targetError, boss->data->owner.c_str());
@@ -85,14 +85,14 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         std::array<CBullet::Template, 3> grenadeTemplates;
         for (unsigned index = 0; index < 3; ++index) {
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(grenade.packHash, GameSection::Bullet, grenadeOrdinals[index], bytes)) { return 1; }
+            if (!tables.ReadSectionResource(grenade.packHash, ZGameSection::Bullet, grenadeOrdinals[index], bytes)) { return 1; }
             CArrayInputStream input(bytes);
             if (!grenadeTemplates[index].Init(input)) { return 1; }
         }
         CEnemy &enemy = boss->model.enemy;
         const unsigned initialParts = enemy.GetPartCount();
         const float initialHealth = enemy.combat.health;
-        CombatHit hit;
+        ZCombatHit hit;
         hit.owner = kPlayerCombatId;
         hit.ownerType = 0;
         hit.damage = grenadeTemplates[0].GetBaseDamage();
@@ -106,15 +106,15 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         std::printf("[boss-check] direct contacts=5 parts=%u expected=%u hp=%.1f\n", enemy.GetPartCount(), initialParts, enemy.combat.health);
         // Restart this fixture after the deliberate failing contact probe so
         // independent explosion assertions stay meaningful on the old code.
-        const EnemyTemplateData *bossData = boss->data;
+        const ZEnemyTemplateData *bossData = boss->data;
         std::size_t bossEntry = static_cast<std::size_t>(bossData - enemies.data());
-        WeaponEffects blastEffects(toc, tables, program);
-        CombatScene blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
+        ZWeaponEffects blastEffects(toc, tables, program);
+        ZCombatWorld blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
         blastScene.SetLevel(&session.GetLevel());
         for (unsigned kind = 0; kind < 3; ++kind) {
             blastScene.Reset();
             vitals.invincible = true;
-            CombatEnemy *target = blastScene.Spawn(bossEntry, 600, 450);
+            ZCombatEnemy *target = blastScene.Spawn(bossEntry, 600, 450);
             if (target == nullptr) { return 1; }
             CEnemy &blastEnemy = target->model.enemy;
             // Each authored intro emits LEVEL event 11 when its animation
@@ -122,8 +122,8 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             bool introComplete = false;
             for (int elapsed = 0; elapsed < 60000 && !introComplete; elapsed += 16) {
                 blastEnemy.Update(16);
-                for (const EnemyAction &action : blastEnemy.combat.actions) {
-                    if (action.kind == EnemyAction::Kind::LevelEvent && action.slot == 11) { introComplete = true; }
+                for (const ZEnemyAction &action : blastEnemy.combat.actions) {
+                    if (action.kind == ZEnemyAction::Kind::LevelEvent && action.slot == 11) { introComplete = true; }
                 }
                 blastEnemy.combat.actions.clear();
             }
@@ -220,14 +220,14 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                 packShortName.c_str(), wave, session.GetLevel().GetWave(), checkFailures);
             if (wave == 450 || wave == 499) {
                 blastScene.Reset();
-                CombatEnemy *target = blastScene.Spawn(bossEntry, 600, 450);
+                ZCombatEnemy *target = blastScene.Spawn(bossEntry, 600, 450);
                 if (target == nullptr) { return 1; }
                 CEnemy &blastEnemy = target->model.enemy;
                 bool ready = false;
                 for (int time = 0; time < 60000 && !ready; time += 16) {
                     blastEnemy.Update(16);
                     for (const auto &action : blastEnemy.combat.actions) {
-                        if (action.kind == EnemyAction::Kind::LevelEvent && action.slot == 11) { ready = true; }
+                        if (action.kind == ZEnemyAction::Kind::LevelEvent && action.slot == 11) { ready = true; }
                     }
                     blastEnemy.combat.actions.clear();
                 }
@@ -270,4 +270,3 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
-

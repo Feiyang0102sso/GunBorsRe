@@ -1,11 +1,11 @@
 // Desktop-only fast-forward through the original survival Flow callbacks.
 #include "gun_bros_re/cheats/CheatConfig.h"
-#include "gun_bros_re/gameplay/SurvivalSession.h"
+#include "gun_bros_re/gameplay/ZLevelHost.h"
 #include <chrono>
 #include <cstdio>
 
-bool SurvivalSession::StartBossSkip() {
-    PlayerVitals &player = m_scene.GetPlayerVitals();
+bool ZLevelHost::StartBossSkip() {
+    ZPlayerVitals &player = m_scene.GetPlayerVitals();
     if (m_bossSkipActive || m_suspended || m_match != nullptr || m_scene.IsRescuePending() ||
         m_archive || m_horde || m_level.GetTutorialStep() >= 0 || player.dead ||
         m_level.IsCleared() || m_level.IsPaused() ||
@@ -31,9 +31,9 @@ bool SurvivalSession::StartBossSkip() {
     return true;
 }
 
-void SurvivalSession::AdvanceBossSkip() {
+void ZLevelHost::AdvanceBossSkip() {
     if (!m_bossSkipActive) { return; }
-    PlayerVitals &player = m_scene.GetPlayerVitals();
+    ZPlayerVitals &player = m_scene.GetPlayerVitals();
     if (m_suspended || player.dead || m_scene.IsRescuePending() || m_level.IsPaused() ||
         (m_powerups != nullptr && m_powerups->IsMovieActive()) ||
         (m_peerPowerups != nullptr && m_peerPowerups->IsMovieActive())) {
@@ -42,7 +42,7 @@ void SurvivalSession::AdvanceBossSkip() {
     }
     const auto frameStarted = std::chrono::steady_clock::now();
     const bool playerInvincible = player.invincible;
-    PlayerVitals *brother = m_scene.GetBrotherVitals();
+    ZPlayerVitals *brother = m_scene.GetBrotherVitals();
     bool brotherInvincible = false;
     if (brother != nullptr) { brotherInvincible = brother->invincible; brother->invincible = true; }
     player.invincible = true;
@@ -76,7 +76,7 @@ void SurvivalSession::AdvanceBossSkip() {
     if (m_effects != nullptr) { m_effects->SetPaused(false); }
 }
 
-void SurvivalSession::FinishBossSkip() {
+void ZLevelHost::FinishBossSkip() {
     *m_level.VariableResolver(5) = m_bossSkipPreviousFlag;
     m_bossSkipActive = false;
     const bool success = m_level.GetBossIntroSerial() != m_bossSkipIntroSerial;
@@ -85,7 +85,7 @@ void SurvivalSession::FinishBossSkip() {
         success, m_bossSkipDefeated, m_bossSkipElapsedMs, static_cast<long long>(wallMs), m_level.GetWave(), m_level.GetStateId());
 }
 
-bool SurvivalSession::SkipToBoss() {
+bool ZLevelHost::SkipToBoss() {
     // Synchronous driver for permanent research checks; interactive cheats
     // call StartBossSkip and let each host frame call AdvanceBossSkip.
     if (!StartBossSkip()) { return false; }

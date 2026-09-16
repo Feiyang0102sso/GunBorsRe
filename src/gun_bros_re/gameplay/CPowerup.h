@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /** @file CPowerup.h
  * @brief Original consumable template (CPowerup::Template::Init :187947).
  */
@@ -8,7 +8,7 @@
 #include "engine/glu/script/CScriptInterpreter.h"
 #include <array>
 
-struct PowerupAction {
+struct ZPowerupAction {
     std::uint8_t function = 0;
     std::array<std::int16_t, 8> arguments{};
     std::uint8_t count = 0;
@@ -16,7 +16,7 @@ struct PowerupAction {
 };
 
 /** Native queries read a snapshot; gameplay applies emitted actions itself. */
-struct PowerupStatus {
+struct ZPowerupStatus {
     int healthPercent = 50;
     bool shield = false;
     bool frenzy = false;
@@ -25,7 +25,7 @@ struct PowerupStatus {
     std::array<bool, 4> frenzyTypes{};
 };
 
-class CPowerup : public GameScriptObject {
+class CPowerup : public ZGameScriptObject {
 public:
     struct Template {
         CGameAssetRef name;
@@ -39,7 +39,7 @@ public:
         std::uint8_t field124 = 0;
         bool Init(CArrayInputStream &stream);
     };
-    void Bind(const Template &data, const PowerupStatus &status = {});
+    void Bind(const Template &data, const ZPowerupStatus &status = {});
     /** Original exports: 0 equipable, 1 usable, 2 selector, 3 decrement, 4 default. */
     bool Query(std::uint8_t exportId, int argument = kScriptNoArgument);
     void Equip();
@@ -50,13 +50,13 @@ public:
     bool IsDone() const { return m_done; }
     unsigned GetStateId() const { return m_interpreter.GetStateId(); }
     unsigned GetUnsupportedCount() const { return m_unsupported; }
-    std::vector<PowerupAction> TakeActions();
+    std::vector<ZPowerupAction> TakeActions();
     std::int16_t FunctionResolver(std::uint8_t function, const std::int16_t *arguments, std::uint8_t count);
 private:
     const Template *m_template = nullptr;
     CScriptInterpreter m_interpreter;
-    PowerupStatus m_status;
-    std::vector<PowerupAction> m_actions;
+    ZPowerupStatus m_status;
+    std::vector<ZPowerupAction> m_actions;
     int m_timerMs = 0;
     bool m_done = false;
     unsigned m_unsupported = 0;

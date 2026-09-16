@@ -8,7 +8,7 @@
 
 #include <cstdint>
 #include <string>
-#include "gun_bros_re/gameplay/MapScene.h"
+#include "gun_bros_re/gameplay/ZMapScene.h"
 
 /** The two intentionally different ways a map can be opened. */
 // MapViewMode now belongs to runtime/MapScene.h, shared by game and tools.
@@ -33,15 +33,15 @@
 int RunMapPreview(const std::string &bigDirectory, const std::string &packShortName,
              std::uint32_t mapIndex, const std::string &screenshotPath,
              std::uint32_t advanceMs, bool showSpawns, bool showCollisions,
-             MapViewMode viewMode, std::uint32_t weaponIndex = 0,
+             ZMapViewMode viewMode, std::uint32_t weaponIndex = 0,
              bool firePreview = false);
 
 /** List every pack that holds maps, and how many. */
 int RunMapList(const std::string &bigDirectory);
 
 /** Retail survival on the same terrain renderer; research viewers stay separate. */
-struct SurvivalGameContext;
-struct MissionEntry;
+struct ZSurvivalGameContext;
+struct ZMissionEntry;
 // RunSurvival is declared in runtime/MapScene.h; no game caller needs this harness.
 
 #endif  // GUN_BROS_VIEWER_MAPPREVIEW_H

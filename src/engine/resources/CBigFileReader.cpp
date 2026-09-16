@@ -221,7 +221,7 @@ std::uint8_t CBigFileReader::GetCompressionFlag(std::uint32_t table2Index) {
 bool CBigFileReader::ResolveResourceId(std::uint32_t resourceId,
                                        std::uint32_t &table2Index) const {
     // Logical IDs are sparse; table1 stores them as runs.
-    for (const BigTable1Range &range : m_table1) {
+    for (const ZBigTable1Range &range : m_table1) {
         const std::uint32_t first = range.baseResourceId;
         const std::uint32_t last = first + range.rangeLength;
         if (resourceId >= first && resourceId < last) {

@@ -1,9 +1,9 @@
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /** @file CBGM.cpp
  * @brief CBGM::Play / NextTrack follow iOS :60102 / :60204.
  */
 #include "gun_bros_re/gameplay/CBGM.h"
-#include "engine/platform/CMediaDecoder.h"
+#include "engine/platform/ZMediaDecoder.h"
 #include <cstdio>
 
 namespace {
@@ -24,7 +24,7 @@ bool CBGM::Play(unsigned track, bool loop) {
     if (m_track == static_cast<int>(track)) { return true; }
     // Decode while the previous track is still queued; reuse PCM on revisits.
     if (!m_audio.HasSound(track)) {
-        MediaAudio decoded;
+        ZMediaAudio decoded;
         if (!DecodeMediaAudio(Paths::Root() / Paths::AudioDirectory / kTracks[track], decoded) ||
             !m_audio.LoadPcm(track, decoded.samples, decoded.sampleRate, decoded.channels)) { return false; }
     }
@@ -34,7 +34,7 @@ bool CBGM::Play(unsigned track, bool loop) {
     if (!m_audio.Play(track, loop)) { return false; }
     m_track = static_cast<int>(track);
     ++g_playbackStarts;
-    std::printf("[bgm] track=%u file=%s loop=%d muted=%d\n", track, kTracks[track], loop, CAudioPlayer::IsMuted());
+    std::printf("[bgm] track=%u file=%s loop=%d muted=%d\n", track, kTracks[track], loop, ZAudioPlayer::IsMuted());
     return true;
 }
 

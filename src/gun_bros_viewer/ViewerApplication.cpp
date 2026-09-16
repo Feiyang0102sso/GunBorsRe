@@ -8,8 +8,8 @@
 #include "gun_bros_viewer/scenes/ResourceInfo.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_viewer/ViewerSettings.h"
-#include "engine/core/Paths.h"
-#include "engine/platform/CAudioPlayer.h"
+#include "engine/core/ZPaths.h"
+#include "engine/platform/ZAudioPlayer.h"
 #include <charconv>
 #include <cstdio>
 #include <cstring>
@@ -44,7 +44,7 @@ int RunView(const Options &options) {
     switch (options.view) {
     case View::Map:
         return RunMapPreview(options.bigDirectory, options.mapPack, options.index,
-            options.screenshot, options.advance, options.spawns, options.collisions, MapViewMode::Preview);
+            options.screenshot, options.advance, options.spawns, options.collisions, ZMapViewMode::Preview);
     case View::Mesh:
         return RunMeshPreview(options.bigDirectory, options.index, 0, options.frame, options.screenshot, options.advance);
     case View::Enemy:
@@ -68,7 +68,7 @@ int RunViewerApplication(int argc, char **argv) {
     for (int argument = 1; argument < argc; ++argument) {
         const std::string name = argv[argument];
         if (name == "--help" || name == "-h") { PrintUsage(); return 0; }
-        if (name == "--mute") { CAudioPlayer::SetMuted(true); continue; }
+        if (name == "--mute") { ZAudioPlayer::SetMuted(true); continue; }
         if (name == "--fire") { options.fire = true; continue; }
         if (name == "--collisions") { options.collisions = true; continue; }
         if (name == "--spawns") { options.spawns = true; continue; }
@@ -126,8 +126,8 @@ int RunViewerApplication(int argc, char **argv) {
 
     GameCheats::Bind();
     if (!GetViewerSettings().Load(configPath)) { return 1; }
-    CAudioPlayer::SetEffectsGain(GetViewerSettings().effectsVolume * 0.1f);
-    BigVersion version = BigVersion::Unknown;
+    ZAudioPlayer::SetEffectsGain(GetViewerSettings().effectsVolume * 0.1f);
+    ZBigVersion version = ZBigVersion::Unknown;
     if (!DetectViewerBigVersion(options.bigDirectory, version)) { return 1; }
     if (options.view != View::Menu) { return RunView(options); }
     for (;;) {

@@ -30,8 +30,8 @@ bool CPickup::Collect() {
     return true;
 }
 
-std::vector<PickupAction> CPickup::TakeActions() {
-    std::vector<PickupAction> actions;
+std::vector<ZPickupAction> CPickup::TakeActions() {
+    std::vector<ZPickupAction> actions;
     actions.swap(m_actions);
     return actions;
 }
@@ -40,8 +40,8 @@ std::int16_t CPickup::FunctionResolver(std::uint8_t function,
     const std::int16_t *arguments, std::uint8_t argumentCount) {
     if (function == 4) {
         for (const GameObjectRef &item : m_template->items) {
-            PickupAction action;
-            action.kind = PickupAction::Kind::StoreItem;
+            ZPickupAction action;
+            action.kind = ZPickupAction::Kind::StoreItem;
             action.resource = item;
             m_actions.push_back(action);
         }
@@ -52,12 +52,12 @@ std::int16_t CPickup::FunctionResolver(std::uint8_t function,
         std::printf("[pickup] unsupported native %u args=%u\n", function, argumentCount);
         return 0;
     }
-    PickupAction action;
+    ZPickupAction action;
     action.amount = arguments[0];
-    if (function == 1) { action.kind = PickupAction::Kind::Experience; }
-    if (function == 2) { action.kind = PickupAction::Kind::Health; }
+    if (function == 1) { action.kind = ZPickupAction::Kind::Experience; }
+    if (function == 2) { action.kind = ZPickupAction::Kind::Health; }
     if (function == 3) {
-        action.kind = PickupAction::Kind::Sound;
+        action.kind = ZPickupAction::Kind::Sound;
         std::uint32_t index = 0;
         if (!m_interpreter.GetResource(arguments[0], action.resource.packHash, index)) {
             ++m_unsupported;

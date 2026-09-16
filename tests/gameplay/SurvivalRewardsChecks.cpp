@@ -1,3 +1,4 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -20,12 +21,12 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
     if (check) {
         // A separate world exercises empty-wave minimums and damage rejection
         // without putting fixture currency into the actual survival/profile run.
-        CombatScene rewardProbe(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+        ZCombatWorld rewardProbe(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
         rewardProbe.Reset();
         rewardProbe.OnWaveCleared(10);
         rewardProbe.OnWaveCleared(100);
         if (rewardProbe.GetXplodium() != 2 || rewardProbe.GetPerfectWaves() != 2) { ++checkFailures; }
-        CombatHit wound;
+        ZCombatHit wound;
         wound.ownerType = 1;
         wound.damage = 0.25f;
         rewardProbe.ApplyHit(kPlayerCombatId, wound);
@@ -35,7 +36,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         rewardProbe.OnWaveCleared(10);
         if (rewardProbe.GetLastWaveBonus() != 1 || rewardProbe.GetXplodium() != 3) { ++checkFailures; }
         // Render an actual credited reward, not a percentage estimate or a made-up HUD bonus.
-        SurvivalHudState rewardState;
+        ZInputPadState rewardState;
         rewardState.health = rewardState.maximumHealth = vitals.maximum;
         rewardState.debugMap = "REWARD REGRESSION";
         rewardState.xplodium = rewardProbe.GetXplodium();
@@ -43,18 +44,18 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         rewardState.perfectWaves = rewardProbe.GetPerfectWaves();
         rewardState.clearedWaves = rewardProbe.GetClearedWaves();
         rewardState.lastWavePerfect = rewardProbe.GetWavePerfectResults().back();
-        const HostSettings previousSettings = GameHostSettings();
+        const ZHostSettings previousSettings = GameHostSettings();
         GameHostSettings().debugMode = true;
         GameHostSettings().drawDebugInfo = true;
         survivalHud.ResetNotices();
-        survivalHud.OnOriginalWaveClear(4, true, 10, false);
+        survivalHud.OnWaveClear(4, true, 10, false);
         // Reach the second authored movie, then capture its readable middle.
         for (unsigned tick = 0; tick < 2000 && survivalHud.NoticeCount() == 2; ++tick) { survivalHud.Advance(16); }
         survivalHud.Advance(500);
         if (survivalHud.NoticeCount() != 1) { ++checkFailures; }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (!survivalHud.Draw(rewardState) ||
-            !GB_SAVE_FRAME(window, TestOutput::Path("perfect-wave-credited-bonus.png"))) { ++checkFailures; }
+            !Capture::SaveFrame(window, TestOutput::Path("perfect-wave-credited-bonus.png"))) { ++checkFailures; }
         survivalHud.ResetNotices();
         GameHostSettings() = previousSettings;
         std::printf("[survival-check] minimum/previous-bonus/damage/next-wave failures=%u\n", checkFailures);
@@ -65,21 +66,21 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         if (!LoadRefinementTemplate(toc, tables, pickupRefinement)) { return 1; }
         CProfileManager pickupProfile;
         pickupProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), pickupRefinement);
-        PickupScene pickupProbe(toc, tables, program, &pickupProfile);
+        ZPickupScene pickupProbe(toc, tables, program, &pickupProfile);
         if (!pickupProbe.Init()) { return 1; }
         GameObjectRef pickupRef;
         pickupRef.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
         pickupRef.localIndex = 2;
         vitals.health = 1;
-        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupProbe.Update(16, rewardProbe, effects);
         if (vitals.health != vitals.maximum) { ++checkFailures; }
         pickupRef.localIndex = 0;
-        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupRef.localIndex = 1;
-        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupRef.localIndex = 7;
-        pickupProbe.Spawn(pickupRef, rewardProbe.playerX, rewardProbe.playerY);
+        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupProbe.Update(16, rewardProbe, effects);
         pickupProbe.Update(16, rewardProbe, effects);
         GameObjectRef grenade = pickupRef;
@@ -118,17 +119,17 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         vitals.invincible = true;
         unsigned expectedExperience = 0;
         for (unsigned death = 0; death < 3; ++death) {
-            CombatEnemy *target = rewardProbe.Spawn(0, 600, 350);
+            ZCombatEnemy *target = rewardProbe.Spawn(0, 600, 350);
             if (target == nullptr) { ++checkFailures; break; }
             const unsigned experience = static_cast<unsigned>(std::ceil(target->data->experienceReward * PlayerArmorMultiplier(player, 3)));
             if (death == 0) { expectedExperience = experience; }
-            CombatHit hit;
+            ZCombatHit hit;
             hit.owner = kPlayerCombatId;
             if (death == 2) { hit.owner = kBrotherCombatId; }
             hit.ownerType = 0;
             hit.damage = 1000000;
             hit.applyArmorAttack = false;
-            const CombatId targetId = target->model.enemy.combat.id;
+            const ZCombatId targetId = target->model.enemy.combat.id;
             for (unsigned tick = 0; tick < 300 && !target->deathReported; ++tick) {
                 rewardProbe.ApplyHit(targetId, hit);
                 rewardProbe.Update(16, 0, 0, false);
@@ -149,9 +150,9 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         rewardProbe.Reset();
         rewardProbe.SetHorde(false);
         rewardProbe.SetTextView(400, 100, 2, 1.5f);
-        CombatEnemy *xpTarget = rewardProbe.Spawn(0, 600, 350);
+        ZCombatEnemy *xpTarget = rewardProbe.Spawn(0, 600, 350);
         if (xpTarget == nullptr) { return 1; }
-        CombatHit xpHit;
+        ZCombatHit xpHit;
         xpHit.owner = kPlayerCombatId;
         xpHit.ownerType = 0;
         xpHit.damage = 1000000;
@@ -183,7 +184,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
             if (!survivalHud.DrawExperienceTexts(rewardProbe.GetExperienceTexts(), false)) { ++checkFailures; }
             // Inspect the isolated text before Capture adds the global presentation overlay.
             glReadPixels(0, 0, frameWidth, frameHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-            if (!GB_SAVE_FRAME(window, TestOutput::Path("xp-text-") + std::to_string(stage * 1000) + ".png")) { ++checkFailures; }
+            if (!Capture::SaveFrame(window, TestOutput::Path("xp-text-") + std::to_string(stage * 1000) + ".png")) { ++checkFailures; }
             std::uint64_t light = 0;
             for (std::size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
                 light += pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2];
@@ -202,4 +203,3 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
-

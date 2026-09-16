@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 
-class CWindow;
+class ZWindow;
 
 namespace ViewerDefaults {
 inline constexpr int WindowWidth = 1600;
@@ -22,4 +22,4 @@ struct ViewerSettings {
 
 ViewerSettings &GetViewerSettings();
 std::string ViewerWindowTitle(const std::string &view, const std::string &details = "");
-bool OpenViewerWindow(CWindow &window, const std::string &view);
+bool OpenViewerWindow(ZWindow &window, const std::string &view);

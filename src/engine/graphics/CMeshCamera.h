@@ -55,14 +55,14 @@ constexpr std::size_t kGunLeftBoneIndex = 2;  // "gunleft", the left hand
  * and a tint; those stay with the caller, which is what keeps this header free
  * of both GL and resource loading. What is left is the transform.
  */
-struct MeshPart {
+struct ZMeshPart {
     /**
      * Where the parent's bone puts this part.
      *
      * All zero for a part that hangs off nothing -- the zero quaternion is the
      * identity here, which is exactly how the torso and the legs are drawn.
      */
-    MeshBoneTransform attachment;
+    ZMeshBoneTransform attachment;
 
     /**
      * An extra turn on top of the bone's own, in DEGREES about an arbitrary
@@ -72,7 +72,7 @@ struct MeshPart {
     float extraAngleDegrees;
     float extraAxisX, extraAxisY, extraAxisZ;
 
-    MeshPart();
+    ZMeshPart();
 };
 
 /**
@@ -84,7 +84,7 @@ struct MeshPart {
  * @param base Row-major, shared by every part of the model.
  * @param out  Row-major, 16 floats. Must not alias `base`.
  */
-void MeshCameraBuildPartMatrix(const MeshPart &part, const float *base,
+void MeshCameraBuildPartMatrix(const ZMeshPart &part, const float *base,
                                float *out);
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMESHCAMERA_H

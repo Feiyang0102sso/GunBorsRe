@@ -1,6 +1,7 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /**
  * @file PlayerEquipmentPreview.cpp
  * @brief Fixed-position equipment display using PlayerModel and WeaponEffects.
@@ -11,24 +12,24 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/PackTables.h"
-#include "gun_bros_re/gameplay/PlayerModel.h"
-#include "gun_bros_re/gameplay/EnemyModel.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/gameplay/CombatGeometry.h"
-#include "gun_bros_re/gameplay/WeaponEffects.h"
+#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/graphics/CMeshBuffer.h"
-#include "engine/graphics/CPNG.h"
-#include "engine/graphics/CShaderProgram.h"
-#include "engine/graphics/CTexture.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/graphics/ZMeshBuffer.h"
+#include "engine/graphics/ZPNG.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/graphics/ZTexture.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
 #include "gun_bros_re/gameplay/CBrother.h"
@@ -53,7 +54,6 @@
 #include "gun_bros_viewer/scenes/MeshPreviewInternal.h"
 using namespace MeshPreviewDetail;
 
-
 using namespace MeshPreviewDetail;
 
 int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gunIndex,
@@ -66,12 +66,12 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         return 1;
     }
 
-    PackTables tables(tocManager);
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData playerTemplate;
+    ZPackTables tables(tocManager);
+    std::vector<ZWeaponEntry> weapons;
+    ZPlayerTemplateData playerTemplate;
     if (!LoadWeaponCatalog(tocManager, tables, weapons)) { return 1; }
 
-    std::vector<ArmorEntry> armors;
+    std::vector<ZArmorEntry> armors;
     if (armorIndex >= 0 && !LoadArmorCatalog(tocManager, tables, armors)) {
         return 1;
     }
@@ -98,7 +98,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
 
     std::string equipmentView = "Player weapon";
     if (armorIndex >= 0) { equipmentView = "Player armor"; }
-    CWindow window;
+    ZWindow window;
     if (!OpenViewerWindow(window, equipmentView)) {
         return 1;
     }
@@ -107,15 +107,14 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
     ViewerControls controls(window, bindings);
     if (!controls.Init()) { return 1; }
 
-
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
         return 1;
     }
 
     // Held by pointer for the same reason one part is: swapping the gun
     // rebuilds the whole thing, and nothing in it can be moved.
-    std::unique_ptr<PlayerModel> character(new PlayerModel());
+    std::unique_ptr<ZPlayerModel> character(new ZPlayerModel());
     if (!BuildPlayerBody(tables, playerTemplate.moveSet, *character) ||
         !EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
                            weapons[gunSlot].owner, *character) ||
@@ -137,7 +136,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         std::printf("[armor] Left/Right: armor; B: remove all; 1-7,N/M: weapon; F: fire; WASD: walk\n");
     }
     PosePlayer(*character);
-    WeaponEffects effects(tocManager, tables, program);
+    ZWeaponEffects effects(tocManager, tables, program);
 
     glEnable(GL_DEPTH_TEST);
 
@@ -166,7 +165,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         controls.GetDrawableSize(drawableWidth, drawableHeight);
 
         const std::size_t previousGunSlot = gunSlot;
-        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None;
+        for (ZKeyCode key = controls.TakeKeyPress(); key != ZKeyCode::None;
              key = controls.TakeKeyPress()) {
             if (armorIndex >= 0 && (controls.IsPressed(key, ViewerAction::Previous) || controls.IsPressed(key, ViewerAction::Next))) {
                 int next = armorIndex + 1;
@@ -225,7 +224,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
             std::printf("\n[equipment] --- weapon %zu of %zu ---\n", gunSlot + 1,
                         weapons.size());
 
-            std::unique_ptr<PlayerModel> replacement(new PlayerModel());
+            std::unique_ptr<ZPlayerModel> replacement(new ZPlayerModel());
             if (BuildPlayerBody(tables, playerTemplate.moveSet, *replacement) &&
                 EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
                                   weapons[gunSlot].owner, *replacement) &&
@@ -324,11 +323,11 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         effects.Update(*character, modelToWorld, 0, static_cast<int>(elapsedMs));
         float screenMvp[kMatrix4dElements];
         Matrix4dOrthoTopLeft(static_cast<float>(drawableWidth), static_cast<float>(drawableHeight), 1000.0f, screenMvp);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, WeaponDrawPass::BehindPlayer);
+        effects.Draw(screenMvp, worldToScreen, 1.0f, ZWeaponDrawPass::BehindPlayer);
         glEnable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         DrawPlayer(*character, program, base);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, WeaponDrawPass::InFrontOfPlayer);
+        effects.Draw(screenMvp, worldToScreen, 1.0f, ZWeaponDrawPass::InFrontOfPlayer);
 
         if (!controls.Draw()) { return 1; }
 
@@ -341,7 +340,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
                     effects.GetShotCount(), effects.GetBulletCount(),
                     character->weapon->brother.GetTorso().GetMoveIndex(),
                     character->weapon->brother.GetLegs().GetMoveIndex());
-                if (!GB_SAVE_FRAME(window, screenshotPath)) {
+                if (!Capture::SaveFrame(window, screenshotPath)) {
                     return 1;
                 }
                 window.Present();
@@ -355,4 +354,3 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
     std::printf("[equipment] done\n");
     return 0;
 }
-

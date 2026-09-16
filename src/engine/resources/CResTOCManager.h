@@ -36,7 +36,7 @@ extern const char *const kPackTOCKeyTableOfContents;
  * One record of packTOC_<artset>.dat.
  * The file is a flat list of "<pack>_<artset>:<KEY>" strings with a value each.
  */
-struct PackTOCRecord {
+struct ZPackTOCRecord {
     std::string fullName;         // "pack1_xga"
     std::string shortName;        // "pack1"
     std::uint32_t tocResourceId;  // logical ID of the pack's TOC resource
@@ -94,7 +94,7 @@ public:
 private:
     /** Read and split the packTOC file. Returns false when it is unusable. */
     bool ReadPackTOCFile(const std::string &path, const std::string &artSet,
-                         std::vector<PackTOCRecord> &records) const;
+                         std::vector<ZPackTOCRecord> &records) const;
 
     std::string m_bigDirectory;
     std::vector<std::unique_ptr<CResPackTOC>> m_packs;

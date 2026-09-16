@@ -25,7 +25,7 @@ CScriptInterpreter::CScriptInterpreter()
     }
 }
 
-void CScriptInterpreter::SetScript(const CScript &script, IScriptObject &host) {
+void CScriptInterpreter::SetScript(const CScript &script, ZScriptObject &host) {
     m_script = &script;
     m_host = &host;
     m_state = nullptr;
@@ -120,7 +120,7 @@ bool CScriptInterpreter::GetResource(std::uint16_t index, std::uint32_t &packHas
         return false;
     }
 
-    const std::vector<ScriptResourceRef> &resources = m_script->GetResources();
+    const std::vector<ZScriptResourceRef> &resources = m_script->GetResources();
     if (index >= resources.size()) {
         return false;
     }
@@ -207,7 +207,7 @@ bool CScriptInterpreter::CallExportFunction(std::uint8_t exportId,
     // The current state gets first refusal, which is how a state overrides one
     // handler without redeclaring the rest.
     if (m_state != nullptr) {
-        const std::vector<ScriptStateExport> &exports = m_state->GetExports();
+        const std::vector<ZScriptStateExport> &exports = m_state->GetExports();
         for (std::size_t i = 0; i < exports.size(); ++i) {
             if (exports[i].id == exportId) {
                 return exports[i].code.Execute(*this);

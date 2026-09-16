@@ -215,22 +215,22 @@ std::int16_t *CGun::VariableResolver(std::uint8_t variable) {
     return nullptr;
 }
 
-std::vector<GunCue> CGun::TakeCues() {
-    std::vector<GunCue> result;
+std::vector<ZGunCue> CGun::TakeCues() {
+    std::vector<ZGunCue> result;
     result.swap(m_cues);
     return result;
 }
 
 std::int16_t CGun::FunctionResolver(std::uint8_t function,
     const std::int16_t *arguments, std::uint8_t argumentCount) {
-    GunCue cue;
+    ZGunCue cue;
     // Native ordinals come from CGun::FunctionResolver (:128186).
     switch (function) {
     case 0:
     case 1:
     case 2:
         if (argumentCount < 5) { return 0; }
-        cue.kind = GunCue::Kind::Bullet;
+        cue.kind = ZGunCue::Kind::Bullet;
         cue.resource = m_template->GetBulletRef();
         if (arguments[0] != 0) {
             std::uint32_t ordinal = 0;
@@ -267,8 +267,8 @@ std::int16_t CGun::FunctionResolver(std::uint8_t function,
         return 0;
     case 9:
     case 10: {
-        cue.kind = GunCue::Kind::Sound;
-        if (function == 10) { cue.kind = GunCue::Kind::LoopSound; }
+        cue.kind = ZGunCue::Kind::Sound;
+        if (function == 10) { cue.kind = ZGunCue::Kind::LoopSound; }
         std::uint32_t ordinal = 0;
         if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
             cue.resource.localIndex = static_cast<std::uint8_t>(ordinal);
@@ -277,11 +277,11 @@ std::int16_t CGun::FunctionResolver(std::uint8_t function,
         return 0;
     }
     case 11:
-        cue.kind = GunCue::Kind::StopSound;
+        cue.kind = ZGunCue::Kind::StopSound;
         m_cues.push_back(cue);
         return 0;
     case 12: {
-        cue.kind = GunCue::Kind::Effect;
+        cue.kind = ZGunCue::Kind::Effect;
         cue.alignEffect = true;
         cue.hand = arguments[0];
         cue.node = arguments[1];

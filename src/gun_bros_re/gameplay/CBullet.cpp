@@ -165,16 +165,16 @@ void CBullet::OnWallCollision() {
     m_interpreter.HandleEvent(8, 2);
 }
 
-void CBullet::OnCollision(HitResult result) {
-    if (result == HitResult::Pending || removed) { return; }
+void CBullet::OnCollision(ZHitResult result) {
+    if (result == ZHitResult::Pending || removed) { return; }
     int event = 0;
-    if (result == HitResult::Killed) { event = 1; }
-    if (result == HitResult::Ignored) { event = 2; }
+    if (result == ZHitResult::Killed) { event = 1; }
+    if (result == ZHitResult::Ignored) { event = 2; }
     m_interpreter.HandleEvent(8, static_cast<std::uint8_t>(event));
     // Enemy reflection is flag 0x1000; native 9 counts terrain ricochets.
     // Correction: native 9 is GetZOrderGroup's field +448 (:64007), not a count.
     // Ignored contacts remove ordinary bullets even when they can penetrate.
-    if (result == HitResult::Ignored) {
+    if (result == ZHitResult::Ignored) {
         if ((flags & 0x100) == 0) { removed = true; }
     } else if ((flags & 0x1140) == 0) { removed = true; }
 }
@@ -185,24 +185,24 @@ std::int16_t *CBullet::VariableResolver(std::uint8_t variable) {
     return nullptr;
 }
 
-std::vector<GunCue> CBullet::TakeCues() {
-    std::vector<GunCue> result;
+std::vector<ZGunCue> CBullet::TakeCues() {
+    std::vector<ZGunCue> result;
     result.swap(m_cues);
     return result;
 }
 
 std::int16_t CBullet::FunctionResolver(std::uint8_t function,
     const std::int16_t *arguments, std::uint8_t argumentCount) {
-    GunCue cue;
+    ZGunCue cue;
     switch (function) {
     case 1:
     case 2:
     case 6:
     case 17: {
-        cue.kind = GunCue::Kind::Effect;
-        if (function == 2) { cue.kind = GunCue::Kind::Trail; }
+        cue.kind = ZGunCue::Kind::Effect;
+        if (function == 2) { cue.kind = ZGunCue::Kind::Trail; }
         cue.alignEffect = argumentCount > 1 && arguments[1] != 0;
-        if (function == 6) { cue.kind = GunCue::Kind::Sound; }
+        if (function == 6) { cue.kind = ZGunCue::Kind::Sound; }
         std::uint32_t ordinal = 0;
         if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
             cue.resource.localIndex = static_cast<std::uint8_t>(ordinal);
@@ -215,7 +215,7 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         m_timerFunction = static_cast<std::uint8_t>(arguments[1]);
         break;
     case 3:
-        cue.kind = GunCue::Kind::StopTrail;
+        cue.kind = ZGunCue::Kind::StopTrail;
         m_cues.push_back(cue);
         break;
     case 14:
@@ -252,7 +252,7 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         ++lightning.revision;
         break;
     case 0: case 7: case 23:
-        cue.kind = GunCue::Kind::Splash;
+        cue.kind = ZGunCue::Kind::Splash;
         cue.percentDamage = function == 23;
         cue.damage = arguments[0];
         cue.radius = arguments[1];
@@ -264,7 +264,7 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         m_cues.push_back(cue);
         break;
     case 22: {
-        cue.kind = GunCue::Kind::SpawnEnemy;
+        cue.kind = ZGunCue::Kind::SpawnEnemy;
         // :61351 accepts resource[, object ID[, force pool allocation]].
         if (argumentCount >= 2) { cue.spawnObjectId = arguments[1]; }
         if (argumentCount >= 3) { cue.forceSpawn = arguments[2] != 0; }

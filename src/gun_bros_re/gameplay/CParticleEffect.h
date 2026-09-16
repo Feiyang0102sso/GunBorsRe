@@ -15,7 +15,7 @@
 constexpr std::size_t kParticleInterpolatorChannelCount = 8;
 
 /** One timed range used by a particle property such as scale or opacity. */
-struct ParticleInterpolatorKey {
+struct ZParticleInterpolatorKey {
     bool keepPreviousStart;
     std::uint32_t startMs;
     std::uint32_t durationMs;
@@ -25,19 +25,19 @@ struct ParticleInterpolatorKey {
     float endMaximum;
 };
 
-enum class ParticleSpawnPattern : std::uint8_t {
+enum class ZParticleSpawnPattern : std::uint8_t {
     Line,
     Rectangle,
     Circle,
 };
 
-enum class ParticleSpawnVelocity : std::uint8_t {
+enum class ZParticleSpawnVelocity : std::uint8_t {
     Linear,
     Radial,
 };
 
 /** One emitter from a CParticleEffect template. */
-struct ParticleEmitterTemplate {
+struct ZParticleEmitterTemplate {
     std::uint8_t archetype;
     std::uint32_t animationMask;
     float intervalMinimumSeconds;
@@ -47,15 +47,15 @@ struct ParticleEmitterTemplate {
     bool alignToVelocity;
     float accelerationX;
     float accelerationY;
-    std::array<std::vector<ParticleInterpolatorKey>,
+    std::array<std::vector<ZParticleInterpolatorKey>,
                kParticleInterpolatorChannelCount>
         interpolators;
-    ParticleSpawnPattern pattern;
+    ZParticleSpawnPattern pattern;
     std::array<float, 6> patternValues;
-    ParticleSpawnVelocity velocity;
+    ZParticleSpawnVelocity velocity;
     std::array<float, 4> velocityValues;
 
-    ParticleEmitterTemplate();
+    ZParticleEmitterTemplate();
 
     /** Latest interpolator end, which is the lifetime of one particle. */
     std::uint32_t GetParticleLifetimeMs() const;
@@ -71,17 +71,17 @@ public:
     bool Init(CArrayInputStream &stream);
 
     std::uint32_t GetSpritePackHash() const { return m_spritePackHash; }
-    const std::vector<ParticleEmitterTemplate> &GetEmitters() const {
+    const std::vector<ZParticleEmitterTemplate> &GetEmitters() const {
         return m_emitters;
     }
 
 private:
-    bool ReadEmitter(CArrayInputStream &stream, ParticleEmitterTemplate &emitter);
+    bool ReadEmitter(CArrayInputStream &stream, ZParticleEmitterTemplate &emitter);
     void ReadInterpolator(CArrayInputStream &stream,
-                          ParticleInterpolatorKey &interpolator);
+                          ZParticleInterpolatorKey &interpolator);
 
     std::uint32_t m_spritePackHash;
-    std::vector<ParticleEmitterTemplate> m_emitters;
+    std::vector<ZParticleEmitterTemplate> m_emitters;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CPARTICLEEFFECT_H

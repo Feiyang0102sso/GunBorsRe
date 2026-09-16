@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CGun.h
  * @brief The weapon template: stat tables, a script, and a model set.
@@ -59,7 +59,7 @@ constexpr std::uint32_t kGunStatTableCount = 6;
 class CBullet;
 
 /** A visual cue emitted by the original weapon script. */
-struct GunCue {
+struct ZGunCue {
     enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, Splash, SpawnEnemy, Grenade };
     Kind kind = Kind::Bullet;
     GameObjectRef resource;
@@ -80,7 +80,7 @@ struct GunCue {
     int forceMs = 0;
 };
 
-class CGun : public GameScriptObject {
+class CGun : public ZGameScriptObject {
 public:
     class Template {
     public:
@@ -152,7 +152,7 @@ public:
     float GetMasteryDamageMultiplier(float randomUnit = 1, bool *critical = nullptr) const;
     unsigned GetMasterySpeedMod() const;
     float GetHeatIntensity() const { return m_heatIntensity; }
-    std::vector<GunCue> TakeCues();
+    std::vector<ZGunCue> TakeCues();
 
 private:
     void DetachBullets();
@@ -161,7 +161,7 @@ private:
     CScriptInterpreter m_interpreter;
     CMeshAnimationController m_animation;
     std::vector<std::int32_t> m_overrides;
-    std::vector<GunCue> m_cues;
+    std::vector<ZGunCue> m_cues;
     std::int16_t m_ammo;
     std::int16_t m_mastery;
     std::int32_t m_functionTimer;

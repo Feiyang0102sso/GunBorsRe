@@ -1,14 +1,14 @@
 #include "gun_bros_re/data/CDailyBonusTracking.h"
 #include <cstdio>
 
-bool CDailyBonusTracking::Load(CResTOCManager &toc, PackTables &tables) {
+bool CDailyBonusTracking::Load(CResTOCManager &toc, ZPackTables &tables) {
     std::vector<std::uint8_t> bytes;
     bool found = false;
     // InitGameObject(type, globalIndex=0) walks packs; it is not core-local.
     for (unsigned index = 0; index < toc.GetPackCount(); ++index) {
-        if (tables.GetObjectPack(index).GetObjectCount(static_cast<GameSection>(5)) == 0) { continue; }
+        if (tables.GetObjectPack(index).GetObjectCount(static_cast<ZGameSection>(5)) == 0) { continue; }
         const auto *pack = toc.GetPack(index);
-        if (!tables.ReadSectionResource(pack->GetPackHash(), static_cast<GameSection>(5), 0, bytes)) { return false; }
+        if (!tables.ReadSectionResource(pack->GetPackHash(), static_cast<ZGameSection>(5), 0, bytes)) { return false; }
         std::printf("[daily] template=%s bytes=%zu\n", pack->GetShortName().c_str(), bytes.size());
         found = true;
         break;
@@ -23,9 +23,9 @@ bool CDailyBonusTracking::Load(CResTOCManager &toc, PackTables &tables) {
     if (stream.Overran() || count == 0) { return false; }
     prizes.clear();
     for (const auto &ref : references) {
-        if (!tables.ReadSectionResource(ref.packHash, static_cast<GameSection>(19), ref.localIndex, bytes)) { return false; }
+        if (!tables.ReadSectionResource(ref.packHash, static_cast<ZGameSection>(19), ref.localIndex, bytes)) { return false; }
         CArrayInputStream prizeStream(bytes);
-        DailyPrize prize;
+        ZDailyPrize prize;
         // CPrize::Init :204736. Remaining chance and flags are still parsed.
         prize.coins = prizeStream.ReadUInt32();
         prize.warbucks = prizeStream.ReadUInt32();
@@ -78,13 +78,13 @@ unsigned CDailyBonusTracking::CalculateBonus(const CProfileManager &profile, std
     return profile.dailyConsecutiveDays % static_cast<unsigned>(prizes.size());
 }
 
-bool CDailyBonusTracking::CommitBonus(CProfileManager &profile, std::int64_t localDay, const std::vector<StoreEntry> &store) const {
+bool CDailyBonusTracking::CommitBonus(CProfileManager &profile, std::int64_t localDay, const std::vector<ZStoreEntry> &store) const {
     if (!IsBonusAvailable(profile, localDay)) { return false; }
     const unsigned index = CalculateBonus(profile, localDay);
-    const DailyPrize &prize = prizes[index];
+    const ZDailyPrize &prize = prizes[index];
     CProfileManager candidate = profile;
     for (const auto &ref : prize.storeItems) {
-        const StoreEntry *reward = nullptr;
+        const ZStoreEntry *reward = nullptr;
         for (const auto &entry : store) {
             if (entry.ref.packHash == ref.packHash && entry.ref.localIndex == ref.localIndex) { reward = &entry; break; }
         }
@@ -96,8 +96,8 @@ bool CDailyBonusTracking::CommitBonus(CProfileManager &profile, std::int64_t loc
         const auto result = candidate.AcquireItem(reward->data, playerProgress.GetLevel(), true);
         // AwardPrize ignores an ineligible/already-owned item and still awards
         // the currency/XP. Unsupported resources remain an explicit failure.
-        if (result == PurchaseResult::LevelLocked) { continue; }
-        if (result != PurchaseResult::Purchased && result != PurchaseResult::Owned) { return false; }
+        if (result == ZPurchaseResult::LevelLocked) { continue; }
+        if (result != ZPurchaseResult::Purchased && result != ZPurchaseResult::Owned) { return false; }
     }
     // CDailyBonusTracking::CommitBonus :209500-209546: coins only.
     candidate.coins += static_cast<std::uint64_t>(prize.coins) *

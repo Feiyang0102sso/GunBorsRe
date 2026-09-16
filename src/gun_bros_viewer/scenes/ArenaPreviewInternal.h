@@ -1,15 +1,15 @@
 #pragma once
-#include "engine/core/Paths.h"
-/** @file Arena.cpp
+#include "engine/core/ZPaths.h"
+/** @file ArenaPreviewInternal.h
  * @brief Empty arenas sharing the same player, weapons and enemy script hosts.
  */
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/gameplay/CombatScene.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "engine/graphics/CMarkerBatch.h"
-#include "engine/core/CMatrix4d.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/gameplay/ZCombatWorld.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "engine/graphics/ZMarkerBatch.h"
+#include "engine/core/ZMatrix4d.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include <algorithm>
@@ -20,20 +20,20 @@
 
 namespace ArenaDetail {
 constexpr int kStepMs = 16;
-bool Equip(PackTables &tables, const PlayerTemplateData &data, const WeaponEntry &entry, PlayerModel &player, const CShaderProgram &program);
+bool Equip(ZPackTables &tables, const ZPlayerTemplateData &data, const ZWeaponEntry &entry, ZPlayerModel &player, const ZShaderProgram &program);
 }
 
 /** Borrowed scene state, valid only during RunArena's scene-ready callback. */
 struct ArenaScene {
-    CWindow &window;
+    ZWindow &window;
     CResTOCManager &toc;
-    PackTables &tables;
-    const CShaderProgram &program;
-    const std::vector<EnemyTemplateData> &catalog;
-    const std::vector<WeaponEntry> &weapons;
-    const PlayerTemplateData &playerData;
-    PlayerModel &player;
-    PlayerVitals &vitals;
-    WeaponEffects &effects;
-    CombatScene &scene;
+    ZPackTables &tables;
+    const ZShaderProgram &program;
+    const std::vector<ZEnemyTemplateData> &catalog;
+    const std::vector<ZWeaponEntry> &weapons;
+    const ZPlayerTemplateData &playerData;
+    ZPlayerModel &player;
+    ZPlayerVitals &vitals;
+    ZWeaponEffects &effects;
+    ZCombatWorld &scene;
 };

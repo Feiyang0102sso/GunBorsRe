@@ -1,46 +1,46 @@
-/** @file MissionCatalog.cpp
+/** @file ZMissionCatalog.cpp
  * @brief Validate full records, level/map references and original objective text.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/MissionCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZMissionCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/MissionObjective.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/MapScene.h"
+#include "gun_bros_re/gameplay/ZMapScene.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
-#include "gun_bros_re/data/MissionCatalogInternal.h"
+#include "gun_bros_re/data/ZMissionCatalogInternal.h"
 using namespace MissionCatalogDetail;
 #include "Checks.h"
 
 int RunMissionCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<MissionEntry> catalog;
+    ZPackTables tables(toc);
+    std::vector<ZMissionEntry> catalog;
     if (!LoadMissionCatalog(toc, tables, catalog)) { return 1; }
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("mission-check.txt"));
     unsigned failures = 0, objectives = 0;
-    for (const MissionEntry &entry : catalog) {
+    for (const ZMissionEntry &entry : catalog) {
         const Mission &mission = entry.data;
         report << entry.owner << " title=" << std::quoted(entry.title) << " type=" << mission.type
             << " fields=" << mission.value64 << ',' << mission.value66 << " objectives=" << mission.objectives.size()
             << " description=" << std::quoted(ReadGameString(toc, mission.description)) << '\n';
         std::vector<std::uint8_t> payload;
-        if (!tables.ReadSectionResource(mission.level.packHash, GameSection::Level, mission.level.localIndex, payload)) { ++failures; continue; }
+        if (!tables.ReadSectionResource(mission.level.packHash, ZGameSection::Level, mission.level.localIndex, payload)) { ++failures; continue; }
         CArrayInputStream levelStream(payload);
         CLevel::Template level;
         if (!level.Init(levelStream) || levelStream.Available() != 0) { ++failures; continue; }
         report << " level=" << tables.GetPackName(mission.level.packHash) << ':' << unsigned(mission.level.localIndex)
             << " map=" << tables.GetPackName(level.mapRef.packHash) << ':' << unsigned(level.mapRef.localIndex)
             << " states=" << level.script.GetStates().size() << " waves=" << level.wavesPerRevolution << ',' << level.waveLimit << '\n';
-        if (!tables.ReadSectionResource(level.mapRef.packHash, GameSection::TileLayer, level.mapRef.localIndex, payload)) { ++failures; }
+        if (!tables.ReadSectionResource(level.mapRef.packHash, ZGameSection::TileLayer, level.mapRef.localIndex, payload)) { ++failures; }
         else if (mission.type == 0) {
             CArrayInputStream mapStream(payload);
             CMap map;
@@ -49,7 +49,7 @@ int RunMissionCheck(const std::string &bigDirectory) {
         }
         for (const GameObjectRef &ref : mission.objectives) {
             ++objectives;
-            if (!tables.ReadSectionResource(ref.packHash, GameSection::MissionObjective, ref.localIndex, payload)) { ++failures; continue; }
+            if (!tables.ReadSectionResource(ref.packHash, ZGameSection::MissionObjective, ref.localIndex, payload)) { ++failures; continue; }
             CArrayInputStream objectiveStream(payload);
             MissionObjective objective;
             if (!objective.Init(objectiveStream) || objectiveStream.Available() != 0) { ++failures; continue; }

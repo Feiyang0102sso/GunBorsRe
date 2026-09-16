@@ -2,11 +2,11 @@
  * @brief Nearest-neighbour spacing over the live actors. Diagnostic only.
  */
 #include "gun_bros_re/debug/FlockMetrics.h"
-#include "gun_bros_re/gameplay/CombatScene.h"
+#include "gun_bros_re/gameplay/ZCombatWorld.h"
 #include <cmath>
 #include <limits>
 
-FlockMetrics MeasureFlock(const CombatScene &scene) {
+FlockMetrics MeasureFlock(const ZCombatWorld &scene) {
     FlockMetrics metrics;
     float sum = 0;
     float minimum = std::numeric_limits<float>::infinity();

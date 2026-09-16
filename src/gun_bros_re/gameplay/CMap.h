@@ -30,7 +30,7 @@
 #include <vector>
 
 /** Layer types, as switched on in CMap::Init. */
-enum class MapLayerType : std::uint8_t {
+enum class ZMapLayerType : std::uint8_t {
     Tile = 0,
     Collision = 1,
     Object = 2,
@@ -126,7 +126,7 @@ public:
      * script runs. Empty when the map has no camera layer at all, and then the
      * whole canvas is on show.
      */
-    MapRectangle GetVisibleBounds() const;
+    ZMapRectangle GetVisibleBounds() const;
 
     /**
      * Every camera rectangle merged into one, in world pixels.
@@ -140,7 +140,7 @@ public:
      *
      * Empty when the map has no camera layer.
      */
-    MapRectangle GetCameraExtent() const;
+    ZMapRectangle GetCameraExtent() const;
 
     /** Canvas size in tiles: the largest extent over all tile layers. */
     std::uint16_t GetCanvasWidth() const { return m_canvasWidth; }

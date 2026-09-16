@@ -1,15 +1,16 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/debug/CollisionOverlay.h"
 namespace ArenaDetail {
 constexpr float kRadians = 3.14159265f / 180;
 const char *const kShaders = Paths::Shaders().c_str();
 
-bool Equip(PackTables &tables, const PlayerTemplateData &data, const WeaponEntry &entry,
-    PlayerModel &player, const CShaderProgram &program) {
+bool Equip(ZPackTables &tables, const ZPlayerTemplateData &data, const ZWeaponEntry &entry,
+    ZPlayerModel &player, const ZShaderProgram &program) {
     return EquipPlayerWeapon(tables, data.script, entry.data, entry.owner, player) &&
         CreatePlayerBuffers(player, program);
 }
@@ -23,35 +24,35 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     bool fire, bool showCollisions, int armorIndex, ArenaSceneCallback onSceneReady) {
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<EnemyTemplateData> catalog;
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData playerData;
-    PlayerVitals vitals;
+    ZPackTables tables(toc);
+    std::vector<ZEnemyTemplateData> catalog;
+    std::vector<ZWeaponEntry> weapons;
+    ZPlayerTemplateData playerData;
+    ZPlayerVitals vitals;
     if (!LoadEnemyCatalog(toc, tables, catalog) || catalog.empty() ||
         !LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerData) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     if (weapons.empty() || weaponIndex >= weapons.size() || enemyIndex >= catalog.size()) {
         std::printf("[arena] equipment or enemy index out of range\n"); return 1;
     }
-    CWindow window;
+    ZWindow window;
     if (!OpenViewerWindow(window, "Arena")) { return 1; }
 
     ViewerControls controls(window, arena::Bindings);
     if (!controls.Init()) { return 1; }
-    CShaderProgram program, markerProgram;
+    ZShaderProgram program, markerProgram;
     if (!program.Load(kShaders, "ogles_vs_mvp_tex0", "ogles_ps_tex0") ||
         !markerProgram.Load(kShaders, "ogles_vs_mvp_constcolor", "ogles_ps_constcolor")) { return 1; }
-    CMarkerBatch markers;
+    ZMarkerBatch markers;
     if (!markers.Create(markerProgram)) { return 1; }
-    PlayerModel player;
+    ZPlayerModel player;
     player.vitals = &vitals;
     std::size_t weapon = weaponIndex % weapons.size();
     std::size_t entry = enemyIndex % catalog.size();
     if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
         !Equip(tables, playerData, weapons[weapon], player, program)) { return 1; }
-    WeaponEffects effects(toc, tables, program);
-    CombatScene scene(tables, program, catalog, player, vitals, effects,
+    ZWeaponEffects effects(toc, tables, program);
+    ZCombatWorld scene(tables, program, catalog, player, vitals, effects,
         playerData.gameScale);
     
     if (onSceneReady != nullptr) {
@@ -59,7 +60,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         return onSceneReady(ready);
     }
 
-    std::array<PowerupEntry, 3> grenades;
+    std::array<ZPowerupEntry, 3> grenades;
     if (!LoadArenaGrenades(toc, tables, grenades)) { return 1; }
     std::vector<std::string> enemyNames;
     for (const auto &enemy : catalog) {
@@ -71,7 +72,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     vitals.unlimitedHealth = true;
     ArenaCamera camera;
     if (armorIndex >= 0) {
-        std::vector<ArmorEntry> armor;
+        std::vector<ZArmorEntry> armor;
         if (!LoadArmorCatalog(toc, tables, armor) || armorIndex >= static_cast<int>(armor.size()) ||
             !EquipPlayerArmor(tables, armor[armorIndex].data, program, player)) {
             return 1;
@@ -95,7 +96,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         bool reset = false;
         std::size_t nextEntry = entry;
         std::size_t nextWeapon = weapon;
-        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None; key = controls.TakeKeyPress()) {
+        for (ZKeyCode key = controls.TakeKeyPress(); key != ZKeyCode::None; key = controls.TakeKeyPress()) {
             if (controls.IsPressed(key, ViewerAction::Previous)) { nextEntry = (nextEntry + catalog.size() - 1) % catalog.size(); }
             else if (controls.IsPressed(key, ViewerAction::Next)) { nextEntry = (nextEntry + 1) % catalog.size(); }
             else if (controls.IsPressed(key, ViewerAction::Spawn)) {
@@ -131,14 +132,14 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         const int arenaTop = std::min(kInfoHeight, height / 2);
         const int arenaHeight = std::max(1, height - arenaTop);
         camera.Scroll(controls.TakeWheelDelta());
-        camera.Follow(scene.playerX, scene.playerY, arenaWidth, arenaHeight);
+        camera.Follow(scene.GetPlayer().x, scene.GetPlayer().y, arenaWidth, arenaHeight);
         float mouseX = 0, mouseY = 0;
         const bool pointerInArena = controls.GetMousePosition(mouseX, mouseY) &&
             mouseX >= 0 && mouseX < arenaWidth &&
             mouseY >= arenaTop && mouseY < arenaTop + arenaHeight;
         if (screenshot.empty() && pointerInArena && !vitals.dead) {
-            scene.facing = std::atan2(camera.WorldX(mouseX) - scene.playerX,
-                scene.playerY - camera.WorldY(mouseY - arenaTop)) / kRadians;
+            scene.GetPlayer().facing = std::atan2(camera.WorldX(mouseX) - scene.GetPlayer().x,
+                scene.GetPlayer().y - camera.WorldY(mouseY - arenaTop)) / kRadians;
         }
         float moveX = 0, moveY = 0;
         if (controls.IsDown(ViewerAction::MoveLeft)) { moveX -= 1; }
@@ -154,7 +155,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
             accumulator -= kStepMs;
         }
         float projection[16];
-        camera.Follow(scene.playerX, scene.playerY, arenaWidth, arenaHeight);
+        camera.Follow(scene.GetPlayer().x, scene.GetPlayer().y, arenaWidth, arenaHeight);
         Matrix4dOrthoTopLeft(arenaWidth / camera.scale, arenaHeight / camera.scale, 4000, projection);
         Matrix4dTranslate(projection, -camera.x, -camera.y);
         glViewport(0, 0, arenaWidth, arenaHeight);
@@ -176,7 +177,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         markers.Draw(markerProgram, projection, 0.12f, 0.48f, 1, 1);
         float playerMatrix[16], model[16], mvp[16];
         scene.PlayerMatrix(playerMatrix);
-        effects.Draw(projection, nullptr, 1, WeaponDrawPass::BehindPlayer);
+        effects.Draw(projection, nullptr, 1, ZWeaponDrawPass::BehindPlayer);
         // Actor meshes share a depth buffer; UI and billboards are layered after.
         glEnable(GL_DEPTH_TEST);
         for (auto &actor : scene.enemies) {
@@ -188,12 +189,12 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         }
         Matrix4dMultiply(projection, playerMatrix, mvp);
         DrawPlayer(player, program, mvp);
-        effects.Draw(projection, nullptr, 1, WeaponDrawPass::InFrontOfPlayer);
+        effects.Draw(projection, nullptr, 1, ZWeaponDrawPass::InFrontOfPlayer);
         glDisable(GL_DEPTH_TEST);
         // Every bar uses the same predicate as projectile damage filtering.
         for (auto &actor : scene.enemies) {
             CEnemy &enemy = actor->model.enemy;
-            const EnemyCombat &state = enemy.combat;
+            const ZEnemyCombat &state = enemy.combat;
             if (state.removed || state.dead) { continue; }
             float barY = state.y - std::max(60.0f, actor->data->gameScale * 0.55f);
             markers.Begin();
@@ -232,7 +233,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         float damage = scene.damageDealt;
         unsigned deferred = 0;
         for (const auto &actor : scene.enemies) {
-            const EnemyCombat &state = actor->model.enemy.combat;
+            const ZEnemyCombat &state = actor->model.enemy.combat;
             kills += state.deathCount; hits += state.hitCount;
             damage += state.totalDamage;
             deferred |= state.deferredMechanisms;
@@ -256,7 +257,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         std::snprintf(line, sizeof(line), "Alive %zu   Kills %u   Landed hits %u", scene.AliveCount(), kills, hits);
         controls.DrawLabel(line, 16, 158, hudWidth - 32, fontHeight, hudProjection);
         if (!scene.enemies.empty()) {
-            const EnemyCombat &state = scene.enemies.front()->model.enemy.combat;
+            const ZEnemyCombat &state = scene.enemies.front()->model.enemy.combat;
             std::snprintf(line, sizeof(line), "Filter %d   Target type %d", state.variables[16], state.targetType);
             controls.DrawLabel(line, 16, kInfoHeight + 8, hudWidth - 32, fontHeight, hudProjection);
         }
@@ -267,7 +268,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         window.SetTitle(ViewerWindowTitle("Arena", enemyNames[entry] + " | " + catalog[entry].owner + " | " + weapons[weapon].name));
         if (!controls.Draw()) { return 1; }
         if (!screenshot.empty()) {
-            if (GB_SAVE_FRAME(window, screenshot)) { return 0; }
+            if (Capture::SaveFrame(window, screenshot)) { return 0; }
             return 1;
         }
         window.Present();

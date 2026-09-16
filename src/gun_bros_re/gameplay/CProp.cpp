@@ -89,8 +89,8 @@ void CProp::Update(int deltaMs, bool playerInside) {
         m_inside = playerInside;
         if (playerInside) {
             m_interpreter.HandleEvent(10, 4);
-            PropAction action;
-            action.kind = PropAction::Kind::Entered;
+            ZPropAction action;
+            action.kind = ZPropAction::Kind::Entered;
             m_actions.push_back(action);
         } else { m_interpreter.HandleEvent(10, 5); }
     }
@@ -102,8 +102,8 @@ void CProp::Update(int deltaMs, bool playerInside) {
             m_lastMoveStep = step;
             const unsigned sound = move.frames[step].sound;
             if (sound != 255) {
-                PropAction action;
-                action.kind = PropAction::Kind::Sound;
+                ZPropAction action;
+                action.kind = ZPropAction::Kind::Sound;
                 action.resource.packHash = m_template->GetMoveSet().packHash;
                 action.resource.localIndex = static_cast<std::uint8_t>(sound);
                 m_actions.push_back(action);
@@ -143,8 +143,8 @@ bool CProp::IsScriptSequenceFrameFinished() {
     return m_move >= 0 && m_players[m_moveSlot].HasFinished();
 }
 
-void CProp::QueueResource(PropAction::Kind kind, int resource, int group) {
-    PropAction action;
+void CProp::QueueResource(ZPropAction::Kind kind, int resource, int group) {
+    ZPropAction action;
     action.kind = kind;
     action.group = group;
     std::uint32_t index = 0;
@@ -163,7 +163,7 @@ std::int16_t CProp::FunctionResolver(std::uint8_t function, const std::int16_t *
     case 1: m_timerMs = first * 1000; break;
     case 2:
         if (count < 2) { second = 3; }
-        QueueResource(PropAction::Kind::Effect, first, second);
+        QueueResource(ZPropAction::Kind::Effect, first, second);
         break;
     case 3:
         if (m_health > 0) {
@@ -175,7 +175,7 @@ std::int16_t CProp::FunctionResolver(std::uint8_t function, const std::int16_t *
             }
         }
         break;
-    case 4: QueueResource(PropAction::Kind::Sound, first); break;
+    case 4: QueueResource(ZPropAction::Kind::Sound, first); break;
     case 5:
     case 6:
         if (first == 0) { m_collision.SetGroupEnabled(second, function == 6); }
@@ -185,8 +185,8 @@ std::int16_t CProp::FunctionResolver(std::uint8_t function, const std::int16_t *
         break;
     case 7:
     case 10: {
-        PropAction action;
-        action.kind = PropAction::Kind::Splash;
+        ZPropAction action;
+        action.kind = ZPropAction::Kind::Splash;
         action.radius = first;
         action.damage = second;
         action.playersOnly = function == 10;
@@ -199,8 +199,8 @@ std::int16_t CProp::FunctionResolver(std::uint8_t function, const std::int16_t *
         if (first < 0 || first >= 32) { return 0; }
         return (m_damageFlags & (1u << first)) != 0;
     case 9: {
-        PropAction action;
-        action.kind = PropAction::Kind::Destroyed;
+        ZPropAction action;
+        action.kind = ZPropAction::Kind::Destroyed;
         m_actions.push_back(action);
         m_collisionChanged = true;
         break;
@@ -209,11 +209,11 @@ std::int16_t CProp::FunctionResolver(std::uint8_t function, const std::int16_t *
     case 12: m_checkEntry = true; m_collisionChanged = true; break;
     case 13: m_checkEntry = false; m_collisionChanged = true; break;
     case 14: m_moveSlot = first; break;
-    case 15: QueueResource(PropAction::Kind::Portal, first); break;
-    case 16: QueueResource(PropAction::Kind::AttachedEffect, first, second); break;
+    case 15: QueueResource(ZPropAction::Kind::Portal, first); break;
+    case 16: QueueResource(ZPropAction::Kind::AttachedEffect, first, second); break;
     case 17: {
-        PropAction action;
-        action.kind = PropAction::Kind::StopEffect;
+        ZPropAction action;
+        action.kind = ZPropAction::Kind::StopEffect;
         m_actions.push_back(action);
         break;
     }
@@ -234,8 +234,8 @@ const CCollisionData &CProp::GetCollision(bool bullets) const {
     return m_collision;
 }
 
-std::vector<PropAction> CProp::TakeActions() {
-    std::vector<PropAction> actions;
+std::vector<ZPropAction> CProp::TakeActions() {
+    std::vector<ZPropAction> actions;
     actions.swap(m_actions);
     return actions;
 }

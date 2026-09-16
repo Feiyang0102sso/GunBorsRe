@@ -21,7 +21,7 @@ float ReadFloat(CArrayInputStream &stream) {
 
 }  // namespace
 
-ParticleEmitterTemplate::ParticleEmitterTemplate()
+ZParticleEmitterTemplate::ZParticleEmitterTemplate()
     : archetype(255),
       animationMask(0),
       intervalMinimumSeconds(0.0f),
@@ -31,16 +31,16 @@ ParticleEmitterTemplate::ParticleEmitterTemplate()
       alignToVelocity(false),
       accelerationX(0.0f),
       accelerationY(0.0f),
-      pattern(ParticleSpawnPattern::Line),
-      velocity(ParticleSpawnVelocity::Linear) {
+      pattern(ZParticleSpawnPattern::Line),
+      velocity(ZParticleSpawnVelocity::Linear) {
     patternValues.fill(0.0f);
     velocityValues.fill(0.0f);
 }
 
-std::uint32_t ParticleEmitterTemplate::GetParticleLifetimeMs() const {
+std::uint32_t ZParticleEmitterTemplate::GetParticleLifetimeMs() const {
     std::uint32_t lifetime = 0;
     for (std::size_t channel = 0; channel < interpolators.size(); ++channel) {
-        const std::vector<ParticleInterpolatorKey> &keys = interpolators[channel];
+        const std::vector<ZParticleInterpolatorKey> &keys = interpolators[channel];
         for (std::size_t key = 0; key < keys.size(); ++key) {
             const std::uint32_t end = keys[key].startMs + keys[key].durationMs;
             if (end > lifetime) {
@@ -66,7 +66,7 @@ bool CParticleEffect::Init(CArrayInputStream &stream) {
 }
 
 bool CParticleEffect::ReadEmitter(CArrayInputStream &stream,
-                                  ParticleEmitterTemplate &emitter) {
+                                  ZParticleEmitterTemplate &emitter) {
     emitter.archetype = stream.ReadUInt8();
     emitter.animationMask = stream.ReadUInt32();
     emitter.intervalMinimumSeconds = ReadFloat(stream);
@@ -87,9 +87,9 @@ bool CParticleEffect::ReadEmitter(CArrayInputStream &stream,
     }
 
     const std::uint8_t pattern = stream.ReadUInt8();
-    emitter.pattern = static_cast<ParticleSpawnPattern>(pattern);
+    emitter.pattern = static_cast<ZParticleSpawnPattern>(pattern);
     std::size_t patternValueCount = 4;
-    if (emitter.pattern == ParticleSpawnPattern::Circle) {
+    if (emitter.pattern == ZParticleSpawnPattern::Circle) {
         patternValueCount = 6;
     }
     for (std::size_t value = 0; value < patternValueCount; ++value) {
@@ -97,7 +97,7 @@ bool CParticleEffect::ReadEmitter(CArrayInputStream &stream,
     }
 
     const std::uint8_t velocity = stream.ReadUInt8();
-    emitter.velocity = static_cast<ParticleSpawnVelocity>(velocity);
+    emitter.velocity = static_cast<ZParticleSpawnVelocity>(velocity);
     for (std::size_t value = 0; value < emitter.velocityValues.size(); ++value) {
         emitter.velocityValues[value] = ReadFloat(stream);
     }
@@ -106,7 +106,7 @@ bool CParticleEffect::ReadEmitter(CArrayInputStream &stream,
 }
 
 void CParticleEffect::ReadInterpolator(
-    CArrayInputStream &stream, ParticleInterpolatorKey &interpolator) {
+    CArrayInputStream &stream, ZParticleInterpolatorKey &interpolator) {
     interpolator.keepPreviousStart = stream.ReadUInt8() != 0;
     interpolator.startMs = stream.ReadUInt32();
     interpolator.durationMs = stream.ReadUInt32();
@@ -120,7 +120,7 @@ void CParticleEffect::ReadInterpolator(
     interpolator.endMaximum = ReadFloat(stream);
 }
 
-int ParticleEmitterTemplate::SelectAnimation(float random) const {
+int ZParticleEmitterTemplate::SelectAnimation(float random) const {
     int count = 0;
     for (int bit = 0; bit < 32; ++bit) {
         if ((animationMask & (1u << bit)) != 0) { ++count; }

@@ -43,7 +43,7 @@ bool PushWheel(float x, float y, float delta) {
     event.wheel.y = delta;
     return SDL_PushEvent(&event);
 }
-bool Draw(CWindow &window, ViewerControls &controls, const char *name) {
+bool Draw(ZWindow &window, ViewerControls &controls, const char *name) {
     int width = 0, height = 0;
     controls.GetDrawableSize(width, height);
     glViewport(0, 0, width, height);
@@ -65,25 +65,25 @@ bool Draw(CWindow &window, ViewerControls &controls, const char *name) {
 
 int CheckViewerControls() {
     failures = 0;
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Viewer controls checks", 800, 600) || !window.PumpEvents()) { return 1; }
-    while (window.TakeKeyPress() != KeyCode::None) {}
+    while (window.TakeKeyPress() != ZKeyCode::None) {}
     {
         ViewerControls controls(window, mapview::Bindings);
         if (!controls.Init()) { return 1; }
         if (!PushKey(SDL_EVENT_KEY_DOWN, 't') || !PushKey(SDL_EVENT_KEY_UP, 't') ||
             !PushKey(SDL_EVENT_KEY_DOWN, 'g') || !PushKey(SDL_EVENT_KEY_UP, 'g') || !controls.PumpEvents()) { return 1; }
-        const KeyCode turretKey = controls.TakeKeyPress();
-        const KeyCode tilesKey = controls.TakeKeyPress();
+        const ZKeyCode turretKey = controls.TakeKeyPress();
+        const ZKeyCode tilesKey = controls.TakeKeyPress();
         Check(controls.IsPressed(turretKey, ViewerAction::Turret) && !controls.IsPressed(turretKey, ViewerAction::Tiles), "T selects turret only");
         Check(controls.IsPressed(tilesKey, ViewerAction::Tiles) && !controls.IsPressed(tilesKey, ViewerAction::Turret), "G selects tiles only");
     }
     {
         ViewerControls controls(window, arena::Bindings);
         if (!controls.Init()) { return 1; }
-        Check(controls.IsPressed(KeyCode::G, ViewerAction::Grenade) &&
-            controls.IsPressed(KeyCode::Q, ViewerAction::FreezeGrenade) &&
-            controls.IsPressed(KeyCode::E, ViewerAction::ShockGrenade), "arena grenade shortcuts");
+        Check(controls.IsPressed(ZKeyCode::G, ViewerAction::Grenade) &&
+            controls.IsPressed(ZKeyCode::Q, ViewerAction::FreezeGrenade) &&
+            controls.IsPressed(ZKeyCode::E, ViewerAction::ShockGrenade), "arena grenade shortcuts");
         Check(PushWheel(200, 220, 2) && controls.PumpEvents(), "arena wheel event");
         ArenaDetail::ArenaCamera camera;
         camera.Scroll(controls.TakeWheelDelta());
@@ -102,9 +102,9 @@ int CheckViewerControls() {
         // Changing the definition must affect both dispatch and the rendered help.
         std::vector<ViewerBinding> bindings(arena::All, arena::All + arena::Bindings.count);
         for (auto &binding : bindings) {
-            if (binding.action == ViewerAction::Category3) { binding.key = KeyCode::Q; }
-            if (binding.action == ViewerAction::MoveUp) { binding.key = KeyCode::T; }
-            if (binding.action == ViewerAction::Back) { binding.key = KeyCode::B; }
+            if (binding.action == ViewerAction::Category3) { binding.key = ZKeyCode::Q; }
+            if (binding.action == ViewerAction::MoveUp) { binding.key = ZKeyCode::T; }
+            if (binding.action == ViewerAction::Back) { binding.key = ZKeyCode::B; }
         }
         ViewerControls controls(window, {L"Remapped arena", bindings.data(), bindings.size()});
         if (!controls.Init() || !controls.PumpEvents()) { return 1; }
@@ -114,8 +114,8 @@ int CheckViewerControls() {
         if (!Draw(window, controls, "controls-expanded.png")) { return 1; }
         Check(PushKey(SDL_EVENT_KEY_DOWN, SDLK_Q) && PushKey(SDL_EVENT_KEY_UP, SDLK_Q) &&
             controls.PumpEvents(), "queue remapped category");
-        Check(controls.WeaponSelectionKey(controls.TakeKeyPress()) == KeyCode::Digit3 &&
-            controls.WeaponSelectionKey(KeyCode::Digit3) == KeyCode::None, "category remap reaches shared catalogue");
+        Check(controls.WeaponSelectionKey(controls.TakeKeyPress()) == ZKeyCode::Digit3 &&
+            controls.WeaponSelectionKey(ZKeyCode::Digit3) == ZKeyCode::None, "category remap reaches shared catalogue");
         Check(PushKey(SDL_EVENT_KEY_DOWN, SDLK_T) && controls.PumpEvents() &&
             controls.IsDown(ViewerAction::MoveUp), "remapped held movement");
         Check(PushKey(SDL_EVENT_KEY_UP, SDLK_T) && controls.PumpEvents() &&

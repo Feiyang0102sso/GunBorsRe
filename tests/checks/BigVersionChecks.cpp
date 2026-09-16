@@ -4,7 +4,7 @@
  */
 #include "TestOutput.h"
 #include "engine/core/CStringToKey.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_viewer/scenes/ResourceInfo.h"
 #include <cstdio>
 #include <fstream>
@@ -116,15 +116,15 @@ bool MakeFixture(const std::filesystem::path &directory, unsigned types, unsigne
     return WriteBytes(directory / (fullName + ".big"), big) && WriteBytes(directory / tocName, toc);
 }
 
-bool CheckValid(const std::filesystem::path &directory, BigVersion expected) {
-    BigVersion detected = BigVersion::Unknown;
+bool CheckValid(const std::filesystem::path &directory, ZBigVersion expected) {
+    ZBigVersion detected = ZBigVersion::Unknown;
     if (!DetectViewerBigVersion(directory.u8string(), detected) || detected != expected) { return false; }
     CResTOCManager toc;
     if (!toc.InitAuto(directory.u8string()) || !toc.Bind()) { return false; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CGameObjectPack &objects = tables.GetObjectPack(0);
     CResPackTOC &pack = *toc.GetPack(0);
-    const GameSection media[] = {GameSection::Png, GameSection::Wav, GameSection::Mesh};
+    const ZGameSection media[] = {ZGameSection::Png, ZGameSection::Wav, ZGameSection::Mesh};
     const Bytes expectedMedia[] = {{'P', 'N', 'G'}, {'W', 'A', 'V'}, {'M', 'E', 'S', 'H'}};
     for (unsigned index = 0; index < 3; ++index) {
         Bytes payload;
@@ -133,7 +133,7 @@ bool CheckValid(const std::filesystem::path &directory, BigVersion expected) {
     }
     // An absent newer object type cannot resolve to an older media section.
     for (unsigned number = objects.GetTypeCount() + 1; number <= 28; ++number) {
-        if (objects.GetHandle(static_cast<GameSection>(number), 0) != 0) { return false; }
+        if (objects.GetHandle(static_cast<ZGameSection>(number), 0) != 0) { return false; }
     }
     CGameAssetRef stringRef;
     stringRef.packHash = pack.GetPackHash();
@@ -141,7 +141,7 @@ bool CheckValid(const std::filesystem::path &directory, BigVersion expected) {
     if (objects.GetStringHandle(0) != kStringHandle || ReadGameString(toc, stringRef) != "Hello") { return false; }
     stringRef.assetId = 1;
     if (!ReadGameString(toc, stringRef).empty()) { return false; }
-    return tables.HasLatestBigVersion() == (expected == BigVersion::V1);
+    return tables.HasLatestBigVersion() == (expected == ZBigVersion::V1);
 }
 }
 
@@ -152,14 +152,14 @@ int RunBigVersionCheck() {
     for (unsigned index = 0; index < 3; ++index) {
         const auto directory = root / ("format-" + std::to_string(index + 1));
         if (!MakeFixture(directory, types[index], types[index] + 5, false) ||
-            !CheckValid(directory, static_cast<BigVersion>(index + 1))) { ++failures; }
+            !CheckValid(directory, static_cast<ZBigVersion>(index + 1))) { ++failures; }
     }
     const auto plain = root / "plain";
-    if (!MakeFixture(plain, 26, 31, true) || !CheckValid(plain, BigVersion::V3)) { ++failures; }
+    if (!MakeFixture(plain, 26, 31, true) || !CheckValid(plain, ZBigVersion::V3)) { ++failures; }
     const auto invalid = root / "invalid";
-    BigVersion detected = BigVersion::V1;
+    ZBigVersion detected = ZBigVersion::V1;
     if (!MakeFixture(invalid, 27, 33, false) || DetectViewerBigVersion(invalid.u8string(), detected) ||
-        detected != BigVersion::Unknown) { ++failures; }
+        detected != ZBigVersion::Unknown) { ++failures; }
     if (!MakeFixture(invalid, 28, 33, false, "pack0_core", true) ||
         DetectViewerBigVersion(invalid.u8string(), detected)) { ++failures; }
     if (!MakeFixture(invalid, 28, 33, false, "pack0_core", false, true) ||

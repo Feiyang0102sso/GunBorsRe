@@ -9,19 +9,20 @@
 #include <vector>
 
 class CLevel;
-struct PlacedObject;
+class ILayerPath;
+struct ZPlacedObject;
 
 /** The level world decides which spawn nodes are free and owns the actors. */
-class IEnemySpawnWorld {
+class ZLevelWorld {
 public:
-    virtual ~IEnemySpawnWorld() = default;
+    virtual ~ZLevelWorld() = default;
     virtual bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) = 0;
     virtual int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const = 0;
     // Pool occupancy includes dead actors until Release. Worlds which retire
     // actors immediately can use their ordinary count.
     virtual int CountEnemySlots(const GameObjectRef *enemy = nullptr) const { return CountEnemies(enemy); }
     virtual void StartObjectLayer(int layer) {}
-    virtual bool SpawnMapObject(const PlacedObject &object, int objectId) { return false; }
+    virtual bool SpawnMapObject(const ZPlacedObject &object, int objectId) { return false; }
     virtual void SendEnemyMessage(int objectId, int message) {}
     virtual void SendPropMessage(int objectId, int message) {}
     virtual void SetEnemyPortal(int enemyId, int propId) {}
@@ -49,8 +50,11 @@ public:
         int resource = -1;
     };
 
-    void Bind(CLevel &level, IEnemySpawnWorld *world);
+    void Bind(CLevel &level, ZLevelWorld *world);
     void Reset();
+    /** Select explicit nodes or delegate offscreen placement to the path layer. */
+    int GetSpawnPoint(const ILayerPath &path, float sourceX, float sourceY,
+        float cameraLeft, float cameraTop, float cameraWidth, float cameraHeight);
     void Update(int deltaMs);
     std::int16_t FunctionResolver(std::uint8_t function, const std::int16_t *arguments,
         std::uint8_t argumentCount);
@@ -64,7 +68,7 @@ public:
 private:
     bool Spawn(int resource, int layer, int node, int objectId);
     CLevel *m_level = nullptr;
-    IEnemySpawnWorld *m_world = nullptr;
+    ZLevelWorld *m_world = nullptr;
     std::array<Rule, 10> m_rules;
     bool m_paused = false;
     bool m_allNodes = true;

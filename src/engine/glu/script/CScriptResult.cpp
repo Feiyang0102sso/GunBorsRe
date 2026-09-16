@@ -7,10 +7,10 @@
 
 #include "engine/glu/script/CScriptInterpreter.h"
 
-bool CScriptResult::Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor) {
+bool CScriptResult::Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor) {
     const std::uint8_t stateId = cursor.ReadUInt8();
     interpreter.SetState(stateId);
     return true;
 }
 
-void CScriptResult::Skip(ScriptCursor &cursor) { cursor.at += 1; }
+void CScriptResult::Skip(ZScriptCursor &cursor) { cursor.at += 1; }

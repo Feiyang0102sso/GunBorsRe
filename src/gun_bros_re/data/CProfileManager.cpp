@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/data/PowerupCatalog.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
 #include <Windows.h>
 #include <fstream>
 #include <cstdio>
@@ -123,36 +123,36 @@ void CProfileManager::Grant(unsigned type, const GameObjectRef &ref) {
     inventory.push_back(entry);
 }
 
-PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned level, bool award) {
+ZPurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned level, bool award) {
     // Consumables, bundles with consumables, and real-money products need their
     // own runtime systems; do not charge for an item we cannot deliver.
     // Stage 10: supported consumables now use their own count inventory.
-    if (item.type >= 14 || item.objects.empty()) { return PurchaseResult::Unsupported; }
+    if (item.type >= 14 || item.objects.empty()) { return ZPurchaseResult::Unsupported; }
     if (!award && item.singlePurchase != 0) {
-        if (item.resource.IsNull()) { return PurchaseResult::Unsupported; }
-        if (IsPackagePurchased(item.resource)) { return PurchaseResult::Owned; }
+        if (item.resource.IsNull()) { return ZPurchaseResult::Unsupported; }
+        if (IsPackagePurchased(item.resource)) { return ZPurchaseResult::Owned; }
     }
     bool missing = false;
     for (const GameObjectTypeRef &ref : item.objects) {
         if (ref.type == 17 && IsPlayablePowerup(ref.object)) {
             if (award && GetPowerupCount(ref.object) >= 99) { continue; }
-            if (!award && item.commonPrice == 0 && item.rarePrice == 0) { return PurchaseResult::Unsupported; }
+            if (!award && item.commonPrice == 0 && item.rarePrice == 0) { return ZPurchaseResult::Unsupported; }
             missing = true;
             continue;
         }
-        if ((ref.type != 2 && ref.type != 6) || ref.object.IsNull()) { return PurchaseResult::Unsupported; }
+        if ((ref.type != 2 && ref.type != 6) || ref.object.IsNull()) { return ZPurchaseResult::Unsupported; }
         if (!Owns(ref.type, ref.object)) { missing = true; }
     }
-    if (!missing) { return PurchaseResult::Owned; }
-    if (level < item.requiredLevel) { return PurchaseResult::LevelLocked; }
+    if (!missing) { return ZPurchaseResult::Owned; }
+    if (level < item.requiredLevel) { return ZPurchaseResult::LevelLocked; }
     // CStoreAggregator::AcquireItem :158044 has a separate award branch;
     // its level gate still applies. Never rewrite a BIG item's price to grant it.
     if (!award) {
         if (item.commonPrice != 0) {
-            if (coins < item.commonPrice) { return PurchaseResult::InsufficientCoins; }
+            if (coins < item.commonPrice) { return ZPurchaseResult::InsufficientCoins; }
             coins -= item.commonPrice;
         } else {
-            if (warbucks < item.rarePrice) { return PurchaseResult::InsufficientWarbucks; }
+            if (warbucks < item.rarePrice) { return ZPurchaseResult::InsufficientWarbucks; }
             warbucks -= item.rarePrice;
         }
     }
@@ -174,29 +174,29 @@ PurchaseResult CProfileManager::AcquireItem(const CStoreItem &item, unsigned lev
         purchasedPackages.push_back(item.resource);
         packagesPurchasedThisSession.push_back(item.resource);
     }
-    return PurchaseResult::Purchased;
+    return ZPurchaseResult::Purchased;
 }
 
-PurchaseResult CProfileManager::AcquireCurrency(const CStoreItem &item) {
+ZPurchaseResult CProfileManager::AcquireCurrency(const CStoreItem &item) {
     // CurrencyPurchase :155009. The absent online checkout is explicitly
     // confirmed by the local-mode screen before this original settlement.
-    if (item.type == 14) { coins += item.commonPrice; return PurchaseResult::Purchased; }
-    if (item.type == 15) { warbucks += item.rarePrice; return PurchaseResult::Purchased; }
-    if (item.type != 16) { return PurchaseResult::Unsupported; }
+    if (item.type == 14) { coins += item.commonPrice; return ZPurchaseResult::Purchased; }
+    if (item.type == 15) { warbucks += item.rarePrice; return ZPurchaseResult::Purchased; }
+    if (item.type != 16) { return ZPurchaseResult::Unsupported; }
     if (item.value32 != 0) {
-        if (coins < item.commonPrice) { return PurchaseResult::InsufficientCoins; }
+        if (coins < item.commonPrice) { return ZPurchaseResult::InsufficientCoins; }
         coins -= item.commonPrice;
         warbucks += item.rarePrice;
     } else {
-        if (warbucks < item.rarePrice) { return PurchaseResult::InsufficientWarbucks; }
+        if (warbucks < item.rarePrice) { return ZPurchaseResult::InsufficientWarbucks; }
         warbucks -= item.rarePrice;
         coins += item.commonPrice;
     }
-    return PurchaseResult::Purchased;
+    return ZPurchaseResult::Purchased;
 }
 
 bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
-    if (nativeArchive) { return ReloadNativeProfile(*this, path); }
+    if (nativeArchive) { return ReloadProfile(*this, path); }
     if (!std::filesystem::exists(path)) { return true; }
     std::ifstream stream(path);
     std::string magic;
@@ -284,7 +284,7 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
     if (version >= 10) {
         if (!(stream >> count) || count > kMaximumInventoryRecords) { return false; }
         for (unsigned index = 0; index < count; ++index) {
-            WeaponMasteryEntry entry;
+            ZWeaponMasteryEntry entry;
             if (!ReadRef(stream, entry.resource) || entry.resource.IsNull() || !(stream >> entry.experience)) { return false; }
             candidate.weaponMastery.push_back(entry);
         }
@@ -319,7 +319,7 @@ bool CProfileManager::LoadFromDisk(const std::filesystem::path &path) {
 }
 
 bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
-    if (nativeArchive) { return SaveNativeProfile(*this, path); }
+    if (nativeArchive) { return SaveProfile(*this, path); }
     if (!path.parent_path().empty()) { std::filesystem::create_directories(path.parent_path()); }
     std::filesystem::path temporary = path;
     temporary += L".tmp";
@@ -341,7 +341,7 @@ bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
         stream << slot.state << ' ' << slot.amount << ' ' << slot.finishTime << ' ' << slot.efficiency << '\n';
     }
     stream << powerups.size() << '\n';
-    for (const PowerupInventoryEntry &item : powerups) {
+    for (const ZPowerupInventoryEntry &item : powerups) {
         WriteRef(stream, item.resource);
         stream << item.count << '\n';
     }
@@ -376,7 +376,7 @@ bool CProfileManager::SaveToDisk(const std::filesystem::path &path) const {
 }
 
 void CProfileManager::AddPowerup(const GameObjectRef &ref, unsigned count) {
-    for (PowerupInventoryEntry &entry : powerups) {
+    for (ZPowerupInventoryEntry &entry : powerups) {
         if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) {
             entry.count += count;
             return;
@@ -386,14 +386,14 @@ void CProfileManager::AddPowerup(const GameObjectRef &ref, unsigned count) {
 }
 
 unsigned CProfileManager::GetPowerupCount(const GameObjectRef &ref) const {
-    for (const PowerupInventoryEntry &entry : powerups) {
+    for (const ZPowerupInventoryEntry &entry : powerups) {
         if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) { return entry.count; }
     }
     return 0;
 }
 
 bool CProfileManager::ConsumePowerup(const GameObjectRef &ref, unsigned count) {
-    for (PowerupInventoryEntry &entry : powerups) {
+    for (ZPowerupInventoryEntry &entry : powerups) {
         if (entry.resource.packHash != ref.packHash || entry.resource.localIndex != ref.localIndex) { continue; }
         if (entry.count < count) { return false; }
         entry.count -= count;

@@ -17,17 +17,17 @@ namespace {
  * types set hasExtra and write nothing, so their objects are the plain 11
  * bytes -- see the switch at _IDA_OUT/gunbros_3.6.0_IOS.c:126540.
  */
-void ReadObjectExtra(CArrayInputStream &stream, PlacedObject &object) {
+void ReadObjectExtra(CArrayInputStream &stream, ZPlacedObject &object) {
     const std::uint8_t objectType = object.objectType;
-    if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Player)) {
+    if (objectType == static_cast<std::uint8_t>(ZPlacedObjectType::Player)) {
         // :126603. The runtime buffer is 12 bytes; the disk holds this one
         // uint16 only, and it is the spawn angle in degrees.
         object.playerSpawnFacing = stream.ReadUInt16();
         object.hasPlayerSpawnFacing = true;
-    } else if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Enemy)) {
+    } else if (objectType == static_cast<std::uint8_t>(ZPlacedObjectType::Enemy)) {
         object.pathLayer = stream.ReadUInt8();
         object.facing = stream.ReadInt16();
-    } else if (objectType == static_cast<std::uint8_t>(PlacedObjectType::Platform)) {
+    } else if (objectType == static_cast<std::uint8_t>(ZPlacedObjectType::Platform)) {
         object.platformPath = stream.ReadUInt8();
     }
 }
@@ -48,7 +48,7 @@ bool CLayerObject::Init(CArrayInputStream &stream) {
         stream.ReadUInt16();  // extra-data allocation count
 
         for (std::uint16_t index = 0; index < count; ++index) {
-            PlacedObject object;
+            ZPlacedObject object;
             object.objectType = objectType;
             object.packHash = stream.ReadUInt32();
             object.localIndex = stream.ReadUInt8();

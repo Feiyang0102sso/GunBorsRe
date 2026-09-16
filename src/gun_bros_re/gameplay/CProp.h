@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/GameScriptObject.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
 /**
  * @file CProp.h
  * @brief The template behind a placed prop: which sprite it draws.
@@ -47,7 +47,7 @@
  * packs fill only the background slot, so reading just the main one would draw
  * a third of the map's scenery and silently drop the rest.
  */
-struct PropAction {
+struct ZPropAction {
     enum class Kind { Effect, Sound, Splash, Destroyed, Entered, Portal, AttachedEffect, StopEffect };
     Kind kind = Kind::Effect;
     GameObjectRef resource;
@@ -60,7 +60,7 @@ struct PropAction {
     int damageOwner = 0;
 };
 
-class CProp : public GameScriptObject {
+class CProp : public ZGameScriptObject {
 public:
     class Template {
     public:
@@ -108,7 +108,7 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
     void SetScriptSequenceFrame(std::uint8_t move) override;
     bool IsScriptSequenceFrameFinished() override;
-    std::vector<PropAction> TakeActions();
+    std::vector<ZPropAction> TakeActions();
     const CCollisionData &GetCollision(bool bullets = false) const;
     int GetAnimation(unsigned slot) const { return m_animations[slot]; }
     const CSpritePlayer &GetPlayer(unsigned slot) const { return m_players[slot]; }
@@ -126,7 +126,7 @@ public:
     int GetTimerMs() const { return m_timerMs; }
 private:
     void SetAnimation(int slot, int animation);
-    void QueueResource(PropAction::Kind kind, int resource, int group = 3);
+    void QueueResource(ZPropAction::Kind kind, int resource, int group = 3);
     const Template *m_template = nullptr;
     const std::vector<std::vector<std::uint16_t>> *m_durations = nullptr;
     CScriptInterpreter m_interpreter;
@@ -134,7 +134,7 @@ private:
     std::array<CSpritePlayer, 3> m_players;
     CCollisionData m_collision;
     CCollisionData m_bulletCollision;
-    std::vector<PropAction> m_actions;
+    std::vector<ZPropAction> m_actions;
     float m_health = 0;
     float m_damage = 0;
     std::uint32_t m_damageFlags = 0;

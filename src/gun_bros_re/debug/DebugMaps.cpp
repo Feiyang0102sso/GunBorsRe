@@ -7,10 +7,10 @@
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/gameplay/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/MapScene.h"
-#include "gun_bros_re/gameplay/SurvivalGameContext.h"
-#include "engine/glu/movie/MovieRenderer.h"
-#include "engine/platform/GLLoader.h"
+#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "engine/glu/movie/ZMovieRenderer.h"
+#include "engine/platform/ZGLLoader.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -21,7 +21,7 @@ namespace Labels = DebugConfig::Maps::Text;
 bool Contains(const Layout::Rect &rect, float x, float y) {
     return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }
-void DrawText(MovieRenderer &renderer, const std::string &text, const DebugConfig::TextStyle &style) {
+void DrawText(ZMovieRenderer &renderer, const std::string &text, const DebugConfig::TextStyle &style) {
     renderer.Text(text, style.x, style.y, style.font, style.scale, style.width, style.alpha);
 }
 struct MapRow {
@@ -38,19 +38,19 @@ bool SameRef(const GameObjectRef &a, const GameObjectRef &b) {
     return a.packHash == b.packHash && a.localIndex == b.localIndex;
 }
 
-bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows) {
-    std::vector<MissionEntry> missions;
+bool LoadRows(CResTOCManager &toc, ZPackTables &tables, std::vector<MapRow> &rows) {
+    std::vector<ZMissionEntry> missions;
     std::vector<LevelEntry> levels;
     if (!LoadMissionCatalog(toc, tables, missions)) { return false; }
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto &pack = *toc.GetPack(packIndex);
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Level);
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::Level);
         for (unsigned index = 0; index < count; ++index) {
             LevelEntry level;
             level.resource.packHash = pack.GetPackHash();
             level.resource.localIndex = static_cast<std::uint8_t>(index);
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(pack.GetPackHash(), GameSection::Level, index, bytes)) { return false; }
+            if (!tables.ReadSectionResource(pack.GetPackHash(), ZGameSection::Level, index, bytes)) { return false; }
             CArrayInputStream input(bytes);
             if (!level.data.Init(input) || input.Available() != 0) { return false; }
             levels.push_back(std::move(level));
@@ -59,7 +59,7 @@ bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows
     unsigned mapCount = 0;
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto &pack = *toc.GetPack(packIndex);
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::TileLayer);
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::TileLayer);
         for (unsigned index = 0; index < count; ++index) {
             ++mapCount;
             MapRow base;
@@ -68,14 +68,14 @@ bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows
             base.label = pack.GetShortName() + Labels::Map + std::to_string(index);
             std::vector<std::uint8_t> bytes;
             CMap map;
-            bool valid = tables.ReadSectionResource(pack.GetPackHash(), GameSection::TileLayer, index, bytes);
+            bool valid = tables.ReadSectionResource(pack.GetPackHash(), ZGameSection::TileLayer, index, bytes);
             CArrayInputStream input(bytes);
             if (valid) { valid = map.Init(input) && input.Available() == 0; }
             bool hasPlayer = false;
             if (valid) {
                 for (unsigned layer = 0; layer < map.GetObjectLayerCount(); ++layer) {
                     for (const auto &object : map.GetObjectLayer(layer).GetObjects()) {
-                        if (object.objectType == static_cast<unsigned>(PlacedObjectType::Player)) { hasPlayer = true; }
+                        if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Player)) { hasPlayer = true; }
                     }
                 }
             }
@@ -122,11 +122,11 @@ bool LoadRows(CResTOCManager &toc, PackTables &tables, std::vector<MapRow> &rows
 }
 }
 
-bool ShowDebugMapPicker(CResTOCManager &toc, PackTables &tables, CWindow &window, DebugMapSelection &selection,
+bool ShowDebugMapPicker(CResTOCManager &toc, ZPackTables &tables, ZWindow &window, DebugMapSelection &selection,
     const std::string &message) {
     std::vector<MapRow> rows;
     if (!LoadRows(toc, tables, rows)) { return false; }
-    MovieRenderer renderer;
+    ZMovieRenderer renderer;
     auto &core = *toc.GetPack(toc.GetCorePackIndex());
     if (!renderer.Init(core, core)) { return false; }
     int selected = 0;
@@ -146,7 +146,7 @@ bool ShowDebugMapPicker(CResTOCManager &toc, PackTables &tables, CWindow &window
     // This modal suspends its caller. It owns clicks/keys until accepted or cancelled.
     while (window.PumpEvents()) {
         bool load = false;
-        for (KeyCode key = window.TakeKeyPress(); key != KeyCode::None; key = window.TakeKeyPress()) {
+        for (ZKeyCode key = window.TakeKeyPress(); key != ZKeyCode::None; key = window.TakeKeyPress()) {
             if (key == GameDebugKeys::MapBack || GameDebugKeys::OpensMapBrowser(key, window)) { return false; }
             if (key == GameDebugKeys::MapPrevious) { --selected; }
             if (key == GameDebugKeys::MapNext) { ++selected; }
@@ -218,10 +218,10 @@ bool ShowDebugMapPicker(CResTOCManager &toc, PackTables &tables, CWindow &window
     return false;
 }
 
-SurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
-    SurvivalGameContext &context) {
+ZSurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
+    ZSurvivalGameContext &context) {
     context.persistProgress = false;
-    SurvivalLaunch launch;
+    ZSurvivalLaunch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = selection.pack;
     launch.mapIndex = selection.map;
@@ -235,7 +235,7 @@ SurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMa
     return launch;
 }
 
-void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSelection &selection,
+void RunDebugMaps(const std::string &bigDirectory, ZWindow &window, DebugMapSelection &selection,
     const CProfileManager &profile) {
     while (selection.ready) {
         const DebugMapSelection current = selection;
@@ -243,8 +243,8 @@ void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSele
         // Reuse the retail equipment path (CBrother::Bind), including mastery,
         // armor and both gun slots. Purchases and pickups affect only this copy.
         CProfileManager previewProfile = profile;
-        SurvivalGameContext context{previewProfile, {}};
-        SurvivalLaunch launch = MakeDebugMapLaunch(bigDirectory, current, context);
+        ZSurvivalGameContext context{previewProfile, {}};
+        ZSurvivalLaunch launch = MakeDebugMapLaunch(bigDirectory, current, context);
         launch.window = &window;
         launch.debugSelection = &selection;
         std::printf("[debug-maps] launch %s map=%u level=%u:%u\n", current.pack.c_str(), current.map, current.level.packHash, current.level.localIndex);
@@ -260,7 +260,7 @@ void RunDebugMaps(const std::string &bigDirectory, CWindow &window, DebugMapSele
             }
             CResTOCManager toc;
             if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return; }
-            PackTables tables(toc);
+            ZPackTables tables(toc);
             ShowDebugMapPicker(toc, tables, window, selection, message);
         }
     }

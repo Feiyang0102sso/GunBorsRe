@@ -1,15 +1,15 @@
 /** Reproduce reported DM regressions through real BIG actors and rendering state. */
 #define NOMINMAX
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/SurvivalSession.h"
-#include "gun_bros_re/gameplay/PowerupScene.h"
+#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/gameplay/ZPowerupScene.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "engine/core/CStringToKey.h"
 #include <chrono>
 #include "gun_bros_re/debug/PerformanceProbe.h"
 
-int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, PowerupScene &powerups, CProfileManager &profile) {
+int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, ZPowerupScene &powerups, CProfileManager &profile) {
     auto &scene = fixture.scene;
     auto &player = fixture.player;
     auto &bot = fixture.brother;
@@ -19,14 +19,14 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         std::printf("[dm-entry] actor spawned before equipment confirmation\n");
         return 1;
     }
-    const float waitingX = scene.playerX, waitingY = scene.playerY;
+    const float waitingX = scene.GetPlayer().x, waitingY = scene.GetPlayer().y;
     if (waitingX != fixture.startX || waitingY != fixture.startY) {
         std::printf("[dm-entry-camera] moved to spawn before equipment confirmation\n");
         return 1;
     }
     const float waitingCameraX = fixture.loaded.map.GetCamera().GetX();
     const float waitingCameraY = fixture.loaded.map.GetCamera().GetY();
-    CombatHit incoming;
+    ZCombatHit incoming;
     incoming.owner = kBrotherCombatId; incoming.damage = fixture.vitals.maximum * 10;
     for (unsigned elapsed = 0; elapsed < 12000; elapsed += 16) {
         session.Update(16, 1, 1, true);
@@ -34,10 +34,10 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
             std::printf("[dm-entry-camera] camera moved during initial equipment selection\n");
             return 1;
         }
-        if (scene.ApplyHit(kPlayerCombatId, incoming) != HitResult::Ignored) { return 1; }
+        if (scene.ApplyHit(kPlayerCombatId, incoming) != ZHitResult::Ignored) { return 1; }
     }
     float targetX = 0, targetY = 0;
-    if (scene.playerX != waitingX || scene.playerY != waitingY || fixture.vitals.dead ||
+    if (scene.GetPlayer().x != waitingX || scene.GetPlayer().y != waitingY || fixture.vitals.dead ||
         match.Score(0) != 0 || match.Score(1) != 0 || scene.TouchesPickup(waitingX, waitingY) ||
         scene.GetBrotherTarget(kPlayerCombatId, targetX, targetY) || scene.Suicide()) { return 1; }
     if (!scene.RespawnDeathmatch(1, true)) { return 1; }
@@ -56,7 +56,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         scene.ActiveMatchGun(0).packHash != selectedGun.packHash || scene.ActiveMatchGun(0).localIndex != selectedGun.localIndex ||
         *player.weapon->brother.VariableResolver(3) != 3000) { return 1; }
     std::printf("[dm-entry] no-body-no-hit-no-target-before-confirm=1 selected-gun-and-respawn-export=1\n");
-    const float entryDistance = std::hypot(scene.playerX - waitingX, scene.playerY - waitingY);
+    const float entryDistance = std::hypot(scene.GetPlayer().x - waitingX, scene.GetPlayer().y - waitingY);
     const auto *entryPath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetRespawnPathLayer());
     if (entryPath == nullptr) { return 1; }
     for (const auto &node : entryPath->GetNodes()) {
@@ -69,16 +69,16 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         return 1;
     }
     std::printf("[dm-entry-camera] held=%.1f,%.1f confirmed=%.1f,%.1f spawn=%.1f,%.1f\n",
-        waitingCameraX, waitingCameraY, entryCamera.GetX(), entryCamera.GetY(), scene.playerX, scene.playerY);
+        waitingCameraX, waitingCameraY, entryCamera.GetX(), entryCamera.GetY(), scene.GetPlayer().x, scene.GetPlayer().y);
     fixture.vitals.invincible = true;
     bot.vitals.invincible = true;
     unsigned failures = 0;
     // Each selector blocks only its owner's input; the world continues.
     scene.SetMatchShopping(0, true);
-    const float shoppingX = scene.playerX, shoppingY = scene.playerY;
+    const float shoppingX = scene.GetPlayer().x, shoppingY = scene.GetPlayer().y;
     const float botBeforeX = bot.x, botBeforeY = bot.y;
     for (unsigned elapsed = 0; elapsed < 4000; elapsed += 16) { session.Update(16, 1, 1, true); }
-    if (scene.playerX != shoppingX || scene.playerY != shoppingY || (bot.x == botBeforeX && bot.y == botBeforeY)) { ++failures; }
+    if (scene.GetPlayer().x != shoppingX || scene.GetPlayer().y != shoppingY || (bot.x == botBeforeX && bot.y == botBeforeY)) { ++failures; }
     scene.SetMatchShopping(0, false);
     scene.SetMatchShopping(1, true);
     const float botShoppingX = bot.x, botShoppingY = bot.y;
@@ -87,12 +87,12 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
     scene.SetMatchShopping(1, false);
     std::printf("[dm-shop] independent-input-and-world failures=%u\n", failures);
     const float outsideDamage = fixture.vitals.incomingDamage;
-    scene.SplashBrothers(scene.playerX - 101, scene.playerY, 100, 10, 0, 0);
+    scene.SplashBrothers(scene.GetPlayer().x - 101, scene.GetPlayer().y, 100, 10, 0, 0);
     if (fixture.vitals.incomingDamage != outsideDamage) { ++failures; }
     // Decode an actual active barrel. Native 7 uses CanCollide; only native 10
     // directly visits both brothers, with its own authored damage and radius.
     for (auto &prop : fixture.loaded.props) {
-        if (!prop.active || !prop.runtime || prop.sprite->interactiveKind != MapDetail::InteractivePropKind::Barrel) { continue; }
+        if (!prop.active || !prop.runtime || prop.sprite->interactiveKind != MapDetail::ZInteractivePropKind::Barrel) { continue; }
         CProp probe;
         probe.SetLevelContext(&session.GetLevel());
         probe.Bind(prop.sprite->data, &prop.sprite->durations);
@@ -100,23 +100,23 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         for (unsigned time = 0; time < 1000; time += 16) { probe.Update(16, false); }
         float playerDamage = 0;
         for (const auto &action : probe.TakeActions()) {
-            if (action.kind != PropAction::Kind::Splash) { continue; }
+            if (action.kind != ZPropAction::Kind::Splash) { continue; }
             std::printf("[dm-barrel] resource=%08x:%u native=%u radius=%d damage=%d owner=%d force=%d\n",
                 prop.sprite->resource.packHash, prop.sprite->resource.localIndex, action.playersOnly ? 10 : 7,
                 action.radius, action.damage, action.damageOwner, action.force);
             if (action.playersOnly) { playerDamage += action.damage; }
         }
-        const float originalX = scene.playerX, originalY = scene.playerY;
+        const float originalX = scene.GetPlayer().x, originalY = scene.GetPlayer().y;
         const float originalBotX = bot.x, originalBotY = bot.y;
-        scene.playerX = prop.x + 30; scene.playerY = prop.y;
+        scene.GetPlayer().x = prop.x + 30; scene.GetPlayer().y = prop.y;
         bot.x = prop.x - 30; bot.y = prop.y;
         const float beforePlayer = fixture.vitals.incomingDamage, beforeBot = bot.vitals.incomingDamage;
         scene.SetMatchShopping(0, true); scene.SetMatchShopping(1, true);
-        CombatHit trigger;
+        ZCombatHit trigger;
         trigger.owner = kPlayerCombatId; trigger.projectile = 123;
         trigger.damage = prop.runtime->GetHealth(); trigger.applyArmorAttack = false;
         const auto contact = scene.Trace(trigger, prop.x - 150, prop.y, 300, 0, 1, {kBrotherCombatId});
-        if (contact.target == 0 || scene.ApplyHit(contact.target, trigger) == HitResult::Ignored) { ++failures; }
+        if (contact.target == 0 || scene.ApplyHit(contact.target, trigger) == ZHitResult::Ignored) { ++failures; }
         for (unsigned time = 0; time < 1000; time += 16) { session.Update(16, 0, 0, false); }
         const float receivedPlayer = fixture.vitals.incomingDamage - beforePlayer;
         const float receivedBot = bot.vitals.incomingDamage - beforeBot;
@@ -124,7 +124,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         const float expectedBot = playerDamage * (2 - PlayerArmorMultiplier(fixture.brotherModel, 0)) / CFriendPowerManager::Multiplier(fixture.brotherModel.friendCount, 1);
         if (std::abs(receivedPlayer - expectedPlayer) > 0.01f || std::abs(receivedBot - expectedBot) > 0.01f) { ++failures; }
         std::printf("[dm-barrel] received=%.2f,%.2f expected=%.2f,%.2f failures=%u\n", receivedPlayer, receivedBot, expectedPlayer, expectedBot, failures);
-        scene.playerX = originalX; scene.playerY = originalY;
+        scene.GetPlayer().x = originalX; scene.GetPlayer().y = originalY;
         bot.x = originalBotX; bot.y = originalBotY;
         scene.SetMatchShopping(0, false); scene.SetMatchShopping(1, false);
         break;
@@ -185,7 +185,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
     turret.packHash = CStringToKey("pack5"); turret.localIndex = 19;
     profile.AddPowerup(turret, 2);
     if (!powerups.SelectResource(turret) || !powerups.Use()) { ++failures; }
-    CombatId turretId = 0;
+    ZCombatId turretId = 0;
     for (unsigned elapsed = 0; elapsed < 5000; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (const auto &actor : scene.enemies) {
@@ -202,10 +202,10 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
     }
     if (turretId == 0) { std::printf("[dm-feedback] turret never spawned\n"); ++failures; }
     fixture.vitals.invincible = false;
-    CombatHit turretShot;
+    ZCombatHit turretShot;
     turretShot.owner = turretId; turretShot.ownerType = 1; turretShot.damage = 10;
     const float ownerHealth = fixture.vitals.health;
-    if (scene.ApplyHit(kPlayerCombatId, turretShot) != HitResult::Ignored || fixture.vitals.health != ownerHealth) { ++failures; }
+    if (scene.ApplyHit(kPlayerCombatId, turretShot) != ZHitResult::Ignored || fixture.vitals.health != ownerHealth) { ++failures; }
     scene.Suicide();
     for (unsigned elapsed = 0; elapsed < 1500; elapsed += 16) { session.Update(16, 0, 0, false); }
     // Retail PLAYER DM death completes the burst without retaining body meshes.
@@ -219,11 +219,11 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         *player.weapon->brother.VariableResolver(3) != 3000 || match.GetLife(0).serial != 1) { ++failures; }
     const auto *respawnPath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetRespawnPathLayer());
     if (respawnPath == nullptr) { return 1; }
-    const float respawnDistance = std::hypot(scene.playerX - opponentX, scene.playerY - opponentY);
+    const float respawnDistance = std::hypot(scene.GetPlayer().x - opponentX, scene.GetPlayer().y - opponentY);
     bool atUnlockedNode = false;
     for (const auto &node : respawnPath->GetNodes()) {
         if (node.locked) { continue; }
-        if (node.x == scene.playerX && node.y == scene.playerY) { atUnlockedNode = true; }
+        if (node.x == scene.GetPlayer().x && node.y == scene.GetPlayer().y) { atUnlockedNode = true; }
         if (std::hypot(node.x - opponentX, node.y - opponentY) > respawnDistance + 0.01f) { ++failures; }
     }
     if (!atUnlockedNode) { ++failures; }
@@ -233,7 +233,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         if (cue.resource.packHash == CStringToKey("pack0_core") && cue.resource.localIndex == 8) { respawnEffect = true; }
     }
     if (!respawnEffect) { std::printf("[dm-feedback] missing respawn effect\n"); ++failures; }
-    if (player.weapon->brother.ReceiveDamage(10) != HitResult::Ignored) { ++failures; }
+    if (player.weapon->brother.ReceiveDamage(10) != ZHitResult::Ignored) { ++failures; }
     fixture.brotherModel.weapon->brother.StartDeath();
     for (unsigned elapsed = 0; elapsed < 1500; elapsed += 16) { session.Update(16, 0, 0, false); }
     scene.UpdatePeerIndicator(16, bot.x + 1000, bot.y + 1000, 100, 100);
@@ -247,11 +247,11 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
         if (!match.Kill(1, 0) || !match.Respawn(1, true)) { return 1; }
     }
     // Keep the final burst in the captured camera, independent of respawn distance.
-    scene.playerX = bot.x + 80; scene.playerY = bot.y;
+    scene.GetPlayer().x = bot.x + 80; scene.GetPlayer().y = bot.y;
     fixture.brotherModel.weapon->brother.StartDeath();
     session.Update(16, 0, 0, false);
     if (!session.IsFinished() || session.IsReadyForResults()) { ++failures; }
-    const float frozenX = scene.playerX, frozenY = scene.playerY;
+    const float frozenX = scene.GetPlayer().x, frozenY = scene.GetPlayer().y;
     const auto frozenShots = fixture.effects.GetShotCount();
     unsigned wrapUpMs = 0;
     unsigned burstCompleteMs = 0, fadeStartedMs = 0;
@@ -272,7 +272,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, Power
             const unsigned holdMs = fadeStartedMs - burstCompleteMs;
             if (burstCompleteMs == 0 || holdMs < 784 || holdMs > 816) { ++failures; }
         }
-        if (scene.playerX != frozenX || scene.playerY != frozenY || fixture.effects.GetShotCount() != frozenShots) { ++failures; break; }
+        if (scene.GetPlayer().x != frozenX || scene.GetPlayer().y != frozenY || fixture.effects.GetShotCount() != frozenShots) { ++failures; break; }
     }
     if (!session.IsReadyForResults() || wrapUpMs <= 16 || powerups.Use()) { ++failures; }
     if (!capturedBurst || fadeStartedMs == 0) { ++failures; }

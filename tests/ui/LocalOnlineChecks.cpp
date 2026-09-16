@@ -1,8 +1,9 @@
+#include "gun_bros_re/debug/Capture.h"
 /** Local service callbacks are exercised with actual BIG movies and save copies. */
 #include "ui/MenuChecks.h"
 #include "TestOutput.h"
 
-int CheckBroOps(GameMenu &view, CResTOCManager &toc, PackTables &tables, const CProfileManager &source);
+int CheckBroOps(ZGameMenu &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &source);
 
 namespace {
 struct RestoreConnection {
@@ -11,7 +12,7 @@ struct RestoreConnection {
 };
 
 // Capture authored logical regions at the actual drawable resolution (including DPI).
-std::vector<std::uint8_t> SocialPixels(GameMenu &view, const MovieRegion &region) {
+std::vector<std::uint8_t> SocialPixels(ZGameMenu &view, const ZMovieRegion &region) {
     int width = 0, height = 0;
     view.window.GetDrawableSize(width, height);
     const int x = static_cast<int>(region.x * width / 1024);
@@ -29,33 +30,33 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     GameHostSettings().isConnected = true;
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<StoreEntry> store;
+    std::vector<ZStoreEntry> store;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("local-online")) / std::to_string(GetTickCount64());
-    if (!LoadNativeProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
-    GameMenu view;
+    ZGameMenu view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = false;
     // Both multiplayer modes use the original unavailable prompt before selection.
     GameHostSettings().isConnected = false;
     for (unsigned mode : {1u, 2u}) {
-        MenuState unavailable;
+        ZMenuState unavailable;
         view.Begin(0);
-        if (!DrawOriginalModeOverlay(view, unavailable)) { return 1; }
-        MovieRegion button;
+        if (!DrawModeOverlay(view, unavailable)) { return 1; }
+        ZMovieRegion button;
         if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP"),
             mode * 2 + 1, unavailable.mode.modeTime, button)) { return 1; }
         view.Begin(0);
         view.SetTestClick({button.x + button.width / 2, button.y + button.height / 2});
-        if (!DrawOriginalModeOverlay(view, unavailable) || unavailable.gameMode != 0 ||
+        if (!DrawModeOverlay(view, unavailable) || unavailable.gameMode != 0 ||
             unavailable.mode.modeSelected || !unavailable.storePromptRequested ||
             std::string(unavailable.storePromptTable) != "MDS_PROMPT_MP_UNAVAILABLE" ||
             unavailable.storePromptIndex != 2) {
@@ -68,10 +69,10 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             if (!DrawStorePrompt(view, unavailable)) { return 1; }
         }
         if (!unavailable.storePopup.IsReady() ||
-            !GB_SAVE_FRAME(view.window, (path / ("offline-mode-" + std::to_string(mode) + ".png")).string())) { return 1; }
+            !Capture::SaveFrame(view.window, (path / ("offline-mode-" + std::to_string(mode) + ".png")).string())) { return 1; }
         unavailable.gameMode = mode;
         if (BeginLocalMatch(unavailable) || unavailable.online.IsMatching()) { return 1; }
-        LocalOnlineServices service;
+        ZLocalOnlineServices service;
         service.SetConnected(false);
         if (service.BeginMatch(mode) || service.AdvanceMatch(view.clock + 5000)) { return 1; }
     }
@@ -83,7 +84,7 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     // the final field must fail, rather than silently create an empty menu.
     const auto &sample = catalog.templates.front();
     std::vector<std::uint8_t> bytes;
-    if (!tables.ReadSectionResource(sample.reference.packHash, static_cast<GameSection>(27), sample.reference.localIndex, bytes)) { return 1; }
+    if (!tables.ReadSectionResource(sample.reference.packHash, static_cast<ZGameSection>(27), sample.reference.localIndex, bytes)) { return 1; }
     bytes.pop_back();
     CArrayInputStream truncated(bytes);
     CChallengeManager::Template invalid;
@@ -101,18 +102,18 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
         catalog.current.front().progress != 37 || catalog.current.front().templateIndex != catalog.GenerateChallengeList(1).front()) { return 1; }
     const auto untouchedChallenges = profile.nativeArchive->records[17].payload;
     for (unsigned page : {4u, 5u}) {
-        MenuState state;
+        ZMenuState state;
         state.page = page;
         view.Begin(page);
-        if (!DrawOriginalSocialMenu(view, state, profile, false) || !state.social.onlinePage) { return 1; }
+        if (!DrawSocialMenu(view, state, profile, false) || !state.social.onlinePage) { return 1; }
         if (state.social.renderedEntries == 0) {
             std::printf("[social-content-check] page=%u local content missing\n", page);
             return 1;
         }
         if (state.social.challenges.templates.size() != 238 || state.social.challenges.current.empty() ||
-            state.social.brotherName.empty() || view.Header(profile, progress, page) == -3 || !GB_SAVE_FRAME(view.window, (path / ("social-initial-" + std::to_string(page) + ".png")).string())) { return 1; }
+            state.social.brotherName.empty() || view.Header(profile, progress, page) == -3 || !Capture::SaveFrame(view.window, (path / ("social-initial-" + std::to_string(page) + ".png")).string())) { return 1; }
         if (page == 4) {
-            MovieRegion list, row, card;
+            ZMovieRegion list, row, card;
             const auto listMovie = view.movies.Ordinal("GLU_MOVIE_BROTHER_MENU_SCROLL_3_OPTION");
             const auto cardMovie = view.movies.Ordinal("GLU_MOVIE_BROTHER_BOX");
             unsigned start = 0, end = 0;
@@ -127,25 +128,25 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             card.y += row.y - 384;
             view.Begin(page);
             view.SetTestClick({card.x + card.width / 2, card.y + card.height / 2});
-            if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.selectedLocalFriend != 1) { return 1; }
+            if (!DrawSocialMenu(view, state, profile, false) || state.social.selectedLocalFriend != 1) { return 1; }
             view.Begin(page);
-            if (!DrawOriginalSocialMenu(view, state, profile, false) ||
+            if (!DrawSocialMenu(view, state, profile, false) ||
                 view.Header(profile, progress, page) == -3 ||
-                !GB_SAVE_FRAME(view.window, (path / "local-bot-selected.png").string())) { return 1; }
+                !Capture::SaveFrame(view.window, (path / "local-bot-selected.png").string())) { return 1; }
         }
         // Isolate the warning tape between the title and tabs, away from the
         // independently animated player model, header and selected challenge.
-        MovieRegion titleArea, tabsArea;
+        ZMovieRegion titleArea, tabsArea;
         const unsigned socialMovie = view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU");
         if (!view.movies.Region(socialMovie, 2, state.social.socialTime, titleArea) ||
             !view.movies.Region(socialMovie, 1, state.social.socialTime, tabsArea)) { return 1; }
-        MovieRegion tape = titleArea;
+        ZMovieRegion tape = titleArea;
         tape.y += titleArea.height;
         tape.height = tabsArea.y - tape.y;
         const auto idleBefore = SocialPixels(view, tape);
         view.clock += 125;
         view.Begin(page);
-        if (!DrawOriginalSocialMenu(view, state, profile, false)) { return 1; }
+        if (!DrawSocialMenu(view, state, profile, false)) { return 1; }
         if (idleBefore == SocialPixels(view, tape)) {
             std::printf("[social-animation-check] FAILED: warning tape is frozen page=%u\n", page);
             return 1;
@@ -153,9 +154,9 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
         if (page == 4) {
             state.social.socialTab = 1;
             view.Begin(page);
-            if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.renderedEntries < 3 || view.Header(profile, progress, page) == -3 ||
-                !GB_SAVE_FRAME(view.window, (path / "social-buffs.png").string())) { return 1; }
-            MovieRegion listOrigin;
+            if (!DrawSocialMenu(view, state, profile, false) || state.social.renderedEntries < 3 || view.Header(profile, progress, page) == -3 ||
+                !Capture::SaveFrame(view.window, (path / "social-buffs.png").string())) { return 1; }
+            ZMovieRegion listOrigin;
             if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"), 4, state.social.socialTime, listOrigin)) { return 1; }
             const unsigned list = view.movies.Ordinal("GLU_MOVIE_BROTHER_MENU_SCROLL_3_OPTION");
             unsigned start = 0, end = 0;
@@ -168,16 +169,16 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             view.SetTestClick({listOrigin.x + 10, listOrigin.y + 10});
             view.pointerPressed = view.pointerHeld = true;
             view.dragY = -(slots[2].y - slots[1].y) * 7;
-            if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.scrollPosition <= 0 ||
+            if (!DrawSocialMenu(view, state, profile, false) || state.social.scrollPosition <= 0 ||
                 state.social.renderedEntries < 3 || view.Header(profile, progress, page) == -3 ||
-                !GB_SAVE_FRAME(view.window, (path / "social-buffs-last.png").string())) { return 1; }
+                !Capture::SaveFrame(view.window, (path / "social-buffs-last.png").string())) { return 1; }
             view.pointerPressed = view.pointerHeld = false;
             view.dragY = 0;
             view.ExchangeClick(false);
             state.social.socialTab = 0;
         }
         if (page == 5) {
-            MovieRegion listOrigin;
+            ZMovieRegion listOrigin;
             if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"), 4, state.social.socialTime, listOrigin)) { return 1; }
             const unsigned list = view.movies.Ordinal("GLU_MOVIE_BROTHER_MENU_SCROLL");
             unsigned start = 0, end = 0;
@@ -187,7 +188,7 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             if (slots.size() < 3) { return 1; }
             view.Begin(page);
             view.SetTestClick({slots[2].x + slots[2].width / 2, slots[2].y + slots[2].height / 2});
-            if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.selectedChallenge != 1) { return 1; }
+            if (!DrawSocialMenu(view, state, profile, false) || state.social.selectedChallenge != 1) { return 1; }
             const auto selectedBefore = SocialPixels(view, slots[2]);
             const auto otherBefore = SocialPixels(view, slots[3]);
             if (!state.social.sidebarReverse || state.social.sidebarChallenge != 0) {
@@ -196,7 +197,7 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             }
             view.clock += 250;
             view.Begin(page);
-            if (!DrawOriginalSocialMenu(view, state, profile, false)) { return 1; }
+            if (!DrawSocialMenu(view, state, profile, false)) { return 1; }
             if (selectedBefore == SocialPixels(view, slots[2]) || otherBefore != SocialPixels(view, slots[3])) {
                 std::printf("[social-animation-check] FAILED: selected card must animate independently\n");
                 return 1;
@@ -204,8 +205,8 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             if (state.social.sidebarReverse || state.social.sidebarChallenge != 1) { return 1; }
             view.clock += 200;
             view.Begin(page);
-            if (!DrawOriginalSocialMenu(view, state, profile, false) || view.Header(profile, progress, page) == -3 ||
-                !GB_SAVE_FRAME(view.window, (path / "social-challenge-selected.png").string())) { return 1; }
+            if (!DrawSocialMenu(view, state, profile, false) || view.Header(profile, progress, page) == -3 ||
+                !Capture::SaveFrame(view.window, (path / "social-challenge-selected.png").string())) { return 1; }
             // Four real tasks still support dragging at either bound, then return.
             const float stride = slots[2].y - slots[1].y;
             for (int direction : {-1, 1}) {
@@ -214,21 +215,21 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
                 view.SetTestClick({slots[2].x + slots[2].width / 2, slots[2].y + slots[2].height / 2});
                 view.pointerPressed = view.pointerHeld = true;
                 view.dragY = direction * stride / 2;
-                if (!DrawOriginalSocialMenu(view, state, profile, false) ||
+                if (!DrawSocialMenu(view, state, profile, false) ||
                     state.social.scrollPosition * direction >= 0 || state.social.selectedChallenge != 1 ||
                     state.social.renderedEntries != 4) {
                     std::printf("[social-scroll-check] FAILED: four tasks must drag without selecting\n");
                     return 1;
                 }
-                if (!GB_SAVE_FRAME(view.window, (path / ("social-drag-" + std::to_string(direction) + ".png")).string())) { return 1; }
+                if (!Capture::SaveFrame(view.window, (path / ("social-drag-" + std::to_string(direction) + ".png")).string())) { return 1; }
                 // A partly clipped first card must not intercept input above the viewport.
                 view.Begin(page);
                 view.SetTestClick({listOrigin.x + 20, listOrigin.y - 2});
-                if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.selectedChallenge != 1) { return 1; }
+                if (!DrawSocialMenu(view, state, profile, false) || state.social.selectedChallenge != 1) { return 1; }
                 for (unsigned frame = 0; frame < 120 && state.social.scrollPosition != 0; ++frame) {
                     view.clock += 16;
                     view.Begin(page);
-                    if (!DrawOriginalSocialMenu(view, state, profile, false)) { return 1; }
+                    if (!DrawSocialMenu(view, state, profile, false)) { return 1; }
                 }
                 if (state.social.scrollPosition != 0) {
                     std::printf("[social-scroll-check] FAILED: list did not return to its bound\n");
@@ -237,25 +238,25 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             }
             // Compare both sets of native checkboxes across incomplete/complete
             // states. Changing status text or the meter cannot satisfy this check.
-            MovieRegion sidebar;
+            ZMovieRegion sidebar;
             if (!view.movies.Region(socialMovie, 3, state.social.socialTime, sidebar)) { return 1; }
             const unsigned details = view.movies.Ordinal("GLU_MOVIE_BRO_OPS_DETAILS");
             unsigned detailsStart = 0, detailsEnd = 0;
             if (!view.movies.GetMovie(details)->GetChapterRange(1, detailsStart, detailsEnd)) { return 1; }
             const auto rewardRegions = view.movies.Regions(details, detailsEnd, sidebar.x, sidebar.y);
-            MovieRegion checkBounds, personBounds;
+            ZMovieRegion checkBounds, personBounds;
             // Obtain this card's actual origin, not the default movie origin.
             const auto cardRegions = view.movies.Regions(view.movies.Ordinal("GLU_MOVIE_BRO_OP_BOX"), 0, slots[2].x, slots[2].y);
             if (cardRegions.size() < 4 || rewardRegions.size() < 6) { return 1; }
             const auto &prizeRegion = cardRegions[3];
-            const auto *checkEntry = OriginalMenuData("MDS_ICON_CHALLENGES", 1);
-            const auto *personEntry = OriginalMenuData("MDS_ICON_CHALLENGES", 0);
+            const auto *checkEntry = FindMenuData("MDS_ICON_CHALLENGES", 1);
+            const auto *personEntry = FindMenuData("MDS_ICON_CHALLENGES", 0);
             if (!checkEntry || !personEntry ||
                 !view.movies.SpriteBounds(checkEntry->sprites[0] >> 16, checkEntry->sprites[0] & 255, checkBounds) ||
                 !view.movies.SpriteBounds(personEntry->sprites[0] >> 16, personEntry->sprites[0] & 255, personBounds)) { return 1; }
-            std::vector<MovieRegion> markers;
+            std::vector<ZMovieRegion> markers;
             for (unsigned tier = 0; tier < 3; ++tier) {
-                MovieRegion marker = checkBounds;
+                ZMovieRegion marker = checkBounds;
                 marker.x = prizeRegion.x + (tier + 1) * (prizeRegion.width / 3) - checkBounds.width * 1.5f;
                 marker.y = prizeRegion.y + prizeRegion.height - checkBounds.height;
                 markers.push_back(marker);
@@ -263,7 +264,7 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
                 marker.y = rewardRegions[3 + tier].y + (rewardRegions[3 + tier].height - checkBounds.height) / 2;
                 markers.push_back(marker);
             }
-            MovieRegion recruits = personBounds;
+            ZMovieRegion recruits = personBounds;
             recruits.x = rewardRegions[5].x + 4 * checkBounds.width;
             recruits.y = rewardRegions[5].y + personBounds.height;
             recruits.width *= 2;
@@ -275,14 +276,14 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
             challenge.progress = 0;
             challenge.completedFriends = 0;
             view.Begin(page);
-            if (!DrawOriginalSocialMenu(view, state, profile, false)) { return 1; }
+            if (!DrawSocialMenu(view, state, profile, false)) { return 1; }
             std::vector<std::vector<std::uint8_t>> incomplete;
             for (const auto &marker : markers) { incomplete.push_back(SocialPixels(view, marker)); }
             challenge.progress = 100;
             challenge.achieved = challenge.target;
             challenge.completedFriends = state.social.challenges.templates[challenge.templateIndex].participationRequired[2];
             view.Begin(page);
-            if (!DrawOriginalSocialMenu(view, state, profile, false)) { return 1; }
+            if (!DrawSocialMenu(view, state, profile, false)) { return 1; }
             for (unsigned index = 0; index < markers.size(); ++index) {
                 if (incomplete[index] == SocialPixels(view, markers[index])) {
                     std::printf("[social-reward-check] FAILED: marker unchanged index=%u\n", index);
@@ -290,37 +291,37 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
                 }
             }
             if (view.Header(profile, progress, page) == -3 ||
-                !GB_SAVE_FRAME(view.window, (path / "social-rewards-completed.png").string())) { return 1; }
+                !Capture::SaveFrame(view.window, (path / "social-rewards-completed.png").string())) { return 1; }
             challenge.progress = previousProgress;
             challenge.completedFriends = previousFriends;
             challenge.achieved = previousAchieved;
             std::printf("[social-presentation-check] tape=2 selection=1 drag=2 return=2 reward-markers=6 recruits=2\n");
         }
-        MovieRegion tabs;
+        ZMovieRegion tabs;
         if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"), 1, state.social.socialTime, tabs)) { return 1; }
         const char *table = "MDS_BUTTON_FRIENDS_CATEGORIES";
         if (page == 5) { table = "MDS_BUTTON_CHALLENGE_CATEGORIES"; }
-        const auto *button = OriginalMenuData(table, 2);
-        MovieRegion bounds;
+        const auto *button = FindMenuData(table, 2);
+        ZMovieRegion bounds;
         if (button == nullptr || !view.movies.Region(view.movies.Ordinal(button->movies[0]), 1, 0, bounds)) { return 1; }
         view.Begin(page);
         view.SetTestClick({tabs.x + tabs.width - bounds.width / 2, tabs.y + bounds.height / 2});
-        if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.socialTab != 2) { return 1; }
+        if (!DrawSocialMenu(view, state, profile, false) || state.social.socialTab != 2) { return 1; }
         view.Begin(page);
-        if (!DrawOriginalSocialMenu(view, state, profile, false) || view.Header(profile, progress, page) == -3 ||
-            !GB_SAVE_FRAME(view.window, (path / ("social-" + std::to_string(page) + ".png")).string())) { return 1; }
+        if (!DrawSocialMenu(view, state, profile, false) || view.Header(profile, progress, page) == -3 ||
+            !Capture::SaveFrame(view.window, (path / ("social-" + std::to_string(page) + ".png")).string())) { return 1; }
         GameHostSettings().isConnected = false;
         view.Begin(page);
-        if (!DrawOriginalSocialMenu(view, state, profile, false) || state.social.onlinePage) { return 1; }
+        if (!DrawSocialMenu(view, state, profile, false) || state.social.onlinePage) { return 1; }
         GameHostSettings().isConnected = true;
     }
     if (profile.nativeArchive->records[17].payload != untouchedChallenges) { return 1; }
 
-    MenuState match;
+    ZMenuState match;
     match.gameMode = 1;
     match.planet = 4;
     if (!BeginLocalMatch(match) || !match.online.IsMatching()) { return 1; }
-    match = MenuState{};
+    match = ZMenuState{};
     match.gameMode = 1;
     match.planet = 0;
     if (!BeginLocalMatch(match) || !match.online.IsMatching()) { return 1; }
@@ -330,8 +331,8 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
         if (!DrawStorePrompt(view, match)) { return 1; }
     }
     if (!match.storePopup.IsReady() || !match.online.IsMatching() ||
-        !GB_SAVE_FRAME(view.window, (path / "match-waiting.png").string())) { return 1; }
-    MovieRegion cancelRegion;
+        !Capture::SaveFrame(view.window, (path / "match-waiting.png").string())) { return 1; }
+    ZMovieRegion cancelRegion;
     if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_POPUP"), 2, match.storePopup.MovieTime(), cancelRegion)) { return 1; }
     view.Begin(0);
     view.SetTestClick({cancelRegion.x + cancelRegion.width / 2, cancelRegion.y + cancelRegion.height / 2});
@@ -380,13 +381,13 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     if (product < 0) { return 1; }
     const auto startingBalance = profile.warbucks;
     const auto amount = store[product].data.rarePrice;
-    MenuState purchase;
+    ZMenuState purchase;
     purchase.BeginOfflineIAP(product, 0, store[product].productId);
     if (!purchase.currencyPending || !purchase.currencySimulated) { return 1; }
     if (!CompleteOfflineIAP(1000, purchase, profile, store, path) || profile.warbucks != startingBalance ||
-        purchase.online.GetPurchaseState() != LocalOnlineServices::PurchaseState::Verifying) { return 1; }
+        purchase.online.GetPurchaseState() != ZLocalOnlineServices::PurchaseState::Verifying) { return 1; }
     // Reordering the visible catalog must not redirect a completed transaction.
-    std::vector<StoreEntry> reordered = store;
+    std::vector<ZStoreEntry> reordered = store;
     std::reverse(reordered.begin(), reordered.end());
     if (!CompleteOfflineIAP(4000, purchase, profile, reordered, path) || purchase.currencyPending ||
         profile.warbucks != startingBalance + amount) { return 1; }
@@ -403,4 +404,3 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     std::printf("[local-online-check] social-tabs=2 mode-selection match-cancel disconnect product-id single-delivery reload failures=0\n");
     return 0;
 }
-

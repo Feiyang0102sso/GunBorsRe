@@ -1,6 +1,7 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /**
  * @file EnemyPreview.cpp
  * @brief M3.8 harness: enemies, assembled by their own scripts.
@@ -18,23 +19,23 @@
 #include "gun_bros_viewer/scenes/EnemyPreview.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/graphics/CMeshBuffer.h"
-#include "engine/graphics/CPNG.h"
-#include "engine/graphics/CShaderProgram.h"
-#include "engine/graphics/CTexture.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/graphics/ZMeshBuffer.h"
+#include "engine/graphics/ZPNG.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/graphics/ZTexture.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptState.h"
-#include "gun_bros_re/gameplay/EnemyModel.h"
+#include "gun_bros_re/gameplay/ZEnemyModel.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshCamera.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/resources/CResTOCManager.h"
-#include "gun_bros_re/data/PackTables.h"
+#include "gun_bros_re/data/ZPackTables.h"
 
 #include <cmath>
 #include <cstdio>
@@ -95,7 +96,7 @@ constexpr std::int32_t kWarmUpFrameMs = 16;
 // menu gives it; DrawUI divides it by 100.
 // Named for their template offsets, which is the one thing certainly true
 // about them. Read so the two scales land at the right place.
-using EnemyTemplate = EnemyTemplateData;
+using EnemyTemplate = ZEnemyTemplateData;
 
 /** "pack1 enemy 18" */
 std::string OwnerLabel(const std::string &packName, std::uint32_t ordinal) {
@@ -105,7 +106,7 @@ std::string OwnerLabel(const std::string &packName, std::uint32_t ordinal) {
 }
 
 /** Every enemy template in every pack, in the order the archives hand them over. */
-bool CollectEnemies(CResTOCManager &tocManager, PackTables &tables,
+bool CollectEnemies(CResTOCManager &tocManager, ZPackTables &tables,
                     std::vector<EnemyTemplate> &out) {
     // Historical implementation notes; execution now delegates to the shared game model.
 // A move set names one pack for every model in it, and that is the
@@ -119,7 +120,7 @@ bool CollectEnemies(CResTOCManager &tocManager, PackTables &tables,
 // ---------------------------------------------------------------------------
 
 /** One mesh config of a move set, decoded and uploaded. */
-using LoadedConfig = EnemyModelConfig;
+using LoadedConfig = ZEnemyModelConfig;
 
 /**
  * Every model a move set names, whether or not the script ends up using it.
@@ -128,18 +129,17 @@ using LoadedConfig = EnemyModelConfig;
  * queues every config before anything runs, because the script that picks
  * between them has not run yet.
  */
-bool LoadConfigs(PackTables &tables, const EnemyTemplate &entry,
+bool LoadConfigs(ZPackTables &tables, const EnemyTemplate &entry,
                  std::vector<std::shared_ptr<LoadedConfig>> &out,
-                 bool createBuffers, const CShaderProgram *program) {
-    EnemyModel model;
-    const bool result = LoadEnemyModel(tables, entry, createBuffers, program, EnemySpawnMode::Level, model);
+                 bool createBuffers, const ZShaderProgram *program) {
+    ZEnemyModel model;
+    const bool result = LoadEnemyModel(tables, entry, createBuffers, program, ZEnemySpawnMode::Level, model);
     out = std::move(model.configs);
     return result;
 }
 
 /** The mesh pointers CEnemy::Bind wants, indexed by config. */
 // Implemented by EnemyModel in the game package.
-
 
 // ---------------------------------------------------------------------------
 // --enemies: what each script assembles
@@ -156,7 +156,7 @@ void ReportPartTable(std::size_t index, const EnemyTemplate &entry,
                 enemy.GetPartCount() == 1 ? "" : "s");
 
     for (std::uint32_t i = 0; i < enemy.GetPartCount(); ++i) {
-        const EnemyPart &part = enemy.GetPart(i);
+        const ZEnemyPart &part = enemy.GetPart(i);
         const std::int32_t moveIndex = part.controller.GetMoveIndex();
         const std::int32_t configIndex = part.controller.GetMeshConfigIndex();
 
@@ -226,7 +226,7 @@ std::int32_t MoveDurationMs(const EnemyTemplate &entry,
         return 0;
     }
 
-    const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+    const ZMeshMove &move = entry.moveSet.GetMoves()[moveIndex];
     if (move.meshConfigIndex >= configs.size() ||
         !configs[move.meshConfigIndex]->valid) {
         return 0;
@@ -257,7 +257,7 @@ void PrintSequence(const EnemyTemplate &entry,
         total += durationMs;
 
         if (moveIndex < entry.moveSet.GetMoves().size()) {
-            const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+            const ZMeshMove &move = entry.moveSet.GetMoves()[moveIndex];
             std::printf(" %s move %u [cfg %u, frames %u..%u, %d ms]",
                         i == 0 ? "--" : "then", moveIndex, move.meshConfigIndex,
                         move.firstFrame, move.lastFrame, durationMs);
@@ -339,7 +339,7 @@ struct Turntable {
 };
 
 /** One enemy on screen: its models, its script, and the parts it assembled. */
-struct LoadedEnemy : EnemyModel {
+struct LoadedEnemy : ZEnemyModel {
     // Shared EnemyModel owns configs, scripts, parts and the reused pose buffer.
 
     // Which move the viewer is holding on part 0 once M or N has taken it away
@@ -361,8 +361,8 @@ std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex)
  * The order matters and it is the original's: every config is loaded first,
  * then the script runs. A script picks between models that are already there.
  */
-bool BuildEnemy(PackTables &tables, const EnemyTemplate &entry,
-                const CShaderProgram &program, LoadedEnemy &out) {
+bool BuildEnemy(ZPackTables &tables, const EnemyTemplate &entry,
+                const ZShaderProgram &program, LoadedEnemy &out) {
     // Historical implementation notes; execution now delegates to the shared game model.
 // Export 3 is the menu's, and for eighteen of the seventy-eight templates
 // it gives part 0 nothing to play: a turret assembled this way is a bare
@@ -373,7 +373,7 @@ bool BuildEnemy(PackTables &tables, const EnemyTemplate &entry,
 // than a blank window, and say that is what happened -- this is the viewer
 // being helpful, not the engine doing it.
 
-    if (!LoadEnemyModel(tables, entry, true, &program, EnemySpawnMode::Level, out)) {
+    if (!LoadEnemyModel(tables, entry, true, &program, ZEnemySpawnMode::Level, out)) {
         std::printf("[enemy] %s: model unavailable\n", entry.owner.c_str());
         return false;
     }
@@ -394,7 +394,6 @@ std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex)
  * before each part is drawn instead; see DrawEnemy.
  */
 // Implemented by EnemyModel in the game package.
-
 
 /**
  * Walk part 0's move forward or back through the set's move list.
@@ -445,7 +444,7 @@ void SelectBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded,
     controller.SetMove(moveIndex);
     animation.SetTimeMs(animation.GetRangeStartMs());
 
-    const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+    const ZMeshMove &move = entry.moveSet.GetMoves()[moveIndex];
     std::printf("[enemy] body move %d of %zu -- config %u, frames %u..%u, %d ms\n",
                 moveIndex, entry.moveSet.GetMoves().size(), move.meshConfigIndex,
                 move.firstFrame, move.lastFrame, animation.GetRangeDurationMs());
@@ -560,8 +559,8 @@ void StepBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
  * the assembled model instead, through GetBoundsInternal, so this widens to
  * every part that hangs off nothing.
  */
-MeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
-    MeshBounds combined = MeshBounds();
+ZMeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
+    ZMeshBounds combined = ZMeshBounds();
     bool any = false;
 
     for (std::uint32_t i = 0; i < loaded.enemy.GetPartCount(); ++i) {
@@ -576,7 +575,7 @@ MeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
             continue;
         }
 
-        const MeshBounds &bounds = loaded.configs[configIndex]->mesh.GetBounds();
+        const ZMeshBounds &bounds = loaded.configs[configIndex]->mesh.GetBounds();
         any = true;
         if (bounds.minX < combined.minX) {
             combined.minX = bounds.minX;
@@ -642,7 +641,7 @@ MeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
  * @param bounds The box to frame and normalise against.
  * @param scale  `gameScale` in Game mode, `uiScalePercent` in Ui mode.
  */
-void BuildBaseMatrix(const MeshBounds &bounds, const Turntable &view, float scale,
+void BuildBaseMatrix(const ZMeshBounds &bounds, const Turntable &view, float scale,
                      int drawableWidth, int drawableHeight, float *out) {
     float centre[kMatrix4dElements];
     Matrix4dTranslation(-bounds.centerX, -bounds.centerY, -bounds.centerZ, centre);
@@ -697,7 +696,7 @@ void BuildBaseMatrix(const MeshBounds &bounds, const Turntable &view, float scal
  * whichever part is being drawn. CEnemy::Draw (:67499) reads both off part 0's
  * controller and passes the same pair to every GetNodeAt it makes.
  */
-void DrawEnemy(LoadedEnemy &loaded, const CShaderProgram &program,
+void DrawEnemy(LoadedEnemy &loaded, const ZShaderProgram &program,
                const float *base) {
     DrawEnemyModel(loaded, program, base);
 }
@@ -712,15 +711,15 @@ int RunEnemySurvey(const std::string &bigDirectory) {
         return 1;
     }
 
-    PackTables tables(tocManager);
+    ZPackTables tables(tocManager);
     std::vector<EnemyTemplate> enemies;
     if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
 
     unsigned assembled = 0;
     unsigned attached = 0;
     for (std::size_t i = 0; i < enemies.size(); ++i) {
-        EnemyModel model;
-        if (!LoadEnemyModel(tables, enemies[i], false, nullptr, EnemySpawnMode::Level, model)) { return 1; }
+        ZEnemyModel model;
+        if (!LoadEnemyModel(tables, enemies[i], false, nullptr, ZEnemySpawnMode::Level, model)) { return 1; }
         CEnemy &enemy = model.enemy;
 
         ReportPartTable(i, enemies[i], enemy);
@@ -748,7 +747,7 @@ int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
         return 1;
     }
 
-    PackTables tables(tocManager);
+    ZPackTables tables(tocManager);
     std::vector<EnemyTemplate> enemies;
     if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
 
@@ -797,7 +796,7 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         return 1;
     }
 
-    PackTables tables(tocManager);
+    ZPackTables tables(tocManager);
     std::vector<EnemyTemplate> enemies;
     if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
     if (enemies.empty()) {
@@ -814,15 +813,14 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         std::printf("[enemy] state index out of range\n"); return 1;
     }
 
-    CWindow window;
+    ZWindow window;
     if (!OpenViewerWindow(window, "Enemy")) {
         return 1;
     }
     ViewerControls controls(window, enemyview::Bindings);
     if (!controls.Init()) { return 1; }
 
-
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
         return 1;
     }
@@ -880,7 +878,7 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
 
         const std::size_t previousSlot = slot;
         int moveStep = 0;
-        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None;
+        for (ZKeyCode key = controls.TakeKeyPress(); key != ZKeyCode::None;
              key = controls.TakeKeyPress()) {
             const std::size_t count = enemies.size();
             if (controls.IsPressed(key, ViewerAction::Next)) {
@@ -999,7 +997,7 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
             reportedFirstFrame = true;
 
             if (!screenshotPath.empty()) {
-                if (!GB_SAVE_FRAME(window, screenshotPath)) {
+                if (!Capture::SaveFrame(window, screenshotPath)) {
                     return 1;
                 }
                 window.Present();

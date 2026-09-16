@@ -3,7 +3,7 @@
  */
 #include "TestOutput.h"
 #include "tests/checks/PropCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/gameplay/CProp.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include <cstdio>
@@ -14,16 +14,16 @@
 int RunPropCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("prop-check.txt"));
     unsigned failures = 0, templates = 0, scripts = 0, moves = 0, actions = 0;
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC &pack = *toc.GetPack(packIndex);
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::Prop);
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::Prop);
         for (unsigned index = 0; index < count; ++index) {
             std::vector<std::uint8_t> payload;
-            if (!tables.ReadSectionResource(pack.GetPackHash(), GameSection::Prop, index, payload)) { ++failures; continue; }
+            if (!tables.ReadSectionResource(pack.GetPackHash(), ZGameSection::Prop, index, payload)) { ++failures; continue; }
             CArrayInputStream stream(payload);
             CProp::Template data;
             if (!data.Init(stream) || stream.Available() != 0) {
@@ -53,11 +53,11 @@ int RunPropCheck(const std::string &bigDirectory) {
             report << " end=" << prop.GetStateId() << " hp=" << prop.GetHealth();
             const auto cues = prop.TakeActions();
             actions += static_cast<unsigned>(cues.size());
-            for (const PropAction &cue : cues) {
+            for (const ZPropAction &cue : cues) {
                 report << " action=" << static_cast<int>(cue.kind);
                 if (cue.resource.IsNull()) { continue; }
-                GameSection section = GameSection::ParticleEffect;
-                if (cue.kind == PropAction::Kind::Sound) { section = GameSection::SoundEffect; }
+                ZGameSection section = ZGameSection::ParticleEffect;
+                if (cue.kind == ZPropAction::Kind::Sound) { section = ZGameSection::SoundEffect; }
                 if (!tables.ReadSectionResource(cue.resource.packHash, section, cue.resource.localIndex, payload)) { ++failures; }
             }
             failures += prop.GetUnsupportedCount();
@@ -69,10 +69,10 @@ int RunPropCheck(const std::string &bigDirectory) {
     // Inspect every object layer, including inactive campaign/deathmatch data.
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC &pack = *toc.GetPack(packIndex);
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::TileLayer);
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::TileLayer);
         for (unsigned index = 0; index < count; ++index) {
             std::vector<std::uint8_t> payload;
-            if (!tables.ReadSectionResource(pack.GetPackHash(), GameSection::TileLayer, index, payload)) { continue; }
+            if (!tables.ReadSectionResource(pack.GetPackHash(), ZGameSection::TileLayer, index, payload)) { continue; }
             CArrayInputStream stream(payload);
             CMap map;
             if (!map.Init(stream)) { continue; }

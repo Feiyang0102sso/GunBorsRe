@@ -1,7 +1,7 @@
 /** Built on demand in Debug; reuses the same command routing and implementations. */
-#include "engine/platform/Startup.h"
+#include "engine/platform/ZStartup.h"
 #include "TestApplication.h"
-#include "engine/platform/CAudioPlayer.h"
+#include "engine/platform/ZAudioPlayer.h"
 #include <string>
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/DebugMapChecks.h"
@@ -22,76 +22,75 @@ int wmain(int argc, wchar_t **argv) {
     }
     for (int index = 1; index < argc; ++index) {
         if (std::wstring(argv[index]) == L"--deathmatch-data-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunDeathmatchDataCheck(sampleBigDirectory.u8string());
         }
         if (std::wstring(argv[index]) == L"--deathmatch-check" || std::wstring(argv[index]) == L"--deathmatch-feedback-check") {
             int RunDeathmatchCombatCheck(const std::string &, bool);
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunDeathmatchCombatCheck(sampleBigDirectory.u8string(), std::wstring(argv[index]) == L"--deathmatch-feedback-check");
         }
         if (std::wstring(argv[index]) == L"--map-turret-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunMapTurretChecks(sampleBigDirectory.u8string());
         }
         if (std::wstring(argv[index]) == L"--cover-scale-study") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCoverScaleStudy(sampleBigDirectory.u8string());
         }
         if (std::wstring(argv[index]) == L"--viewer-controls-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return CheckViewerControls();
         }
         if (std::wstring(argv[index]) == L"--big-version-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunBigVersionCheck();
         }
         if (std::wstring(argv[index]) == L"--asset-sample-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunOriginalAssetSampleCheck(sampleBigDirectory.u8string());
         }
         if (std::wstring(argv[index]) == L"--debug-map-profile-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunDebugMapProfileCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-content-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignContentCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-door-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignDoorCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-target-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignTargetCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-progression-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignProgressionCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-rescue-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignRescueCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-portal-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignPortalCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-cache-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignCacheCheck();
         }
         if (std::wstring(argv[index]) == L"--campaign-lava2-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return RunCampaignLava2Check();
         }
         if (std::wstring(argv[index]) == L"--debug-input-check") {
-            CAudioPlayer::SetMuted(true);
+            ZAudioPlayer::SetMuted(true);
             return CheckDebugInput();
         }
     }
-    Utf8Arguments arguments(argc, argv);
+    ZUtf8Arguments arguments(argc, argv);
     return RunTestApplication(arguments.Count(), arguments.Data());
 }
-

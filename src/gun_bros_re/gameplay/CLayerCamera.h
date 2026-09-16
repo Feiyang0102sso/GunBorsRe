@@ -28,13 +28,13 @@
 #include <cstdint>
 
 /** A rectangle in world pixels. */
-struct MapRectangle {
+struct ZMapRectangle {
     std::int16_t x;
     std::int16_t y;
     std::int16_t width;
     std::int16_t height;
 
-    MapRectangle() : x(0), y(0), width(0), height(0) {}
+    ZMapRectangle() : x(0), y(0), width(0), height(0) {}
 
     bool IsEmpty() const { return width <= 0 || height <= 0; }
 };
@@ -46,8 +46,8 @@ public:
 
     bool Init(CArrayInputStream &stream);
 
-    const MapRectangle &GetPrimaryBounds() const { return m_primaryBounds; }
-    const MapRectangle &GetSecondaryBounds() const { return m_secondaryBounds; }
+    const ZMapRectangle &GetPrimaryBounds() const { return m_primaryBounds; }
+    const ZMapRectangle &GetSecondaryBounds() const { return m_secondaryBounds; }
 
     /** The original's accessors, both reading the primary rectangle. */
     std::int16_t GetWidth() const { return m_primaryBounds.width; }
@@ -64,8 +64,8 @@ public:
     void SetLayerIndex(std::uint32_t layerIndex) { m_layerIndex = layerIndex; }
 
 private:
-    MapRectangle m_primaryBounds;
-    MapRectangle m_secondaryBounds;
+    ZMapRectangle m_primaryBounds;
+    ZMapRectangle m_secondaryBounds;
     std::uint32_t m_layerIndex;
 };
 

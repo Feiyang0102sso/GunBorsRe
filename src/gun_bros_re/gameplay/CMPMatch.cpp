@@ -23,17 +23,17 @@ bool CMPMatch::Template::Init(CArrayInputStream &stream) {
     return !stream.Overran();
 }
 
-bool LoadMPMatches(CResTOCManager &toc, PackTables &tables, std::vector<CMPMatch::Entry> &entries) {
+bool LoadMPMatches(CResTOCManager &toc, ZPackTables &tables, std::vector<CMPMatch::Entry> &entries) {
     entries.clear();
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto hash = toc.GetPack(packIndex)->GetPackHash();
-        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(GameSection::MPMatch);
+        const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::MPMatch);
         for (unsigned index = 0; index < count; ++index) {
             CMPMatch::Entry entry;
             entry.resource.packHash = hash;
             entry.resource.localIndex = static_cast<std::uint8_t>(index);
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(hash, GameSection::MPMatch, index, bytes)) { return false; }
+            if (!tables.ReadSectionResource(hash, ZGameSection::MPMatch, index, bytes)) { return false; }
             CArrayInputStream stream(bytes);
             if (!entry.data.Init(stream) || stream.Available() != 0 || entry.data.stores.size() < 2 ||
                 entry.data.health == 0 || entry.data.pickups.size() != entry.data.pickupRules.size()) {
@@ -41,7 +41,7 @@ bool LoadMPMatches(CResTOCManager &toc, PackTables &tables, std::vector<CMPMatch
                 return false;
             }
             for (const auto &ref : entry.data.stores) {
-                if (!tables.ReadSectionResource(ref.packHash, GameSection::StoreItem, ref.localIndex, bytes)) { return false; }
+                if (!tables.ReadSectionResource(ref.packHash, ZGameSection::StoreItem, ref.localIndex, bytes)) { return false; }
                 CArrayInputStream storeStream(bytes);
                 CStoreItem store;
                 if (!store.Init(storeStream) || storeStream.Available() != 0 || store.objects.empty() || store.objects[0].type != 6) { return false; }

@@ -80,7 +80,7 @@ constexpr std::uint32_t kHandleSelectorLocale = 255;
  * Maps a run of consecutive logical IDs onto a run of table2 indices.
  * Logical IDs are sparse, so they are stored run-length encoded.
  */
-struct BigTable1Range {
+struct ZBigTable1Range {
     std::uint32_t baseResourceId;    // first logical ID in this run
     std::uint16_t rangeLength;       // how many consecutive IDs it covers
     std::uint16_t table2StartIndex;  // index that baseResourceId maps to
@@ -90,7 +90,7 @@ struct BigTable1Range {
  * One resource. There is no size field: a resource runs until the offset of
  * the next entry, and the last one ends at the offset recorded in the footer.
  */
-struct BigTable2Entry {
+struct ZBigTable2Entry {
     std::uint32_t groupHash;       // resource category, see kGroup* above
     std::uint32_t resourceOffset;  // absolute offset into the archive
 };
@@ -119,8 +119,8 @@ public:
 
     std::uint32_t GetResourceCount() const { return m_table2EntryCount; }
 
-    const std::vector<BigTable1Range> &GetTable1() const { return m_table1; }
-    const std::vector<BigTable2Entry> &GetTable2() const { return m_table2; }
+    const std::vector<ZBigTable1Range> &GetTable1() const { return m_table1; }
+    const std::vector<ZBigTable2Entry> &GetTable2() const { return m_table2; }
 
     /** Group hash of a resource, or 0 when the index is out of range. */
     std::uint32_t GetGroupHash(std::uint32_t table2Index) const;
@@ -191,8 +191,8 @@ private:
     std::uint32_t m_table1Offset;
     std::uint32_t m_table2Offset;
 
-    std::vector<BigTable1Range> m_table1;
-    std::vector<BigTable2Entry> m_table2;
+    std::vector<ZBigTable1Range> m_table1;
+    std::vector<ZBigTable2Entry> m_table2;
 
     // Offset just past the last resource, taken from the 8-byte footer that
     // follows table2. Gives the last resource its length.

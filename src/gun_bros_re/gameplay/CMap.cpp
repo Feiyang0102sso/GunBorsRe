@@ -112,7 +112,7 @@ bool CMap::Init(CArrayInputStream &stream) {
     for (std::uint8_t i = 0; i < m_declaredLayerCount; ++i) {
         const std::uint8_t layerType = stream.ReadUInt8();
 
-        if (layerType == static_cast<std::uint8_t>(MapLayerType::Tile)) {
+        if (layerType == static_cast<std::uint8_t>(ZMapLayerType::Tile)) {
             CLayerTile layer;
             if (!layer.Init(stream)) {
                 return false;
@@ -126,7 +126,7 @@ bool CMap::Init(CArrayInputStream &stream) {
             }
             m_tileLayers.push_back(layer);
 
-        } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Object)) {
+        } else if (layerType == static_cast<std::uint8_t>(ZMapLayerType::Object)) {
             CLayerObject layer;
             if (!layer.Init(stream)) {
                 return false;
@@ -134,28 +134,28 @@ bool CMap::Init(CArrayInputStream &stream) {
             layer.SetLayerIndex(i);
             m_objectLayers.push_back(layer);
 
-        } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Collision)) {
+        } else if (layerType == static_cast<std::uint8_t>(ZMapLayerType::Collision)) {
             CLayerCollision layer;
             if (!layer.Init(stream)) {
                 return false;
             }
             layer.SetLayerIndex(i);
             m_collisionLayers.push_back(std::move(layer));
-        } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Movie)) {
+        } else if (layerType == static_cast<std::uint8_t>(ZMapLayerType::Movie)) {
             SkipMovieLayer(stream);
-        } else if (layerType == static_cast<std::uint8_t>(MapLayerType::Camera)) {
+        } else if (layerType == static_cast<std::uint8_t>(ZMapLayerType::Camera)) {
             CLayerCamera layer;
             if (!layer.Init(stream)) {
                 return false;
             }
             layer.SetLayerIndex(i);
             m_cameraLayers.push_back(layer);
-        } else if (layerType == static_cast<std::uint8_t>(MapLayerType::PathLink)) {
+        } else if (layerType == static_cast<std::uint8_t>(ZMapLayerType::PathLink)) {
             CLayerPathLink layer;
             if (!layer.Init(stream)) { return false; }
             layer.SetLayerIndex(i);
             m_pathLinkLayers.push_back(std::move(layer));
-        } else if (layerType == static_cast<std::uint8_t>(MapLayerType::PathMesh)) {
+        } else if (layerType == static_cast<std::uint8_t>(ZMapLayerType::PathMesh)) {
             CLayerPathMesh layer;
             if (!layer.Init(stream)) { return false; }
             layer.SetLayerIndex(i);
@@ -259,19 +259,19 @@ const CLayerCollision *CMap::GetCurrentBulletCollisionLayer() const {
     return &m_collisionLayers[m_currentBulletCollisionLayer];
 }
 
-MapRectangle CMap::GetCameraExtent() const {
+ZMapRectangle CMap::GetCameraExtent() const {
     if (m_cameraLayers.empty()) {
-        return MapRectangle();
+        return ZMapRectangle();
     }
 
-    const MapRectangle &first = m_cameraLayers[0].GetPrimaryBounds();
+    const ZMapRectangle &first = m_cameraLayers[0].GetPrimaryBounds();
     int left = first.x;
     int top = first.y;
     int right = first.x + first.width;
     int bottom = first.y + first.height;
 
     for (std::size_t i = 1; i < m_cameraLayers.size(); ++i) {
-        const MapRectangle &bounds = m_cameraLayers[i].GetPrimaryBounds();
+        const ZMapRectangle &bounds = m_cameraLayers[i].GetPrimaryBounds();
         if (bounds.IsEmpty()) {
             continue;
         }
@@ -290,7 +290,7 @@ MapRectangle CMap::GetCameraExtent() const {
         }
     }
 
-    MapRectangle extent;
+    ZMapRectangle extent;
     extent.x = static_cast<std::int16_t>(left);
     extent.y = static_cast<std::int16_t>(top);
     extent.width = static_cast<std::int16_t>(right - left);
@@ -298,9 +298,9 @@ MapRectangle CMap::GetCameraExtent() const {
     return extent;
 }
 
-MapRectangle CMap::GetVisibleBounds() const {
+ZMapRectangle CMap::GetVisibleBounds() const {
     if (m_currentCameraLayer >= m_cameraLayers.size()) {
-        return MapRectangle();
+        return ZMapRectangle();
     }
 
     return m_cameraLayers[m_currentCameraLayer].GetPrimaryBounds();

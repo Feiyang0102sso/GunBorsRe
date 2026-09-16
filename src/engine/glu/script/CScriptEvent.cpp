@@ -7,7 +7,7 @@
 
 #include "engine/glu/script/CScriptInterpreter.h"
 
-bool CScriptEvent::Evaluate(CScriptInterpreter &interpreter, ScriptCursor &cursor,
+bool CScriptEvent::Evaluate(CScriptInterpreter &interpreter, ZScriptCursor &cursor,
                             std::uint16_t eventId) {
     const std::uint8_t low = cursor.ReadUInt8();
     const std::uint8_t high = cursor.ReadUInt8();
@@ -39,7 +39,7 @@ bool CScriptEvent::Evaluate(CScriptInterpreter &interpreter, ScriptCursor &curso
     return false;
 }
 
-void CScriptEvent::Skip(ScriptCursor &cursor) {
+void CScriptEvent::Skip(ZScriptCursor &cursor) {
     cursor.at += 2;
     CScriptCode::Skip(cursor);
 }

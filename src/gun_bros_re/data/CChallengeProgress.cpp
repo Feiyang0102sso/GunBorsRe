@@ -61,7 +61,7 @@ bool CChallengeManager::StoreProgress(CProfileManager &profile) const {
     return true;
 }
 
-bool CChallengeManager::InitProgressData(CResTOCManager &toc, PackTables &tables, CProfileManager &profile, unsigned seconds) {
+bool CChallengeManager::InitProgressData(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile, unsigned seconds) {
     if (!profile.nativeArchive || !Bind(toc, tables, profile, seconds)) { return false; }
     const unsigned day = static_cast<unsigned>((std::uint64_t(seconds) + 36000) / 86400);
     CArrayInputStream stream(profile.nativeArchive->records[17].payload);
@@ -89,7 +89,7 @@ bool CChallengeManager::InitProgressData(CResTOCManager &toc, PackTables &tables
     return Bind(toc, tables, profile, seconds);
 }
 
-void CChallengeManager::UpdateFromLevelSession(const Session &session, const std::vector<WeaponEntry> &weapons,
+void CChallengeManager::UpdateFromLevelSession(const Session &session, const std::vector<ZWeaponEntry> &weapons,
     const CProfileManager &profile) {
     // UpdateFromLevelSession :241437: consume this wave's statistics once.
     for (auto &challenge : current) {
@@ -198,7 +198,7 @@ void CChallengeManager::UpdateChallengeStatusData(const CProfileManager &profile
     }
 }
 
-bool CChallengeManager::AwardAvailableRewards(CProfileManager &profile, const std::vector<StoreEntry> &store, unsigned &awarded) {
+bool CChallengeManager::AwardAvailableRewards(CProfileManager &profile, const std::vector<ZStoreEntry> &store, unsigned &awarded) {
     awarded = 0;
     for (auto &challenge : current) {
         if (challenge.progress != 100 || challenge.rewardStatus >= 3) { continue; }
@@ -209,11 +209,11 @@ bool CChallengeManager::AwardAvailableRewards(CProfileManager &profile, const st
             if (challenge.completedFriends < entry.participationRequired[tier]) { break; }
             const auto &prize = challenge.prizes[tier];
             for (const auto &ref : prize.storeItems) {
-                const StoreEntry *item = nullptr;
+                const ZStoreEntry *item = nullptr;
                 for (const auto &value : store) { if (Same(value.ref, ref)) { item = &value; break; } }
                 if (!item) { return false; }
                 const auto result = candidate.AcquireItem(item->data, PlayerLevel(candidate), true);
-                if (result != PurchaseResult::Purchased && result != PurchaseResult::Owned && result != PurchaseResult::LevelLocked) { return false; }
+                if (result != ZPurchaseResult::Purchased && result != ZPurchaseResult::Owned && result != ZPurchaseResult::LevelLocked) { return false; }
             }
             candidate.coins += prize.coins;
             candidate.warbucks += prize.warbucks;

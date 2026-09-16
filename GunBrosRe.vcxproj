@@ -51,10 +51,8 @@
     <LocalDebuggerCommand>$(OutDir)$(GbDebugTarget).exe</LocalDebuggerCommand>
     <LocalDebuggerCommandArguments />
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <FeatureDefinitions>GB_ENABLE_CAPTURE=$(GbCaptureEnabled);GB_ENABLE_CHEATS=1</FeatureDefinitions>
+    <FeatureDefinitions>GB_ENABLE_CAPTURE=$(GbCaptureEnabled)</FeatureDefinitions>
     <FeatureDefinitions Condition="'$(Configuration)'=='Debug'">_DEBUG;$(FeatureDefinitions)</FeatureDefinitions>
-    <FeatureHeaders>$(RepoRoot)src\engine\core\BuildFeatures.h</FeatureHeaders>
-    <FeatureHeaders Condition="'$(GbCaptureEnabled)'=='1'">$(FeatureHeaders);$(RepoRoot)src\gun_bros_re\debug\Capture.h</FeatureHeaders>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -67,7 +65,6 @@
       <AdditionalIncludeDirectories>$(RepoRoot)src;$(RepoRoot)src\third_party\zlib;$(RepoRoot)src\third_party\SDL3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalIncludeDirectories Condition="'$(GbProduct)'=='Tests'">$(RepoRoot);$(RepoRoot)tests;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>$(FeatureDefinitions);%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ForcedIncludeFiles>$(FeatureHeaders);%(ForcedIncludeFiles)</ForcedIncludeFiles>
       <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
       <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>

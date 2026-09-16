@@ -1,4 +1,5 @@
-#include "engine/core/Paths.h"
+#include "gun_bros_re/debug/Capture.h"
+#include "engine/core/ZPaths.h"
 /**
  * @file M35Mesh.cpp
  * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
@@ -32,23 +33,23 @@
 #include "TestOutput.h"
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/PackTables.h"
-#include "gun_bros_re/gameplay/PlayerModel.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/gameplay/CombatGeometry.h"
-#include "gun_bros_re/gameplay/WeaponEffects.h"
+#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/graphics/CMeshBuffer.h"
-#include "engine/graphics/CPNG.h"
-#include "engine/graphics/CShaderProgram.h"
-#include "engine/graphics/CTexture.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/graphics/ZMeshBuffer.h"
+#include "engine/graphics/ZPNG.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/graphics/ZTexture.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
 #include "gun_bros_re/gameplay/CBrother.h"
@@ -75,26 +76,26 @@ using namespace MeshPreviewDetail;
 #include "Checks.h"
 
 /** A target beside the muzzle ray reproduces invisible wide-beam obstruction. */
-class WeaponRayCheckWorld : public IProjectileWorld {
+class WeaponRayCheckWorld : public ZProjectileWorld {
 public:
     bool moveAnchor = false;
     unsigned beamContacts = 0;
     float targetOffset = 50;
     float targetDistance = 100;
     std::vector<float> splashDamage;
-    CombatTrace Trace(const CombatHit &hit, float x, float y, float dx, float dy,
-        float radius, const std::vector<CombatId> &skip) override {
+    ZCombatTrace Trace(const ZCombatHit &hit, float x, float y, float dx, float dy,
+        float radius, const std::vector<ZCombatId> &skip) override {
         if ((hit.flags & 0x100) == 0 || !skip.empty()) { return {}; }
         const float fraction = CombatGeometry::CircleFraction(x, y, dx, dy, x + targetOffset, y - targetDistance, 10 + radius);
         if (fraction > 1) { return {}; }
         ++beamContacts;
         return {99, fraction};
     }
-    HitResult ApplyHit(CombatId, const CombatHit &) override { return HitResult::Hit; }
-    void Splash(const CombatHit &hit, float, float, float, int) override { splashDamage.push_back(hit.damage); }
-    void SpawnFromProjectile(const GameObjectRef &, const CombatHit &) override {}
-    bool FindTarget(const CombatHit &, float, float &, float &) override { return false; }
-    bool Anchor(CombatId, int, int, float &x, float &y, float &z, float &direction) override {
+    ZHitResult ApplyHit(ZCombatId, const ZCombatHit &) override { return ZHitResult::Hit; }
+    void Splash(const ZCombatHit &hit, float, float, float, int) override { splashDamage.push_back(hit.damage); }
+    void SpawnFromProjectile(const GameObjectRef &, const ZCombatHit &) override {}
+    bool FindTarget(const ZCombatHit &, float, float &, float &) override { return false; }
+    bool Anchor(ZCombatId, int, int, float &x, float &y, float &z, float &direction) override {
         if (!moveAnchor) { return false; }
         x = 300; y = 400; z = 0; direction = 73;
         return true;
@@ -103,39 +104,39 @@ public:
 int RunWeaponCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData playerTemplate;
+    ZPackTables tables(toc);
+    std::vector<ZWeaponEntry> weapons;
+    ZPlayerTemplateData playerTemplate;
     if (!LoadWeaponCatalog(toc, tables, weapons) ||
         !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
 
     // Test the input mapping independently of each category's catalogue size.
     for (std::size_t i = 0; i < weapons.size(); ++i) {
-        const std::size_t next = SelectWeaponKey(weapons, i, KeyCode::M);
+        const std::size_t next = SelectWeaponKey(weapons, i, ZKeyCode::M);
         if (weapons[next].category != weapons[i].category ||
-            SelectWeaponKey(weapons, next, KeyCode::N) != i ||
-            SelectWeaponKey(weapons, i, KeyCode::E) != i ||
-            SelectWeaponKey(weapons, i, KeyCode::Digit8) != i ||
-            SelectWeaponKey(weapons, i, KeyCode::Digit9) != i) { return 1; }
+            SelectWeaponKey(weapons, next, ZKeyCode::N) != i ||
+            SelectWeaponKey(weapons, i, ZKeyCode::E) != i ||
+            SelectWeaponKey(weapons, i, ZKeyCode::Digit8) != i ||
+            SelectWeaponKey(weapons, i, ZKeyCode::Digit9) != i) { return 1; }
         for (int category = 0; category < kWeaponCategoryCount; ++category) {
-            const KeyCode key = static_cast<KeyCode>(static_cast<int>(KeyCode::Digit1) + category);
+            const ZKeyCode key = static_cast<ZKeyCode>(static_cast<int>(ZKeyCode::Digit1) + category);
             if (weapons[SelectWeaponKey(weapons, i, key)].category != category) { return 1; }
         }
     }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Weapon verification", 800, 600)) { return 1; }
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    WeaponEffects effects(toc, tables, program);
+    ZWeaponEffects effects(toc, tables, program);
     // The observed Kraken failure: particle templates 0x10/0x20 must select
     // explosion animations 4/5, never laser animations 0/1 from the same atlas.
-    ParticleEmitterTemplate emitter;
+    ZParticleEmitterTemplate emitter;
     emitter.animationMask = 0x10;
     if (emitter.SelectAnimation(0) != 4 || emitter.SelectAnimation(1) != 4) { return 1; }
     emitter.animationMask = 0x20;
     if (emitter.SelectAnimation(0.5f) != 5) { return 1; }
     // Validate the actual STORE join, not hand-selected resource ordinals.
-    std::vector<StoreEntry> storeEntries;
+    std::vector<ZStoreEntry> storeEntries;
     if (!LoadStoreCatalog(toc, tables, storeEntries)) { return 1; }
     for (const auto &store : storeEntries) {
         if (store.data.objects.size() != 1 || store.data.objects.front().type != 6) { continue; }
@@ -158,15 +159,15 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         2, 0, 0, 0, 0, 0, 100, 0, 0, 0,
         32, 3, 0, 0, 100, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0
     };
-    WeaponCollision impactScene;
+    ZWeaponCollision impactScene;
     CArrayInputStream wallStream(wallBytes);
     if (!impactScene.walls.Load(wallStream)) { return 1; }
     impactScene.terrain = impactScene.walls;
     for (std::size_t i = 0; i < weapons.size(); ++i) {
         if (!window.PumpEvents()) { return 1; }
         effects.Clear();
-        PlayerModel player;
-        const WeaponEntry &entry = weapons[i];
+        ZPlayerModel player;
+        const ZWeaponEntry &entry = weapons[i];
         if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
             !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
             !CreatePlayerBuffers(player, program)) { return 1; }
@@ -196,7 +197,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         if (i == 0) {
             // Regression: the default pistols must use the gun's player moves
             // and two distinct hands, even though the mesh is shared with rifles.
-            MeshBoneTransform right{}, left{};
+            ZMeshBoneTransform right{}, left{};
             if (!player.weapon->brother.TorsoUsesWeapon() || entry.data.GetHandedness() != 2 ||
                 !GetPlayerMuzzle(player, 0, 0, right) || !GetPlayerMuzzle(player, 1, 0, left) ||
                 (right.posX == left.posX && right.posY == left.posY && right.posZ == left.posZ)) {
@@ -313,10 +314,10 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             glEnable(GL_DEPTH_TEST);
             float modelMvp[kMatrix4dElements];
             Matrix4dMultiply(sceneMvp, modelToScene, modelMvp);
-            effects.Draw(sceneMvp, nullptr, 1.0f, WeaponDrawPass::BehindPlayer);
+            effects.Draw(sceneMvp, nullptr, 1.0f, ZWeaponDrawPass::BehindPlayer);
             glEnable(GL_DEPTH_TEST);
             DrawPlayer(player, program, modelMvp);
-            effects.Draw(sceneMvp, nullptr, 1.0f, WeaponDrawPass::InFrontOfPlayer);
+            effects.Draw(sceneMvp, nullptr, 1.0f, ZWeaponDrawPass::InFrontOfPlayer);
             if (glGetError() != GL_NO_ERROR) { return 1; }
         }
         const std::size_t emitted = effects.GetShotCount() - before;
@@ -362,17 +363,17 @@ int RunWeaponCheck(const std::string &bigDirectory) {
 int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<WeaponEntry> weapons;
-    PlayerTemplateData playerTemplate;
+    ZPackTables tables(toc);
+    std::vector<ZWeaponEntry> weapons;
+    ZPlayerTemplateData playerTemplate;
     if (!LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
-    CWindow window;
+    ZWindow window;
     if (!window.Open("Weapon effect verification", 800, 600)) { return 1; }
     glViewport(0, 0, 800, 600);
     glEnable(GL_BLEND);
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    WeaponEffects effects(toc, tables, program);
+    ZWeaponEffects effects(toc, tables, program);
     WeaponRayCheckWorld rayWorld;
     effects.SetCombatWorld(&rayWorld);
     // The fixture has a real 800x600 camera; off-screen rifle bullets retire by
@@ -392,7 +393,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         rayWorld.targetOffset = 50;
         rayWorld.targetDistance = 100;
         rayWorld.splashDamage.clear();
-        PlayerModel player;
+        ZPlayerModel player;
         if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
             !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
             !CreatePlayerBuffers(player, program)) { return 1; }
@@ -418,7 +419,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 if (known) { continue; }
                 seen.push_back(shot.resource);
                 std::vector<std::uint8_t> payload;
-                if (!tables.ReadSectionResource(shot.resource.packHash, GameSection::Bullet, shot.resource.localIndex, payload)) { return 1; }
+                if (!tables.ReadSectionResource(shot.resource.packHash, ZGameSection::Bullet, shot.resource.localIndex, payload)) { return 1; }
                 CBullet::Template data;
                 CArrayInputStream stream(payload);
                 if (!data.Init(stream)) { return 1; }
@@ -459,7 +460,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 effects.Draw(mvp);
                 const std::string path = TestOutput::Path("weapon-effects-") + std::to_string(index) + "-" + std::to_string(elapsed + 16) + ".png";
-                if (!GB_SAVE_FRAME(window, path)) { return 1; }
+                if (!Capture::SaveFrame(window, path)) { return 1; }
                 if (rifle && elapsed == 992) {
                     std::vector<unsigned char> pixels(800 * 350 * 4);
                     glReadPixels(0, 250, 800, 350, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
@@ -517,7 +518,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
             effects.Draw(mvp);
             ++closeFrames;
             if (effects.GetDrawnBeamQuadCount() == 0) { ++invisibleFrames; }
-            if (closeFrames == 1 && !GB_SAVE_FRAME(window, TestOutput::Path("weapon-effects-close-") + std::to_string(index) + ".png")) { return 1; }
+            if (closeFrames == 1 && !Capture::SaveFrame(window, TestOutput::Path("weapon-effects-close-") + std::to_string(index) + ".png")) { return 1; }
         }
         if (invisibleFrames != 0) { ++failures; }
         std::printf("[weapon-effects-check] close-beam-frames=%u invisible=%u\n", closeFrames, invisibleFrames);
@@ -533,7 +534,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     }
     // Mechanical Boss Flow pack6 ENEMY8 references pack1 BULLET16 and
     // pack5 BULLET104. Exercise those real visuals independently of aiming.
-    PlayerModel probe;
+    ZPlayerModel probe;
     if (!BuildPlayerBody(tables, playerTemplate.moveSet, probe) ||
         !EquipPlayerWeapon(tables, playerTemplate.script, weapons.front().data, weapons.front().owner, probe) ||
         !CreatePlayerBuffers(probe, program)) { return 1; }
@@ -544,7 +545,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         ref.packHash = toc.GetPack(toc.GetPackIndexFromName(sample.first))->GetPackHash();
         ref.localIndex = static_cast<std::uint8_t>(sample.second);
         std::vector<std::uint8_t> payload;
-        if (!tables.ReadSectionResource(ref.packHash, GameSection::Bullet, ref.localIndex, payload)) { return 1; }
+        if (!tables.ReadSectionResource(ref.packHash, ZGameSection::Bullet, ref.localIndex, payload)) { return 1; }
         CBullet::Template data;
         CArrayInputStream input(payload);
         if (!data.Init(input)) { return 1; }
@@ -598,7 +599,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
             // Measured: bead chain 3%, tiled beam body 44%.
             if (firstLit < 0 || troughPercent < 25) { ++failures; }
         }
-        GB_SAVE_FRAME(window, TestOutput::Path("boss-beam-") + std::string(sample.first) + "-" + std::to_string(sample.second) + ".png");
+        Capture::SaveFrame(window, TestOutput::Path("boss-beam-") + std::string(sample.first) + "-" + std::to_string(sample.second) + ".png");
     }
     effects.Clear();
     rayWorld.moveAnchor = true;

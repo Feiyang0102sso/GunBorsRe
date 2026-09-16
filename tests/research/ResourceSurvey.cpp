@@ -94,7 +94,7 @@ bool CheckStringToKey() {
 
 /** Resolve every handle in a pack and report how many came back with data. */
 void SurveyPack(CResPackTOC &pack) {
-    const std::vector<PackTOCEntry> &entries = pack.GetEntries();
+    const std::vector<ZPackTOCEntry> &entries = pack.GetEntries();
 
     int aggregateCount = 0;
     int directCount = 0;
@@ -186,7 +186,7 @@ void DumpPack(CResPackTOC &pack) {
     // table2 index -> logical ID, built by expanding the run-length table1.
     std::map<std::uint32_t, std::uint32_t> indexToId;
     for (std::size_t i = 0; i < reader.GetTable1().size(); ++i) {
-        const BigTable1Range &range = reader.GetTable1()[i];
+        const ZBigTable1Range &range = reader.GetTable1()[i];
         for (std::uint16_t offset = 0; offset < range.rangeLength; ++offset) {
             indexToId[range.table2StartIndex + offset] = range.baseResourceId + offset;
         }
@@ -247,7 +247,7 @@ void SurveyLevels(CResTOCManager &tocManager) {
         }
 
         const std::uint32_t levelCount =
-            objectPack.GetObjectCount(GameSection::Level);
+            objectPack.GetObjectCount(ZGameSection::Level);
         if (levelCount == 0) {
             continue;
         }
@@ -255,7 +255,7 @@ void SurveyLevels(CResTOCManager &tocManager) {
         std::printf("\n%s: %u levels\n", pack->GetShortName().c_str(), levelCount);
 
         for (std::uint32_t i = 0; i < levelCount; ++i) {
-            const std::uint32_t handle = objectPack.GetHandle(GameSection::Level, i);
+            const std::uint32_t handle = objectPack.GetHandle(ZGameSection::Level, i);
             std::vector<std::uint8_t> payload;
             if (handle == 0 || !pack->GetResource(handle, payload)) {
                 std::printf("  level %u unreadable\n", i);

@@ -3,7 +3,7 @@
  */
 #ifndef GUN_BROS_RE_CBGM_H
 #define GUN_BROS_RE_CBGM_H
-#include "engine/platform/CAudioPlayer.h"
+#include "engine/platform/ZAudioPlayer.h"
 #include <filesystem>
 
 class CBGM {
@@ -12,7 +12,7 @@ public:
     /** Playback starts across instances, for scene handoff regression evidence. */
     static unsigned GetPlaybackStarts();
     void EnableSilentValidation() { m_audio.EnableSilentValidation(); }
-    AudioPlaybackState GetPlaybackState() const { return m_audio.GetPlaybackState(); }
+    ZAudioPlaybackState GetPlaybackState() const { return m_audio.GetPlaybackState(); }
     bool Play(unsigned track, bool loop = true);
     bool NextTrack();
     void Update();
@@ -23,7 +23,7 @@ public:
     void SetVolume(float scale);
     static const char *TrackName(unsigned track);
 private:
-    CAudioPlayer m_audio;
+    ZAudioPlayer m_audio;
     int m_track = -1;
     bool m_enabled = true;
     float m_volumeScale = 1.0f;

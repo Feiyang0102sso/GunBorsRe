@@ -25,19 +25,19 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
     if (feedbackStudy) {
         // Real BIG instances and the same clocks as RunSurvival; no source save.
         vitals.invincible = true;
-        session.SetOriginalHud(&survivalHud);
+        session.SetHud(&survivalHud);
         session.Restart(startX, startY, startFacing);
         for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
-        survivalHud.OnOriginalWaveClear(session.GetLevel().GetWave(), true, 100, false);
-        const float beforeX = scene.playerX;
-        const float beforeY = scene.playerY;
+        survivalHud.OnWaveClear(session.GetLevel().GetWave(), true, 100, false);
+        const float beforeX = scene.GetPlayer().x;
+        const float beforeY = scene.GetPlayer().y;
         for (unsigned tick = 0; tick < 20; ++tick) { session.Update(16, 1, 0, false); }
-        const float moved = std::hypot(scene.playerX - beforeX, scene.playerY - beforeY);
+        const float moved = std::hypot(scene.GetPlayer().x - beforeX, scene.GetPlayer().y - beforeY);
         if (moved <= 0) { ++checkFailures; }
         std::printf("[feedback-check] notice-moving=%.3f interstitial=%d failures=%u\n", moved, survivalHud.HasInterstitial(), checkFailures);
         // Reproduce duplicate object index 0 in the actual layer-2/layer-3 map.
         for (const auto &prop : loaded.props) {
-            if (!prop.active || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
+            if (!prop.active || prop.sprite->interactiveKind != ZInteractivePropKind::Spire) { continue; }
             float targetX = 0, targetY = 0;
             const unsigned target = props.ResolveIndicatorTarget(prop.objectId);
             const bool bound = target != 0 && props.GetIndicatorTarget(target, targetX, targetY);
@@ -64,8 +64,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         }
         // The spire's four phases come from pack7 PROP33's Flow. Compare the
         // runtime clock against native 58's actual Q8 scale, not guessed seconds.
-        for (PlacedProp &prop : loaded.props) {
-            if (!prop.active || prop.runtime == nullptr || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
+        for (ZPlacedProp &prop : loaded.props) {
+            if (!prop.active || prop.runtime == nullptr || prop.sprite->interactiveKind != ZInteractivePropKind::Spire) { continue; }
             CProp &spire = *prop.runtime;
             const bool layersCorrect = spire.GetAnimation(2) == 255 &&
                 BackgroundSlotFor(prop) == RuntimeSlotFor(prop, 0) &&
@@ -93,12 +93,12 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         unsigned simultaneousHits = 0;
         for (std::size_t index = 0; index < enemies.size(); ++index) {
             if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal > 15) { continue; }
-            CombatEnemy *actor = scene.Spawn(index, scene.playerX + 250, scene.playerY);
+            ZCombatEnemy *actor = scene.Spawn(index, scene.GetPlayer().x + 250, scene.GetPlayer().y);
             if (actor == nullptr) { ++checkFailures; continue; }
             CEnemy &enemy = actor->model.enemy;
             for (unsigned tick = 0; tick < 100; ++tick) { enemy.Update(16); }
             const float health = enemy.combat.health;
-            CombatHit hit;
+            ZCombatHit hit;
             hit.owner = kPlayerCombatId;
             hit.ownerType = 0;
             hit.damage = health / 10;
@@ -106,12 +106,12 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             hit.x = enemy.combat.x;
             hit.y = enemy.combat.y + 100;
             hit.projectile = 10001;
-            const HitResult first = scene.ApplyHit(enemy.combat.id, hit);
+            const ZHitResult first = scene.ApplyHit(enemy.combat.id, hit);
             hit.owner = kBrotherCombatId;
             hit.projectile = 10002;
-            const HitResult second = scene.ApplyHit(enemy.combat.id, hit);
+            const ZHitResult second = scene.ApplyHit(enemy.combat.id, hit);
             for (unsigned tick = 0; tick < 100; ++tick) { enemy.Update(16); }
-            if (first == HitResult::Hit && second == HitResult::Hit) {
+            if (first == ZHitResult::Hit && second == ZHitResult::Hit) {
                 ++simultaneousHits;
                 if (enemy.combat.hitCount != 2 || std::abs(health - enemy.combat.health - hit.damage * 2) > 0.01f) { ++checkFailures; }
             }
@@ -122,10 +122,10 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // Native HandleCollision does not pause a projectile when a state
             // has no hit handler. A dormant original turret must not swallow a
             // penetrating round before it reaches the ordinary enemy behind it.
-            WeaponEffects probeEffects(toc, tables, program);
-            CombatScene probe(tables, program, enemies, player, vitals, probeEffects, loaded.playerTemplate->gameScale);
+            ZWeaponEffects probeEffects(toc, tables, program);
+            ZCombatWorld probe(tables, program, enemies, player, vitals, probeEffects, loaded.playerTemplate->gameScale);
             probe.Reset();
-            CombatEnemy *front = nullptr, *back = nullptr;
+            ZCombatEnemy *front = nullptr, *back = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash != CStringToKey("pack1")) { continue; }
                 if (enemies[index].ordinal == 6) { front = probe.Spawn(index, 600, 450); }
@@ -137,7 +137,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             for (const auto &gun : weapons) {
                 std::vector<std::uint8_t> bytes;
                 const auto &ref = gun.data.GetBulletRef();
-                if (ref.IsNull() || !tables.ReadSectionResource(ref.packHash, GameSection::Bullet, ref.localIndex, bytes)) { continue; }
+                if (ref.IsNull() || !tables.ReadSectionResource(ref.packHash, ZGameSection::Bullet, ref.localIndex, bytes)) { continue; }
                 CArrayInputStream input(bytes);
                 CBullet::Template bullet;
                 if (!bullet.Init(input)) { return 1; }
@@ -157,8 +157,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // the camera rectangle travelling away from it, and keeps one that
             // is still heading towards it. Same real BULLET template, same
             // update path; only the camera rectangle is supplied here.
-            WeaponEffects cullEffects(toc, tables, program);
-            CombatScene cullScene(tables, program, enemies, player, vitals, cullEffects, loaded.playerTemplate->gameScale);
+            ZWeaponEffects cullEffects(toc, tables, program);
+            ZCombatWorld cullScene(tables, program, enemies, player, vitals, cullEffects, loaded.playerTemplate->gameScale);
             cullScene.Reset();
             cullScene.SetViewCenter(600, 450);
             cullScene.SetViewSize(200, 200);  // y in [350, 550]
@@ -206,9 +206,9 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // A single-part original enemy supplies an independent GetBounds
         // centre. Check the final screen rectangle, not just its dimensions.
         {
-            WeaponEffects anchorEffects(toc, tables, program);
-            CombatScene anchorScene(tables, program, enemies, player, vitals, anchorEffects, loaded.playerTemplate->gameScale);
-            CombatEnemy *target = nullptr;
+            ZWeaponEffects anchorEffects(toc, tables, program);
+            ZCombatWorld anchorScene(tables, program, enemies, player, vitals, anchorEffects, loaded.playerTemplate->gameScale);
+            ZCombatEnemy *target = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 0) {
                     target = anchorScene.Spawn(index, 640, 480);
@@ -242,25 +242,25 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         }
         // Reproduce a group death through the original enemy export and the
         // same CombatScene/WeaponEffects path used by ordinary combat.
-        CAudioPlayer backendAudio;
+        ZAudioPlayer backendAudio;
         std::vector<std::uint64_t> deathWavs;
         // A real SOUNDEFFECT reference, for the one-voice-per-WAV check below.
         GameObjectRef effectSound;
         // Effects headroom: the configured 0..10 dial reaches the mix as
         // dial x 0.1, the same scale the original's voices use.
         const float configuredGain = GameHostSettings().effectsVolume * 0.1f;
-        if (std::abs(CAudioPlayer::GetEffectsGain() - configuredGain) > 0.001f) { ++checkFailures; }
+        if (std::abs(ZAudioPlayer::GetEffectsGain() - configuredGain) > 0.001f) { ++checkFailures; }
         std::printf("[audio-health-check] effects-dial=%d gain=%.2f music-gain=0.30 failures=%u\n",
-            GameHostSettings().effectsVolume, CAudioPlayer::GetEffectsGain(), checkFailures);
+            GameHostSettings().effectsVolume, ZAudioPlayer::GetEffectsGain(), checkFailures);
         for (unsigned kinds = 1; kinds <= 2; ++kinds) {
             std::vector<GameObjectRef> batchDeathSounds;
-            WeaponEffects deathEffects(toc, tables, program);
-            CombatScene deathScene(tables, program, enemies, player, vitals, deathEffects, loaded.playerTemplate->gameScale);
+            ZWeaponEffects deathEffects(toc, tables, program);
+            ZCombatWorld deathScene(tables, program, enemies, player, vitals, deathEffects, loaded.playerTemplate->gameScale);
             deathScene.Reset();
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal >= kinds) { continue; }
                 for (unsigned count = 0; count < 12; ++count) {
-                    CombatEnemy *actor = deathScene.Spawn(index, 800, 500);
+                    ZCombatEnemy *actor = deathScene.Spawn(index, 800, 500);
                     if (actor == nullptr) { ++checkFailures; continue; }
                     actor->model.enemy.Damage(actor->model.enemy.combat.health);
                     if (count == 0) {
@@ -270,7 +270,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                                 std::vector<std::uint8_t> bytes;
                                 const auto pack = enemies[index].moveSet.GetPackHash();
                                 const auto key = (std::uint64_t(pack) << 32) | sound.soundId;
-                                if (!tables.ReadSectionResource(pack, GameSection::Wav, sound.soundId, bytes) || !backendAudio.Load(key, bytes)) { ++checkFailures; continue; }
+                                if (!tables.ReadSectionResource(pack, ZGameSection::Wav, sound.soundId, bytes) || !backendAudio.Load(key, bytes)) { ++checkFailures; continue; }
                                 if (std::find(deathWavs.begin(), deathWavs.end(), key) == deathWavs.end()) { deathWavs.push_back(key); }
                                 GameObjectRef deathSound;
                                 deathSound.packHash = pack;
@@ -283,13 +283,13 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                     if (kinds == 2 && count == 0) {
                         // Inspect, but do not consume, the original death export.
                         for (const auto &action : actor->model.enemy.combat.actions) {
-                            if (action.kind != EnemyAction::Kind::Sound) { continue; }
+                            if (action.kind != ZEnemyAction::Kind::Sound) { continue; }
                             std::vector<std::uint8_t> bytes;
-                            if (!tables.ReadSectionResource(action.resource.packHash, GameSection::SoundEffect, action.resource.localIndex, bytes)) { ++checkFailures; continue; }
+                            if (!tables.ReadSectionResource(action.resource.packHash, ZGameSection::SoundEffect, action.resource.localIndex, bytes)) { ++checkFailures; continue; }
                             CArrayInputStream input(bytes);
                             CGameAssetRef wav;
                             wav.Init(input);
-                            if (input.Overran() || wav.assetId < 0 || !tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, bytes)) { ++checkFailures; continue; }
+                            if (input.Overran() || wav.assetId < 0 || !tables.ReadSectionResource(wav.packHash, ZGameSection::Wav, wav.assetId, bytes)) { ++checkFailures; continue; }
                             const auto key = (std::uint64_t(wav.packHash) << 32) | wav.assetId;
                             if (!backendAudio.Load(key, bytes)) { ++checkFailures; continue; }
                             deathWavs.push_back(key);
@@ -315,8 +315,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 kinds, deathEffects.GetSoundCueCount() - beforeRepeat, checkFailures);
             // ... and is audible again once that copy has finished. Its own
             // scene has no actors, so nothing else can cue a sound meanwhile.
-            WeaponEffects windowEffects(toc, tables, program);
-            CombatScene windowScene(tables, program, enemies, player, vitals, windowEffects, loaded.playerTemplate->gameScale);
+            ZWeaponEffects windowEffects(toc, tables, program);
+            ZCombatWorld windowScene(tables, program, enemies, player, vitals, windowEffects, loaded.playerTemplate->gameScale);
             windowScene.Reset();
             const GameObjectRef &repeated = batchDeathSounds.front();
             windowEffects.PlayMoveSound(repeated);
@@ -337,22 +337,22 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 // Any real SOUNDEFFECT entry will do; take the first that
                 // resolves to a WAV rather than inventing a resource.
                 const auto corePack = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
-                const unsigned soundCount = tables.GetObjectPack(toc.GetCorePackIndex()).GetObjectCount(GameSection::SoundEffect);
+                const unsigned soundCount = tables.GetObjectPack(toc.GetCorePackIndex()).GetObjectCount(ZGameSection::SoundEffect);
                 for (unsigned index = 0; index < soundCount && effectSound.IsNull(); ++index) {
                     std::vector<std::uint8_t> bytes;
-                    if (!tables.ReadSectionResource(corePack, GameSection::SoundEffect, index, bytes)) { continue; }
+                    if (!tables.ReadSectionResource(corePack, ZGameSection::SoundEffect, index, bytes)) { continue; }
                     CArrayInputStream input(bytes);
                     CGameAssetRef wav;
                     wav.Init(input);
                     if (input.Overran() || wav.assetId < 0) { continue; }
-                    if (!tables.ReadSectionResource(wav.packHash, GameSection::Wav, wav.assetId, bytes)) { continue; }
+                    if (!tables.ReadSectionResource(wav.packHash, ZGameSection::Wav, wav.assetId, bytes)) { continue; }
                     effectSound.packHash = corePack;
                     effectSound.localIndex = static_cast<std::uint8_t>(index);
                 }
             }
             if (!effectSound.IsNull()) {
-                GunCue sound;
-                sound.kind = GunCue::Kind::Sound;
+                ZGunCue sound;
+                sound.kind = ZGunCue::Kind::Sound;
                 sound.resource = effectSound;
                 const auto before = windowEffects.GetSoundCueCount();
                 unsigned peakVoices = 0;
@@ -375,21 +375,21 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // Capture through the production map/HUD draw, centred on the spire.
         session.Restart(startX, startY, startFacing);
         for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
-        for (const PlacedProp &prop : loaded.props) {
-            if (!prop.active || prop.sprite->interactiveKind != InteractivePropKind::Spire) { continue; }
-            scene.playerX = prop.x + 150;
-            scene.playerY = prop.y - 30;
+        for (const ZPlacedProp &prop : loaded.props) {
+            if (!prop.active || prop.sprite->interactiveKind != ZInteractivePropKind::Spire) { continue; }
+            scene.GetPlayer().x = prop.x + 150;
+            scene.GetPlayer().y = prop.y - 30;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 // ENEMY20's actual states 4/6 show/hide the bar. ENEMY3's
                 // actual spawn export hides it. Do not write variable 15 here.
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 3) {
                     const auto before = scene.EnemyHealthBars().size();
-                    CombatEnemy *hidden = scene.Spawn(index, prop.x + 270, prop.y - 80);
+                    ZCombatEnemy *hidden = scene.Spawn(index, prop.x + 270, prop.y - 80);
                     if (hidden == nullptr || hidden->model.enemy.combat.variables[15] != 0 || scene.EnemyHealthBars().size() != before) { ++checkFailures; }
                     std::printf("[audio-health-check] authored-hidden enemy=pack1:3 failures=%u\n", checkFailures);
                 }
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 20) {
-                    CombatEnemy *target = scene.Spawn(index, prop.x + 270, prop.y + 80);
+                    ZCombatEnemy *target = scene.Spawn(index, prop.x + 270, prop.y + 80);
                     if (target != nullptr) {
                         const auto before = scene.EnemyHealthBars().size();
                         if (target->model.enemy.combat.variables[15] != 0) { ++checkFailures; }
@@ -409,4 +409,3 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
-

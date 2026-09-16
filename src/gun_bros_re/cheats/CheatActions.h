@@ -3,16 +3,16 @@
 #include <filesystem>
 #include <string>
 #include "gun_bros_re/data/CPlayerProgress.h"
-class CWindow;
+class ZWindow;
 class CProfileManager;
 class CDailyBonusTracking;
 class CChallengeManager;
-class CombatScene;
-class SurvivalSession;
-class PowerupScene;
-struct PlayerVitals;
-struct SurvivalGameContext;
-namespace MenuDetail { struct MenuState; }
+class ZCombatWorld;
+class ZLevelHost;
+class ZPowerupScene;
+struct ZPlayerVitals;
+struct ZSurvivalGameContext;
+namespace MenuDetail { struct ZMenuState; }
 
 /** Commands mutate game state here; the host applies the returned timing/UI changes. */
 struct CombatCheatResult {
@@ -21,10 +21,10 @@ struct CombatCheatResult {
     bool challengesUpdated = false;
     bool botShop = false, botPowerup = false;
 };
-bool ApplyCombatCheat(const std::string &command, CombatScene &scene, PlayerVitals &vitals,
-    PowerupScene &powerups, SurvivalSession &session, SurvivalGameContext *context, CombatCheatResult &result,
+bool ApplyCombatCheat(const std::string &command, ZCombatWorld &scene, ZPlayerVitals &vitals,
+    ZPowerupScene &powerups, ZLevelHost &session, ZSurvivalGameContext *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
-bool ProcessMenuCheats(CWindow &window, CProfileManager &profile, MenuDetail::MenuState &state,
+bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZMenuState &state,
     const CDailyBonusTracking &daily, const std::filesystem::path &savePath,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
 namespace GameCheats {

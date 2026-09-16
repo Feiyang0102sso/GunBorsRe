@@ -9,7 +9,7 @@
 
 #include <cstdio>
 
-bool CScriptFunction::Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor) {
+bool CScriptFunction::Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor) {
     const std::uint16_t functionId = cursor.ReadUInt16();
     const std::uint8_t declaredArgumentCount = cursor.ReadUInt8();
 
@@ -36,7 +36,7 @@ bool CScriptFunction::Execute(CScriptInterpreter &interpreter, ScriptCursor &cur
     return false;
 }
 
-void CScriptFunction::Skip(ScriptCursor &cursor) {
+void CScriptFunction::Skip(ZScriptCursor &cursor) {
     const std::uint8_t *start = cursor.at;
     const std::uint8_t argumentCount = start[2];
     cursor.at = start + 3 + 2 * static_cast<std::size_t>(argumentCount);

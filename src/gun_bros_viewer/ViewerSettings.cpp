@@ -1,6 +1,6 @@
 #include "gun_bros_viewer/ViewerSettings.h"
-#include "engine/core/Paths.h"
-#include "engine/platform/CWindow.h"
+#include "engine/core/ZPaths.h"
+#include "engine/platform/ZWindow.h"
 #include <charconv>
 #include <cstdio>
 #include <fstream>
@@ -90,7 +90,7 @@ std::string ViewerWindowTitle(const std::string &view, const std::string &detail
     return title;
 }
 
-bool OpenViewerWindow(CWindow &window, const std::string &view) {
+bool OpenViewerWindow(ZWindow &window, const std::string &view) {
     const ViewerSettings &settings = GetViewerSettings();
     const std::string title = ViewerWindowTitle(view);
     std::printf("[viewer-window] %s requested=%dx%d\n", title.c_str(), settings.windowWidth, settings.windowHeight);

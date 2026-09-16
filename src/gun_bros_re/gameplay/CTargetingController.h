@@ -3,28 +3,27 @@
  */
 #ifndef GUN_BROS_RE_CTARGETINGCONTROLLER_H
 #define GUN_BROS_RE_CTARGETINGCONTROLLER_H
-#include "gun_bros_re/gameplay/CombatTypes.h"
+#include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include <random>
 
-class IBrotherAIWorld;
+class ZBrotherAIWorld;
 
 class CTargetingController {
 public:
     void Reset();
     void ClearTarget(float facing);
-    bool Update(int deltaMs, float x, float y, float &facing, IBrotherAIWorld &world);
-    CombatId GetTarget() const { return m_target; }
+    bool Update(int deltaMs, float x, float y, float &facing, ZBrotherAIWorld &world);
+    ZCombatId GetTarget() const { return m_target; }
 private:
     int Random(int minimum, int maximum);
     std::mt19937 m_random{0xA170}; // Reproducible host RNG, not the original global RNG sequence.
-    CombatId m_target = 0;
+    ZCombatId m_target = 0;
     int m_findDelay = 0;
     int m_fireDelay = 0;
     float m_aimError = 0;
     float m_desiredAimError = 0;
     float m_lastFacing = 0;
 };
-
 
 unsigned CheckTargetingController();
 

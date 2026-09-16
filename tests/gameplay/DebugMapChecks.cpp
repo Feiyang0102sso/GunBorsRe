@@ -6,19 +6,19 @@
 #include "gameplay/SurvivalStudy.h"
 #include "TestOutput.h"
 #include "gun_bros_re/debug/DebugMaps.h"
-#include "gun_bros_re/gameplay/SurvivalRuntime.h"
-#include "gun_bros_re/gameplay/MapWorldInternal.h"
+#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 
-static int CheckWallWeaponResources(CResTOCManager &toc, PackTables &tables) {
+static int CheckWallWeaponResources(CResTOCManager &toc, ZPackTables &tables) {
     // Enumerate actual gun-to-bullet dependencies; do not infer attributes
     // from weapon category, damage amount, or the projectile's appearance.
-    std::vector<WeaponEntry> weapons;
+    std::vector<ZWeaponEntry> weapons;
     if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
     for (const auto &weapon : weapons) {
         for (const auto &resource : weapon.data.GetScript().GetResources()) {
             if (resource.sectionOrType != 3) { continue; }
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(resource.packHash, GameSection::Bullet, resource.resourceId, bytes)) { return 1; }
+            if (!tables.ReadSectionResource(resource.packHash, ZGameSection::Bullet, resource.resourceId, bytes)) { return 1; }
             CArrayInputStream input(bytes);
             CBullet::Template bullet;
             if (!bullet.Init(input)) { return 1; }
@@ -35,11 +35,11 @@ int RunDebugMapProfileCheck() {
     const std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     CResTOCManager toc;
     if (!toc.Init(big, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     CProfileManager original;
     const std::filesystem::path copiedSave = TestOutput::Path("profile");
-    if (!LoadNativeProfile(toc, tables, original, copiedSave, TestOutput::Fixtures())) { return 1; }
-    std::vector<MissionEntry> missions;
+    if (!LoadProfile(toc, tables, original, copiedSave, TestOutput::Fixtures())) { return 1; }
+    std::vector<ZMissionEntry> missions;
     if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
     for (const auto &mission : missions) {
         if (tables.GetPackName(mission.resource.packHash) != "pack2" || mission.resource.localIndex != 14) { continue; }
@@ -53,7 +53,7 @@ int RunDebugMapProfileCheck() {
         for (unsigned slot = 0; slot < 2; ++slot) {
             CProfileManager preview = original;
             preview.activeWeaponSlot = slot;
-            SurvivalGameContext context{preview, copiedSave / "must-not-exist"};
+            ZSurvivalGameContext context{preview, copiedSave / "must-not-exist"};
             auto launch = MakeDebugMapLaunch(big, selected, context);
             if (launch.gameContext != &context || context.persistProgress ||
                 launch.withBrother != original.brotherEnabled) { return 1; }
@@ -71,8 +71,8 @@ int RunDebugMapProfileCheck() {
     return 1;
 }
 
-int CheckDebugMapProfile(PackTables &tables, const PlayerModel &player,
-    const CPlayerProgress &progress, SurvivalGameContext &context, const CombatScene &scene, const CLevel &level) {
+int CheckDebugMapProfile(ZPackTables &tables, const ZPlayerModel &player,
+    const CPlayerProgress &progress, ZSurvivalGameContext &context, const ZCombatWorld &scene, const CLevel &level) {
     const auto &profile = context.profile;
     const auto &gun = profile.configuration.guns[profile.activeWeaponSlot];
     if (player.gunResource.packHash != gun.packHash || player.gunResource.localIndex != gun.localIndex ||
@@ -82,7 +82,7 @@ int CheckDebugMapProfile(PackTables &tables, const PlayerModel &player,
     for (const auto &ref : profile.configuration.armor) {
         if (ref.IsNull()) { continue; }
         std::vector<std::uint8_t> bytes;
-        if (!tables.ReadSectionResource(ref.packHash, GameSection::Armor, ref.localIndex, bytes)) { return 1; }
+        if (!tables.ReadSectionResource(ref.packHash, ZGameSection::Armor, ref.localIndex, bytes)) { return 1; }
         CArrayInputStream input(bytes);
         CArmor::Template expected;
         if (!expected.Init(input)) { return 1; }
@@ -108,9 +108,9 @@ int RunCampaignContentCheck() {
     const std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     CResTOCManager toc;
     if (!toc.Init(big, "xga") || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
+    ZPackTables tables(toc);
     if (CheckWallWeaponResources(toc, tables) != 0) { return 1; }
-    std::vector<MissionEntry> missions;
+    std::vector<ZMissionEntry> missions;
     if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
     for (const auto &mission : missions) {
         if (tables.GetPackName(mission.data.level.packHash) != "pack2") { continue; }
@@ -120,18 +120,18 @@ int RunCampaignContentCheck() {
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto &pack = *toc.GetPack(packIndex);
         const auto &objects = tables.GetObjectPack(packIndex);
-        for (unsigned index = 0; index < objects.GetObjectCount(GameSection::Level); ++index) {
+        for (unsigned index = 0; index < objects.GetObjectCount(ZGameSection::Level); ++index) {
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(pack.GetPackHash(), GameSection::Level, index, bytes)) { return 1; }
+            if (!tables.ReadSectionResource(pack.GetPackHash(), ZGameSection::Level, index, bytes)) { return 1; }
             CArrayInputStream input(bytes);
             CLevel::Template level;
             if (!level.Init(input) || input.Available() != 0) { return 1; }
             std::printf("[campaign-content] %s LEVEL %u -> MAP %s:%u script=%d\n", pack.GetShortName().c_str(), index,
                 tables.GetPackName(level.mapRef.packHash).c_str(), level.mapRef.localIndex, level.script.IsPresent());
         }
-        for (unsigned index = 0; index < objects.GetObjectCount(GameSection::TileLayer); ++index) {
+        for (unsigned index = 0; index < objects.GetObjectCount(ZGameSection::TileLayer); ++index) {
             std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(pack.GetPackHash(), GameSection::TileLayer, index, bytes)) { return 1; }
+            if (!tables.ReadSectionResource(pack.GetPackHash(), ZGameSection::TileLayer, index, bytes)) { return 1; }
             CArrayInputStream input(bytes);
             CMap map;
             if (!map.Init(input) || input.Available() != 0) { return 1; }
@@ -146,13 +146,13 @@ int RunCampaignContentCheck() {
                 const auto &layer = map.GetObjectLayer(layerIndex);
                 unsigned objectId = 0;
                 for (const auto &object : layer.GetObjects()) {
-                    if (object.objectType == static_cast<unsigned>(PlacedObjectType::Player)) { ++players; }
+                    if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Player)) { ++players; }
                     if (pack.GetShortName() == "pack2" && (index == 0 || index == 2 || index == 4 || index == 5 || index == 6)) {
                         std::printf("[campaign-object] MAP %u layer=%u id=%u type=%u ref=%s:%u xy=%d,%d tag=%u\n",
                             index, layer.GetLayerIndex(), objectId, object.objectType,
                             tables.GetPackName(object.packHash).c_str(), object.localIndex, object.x, object.y, object.spawnTag);
-                        if (object.objectType == static_cast<unsigned>(PlacedObjectType::Prop)) {
-                            if (!tables.ReadSectionResource(object.packHash, GameSection::Prop, object.localIndex, bytes)) { return 1; }
+                        if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Prop)) {
+                            if (!tables.ReadSectionResource(object.packHash, ZGameSection::Prop, object.localIndex, bytes)) { return 1; }
                             CArrayInputStream propInput(bytes);
                             CProp::Template data;
                             if (!data.Init(propInput)) { return 1; }

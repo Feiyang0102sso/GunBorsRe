@@ -15,7 +15,7 @@ const char *const kObjectScriptCountsName = "OBJECT_SCRIPT__COUNTS_";
 CGameObjectPack::CGameObjectPack() = default;
 
 bool CGameObjectPack::Init(CResPackTOC &pack) {
-    m_version = BigVersion::Unknown;
+    m_version = ZBigVersion::Unknown;
     m_sectionBases.clear();
     m_objectCounts.clear();
     m_stringHandles.clear();
@@ -83,7 +83,7 @@ bool CGameObjectPack::Init(CResPackTOC &pack) {
     // Format: uint8 typeCount, then one uint8 per type.
     CArrayInputStream countsStream(payload);
     const std::uint8_t typeCount = countsStream.ReadUInt8();
-    const BigVersionLayout *layout = FindBigVersionLayout(GetSectionCount(), typeCount);
+    const ZBigVersionLayout *layout = FindBigVersionLayout(GetSectionCount(), typeCount);
     if (layout == nullptr || countsStream.Overran() || countsStream.Available() != typeCount) {
         std::printf("[objpack] %s: unsupported or invalid layout sections=%zu types=%u bytes=%zu\n",
                     pack.GetShortName().c_str(), m_sectionBases.size(), typeCount, payload.size());
@@ -102,7 +102,7 @@ bool CGameObjectPack::Init(CResPackTOC &pack) {
     return true;
 }
 
-std::size_t CGameObjectPack::GetSectionIndex(GameSection section) const {
+std::size_t CGameObjectPack::GetSectionIndex(ZGameSection section) const {
     if (!IsInitialised()) { return m_sectionBases.size(); }
     const std::uint32_t number = static_cast<std::uint32_t>(section);
     if (number == 0) { return m_sectionBases.size(); }
@@ -114,7 +114,7 @@ std::size_t CGameObjectPack::GetSectionIndex(GameSection section) const {
     return m_objectCounts.size() + (number - kObjectTypeCount - 1);
 }
 
-std::uint32_t CGameObjectPack::GetSectionBase(GameSection section) const {
+std::uint32_t CGameObjectPack::GetSectionBase(ZGameSection section) const {
     const std::size_t index = GetSectionIndex(section);
     if (index >= m_sectionBases.size()) {
         return 0;
@@ -122,7 +122,7 @@ std::uint32_t CGameObjectPack::GetSectionBase(GameSection section) const {
     return m_sectionBases[index];
 }
 
-std::uint32_t CGameObjectPack::GetSectionSpan(GameSection section) const {
+std::uint32_t CGameObjectPack::GetSectionSpan(ZGameSection section) const {
     const std::size_t index = GetSectionIndex(section);
     if (index + 1 >= m_sectionBases.size()) {
         return 0;
@@ -137,7 +137,7 @@ std::uint32_t CGameObjectPack::GetSectionSpan(GameSection section) const {
     return nextBase - base;
 }
 
-std::uint32_t CGameObjectPack::GetHandle(GameSection section,
+std::uint32_t CGameObjectPack::GetHandle(ZGameSection section,
                                          std::uint32_t localIndex) const {
     const std::uint32_t base = GetSectionBase(section);
     if (base == 0) {
@@ -146,7 +146,7 @@ std::uint32_t CGameObjectPack::GetHandle(GameSection section,
     return base + localIndex;
 }
 
-std::uint32_t CGameObjectPack::GetObjectCount(GameSection section) const {
+std::uint32_t CGameObjectPack::GetObjectCount(ZGameSection section) const {
     // Only the first 28 sections are object types; PNG and beyond are not
     // covered by the counts resource.
     const std::size_t index = GetSectionIndex(section);

@@ -1,31 +1,31 @@
-#include "gun_bros_re/gameplay/SurvivalSession.h"
-#include "gun_bros_re/data/StoreCatalog.h"
+#include "gun_bros_re/gameplay/ZLevelHost.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
-unsigned SurvivalSession::CheckLevelSounds() {
-    if (m_effects == nullptr) { return 1; }
+unsigned CheckLevelSounds(CLevel &level, ZWeaponEffects &effects) {
     unsigned failures = 0, checked = 0;
-    const auto &resources = m_template.script.GetResources();
+    const auto &resources = level.GetTemplate().script.GetResources();
     for (unsigned index = 0; index < resources.size(); ++index) {
-        if (resources[index].sectionOrType != static_cast<unsigned>(GameSection::SoundEffect) - 1) { continue; }
+        if (resources[index].sectionOrType != static_cast<unsigned>(ZGameSection::SoundEffect) - 1) { continue; }
         // Each reference is checked independently. Some authored entries share
         // a WAV, so checking them in one tick would correctly coalesce them.
-        m_effects->BeginAudioFrame();
-        const std::size_t before = m_effects->GetSoundCueCount();
+        effects.BeginAudioFrame();
+        const std::size_t before = effects.GetSoundCueCount();
         const std::int16_t argument = static_cast<std::int16_t>(index);
-        m_level.FunctionResolver(20, &argument, 1);
-        if (m_effects->GetSoundCueCount() != before + 1) { ++failures; }
+        level.FunctionResolver(20, &argument, 1);
+        if (effects.GetSoundCueCount() != before + 1) { ++failures; }
         ++checked;
     }
     std::printf("[level-sound-check] references=%u failures=%u\n", checked, failures);
     return failures;
 }
-unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY, float startFacing) {
+unsigned CheckTriggerRoutes(ZLevelHost &session, CMap &map, ZCombatWorld &scene, float startX, float startY, float startFacing) {
+    CLevel &level = session.GetLevel();
     unsigned failures = 0, tested = 0;
-    for (unsigned layerIndex = 0; layerIndex < m_map.GetCollisionLayerCount(); ++layerIndex) {
-        const auto &layer = m_map.GetCollisionLayer(layerIndex);
-        if (static_cast<int>(layer.GetLayerIndex()) != m_level.GetTriggerLayer()) { continue; }
+    for (unsigned layerIndex = 0; layerIndex < map.GetCollisionLayerCount(); ++layerIndex) {
+        const auto &layer = map.GetCollisionLayer(layerIndex);
+        if (static_cast<int>(layer.GetLayerIndex()) != level.GetTriggerLayer()) { continue; }
         const auto &geometry = layer.GetCollision();
         std::vector<unsigned> groups;
         for (const auto &edge : geometry.GetEdges()) {
@@ -37,18 +37,18 @@ unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY, float s
             if (length == 0) { continue; }
             const float nx = -(b.y - a.y) / length, ny = (b.x - a.x) / length;
             for (int side : {-1, 1}) {
-                Restart(startX, startY, startFacing);
+                session.Restart(startX, startY, startFacing);
                 // Let the original intro complete before supplying movement.
-                for (unsigned tick = 0; tick < 250; ++tick) { Update(16, 0, 0, false); }
-                m_scene.playerX = (a.x + b.x) * 0.5f + nx * 45 * side;
-                m_scene.playerY = (a.y + b.y) * 0.5f + ny * 45 * side;
-                const unsigned before = m_level.GetTriggerCount();
-                for (unsigned tick = 0; tick < 45; ++tick) { Update(16, -nx * side, -ny * side, false); }
-                reached = m_level.GetTriggerCount() > before;
+                for (unsigned tick = 0; tick < 250; ++tick) { session.Update(16, 0, 0, false); }
+                scene.GetPlayer().x = (a.x + b.x) * 0.5f + nx * 45 * side;
+                scene.GetPlayer().y = (a.y + b.y) * 0.5f + ny * 45 * side;
+                const unsigned before = level.GetTriggerCount();
+                for (unsigned tick = 0; tick < 45; ++tick) { session.Update(16, -nx * side, -ny * side, false); }
+                reached = level.GetTriggerCount() > before;
                 if (reached) { break; }
             }
             std::printf("[map-trigger-check] layer=%u group=%u reached=%d position=%.1f,%.1f\n",
-                layer.GetLayerIndex(), edge.group, reached, m_scene.playerX, m_scene.playerY);
+                layer.GetLayerIndex(), edge.group, reached, scene.GetPlayer().x, scene.GetPlayer().y);
             if (reached) { groups.push_back(edge.group); ++tested; }
         }
         std::vector<unsigned> expected;
@@ -57,7 +57,7 @@ unsigned SurvivalSession::CheckTriggerRoutes(float startX, float startY, float s
         }
         if (groups.size() != expected.size()) { ++failures; }
     }
-    Restart(startX, startY, startFacing);
+    session.Restart(startX, startY, startFacing);
     std::printf("[map-trigger-check] groups=%u failures=%u\n", tested, failures);
     return failures;
 }

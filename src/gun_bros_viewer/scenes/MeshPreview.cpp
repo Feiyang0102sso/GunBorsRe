@@ -1,6 +1,7 @@
+#include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
-#include "engine/core/Paths.h"
+#include "engine/core/ZPaths.h"
 /**
  * @file MeshPreview.cpp
  * @brief M3.5 and M3.7 harnesses: the 3D models in Section 31.
@@ -33,24 +34,24 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/PackTables.h"
-#include "gun_bros_re/gameplay/PlayerModel.h"
-#include "gun_bros_re/gameplay/EnemyModel.h"
-#include "gun_bros_re/data/ArmorCatalog.h"
-#include "gun_bros_re/data/WeaponCatalog.h"
-#include "gun_bros_re/data/StoreCatalog.h"
-#include "gun_bros_re/gameplay/CombatGeometry.h"
-#include "gun_bros_re/gameplay/WeaponEffects.h"
+#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/ZWeaponEffects.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/core/CMatrix4d.h"
-#include "engine/graphics/CMeshBuffer.h"
-#include "engine/graphics/CPNG.h"
-#include "engine/graphics/CShaderProgram.h"
-#include "engine/graphics/CTexture.h"
-#include "engine/platform/CWindow.h"
-#include "engine/platform/GLLoader.h"
+#include "engine/core/ZMatrix4d.h"
+#include "engine/graphics/ZMeshBuffer.h"
+#include "engine/graphics/ZPNG.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/graphics/ZTexture.h"
+#include "engine/platform/ZWindow.h"
+#include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
 #include "gun_bros_re/gameplay/CBrother.h"
@@ -176,7 +177,7 @@ void ReportLongTriangles(const CMesh &mesh) {
         return;
     }
 
-    const MeshBounds &bounds = mesh.GetBounds();
+    const ZMeshBounds &bounds = mesh.GetBounds();
     float extent = bounds.maxX - bounds.minX;
     if (bounds.maxY - bounds.minY > extent) {
         extent = bounds.maxY - bounds.minY;
@@ -248,16 +249,16 @@ void SurveyPack(CResPackTOC &pack, MeshSurveyTotals &totals) {
 
     // Section 31 is past the counts resource, so its size is the distance to
     // the next section base.
-    const std::uint32_t span = objectPack.GetSectionSpan(GameSection::Mesh);
+    const std::uint32_t span = objectPack.GetSectionSpan(ZGameSection::Mesh);
     if (span == 0) {
         return;
     }
 
     std::printf("\n%s -- %u handles from 0x%08X\n", pack.GetShortName().c_str(),
-                span, objectPack.GetSectionBase(GameSection::Mesh));
+                span, objectPack.GetSectionBase(ZGameSection::Mesh));
 
     for (std::uint32_t ordinal = 0; ordinal < span; ++ordinal) {
-        const std::uint32_t handle = objectPack.GetHandle(GameSection::Mesh, ordinal);
+        const std::uint32_t handle = objectPack.GetHandle(ZGameSection::Mesh, ordinal);
 
         std::vector<std::uint8_t> payload;
         if (!pack.GetResource(handle, payload)) {
@@ -281,7 +282,7 @@ void SurveyPack(CResPackTOC &pack, MeshSurveyTotals &totals) {
         }
 
         totals.meshes++;
-        const MeshBounds &bounds = mesh.GetBounds();
+        const ZMeshBounds &bounds = mesh.GetBounds();
         std::printf("  %3u  %2zu bones %5u verts %6zu idx %4zu frames %6d ms"
                     "  %6.1f x %6.1f x %6.1f  %s\n",
                     ordinal, mesh.GetBoneNames().size(), mesh.GetVertexCount(),
@@ -321,7 +322,7 @@ namespace MeshPreviewDetail {
 void EmitMoveSet(const CMoveSetMesh &moveSet, const std::string &owner,
                  IMeshPairSink &sink) {
     for (std::size_t i = 0; i < moveSet.GetMeshConfigs().size(); ++i) {
-        const MeshConfig &config = moveSet.GetMeshConfigs()[i];
+        const ZMeshConfig &config = moveSet.GetMeshConfigs()[i];
 
         MeshPair pair;
         // A move set names one pack for both halves of every pair.
@@ -358,7 +359,7 @@ namespace MeshPreviewDetail {
 
 /** Fetch one template resource. Returns false when the section is empty. */
 bool ReadTemplate(CResPackTOC &pack, CGameObjectPack &objectPack,
-                  GameSection section, std::uint32_t ordinal,
+                  ZGameSection section, std::uint32_t ordinal,
                   std::vector<std::uint8_t> &payload) {
     return pack.GetResource(objectPack.GetHandle(section, ordinal), payload);
 }
@@ -367,14 +368,14 @@ bool ReadTemplate(CResPackTOC &pack, CGameObjectPack &objectPack,
 namespace MeshPreviewDetail {
 
 /** Player templates: parsed whole, so their leftover count means something. */
-void WalkPlayers(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkPlayers(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                  IMeshPairSink &sink) {
     CGameObjectPack &objectPack = tables.GetObjectPack(packIndex);
-    const std::uint32_t count = objectPack.GetObjectCount(GameSection::Player);
+    const std::uint32_t count = objectPack.GetObjectCount(ZGameSection::Player);
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
         std::vector<std::uint8_t> payload;
-        if (!ReadTemplate(pack, objectPack, GameSection::Player, ordinal, payload)) {
+        if (!ReadTemplate(pack, objectPack, ZGameSection::Player, ordinal, payload)) {
             continue;
         }
 
@@ -406,14 +407,14 @@ namespace MeshPreviewDetail {
  * port: that class stays unwritten until its own milestone.
  */
 // The historical partial-reader notes above are superseded by ReadEnemyTemplate.
-void WalkEnemies(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkEnemies(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                  IMeshPairSink &sink) {
     CGameObjectPack &objectPack = tables.GetObjectPack(packIndex);
-    const std::uint32_t count = objectPack.GetObjectCount(GameSection::Enemy);
+    const std::uint32_t count = objectPack.GetObjectCount(ZGameSection::Enemy);
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
         const std::string owner = OwnerLabel(pack, "enemy", ordinal);
-        EnemyTemplateData entry;
+        ZEnemyTemplateData entry;
         if (!ReadEnemyTemplate(tables, pack.GetPackHash(), ordinal, owner, entry)) {
             sink.OnTemplateFailed(owner);
             continue;
@@ -426,14 +427,14 @@ void WalkEnemies(CResPackTOC &pack, PackTables &tables, int packIndex,
 namespace MeshPreviewDetail {
 
 /** Gun templates: a move set at the end, plus the weapon's own model. */
-void WalkGuns(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkGuns(CResPackTOC &pack, ZPackTables &tables, int packIndex,
               IMeshPairSink &sink) {
     CGameObjectPack &objectPack = tables.GetObjectPack(packIndex);
-    const std::uint32_t count = objectPack.GetObjectCount(GameSection::Gun);
+    const std::uint32_t count = objectPack.GetObjectCount(ZGameSection::Gun);
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
         std::vector<std::uint8_t> payload;
-        if (!ReadTemplate(pack, objectPack, GameSection::Gun, ordinal, payload)) {
+        if (!ReadTemplate(pack, objectPack, ZGameSection::Gun, ordinal, payload)) {
             continue;
         }
 
@@ -457,14 +458,14 @@ void WalkGuns(CResPackTOC &pack, PackTables &tables, int packIndex,
 namespace MeshPreviewDetail {
 
 /** Bullet templates: a pair of asset refs, and most name neither. */
-void WalkBullets(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkBullets(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                  IMeshPairSink &sink) {
     CGameObjectPack &objectPack = tables.GetObjectPack(packIndex);
-    const std::uint32_t count = objectPack.GetObjectCount(GameSection::Bullet);
+    const std::uint32_t count = objectPack.GetObjectCount(ZGameSection::Bullet);
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
         std::vector<std::uint8_t> payload;
-        if (!ReadTemplate(pack, objectPack, GameSection::Bullet, ordinal, payload)) {
+        if (!ReadTemplate(pack, objectPack, ZGameSection::Bullet, ordinal, payload)) {
             continue;
         }
 
@@ -489,14 +490,14 @@ void WalkBullets(CResPackTOC &pack, PackTables &tables, int packIndex,
 namespace MeshPreviewDetail {
 
 /** Armour templates: one model per brother, either of which may be absent. */
-void WalkArmor(CResPackTOC &pack, PackTables &tables, int packIndex,
+void WalkArmor(CResPackTOC &pack, ZPackTables &tables, int packIndex,
                IMeshPairSink &sink) {
     CGameObjectPack &objectPack = tables.GetObjectPack(packIndex);
-    const std::uint32_t count = objectPack.GetObjectCount(GameSection::Armor);
+    const std::uint32_t count = objectPack.GetObjectCount(ZGameSection::Armor);
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
         std::vector<std::uint8_t> payload;
-        if (!ReadTemplate(pack, objectPack, GameSection::Armor, ordinal, payload)) {
+        if (!ReadTemplate(pack, objectPack, ZGameSection::Armor, ordinal, payload)) {
             continue;
         }
 
@@ -534,7 +535,7 @@ namespace MeshPreviewDetail {
  * CMoveSetMesh::LoadMesh (:123157) and three GetResId(0x1E, ...) call sites
  * are the whole list.
  */
-void WalkMeshPairs(CResTOCManager &tocManager, PackTables &tables,
+void WalkMeshPairs(CResTOCManager &tocManager, ZPackTables &tables,
                    IMeshPairSink &sink) {
     for (std::uint32_t i = 0; i < tocManager.GetPackCount(); ++i) {
         CResPackTOC *pack = tocManager.GetPack(static_cast<int>(i));
@@ -578,25 +579,25 @@ namespace MeshPreviewDetail {
  * The last column is section 31's size; the rest are the template types that
  * point into it.
  */
-void PrintTemplateCounts(CResTOCManager &tocManager, PackTables &tables) {
+void PrintTemplateCounts(CResTOCManager &tocManager, ZPackTables &tables) {
     std::printf("\n%-12s %8s %8s %6s %8s %8s %8s\n", "pack", "players",
                 "enemies", "guns", "bullets", "armour", "meshes");
     for (std::uint32_t i = 0; i < tocManager.GetPackCount(); ++i) {
         CResPackTOC *pack = tocManager.GetPack(static_cast<int>(i));
         CGameObjectPack &objectPack = tables.GetObjectPack(static_cast<int>(i));
 
-        const std::uint32_t meshes = objectPack.GetSectionSpan(GameSection::Mesh);
+        const std::uint32_t meshes = objectPack.GetSectionSpan(ZGameSection::Mesh);
         if (meshes == 0) {
             continue;
         }
 
         std::printf("%-12s %8u %8u %6u %8u %8u %8u\n",
                     pack->GetShortName().c_str(),
-                    objectPack.GetObjectCount(GameSection::Player),
-                    objectPack.GetObjectCount(GameSection::Enemy),
-                    objectPack.GetObjectCount(GameSection::Gun),
-                    objectPack.GetObjectCount(GameSection::Bullet),
-                    objectPack.GetObjectCount(GameSection::Armor), meshes);
+                    objectPack.GetObjectCount(ZGameSection::Player),
+                    objectPack.GetObjectCount(ZGameSection::Enemy),
+                    objectPack.GetObjectCount(ZGameSection::Gun),
+                    objectPack.GetObjectCount(ZGameSection::Bullet),
+                    objectPack.GetObjectCount(ZGameSection::Armor), meshes);
     }
 }
 }
@@ -641,7 +642,7 @@ namespace MeshPreviewDetail {
  * last contents if the evaluator has nothing -- better a held pose than a
  * model that blinks out.
  */
-void UploadPose(LoadedModel &model, CMeshBuffer &buffer,
+void UploadPose(LoadedModel &model, ZMeshBuffer &buffer,
                 std::uint32_t stillFrameIndex) {
     if (model.rawAnimation.Evaluate(model.pose)) {
         buffer.SetVertices(model.pose);
@@ -677,7 +678,7 @@ void ReportMove(const CatalogEntry &entry, const LoadedModel &model) {
     }
 
     const std::int32_t moveIndex = model.moves[model.moveSlot];
-    const MeshMove &move = entry.moveSet.GetMoves()[moveIndex];
+    const ZMeshMove &move = entry.moveSet.GetMoves()[moveIndex];
     std::printf("[mesh] move %d (%zu of %zu for this mesh) -- frames %u..%u, "
                 "%d ms, speed %.2f%s\n",
                 moveIndex, model.moveSlot + 1, model.moves.size(),
@@ -690,14 +691,14 @@ void ReportMove(const CatalogEntry &entry, const LoadedModel &model) {
 namespace MeshPreviewDetail {
 
 /** Fetch and decode one catalogue entry. */
-bool LoadModel(PackTables &tables, const CatalogEntry &entry, LoadedModel &out) {
+bool LoadModel(ZPackTables &tables, const CatalogEntry &entry, LoadedModel &out) {
     if (entry.imageOrdinal == UINT32_MAX) {
         std::vector<std::uint8_t> payload;
-        if (!tables.ReadSectionResource(entry.meshPackHash, GameSection::Mesh, entry.meshOrdinal, payload)) { return false; }
+        if (!tables.ReadSectionResource(entry.meshPackHash, ZGameSection::Mesh, entry.meshOrdinal, payload)) { return false; }
         CArrayInputStream stream(payload);
         if (!out.mesh.Init(stream)) { return false; }
         // Neutral inspection material; explicitly labeled as untextured, not a game asset.
-        PNGImage neutral;
+        ZPNGImage neutral;
         neutral.width = 1;
         neutral.height = 1;
         neutral.pixels.assign(4, 255);
@@ -731,7 +732,7 @@ namespace MeshPreviewDetail {
  * instead translates to a world position and scales by whatever the caller
  * passes.
  */
-void BuildModelViewProjection(const MeshBounds &bounds, const Turntable &view,
+void BuildModelViewProjection(const ZMeshBounds &bounds, const Turntable &view,
                               int drawableWidth, int drawableHeight, float *out) {
     float centre[kMatrix4dElements];
     Matrix4dTranslation(-bounds.centerX, -bounds.centerY, -bounds.centerZ, centre);
@@ -773,8 +774,8 @@ void BuildModelViewProjection(const MeshBounds &bounds, const Turntable &view,
 namespace MeshPreviewDetail {
 
 /** Assemble the player, with one of the catalogue's guns in his hand. */
-bool BuildViewerCharacter(PackTables &tables, const CharacterSink &catalog,
-                          std::size_t gunSlot, PlayerModel &out) {
+bool BuildViewerCharacter(ZPackTables &tables, const CharacterSink &catalog,
+                          std::size_t gunSlot, ZPlayerModel &out) {
     if (!BuildPlayerBody(tables, catalog.GetPlayerMoveSet(), out)) {
         return false;
     }
@@ -819,7 +820,7 @@ int RunMoveSetSurvey(const std::string &bigDirectory) {
 
     std::printf("\n=== Mesh: move sets, mesh to atlas ===\n");
 
-    PackTables tables(tocManager);
+    ZPackTables tables(tocManager);
     ReportingSink sink(tables);
     WalkMeshPairs(tocManager, tables, sink);
 
@@ -842,7 +843,7 @@ int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         return 1;
     }
 
-    PackTables tables(tocManager);
+    ZPackTables tables(tocManager);
     CatalogSink catalog;
     WalkMeshPairs(tocManager, tables, catalog);
     catalog.AddRawMeshes(tocManager, tables);
@@ -858,20 +859,19 @@ int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         std::printf("[mesh] index out of range\n"); return 1;
     }
 
-    CWindow window;
+    ZWindow window;
     if (!OpenViewerWindow(window, "Mesh")) {
         return 1;
     }
     ViewerControls controls(window, meshview::Bindings);
     if (!controls.Init()) { return 1; }
 
-
-    CShaderProgram program;
+    ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
         return 1;
     }
 
-    CMeshBuffer buffer;
+    ZMeshBuffer buffer;
     if (!buffer.Create(program)) {
         return 1;
     }
@@ -920,7 +920,7 @@ int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         // --- walking the catalogue ---
         const std::size_t previousSlot = slot;
         bool frameChanged = false;
-        for (KeyCode key = controls.TakeKeyPress(); key != KeyCode::None;
+        for (ZKeyCode key = controls.TakeKeyPress(); key != ZKeyCode::None;
              key = controls.TakeKeyPress()) {
             const std::size_t count = catalog.GetEntries().size();
             if (controls.IsPressed(key, ViewerAction::Next)) {
@@ -1051,7 +1051,7 @@ int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
             reportedFirstFrame = true;
 
             if (!screenshotPath.empty()) {
-                if (!GB_SAVE_FRAME(window, screenshotPath)) {
+                if (!Capture::SaveFrame(window, screenshotPath)) {
                     return 1;
                 }
                 window.Present();
@@ -1069,11 +1069,11 @@ int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
 int RunWeaponSurvey(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
-    PackTables tables(toc);
-    std::vector<WeaponEntry> weapons;
+    ZPackTables tables(toc);
+    std::vector<ZWeaponEntry> weapons;
     if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
     for (std::size_t i = 0; i < weapons.size(); ++i) {
-        const WeaponEntry &entry = weapons[i];
+        const ZWeaponEntry &entry = weapons[i];
         CGun gun;
         gun.Bind(entry.data, nullptr);
         gun.OnEquip();
@@ -1084,12 +1084,12 @@ int RunWeaponSurvey(const std::string &bigDirectory) {
         std::printf("\n");
         if (entry.data.GetBulletRef().IsNull()) {
             std::printf("  default bullet: null; script resources:");
-            for (const ScriptResourceRef &ref : entry.data.GetScript().GetResources()) {
+            for (const ZScriptResourceRef &ref : entry.data.GetScript().GetResources()) {
                 std::printf(" %08x:%u:%u", ref.packHash, ref.sectionOrType, ref.resourceId);
             }
             std::printf("\n");
         }
-        for (const MeshConfig &config : entry.data.GetMoveSet().GetMeshConfigs()) {
+        for (const ZMeshConfig &config : entry.data.GetMoveSet().GetMeshConfigs()) {
             std::printf("  config mesh=%u atlas=%u pack=%08x\n", config.meshOrdinal,
                 config.imageOrdinal, entry.data.GetMoveSet().GetPackHash());
         }
@@ -1097,4 +1097,3 @@ int RunWeaponSurvey(const std::string &bigDirectory) {
     std::printf("[weapons] %zu templates parsed\n", weapons.size());
     return 0;
 }
-

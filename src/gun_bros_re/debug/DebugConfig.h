@@ -1,6 +1,6 @@
 #pragma once
 /** Editable host diagnostics. Positions use the game's 1024 x 768 canvas; line widths use screen pixels. */
-#include "engine/platform/CWindow.h"
+#include "engine/platform/ZWindow.h"
 
 namespace DebugConfig {
 // RGBA channels are 0..1; alpha=1 is opaque. Example: {1, 1, 0, 1} is yellow.
@@ -43,8 +43,6 @@ inline constexpr LineStyle Brother{2, {0.2f, 1, 0.35f, 1}};
 inline constexpr LineStyle Enemy{2, {1, 0.2f, 0.3f, 1}};
 inline constexpr LineStyle Projectile{2, {0.85f, 0.25f, 1, 1}};
 inline constexpr LineStyle Disabled{1, {0.55f, 0.55f, 0.55f, 1}};
-
-
 
 // Desktop-only map browser: these are host layout values, never resource data.
 namespace Maps {

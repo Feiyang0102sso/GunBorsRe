@@ -2,11 +2,11 @@
 /** Viewer controls for the authored Haven turret and its separate indicator. */
 #include <vector>
 class CEnemy;
-namespace MapDetail { struct LoadedMap; struct PlacedProp; }
+namespace MapDetail { struct ZLoadedMap; struct ZPlacedProp; }
 
 class MapTurretPreview {
 public:
-    void Bind(MapDetail::LoadedMap &map);
+    void Bind(MapDetail::ZLoadedMap &map);
     void Cycle();
     void Update(int deltaMs);
     const char *StateName() const;
@@ -16,5 +16,5 @@ private:
     void ApplyState();
     unsigned m_state = 0;
     std::vector<CEnemy *> m_enemies;
-    std::vector<MapDetail::PlacedProp *> m_indicators;
+    std::vector<MapDetail::ZPlacedProp *> m_indicators;
 };

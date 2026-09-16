@@ -1,15 +1,15 @@
 #pragma once
-#include "engine/platform/CWindow.h"
-class MovieRenderer;
-class CombatScene;
-class WeaponEffects;
-struct SurvivalHudState;
-struct PlayerModel;
+#include "engine/platform/ZWindow.h"
+class ZMovieRenderer;
+class ZCombatWorld;
+class ZWeaponEffects;
+struct ZInputPadState;
+struct ZPlayerModel;
 
 /** The game owns its state; this module owns diagnostic labels, layout and toggles. */
-bool HandleDebugKey(KeyCode key, const CWindow &window, bool &showCollisions);
-void DrawSurvivalDebugInfo(MovieRenderer &movies, const SurvivalHudState &state);
-void DrawTutorialDebugNotice(MovieRenderer &movies, std::uint64_t ticks);
-void PopulateDebugBuffs(SurvivalHudState &state, const PlayerModel &player);
-void PopulateSurvivalDebugInfo(SurvivalHudState &state, const CombatScene &scene,
-    const WeaponEffects &effects, const std::string &pack, unsigned map, bool collisions);
+bool HandleDebugKey(ZKeyCode key, const ZWindow &window, bool &showCollisions);
+void DrawSurvivalDebugInfo(ZMovieRenderer &movies, const ZInputPadState &state);
+void DrawTutorialDebugNotice(ZMovieRenderer &movies, std::uint64_t ticks);
+void PopulateDebugBuffs(ZInputPadState &state, const ZPlayerModel &player);
+void PopulateSurvivalDebugInfo(ZInputPadState &state, const ZCombatWorld &scene,
+    const ZWeaponEffects &effects, const std::string &pack, unsigned map, bool collisions);

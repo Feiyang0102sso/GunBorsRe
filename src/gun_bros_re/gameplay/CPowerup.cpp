@@ -17,7 +17,7 @@ bool CPowerup::Template::Init(CArrayInputStream &stream) {
     return !stream.Overran();
 }
 
-void CPowerup::Bind(const Template &data, const PowerupStatus &status) {
+void CPowerup::Bind(const Template &data, const ZPowerupStatus &status) {
     m_template = &data;
     m_status = status;
     m_actions.clear();
@@ -70,7 +70,7 @@ std::int16_t CPowerup::FunctionResolver(std::uint8_t function,
     }
     if (function == 29) { return m_status.turret; }
     if (function > 29) { ++m_unsupported; std::printf("[powerup] unsupported native=%u\n", function); return 0; }
-    PowerupAction action;
+    ZPowerupAction action;
     action.function = function;
     action.count = count;
     for (unsigned index = 0; index < count; ++index) { action.arguments[index] = arguments[index]; }
@@ -87,8 +87,8 @@ std::int16_t CPowerup::FunctionResolver(std::uint8_t function,
     return 0;
 }
 
-std::vector<PowerupAction> CPowerup::TakeActions() {
-    std::vector<PowerupAction> actions;
+std::vector<ZPowerupAction> CPowerup::TakeActions() {
+    std::vector<ZPowerupAction> actions;
     actions.swap(m_actions);
     return actions;
 }

@@ -24,9 +24,9 @@ class CScriptInterpreter;
 /** A call statement. No state; the class exists to group the two halves. */
 struct CScriptFunction {
     /** @return false always -- a call never ends the block it is in. */
-    static bool Execute(CScriptInterpreter &interpreter, ScriptCursor &cursor);
+    static bool Execute(CScriptInterpreter &interpreter, ZScriptCursor &cursor);
 
-    static void Skip(ScriptCursor &cursor);
+    static void Skip(ZScriptCursor &cursor);
 };
 
 #endif  // GUN_BROS_RE_GLU_SCRIPT_CSCRIPTFUNCTION_H
