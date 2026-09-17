@@ -1,5 +1,6 @@
+#include "gun_bros_re/effects/CParticleSystem.h"
 #pragma once
-#include "gun_bros_re/gameplay/CParticleEffectPlayer.h"
+#include "gun_bros_re/effects/CParticleEffectPlayer.h"
 /** Desktop resource caches and placed-object storage shared by game and viewer.
  * Original CMap, CProp and CParticleEffect still own their parsed data/behavior.
  * Declare storage before consumers so referenced templates outlive their actors.
@@ -9,12 +10,12 @@
 #include "engine/glu/sprite/CSpriteIterator.h"
 #include "engine/glu/sprite/CSpritePlayer.h"
 #include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/CProp.h"
 #include "gun_bros_re/gameplay/TileSet.h"
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
 #include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include <array>
 #include <map>
@@ -300,7 +301,7 @@ struct ZLoadedMap {
     // CMap's transient effect pool, allocated with 200 slots (:91849).
     std::shared_ptr<CParticlePool> particlePool = std::make_shared<CParticlePool>(200);
     // CMap's CParticleSystem is a separate pool (:133966), used by pickups.
-    std::shared_ptr<CParticlePool> particleSystemPool = std::make_shared<CParticlePool>(200);
+    std::shared_ptr<CParticleSystem> particleSystem = std::make_shared<CParticleSystem>();
 };
 
 }

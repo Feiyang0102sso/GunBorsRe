@@ -1,6 +1,30 @@
 # 源码文件名映射
 
-日期：2026-09-16。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+日期：2026-09-17。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+
+共享特效现统一位于 `gun_bros_re/effects/`，共 28 个源码文件，供 UI 与战斗共同使用。原 `gameplay/` 下同名文件不保留转发头；类名、池与持有关系保持不变。范围与验证见 [目录归并记录](effects-directory-migration.md)。下方历史批次中的旧路径按此迁移定位。
+
+## 夜间特效组合层迁移
+
+`gun_bros_re/gameplay/ZWeaponEffects.h/.cpp` 已删除。下表按职责给出当前文件，不是旧类到一个新类的改名映射；原版依据与验证见 [夜间交接](weapon-effects-night-migration.md)。
+
+| 原职责／状态 | 当前文件或持有者 |
+|---|---|
+| `ZShot`、弹体 Flow 与状态 | `gun_bros_re/gameplay/CBullet.h/.cpp`；移动／碰撞在 `CBulletProjectile.cpp`，呈现在 `CBulletDrawing.cpp`，附属效果在 `CBulletEffects.cpp` |
+| 弹体实例、事件分发与帧调度 | `gun_bros_re/gameplay/level/CLevelEffects.cpp`，实现已有 `CLevel`；没有内部组合 Impl |
+| 粒子模板、粒子、播放器和共享池 | `gun_bros_re/effects/CParticleEffect.*`、`CParticle.*`、`CParticleEffectPlayer.*`、`CParticlePool.*` |
+| 地图临时粒子、20 效果槽与独立池 | `gun_bros_re/effects/CParticleSystem.*` |
+| 原独立效果层的粒子槽 | `gun_bros_re/effects/CEffectLayer.*`，本次只恢复粒子分支 |
+| 四槽附属效果、粒子／带状拖尾、电弧 | `gun_bros_re/effects/EffectHolder.h`、`EffectContainer.*`、`ParticleEffectHolder.*`、`TrailEffectHolder.*`、`CRibbonTrailEffect.*`、`CLightningArc.*` |
+| 强化的六个播放器及共享池 | `gun_bros_re/gameplay/brother/CBrotherParticles.cpp`，状态归 `CBrother::PowerupParticles`；保留 `CBrotherPowerups.cpp` |
+| UI、Powerup 屏幕粒子 | `ui/ZMenuSurface.cpp`、`gameplay/powerup/CPowerupPresentation.cpp` 直接持有共享 `CParticleEffectPlayer` |
+| Sprite 展开与纹理缓存 | `engine/glu/sprite/ZSpriteRenderer.*`，复用 `CSpriteIterator` |
+| Windows 投影与颜色纹理 | `engine/graphics/ZEffectProjection.h`、`gun_bros_re/effects/ZEffectColors.*` |
+| BIG 粒子／弹体缓存 | `gun_bros_re/effects/ZParticleResources.*`、`gun_bros_re/gameplay/ZBulletResources.*` |
+| Windows 声音合并、去重、播放时钟 | `gun_bros_re/gameplay/ZCombatAudio.*`；原 native 事件仍由各原类产生 |
+| 跨绘制与碰撞的宿主值类型 | `gun_bros_re/gameplay/ZProjectileTypes.h`、`ZProjectileGeometry.h`；拖尾参数位于 `gun_bros_re/effects/ZBulletEffectSettings.h` |
+
+## 既有迁移记录
 
 Brother 核心目录：`CBrother.h/.cpp`、`CBrotherPowerups.cpp`、`CPlayer.h/.cpp`、`ZPlayerModel.h/.cpp`、`CBrotherAI.h/.cpp`、`ZLocalCoopBot.h/.cpp`、`ZDeathmatchBot.h/.cpp` 共 13 个文件统一位于 `gun_bros_re/gameplay/brother/`。保留 `CBrotherPowerups.cpp` 的独立文件；数据、关卡与共享战斗模块不随之移动。
 

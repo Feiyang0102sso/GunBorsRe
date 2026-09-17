@@ -24,7 +24,6 @@ int CheckArena(ArenaScene &ready) {
     const auto &playerData = ready.playerData;
     auto &player = ready.player;
     auto &vitals = ready.vitals;
-    auto &effects = ready.effects;
     auto &scene = ready.scene;
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("arena-check.csv"));
@@ -40,7 +39,7 @@ int CheckArena(ArenaScene &ready) {
     for (const auto &grenade : grenades) {
         scene.Reset();
         scene.Update(kStepMs, 0, 0, false);
-        const auto shotsBefore = effects.GetShotCount();
+        const auto shotsBefore = scene.GetShotCount();
         const bool requested = ThrowArenaGrenade(player.weapon->brother, grenade);
         const bool replacedPending = ThrowArenaGrenade(player.weapon->brother, grenades[0]);
         unsigned thrown = 0;
@@ -48,7 +47,7 @@ int CheckArena(ArenaScene &ready) {
             scene.Update(kStepMs, 0, 0, false);
             thrown += player.weapon->brother.TakeThrownGrenades(0);
         }
-        const auto shots = effects.GetShotCount() - shotsBefore;
+        const auto shots = scene.GetShotCount() - shotsBefore;
         std::printf("[arena-check] grenade=%s requested=%d thrown=%u shots=%zu\n",
             grenade.name.c_str(), requested, thrown, shots);
         if (!requested || replacedPending || thrown != 1 || shots == 0) { ++failures; }
@@ -93,7 +92,7 @@ int CheckArena(ArenaScene &ready) {
         const int allegiance = actor->model.enemy.combat.variables[16];
         const int targetType = actor->model.enemy.combat.targetType;
         const unsigned parts = actor->model.enemy.GetPartCount();
-        const std::size_t beforeShots = effects.GetShotCount();
+        const std::size_t beforeShots = scene.GetShotCount();
         if (catalog[i].script.IsPresent()) { ++scripted; } else { ++unused; }
         // Far, near and moving targets cover attack range entry and departure.
         for (int tick = 0; tick < 500; ++tick) {
@@ -147,11 +146,11 @@ int CheckArena(ArenaScene &ready) {
         }
         report << i << ',' << catalog[i].owner << ',' << catalog[i].script.IsPresent() << ','
             << initialHealth << ',' << allegiance << ',' << targetType << ',' << parts << ','
-            << effects.GetShotCount() - beforeShots << ',' << travel << ',' << hitCount << ','
+            << scene.GetShotCount() - beforeShots << ',' << travel << ',' << hitCount << ','
             << unknown << ',' << deathCount << ',' << vitals.incomingDamage << ',' << deferred << '\n';
         std::printf("[arena-check] %zu %s hp=%.0f team=%d target=%d shots=%zu unknown=%zu\n",
             i, catalog[i].owner.c_str(), initialHealth, allegiance, targetType,
-            effects.GetShotCount() - beforeShots, unknown);
+            scene.GetShotCount() - beforeShots, unknown);
     }
     // Contracts use a real ordinary enemy and a real pistol projectile.
     scene.Reset();
@@ -166,18 +165,18 @@ int CheckArena(ArenaScene &ready) {
     float matrix[16];
     scene.PlayerMatrix(matrix);
     // A segment crosses the complete target in one update.
-    effects.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, kPlayerCombatId, 0);
-    effects.Update(player, matrix, 0, 16);
+    scene.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, kPlayerCombatId, 0);
+    scene.Update(player, matrix, 0, 16);
     if (enemy.combat.health >= 10000 || enemy.combat.hitCount != 1) {
         std::printf("[arena-check] FAIL swept projectile\n"); ++failures;
     }
     const float afterHit = enemy.combat.health;
-    effects.SpawnProjectile(bullet, 100, 700, 0, -90, 45000, kPlayerCombatId, 0);
-    effects.Update(player, matrix, 0, 16);
+    scene.SpawnProjectile(bullet, 100, 700, 0, -90, 45000, kPlayerCombatId, 0);
+    scene.Update(player, matrix, 0, 16);
     if (enemy.combat.health != afterHit) { std::printf("[arena-check] FAIL miss\n"); ++failures; }
     enemy.combat.variables[16] = 1;
-    effects.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, kPlayerCombatId, 0);
-    effects.Update(player, matrix, 0, 16);
+    scene.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, kPlayerCombatId, 0);
+    scene.Update(player, matrix, 0, 16);
     if (enemy.combat.health != afterHit) { std::printf("[arena-check] FAIL friendly fire\n"); ++failures; }
     // Invincibility logs incoming damage. Equipment must preserve health.
     vitals.Reset();
@@ -194,7 +193,7 @@ int CheckArena(ArenaScene &ready) {
     player.weapon->brother.ReceiveDamage(99);
     if (!vitals.dead || vitals.deaths != 1) { ++failures; }
     scene.Reset();
-    if (vitals.health != vitals.maximum || vitals.dead || effects.GetBulletCount() != 0 || scene.AliveCount() != 0) { ++failures; }
+    if (vitals.health != vitals.maximum || vitals.dead || scene.GetBulletCount() != 0 || scene.AliveCount() != 0) { ++failures; }
     ZCombatEnemy *first = scene.Spawn(0, 300, 300);
     ZCombatEnemy *second = scene.Spawn(0, 900, 300);
     if (first == nullptr || second == nullptr) { ++failures; }
@@ -228,14 +227,14 @@ int CheckArena(ArenaScene &ready) {
     else {
         const ZCombatId ally = first->model.enemy.combat.id;
         const ZCombatId hostile = second->model.enemy.combat.id;
-        const std::size_t shots = effects.GetShotCount();
+        const std::size_t shots = scene.GetShotCount();
         bool selectedHostile = false;
         for (int tick = 0; tick < 300; ++tick) {
             scene.Update(16, 0, 0, false);
             ZCombatEnemy *turret = scene.Find(ally);
             if (turret != nullptr && turret->model.enemy.combat.targetId == hostile) { selectedHostile = true; }
         }
-        if (!selectedHostile || effects.GetShotCount() == shots) {
+        if (!selectedHostile || scene.GetShotCount() == shots) {
             std::printf("[arena-check] FAIL friendly targeting\n"); ++failures;
         }
     }
@@ -255,7 +254,7 @@ int CheckArena(ArenaScene &ready) {
         actor->model.enemy.combat.maxHealth = 10000;
         actor->model.enemy.GetPart(0).radius = 130;
         actor->model.enemy.combat.behaviour = 7;
-        const std::size_t initialShots = effects.GetShotCount();
+        const std::size_t initialShots = scene.GetShotCount();
         scene.PlayerMatrix(matrix);
         SetPlayerInput(player, false, true);
         for (int time = 0; time < 3000; time += 16) {
@@ -274,9 +273,9 @@ int CheckArena(ArenaScene &ready) {
             }
         }
         const float dealt = 10000 - actor->model.enemy.combat.health;
-        weaponReport << i << ',' << weapons[i].name << ',' << effects.GetShotCount() - initialShots << ','
+        weaponReport << i << ',' << weapons[i].name << ',' << scene.GetShotCount() - initialShots << ','
             << dealt << ',' << scene.GetSpawnCount() << ',' << weapons[i].visualOnly << '\n';
-        if (!weapons[i].visualOnly && effects.GetShotCount() == initialShots) {
+        if (!weapons[i].visualOnly && scene.GetShotCount() == initialShots) {
             std::printf("[arena-check] FAIL weapon %zu did not fire\n", i); ++failures;
         }
         if (!weapons[i].visualOnly && dealt <= 0) {
@@ -298,8 +297,8 @@ int CheckArena(ArenaScene &ready) {
             player.weapon->gun.SetShooting(true);
             player.weapon->gun.TakeCues();
             scene.PlayerMatrix(matrix);
-            effects.SpawnProjectile(weapons[firstBeam].data.GetBulletRef(), 600, 600, 0, -90, 1, kPlayerCombatId, 0);
-            for (int time = 0; time < 960; time += steps[run]) { effects.Update(player, matrix, 0, steps[run]); }
+            scene.SpawnProjectile(weapons[firstBeam].data.GetBulletRef(), 600, 600, 0, -90, 1, kPlayerCombatId, 0);
+            for (int time = 0; time < 960; time += steps[run]) { scene.Update(player, matrix, 0, steps[run]); }
             damage[run] = 10000 - actor->model.enemy.combat.health;
         }
         std::printf("[arena-check] beam %zu at 8/16/32 ms: %.3f %.3f %.3f\n", firstBeam, damage[0], damage[1], damage[2]);
@@ -390,6 +389,21 @@ int CheckArena(ArenaScene &ready) {
     actor = scene.Spawn(0, 600, 300);
     if (actor == nullptr) { return 1; }
     CEnemy &scaledEnemy = actor->model.enemy;
+    // The six-argument call is used by pack10 ENEMY Flow @0x97 (physical 13).
+    // Optional values must survive the native boundary; a short call must not
+    // inherit them from a previous invocation or synthesize an invalid effect.
+    scaledEnemy.TakeActions();
+    const std::int16_t linkedParticle[] = {2, -1, 4, 5, 0, 128};
+    scaledEnemy.FunctionResolver(31, linkedParticle, 6);
+    auto linkedActions = scaledEnemy.TakeActions();
+    if (linkedActions.size() != 1 || linkedActions[0].effectGroup != 5 ||
+        linkedActions[0].alignEffect || linkedActions[0].effectScale != 0.5f) { ++failures; }
+    scaledEnemy.FunctionResolver(31, linkedParticle, 3);
+    linkedActions = scaledEnemy.TakeActions();
+    if (linkedActions.size() != 1 || linkedActions[0].effectGroup != 3 ||
+        !linkedActions[0].alignEffect || linkedActions[0].effectScale != 1) { ++failures; }
+    scaledEnemy.FunctionResolver(31, linkedParticle, 2);
+    if (!scaledEnemy.TakeActions().empty()) { ++failures; }
     const float scaledHealth = scaledEnemy.combat.health;
     const int scriptHealth = scaledEnemy.FunctionResolver(51, nullptr, 0);
     scaledEnemy.combat.variables[0] = 100;

@@ -26,7 +26,7 @@ int CheckSurvivalLevelSounds(SurvivalLevelSoundsFixture fixture) {
     auto & check = fixture.check;
     auto & session = fixture.session;
 
-    if (check) { checkFailures += CheckLevelSounds(session.GetLevel(), fixture.effects); }
+    if (check) { checkFailures += CheckLevelSounds(session.GetLevel(), fixture.scene); }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
 }
 

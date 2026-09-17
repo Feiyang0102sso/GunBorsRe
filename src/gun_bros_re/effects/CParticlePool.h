@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/CParticle.h"
+#include "gun_bros_re/effects/CParticle.h"
 
 /** Fixed storage shared by effect players; source Allocate :92882.
  * The original free-stack cursor starts at count - 1 and zero means empty.
@@ -11,6 +11,7 @@ public:
     struct Particle : CParticle {
         std::size_t emitterIndex = 0;
         float z = 0;
+        int zOrderGroup = 3;
     };
     explicit CParticlePool(std::size_t count);
     std::size_t Acquire();

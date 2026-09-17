@@ -122,7 +122,7 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
         float x = scene.GetPlayer().x;
         if (winner == 1) { x = bot.x; }
         if (!pickups.Spawn(crate, x, startY, -900)) { return 1; }
-        pickups.Update(16, scene, fixture.effects);
+        pickups.Update(16, scene);
         unsigned awards = 0;
         for (const auto &collection : pickups.collections) {
             if (collection.objectId == -900) {
@@ -131,7 +131,7 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
             }
         }
         if (awards != 1) { return 1; }
-        pickups.Update(16, scene, fixture.effects);
+        pickups.Update(16, scene);
         for (const auto &collection : pickups.collections) { if (collection.objectId == -900) { return 1; } }
     }
     bot.x = botX; bot.y = botY;
@@ -205,14 +205,14 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
     session.Restart(startX, startY, 0);
     if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
     vitals.invincible = false; bot.vitals.invincible = true;
-    const auto shots = fixture.effects.GetShotCount();
+    const auto shots = fixture.scene.GetShotCount();
     unsigned matchTime = 0;
     for (; matchTime < 600000 && !session.IsFinished(); matchTime += 16) {
         session.Update(16, 0, 0, false);
         if (matchTime % 60000 == 0) { static_cast<ZDeathmatchBot &>(bot).PrintNavigation(); }
     }
     std::printf("[deathmatch-check] autonomous elapsed=%u ms\n", matchTime);
-    std::printf("[deathmatch-check] autonomous shots=%zu\n", fixture.effects.GetShotCount() - shots);
+    std::printf("[deathmatch-check] autonomous shots=%zu\n", fixture.scene.GetShotCount() - shots);
     std::printf("[deathmatch-check] autonomous score=%u:%u sightings=%u playerHP=%.1f bot=%.1f,%.1f player=%.1f,%.1f\n",
         match.Score(0), match.Score(1), bot.GetTargetCount(), vitals.health, bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y);
     static_cast<ZDeathmatchBot &>(bot).PrintNavigation();

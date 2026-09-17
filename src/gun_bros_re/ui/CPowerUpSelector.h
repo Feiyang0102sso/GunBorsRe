@@ -13,11 +13,11 @@ class CPowerUpSelector {
 public:
     CPowerUpSelector();
     CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
-        ZPlayerVitals &vitals, CLevel &level, ZWeaponEffects &effects, CProfileManager &profile,
+        ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile,
         ZCombatId owner = kPlayerCombatId);
     /** Bind the selector's actor and inventory; UI and equipment share one catalog. */
     void BindPowerups(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
-        ZPlayerVitals &vitals, CLevel &level, ZWeaponEffects &effects, CProfileManager &profile,
+        ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile,
         ZCombatId owner = kPlayerCombatId);
     bool InitPowerups();
     void SetDeathmatch(CMPMatch *match) { m_match = match; }

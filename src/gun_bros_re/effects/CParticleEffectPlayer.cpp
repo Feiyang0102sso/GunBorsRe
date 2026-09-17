@@ -1,5 +1,7 @@
-#include "gun_bros_re/gameplay/CParticleEffectPlayer.h"
+#include "gun_bros_re/effects/CParticleEffectPlayer.h"
 #include <algorithm>
+#include "engine/glu/sprite/ZSpriteRenderer.h"
+#include "engine/graphics/ZEffectProjection.h"
 
 struct CParticleEffectPlayer::State {
     const CParticleEffect *effect = nullptr;
@@ -10,7 +12,18 @@ struct CParticleEffectPlayer::State {
     bool looping = true;
     bool stoppedSpawning = false;
     bool done = true;
+    bool worldSpace = false; // Constructor :131272; AddEffect explicitly changes this.
     float x = 0, y = 0, z = 0, angle = 0;
+    float scale = 1;
+    int zOrderGroup = 3;
+    Anchor anchor;
+
+    void RefreshAnchor() {
+        if (anchor && !anchor(x, y, z, angle)) {
+            anchor = {};
+            stoppedSpawning = true;
+        }
+    }
 
     ~State() { ReleaseParticles(); }
     void ReleaseParticles() {
@@ -20,6 +33,8 @@ struct CParticleEffectPlayer::State {
     void AdvanceParticles(int deltaMs, std::uint32_t &randomState) {
         for (std::size_t index = 0; index < particles.size();) {
             auto &particle = pool->Get(particles[index]);
+            // Update :133782 reads the current player angle for every particle.
+            particle.angle = angle;
             particle.Update(effect->GetEmitters()[particle.emitterIndex], deltaMs, randomState);
             if (particle.IsDone()) {
                 pool->Release(particles[index]);
@@ -53,8 +68,12 @@ struct CParticleEffectPlayer::State {
                 if (slot != 0) {
                     auto &particle = pool->Get(slot);
                     particle.emitterIndex = index;
-                    particle.z = z;
-                    if (particle.Spawn(emitter, randomState, x, y, angle)) {
+                    float originX = 0, originY = 0;
+                    particle.z = 0;
+                    if (worldSpace) { originX = x; originY = y; particle.z = z; }
+                    // CParticle::Spawn :133143 captures the player's group.
+                    particle.zOrderGroup = zOrderGroup;
+                    if (particle.Spawn(emitter, randomState, originX, originY, angle)) {
                         // Original linked list inserts newborn particles at its head.
                         particles.insert(particles.begin(), slot);
                     } else { pool->Release(slot); }
@@ -78,6 +97,10 @@ void CParticleEffectPlayer::Init(const CParticleEffect &effect, std::shared_ptr<
     m_state->ReleaseParticles();
     m_state->effect = &effect;
     m_state->pool = std::move(pool);
+    m_state->anchor = {};
+    m_state->scale = 1;
+    m_state->zOrderGroup = 3;
+    SetPosition(0, 0, 0, 0);
     m_state->remainingMs.assign(effect.GetEmitters().size(), 0);
     Start();
 }
@@ -91,19 +114,35 @@ void CParticleEffectPlayer::Start() {
 void CParticleEffectPlayer::StopSpawning() { m_state->stoppedSpawning = true; }
 void CParticleEffectPlayer::Stop() { m_state->ReleaseParticles(); m_state->done = true; }
 void CParticleEffectPlayer::SetLooping(bool looping) { m_state->looping = looping; }
+void CParticleEffectPlayer::SetWorldSpace(bool worldSpace) { m_state->worldSpace = worldSpace; }
+void CParticleEffectPlayer::SetScale(float scale) { m_state->scale = scale; }
+float CParticleEffectPlayer::GetScale() const { return m_state->scale; }
+void CParticleEffectPlayer::SetZOrderGroup(int group) { m_state->zOrderGroup = group; }
 void CParticleEffectPlayer::SetPosition(float x, float y, float z, float angle) {
     m_state->x = x; m_state->y = y; m_state->z = z; m_state->angle = angle;
+}
+void CParticleEffectPlayer::SetAnchor(Anchor anchor) {
+    m_state->anchor = std::move(anchor);
+    m_state->RefreshAnchor();
 }
 bool CParticleEffectPlayer::IsDone() const { return m_state->done; }
 std::size_t CParticleEffectPlayer::GetParticleCount() const { return m_state->particles.size(); }
 const CParticlePool::Particle &CParticleEffectPlayer::GetParticle(std::size_t index) const {
     return m_state->pool->Get(m_state->particles[index]);
 }
+void CParticleEffectPlayer::GetParticlePosition(std::size_t index, float &x, float &y, float &z) const {
+    const auto &particle = GetParticle(index);
+    x = particle.x; y = particle.y; z = particle.z;
+    // Draw :133524 adds the player origin only for relative particles.
+    if (!m_state->worldSpace) { x += m_state->x; y += m_state->y; z += m_state->z; }
+}
 void CParticleEffectPlayer::Update(int deltaMs, std::uint32_t &randomState) {
     if (deltaMs <= 0 || m_state->done) { return; }
     State &state = *m_state;
+    state.RefreshAnchor();
     const int previousMs = state.ageMs;
     state.ageMs += deltaMs;
+    // CParticleEffect::Init :131032 derives the period from emitter end times.
     const int period = state.effect->GetDurationMs();
     if (!state.stoppedSpawning && !state.looping) {
         if (period > 0 && previousMs >= period) { state.stoppedSpawning = true; }
@@ -128,4 +167,35 @@ void CParticleEffectPlayer::Update(int deltaMs, std::uint32_t &randomState) {
         return;
     }
     state.UpdateEmitters(deltaMs, previousMs, randomState);
+}
+
+void CParticleEffectPlayer::QueueParticles(ZSpriteRenderer &renderer, const float *previewProjection) const {
+    for (std::size_t index = 0; index < GetParticleCount(); ++index) {
+        QueueParticle(index, renderer, previewProjection);
+    }
+}
+
+void CParticleEffectPlayer::QueueParticle(std::size_t index, ZSpriteRenderer &renderer, const float *previewProjection) const {
+    const ZEffectProjection projection(previewProjection);
+    const auto &particle = GetParticle(index);
+    const auto &emitter = m_state->effect->GetEmitters()[particle.emitterIndex];
+    auto &animation = renderer.Animation(m_state->effect->GetSpritePackHash(), emitter.archetype, particle.animation);
+    // CParticle::Draw :133466: channels 0/1 multiply uniform scale 2.
+    // CParticle::Draw :133554 multiplies channel 2 by the player's scale.
+    const float uniformScale = particle.Value(2) * m_state->scale * projection.scale;
+    const float rotation = particle.Rotation(emitter) - particle.angle + m_state->angle;
+    float angle = projection.Direction(rotation - 90) + 90;
+    float x = 0, y = 0, z = 0;
+    GetParticlePosition(index, x, y, z);
+    projection.Position(x, y, z);
+    renderer.AddSprite(animation, static_cast<float>(particle.ageMs), x, y,
+        particle.Value(0) * uniformScale, particle.Value(1) * uniformScale,
+        angle, std::clamp(particle.Value(3), 0.0f, 1.0f));
+}
+
+void CParticleEffectPlayer::Draw(ZSpriteRenderer &renderer, const float *matrix) const {
+    glDisable(GL_DEPTH_TEST);
+    renderer.Begin();
+    QueueParticles(renderer);
+    renderer.Draw(matrix);
 }

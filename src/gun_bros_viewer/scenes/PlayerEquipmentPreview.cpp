@@ -19,8 +19,8 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/core/ZMatrix4d.h"
@@ -136,7 +136,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         std::printf("[armor] Left/Right: armor; B: remove all; 1-7,N/M: weapon; F: fire; WASD: walk\n");
     }
     PosePlayer(*character);
-    ZWeaponEffects effects(tocManager, tables, program);
+    CLevel effects(tocManager, tables, program);
 
     glEnable(GL_DEPTH_TEST);
 

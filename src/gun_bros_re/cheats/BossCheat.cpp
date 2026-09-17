@@ -44,7 +44,7 @@ void CGame::AdvanceBossSkip() {
     bool brotherInvincible = false;
     if (brother != nullptr) { brotherInvincible = brother->invincible; brother->invincible = true; }
     player.invincible = true;
-    if (m_effects != nullptr) { m_effects->SetPaused(true); }
+    m_level.SetPaused(true);
     // Return to the host event/render loop after a small batch. The wall bound
     // also ends unreachable skips without monopolizing input for ten minutes.
     for (int step = 0; step < GameCheats::BossSkipFrameSteps; ++step) {
@@ -65,13 +65,13 @@ void CGame::AdvanceBossSkip() {
         }
         // Retire skipped projectiles/audio before each tick. The last tick's
         // real Boss spawn cues survive, so its authored entrance plays normally.
-        if (m_effects != nullptr) { m_effects->Clear(); }
+        m_level.Clear();
         Update(GameCheats::BossSkipStepMs, 0, 0, false);
         m_bossSkipElapsedMs += GameCheats::BossSkipStepMs;
     }
     player.invincible = playerInvincible;
     if (brother != nullptr) { brother->invincible = brotherInvincible; }
-    if (m_effects != nullptr) { m_effects->SetPaused(false); }
+    m_level.SetPaused(false);
 }
 
 void CGame::FinishBossSkip() {

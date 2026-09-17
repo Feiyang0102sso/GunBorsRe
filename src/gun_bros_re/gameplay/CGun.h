@@ -50,6 +50,7 @@
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "engine/graphics/CMeshAnimationController.h"
+#include "gun_bros_re/effects/ZBulletEffectSettings.h"
 
 #include <cstdint>
 #include <vector>
@@ -64,19 +65,24 @@ class CBullet;
 /** A visual cue emitted by the original weapon script. */
 struct ZGunCue {
     // Runtime owner supplied by native objects, never inferred from resource IDs.
-    std::shared_ptr<CParticlePool> particlePool;
+    bool brotherPowerup = false;
+    bool anchorToActor = false;
     bool stopParticlesImmediately = false;
     bool loopParticles = true;
-    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, Splash, SpawnEnemy, Grenade };
+    enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, Splash, SpawnEnemy, Grenade, RibbonTrail, RibbonColor };
     Kind kind = Kind::Bullet;
+    ZBulletRibbonSettings ribbon;
     GameObjectRef resource;
     int hand = 0;
     int node = 0;
     float minimumAngle = 0.0f;
     float maximumAngle = 0.0f;
-    float speed = 1.0f;
+    float speed = 0.0f; // Absolute world units/s, after the native's 8.8 factor.
     bool alternate = false;
     bool alignEffect = false;
+    bool linkedEnemyEffect = false;
+    int effectGroup = 3;
+    float effectScale = 1;
     float damage = 0;
     bool percentDamage = false;
     int spawnObjectId = -1;

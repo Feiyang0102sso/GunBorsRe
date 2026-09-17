@@ -547,10 +547,16 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
             std::hypot(combat.targetX - combat.x, combat.targetY - combat.y)));
         return true;
     case 31:
+        // FunctionResolver :72312 accepts precisely these native overloads.
+        if (argumentCount < 3 || argumentCount > 6) { return true; }
         action.kind = CEnemy::Action::Kind::LinkedEffect;
         action.slot = args[0];
         action.resource = ScriptResource(args[2]);
         action.node = args[1];
+        action.alignEffect = true;
+        if (argumentCount >= 4) { action.effectGroup = args[3]; }
+        if (argumentCount >= 5) { action.alignEffect = args[4] != 0; }
+        if (argumentCount == 6) { action.effectScale = args[5] / 256.0f; }
         break;
     case 32:
         action.kind = CEnemy::Action::Kind::StopEffect;
@@ -574,6 +580,7 @@ bool CEnemy::ResolveCombatFunction(std::uint8_t function, const std::int16_t *ar
         action.kind = CEnemy::Action::Kind::Effect;
         action.resource = ScriptResource(args[0]);
         action.node = args[1];
+        if (argumentCount >= 3) { action.effectGroup = args[2]; }
         break;
     case 37:
         if (args[0] >= 0 && static_cast<std::uint32_t>(args[0]) < m_partCount) {

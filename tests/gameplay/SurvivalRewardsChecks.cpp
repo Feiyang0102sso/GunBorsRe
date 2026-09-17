@@ -16,12 +16,13 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
     auto & program = fixture.program;
     auto & loaded = fixture.loaded;
     auto & player = fixture.player;
-    auto & effects = fixture.effects;
+    auto & scene = fixture.scene;
 
     if (check) {
         // A separate world exercises empty-wave minimums and damage rejection
         // without putting fixture currency into the actual survival/profile run.
-        CLevel rewardProbe(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+        CLevel rewardProbe(toc, tables, program);
+        rewardProbe.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
         CLevel::Template percentageTemplate;
         CMap percentageMap;
         rewardProbe.Bind(percentageTemplate, percentageMap);
@@ -76,7 +77,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         pickupRef.localIndex = 2;
         vitals.health = 1;
         pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
-        pickupProbe.Update(16, rewardProbe, effects);
+        pickupProbe.Update(16, rewardProbe);
         if (vitals.health != vitals.maximum) { ++checkFailures; }
         pickupRef.localIndex = 0;
         pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
@@ -84,8 +85,8 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupRef.localIndex = 7;
         pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
-        pickupProbe.Update(16, rewardProbe, effects);
-        pickupProbe.Update(16, rewardProbe, effects);
+        pickupProbe.Update(16, rewardProbe);
+        pickupProbe.Update(16, rewardProbe);
         GameObjectRef grenade = pickupRef;
         grenade.localIndex = 13;
         if (pickupProgress.GetExperience() != 500 || rewardProbe.GetXplodium() != 153 ||

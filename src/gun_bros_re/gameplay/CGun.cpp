@@ -13,6 +13,8 @@ namespace {
 
 // Same 16.16 fixed point the move set speeds use.
 constexpr float kFixedPointScale = 1.0f / 65536.0f;
+// FireBullet :128140-128145 uses IEEE-754 0x43D70000 (430 world units/s).
+constexpr float kBulletLaunchSpeed = 430.0f;
 
 /** One stat table: a uint16 count followed by that many uint32 values. */
 void ReadStatTable(CArrayInputStream &stream, std::vector<std::uint32_t> &values) {
@@ -243,7 +245,7 @@ std::int16_t CGun::FunctionResolver(std::uint8_t function,
         cue.node = arguments[1];
         cue.minimumAngle = static_cast<float>(arguments[2]);
         cue.maximumAngle = static_cast<float>(arguments[3]);
-        cue.speed = static_cast<float>(arguments[4]) / 256.0f;
+        cue.speed = kBulletLaunchSpeed * static_cast<float>(arguments[4]) / 256.0f;
         if (argumentCount > 5) { cue.alternate = arguments[5] != 0; }
         m_cues.push_back(cue);
         return 0;

@@ -120,6 +120,15 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
         items.push_back(item);
     }
     if (scene != nullptr) {
+        // CParticleSystem::QueueParticles :133841 adds individual particles,
+        // allowing their authored group and world Y to interleave with actors.
+        for (const auto &particle : scene->GetMapParticleItems()) {
+            ZMapRenderItem item;
+            item.group = particle.group;
+            item.y = particle.y;
+            item.particle = particle;
+            items.push_back(item);
+        }
         if (brotherModel != nullptr) {
             ZMapRenderItem item;
             item.y = static_cast<int>(brotherY);
@@ -154,6 +163,10 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
             batch.Upload();
             batch.Draw(program, mapMvp);
             batch.Begin();
+        }
+        if (item.particle.player != nullptr) {
+            scene->DrawMapParticle(item.particle, mapMvp);
+            continue;
         }
         // CMeshCamera::DrawHeirarchy :99263 clears depth per hierarchy.
         // Depth resolves parts of this model; cross-object order belongs to the queue.

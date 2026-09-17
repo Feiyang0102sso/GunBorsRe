@@ -109,10 +109,10 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     ZPlayerModel player;
     ZPlayerVitals vitals;
     std::vector<ZEnemyTemplateData> catalog;
-    ZWeaponEffects effects(toc, tables, program);
-    CLevel scene(tables, program, catalog, player, vitals, effects, 1.0f);
+    CLevel scene(toc, tables, program);
+    scene.BindCombat(catalog, player, vitals, 1.0f);
     CLevel level;
-    ZMapPropWorld props(loaded, scene, level, effects);
+    ZMapPropWorld props(loaded, scene, level);
     props.Reset();
     for (unsigned layer = 0; layer < loaded.map.GetObjectLayerCount(); ++layer) {
         props.StartLayer(loaded.map.GetObjectLayer(layer).GetLayerIndex());

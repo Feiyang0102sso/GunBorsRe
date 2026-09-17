@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 
 /** Shared particle behavior, independent of map/weapon rendering caches.
  * Source: CParticle::Spawn :133114, RefreshInterpolator :133375,

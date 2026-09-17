@@ -1,6 +1,6 @@
 #include "ParticleRuntimeChecks.h"
 #include "ParticlePlayerChecks.h"
-#include "gun_bros_re/gameplay/CParticle.h"
+#include "gun_bros_re/effects/CParticle.h"
 #include <cmath>
 #include <cstdio>
 

@@ -4,16 +4,14 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
-#include "gun_bros_re/gameplay/CParticlePool.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
+#include "gun_bros_re/effects/CParticlePool.h"
 #include <cstdio>
 
 ZPickupScene::ZPickupScene(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
-    CProfileManager *profile, std::shared_ptr<CParticlePool> particlePool)
+    CProfileManager *profile)
     : m_toc(toc), m_tables(tables), m_program(program), m_profile(profile) {
     // CPickup::Spawn :99889 uses CMap's CParticleSystem, not its effect-layer pool.
-    if (!particlePool) { particlePool = std::make_shared<CParticlePool>(200); }
-    m_particlePool = std::move(particlePool);
 }
 
 bool ZPickupScene::GetObjectPosition(int objectId, float &x, float &y) const {
@@ -107,7 +105,7 @@ void ZPickupScene::GrantStoreItem(const GameObjectRef &ref, CProfileManager *pro
     }
 }
 
-void ZPickupScene::UpdateEffects(int deltaMs, ZWeaponEffects &effects) {
+void ZPickupScene::UpdateEffects(int deltaMs, CLevel &effects) {
     m_effects = &effects;
     for (const auto &instance : m_instances) {
         instance->animation.Update(static_cast<std::uint16_t>(deltaMs));
@@ -116,13 +114,13 @@ void ZPickupScene::UpdateEffects(int deltaMs, ZWeaponEffects &effects) {
         const GameObjectRef &resource = instance->visual->entry->data.particleEffect;
         if (resource.IsNull()) { continue; }
         // CPickup::Spawn anchors the looping effect one world unit above it.
-        instance->effectHandle = effects.StartPersistentEffect(resource, instance->x, instance->y - 1, true, m_particlePool);
-        if (instance->effectHandle == 0) { ++failures; }
+        instance->effectHandle = effects.StartPersistentEffect(resource, instance->x, instance->y - 1, true);
+        // AddEffect may legitimately return null when all twenty slots are busy.
     }
 }
 
-void ZPickupScene::Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects) {
-    UpdateEffects(deltaMs, effects);
+void ZPickupScene::Update(int deltaMs, CLevel &scene) {
+    UpdateEffects(deltaMs, scene);
     collections.clear();
     for (std::size_t index = 0; index < m_instances.size();) {
         Instance &instance = *m_instances[index];
@@ -134,7 +132,7 @@ void ZPickupScene::Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects) {
         }
         if (!playerTouch && !peerTouch) { ++index; continue; }
         if (instance.pickup.Collect()) {
-            effects.StopSpawning(instance.effectHandle);
+            scene.StopSpawning(instance.effectHandle);
             ++collected;
             for (const ZPickupAction &action : instance.pickup.TakeActions()) {
                 if (action.kind == ZPickupAction::Kind::Xplodium) {
@@ -155,7 +153,7 @@ void ZPickupScene::Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects) {
                     ZGunCue cue;
                     cue.kind = ZGunCue::Kind::Sound;
                     cue.resource = action.resource;
-                    effects.Emit(cue, instance.x, instance.y, 0, 0);
+                    scene.Emit(cue, instance.x, instance.y, 0, 0);
                 }
             }
             failures += instance.pickup.GetUnsupportedCount();

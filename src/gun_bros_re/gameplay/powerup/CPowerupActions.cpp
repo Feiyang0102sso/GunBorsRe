@@ -10,10 +10,9 @@
 #include <cmath>
 #include <cstdio>
 
-void CPowerup::BindActor(ZPlayerModel &player, ZPlayerVitals &vitals, ZWeaponEffects &effects) {
+void CPowerup::BindActor(ZPlayerModel &player, ZPlayerVitals &vitals) {
     m_player = &player;
     m_vitals = &vitals;
-    m_effects = &effects;
 }
 
 std::int16_t CPowerup::ResolveNativeFunction(std::uint16_t id,

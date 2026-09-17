@@ -666,7 +666,7 @@ bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
  * the bite size is fixed rather than taken from the wall clock.
  */
 void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
-            ZWeaponEffects *effects , bool firing ) {
+            CLevel *effects , bool firing ) {
     if (effects && !loaded.players.empty()) { SetPlayerInput(*loaded.players[0].model, false, firing); }
     for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
         AdvanceProps(loaded.props, kWarmUpFrameMs);

@@ -13,7 +13,6 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
     auto & batch = fixture.batch;
     auto & loaded = fixture.loaded;
     auto & player = fixture.player;
-    auto & effects = fixture.effects;
     auto & scene = fixture.scene;
     auto & brother = fixture.brother;
     auto & brotherModel = fixture.brotherModel;
@@ -92,7 +91,7 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
                 session.Update(16, 1, 1, true);
                 // Other actors keep shooting during death. Inspect ownership,
                 // not the scene-wide shot counter (pack2's enemies fire here).
-                for (const auto &shot : effects.GetProjectileStates()) {
+                for (const auto &shot : scene.GetProjectileStates()) {
                     if (shot.owner == kPlayerCombatId) { ++checkFailures; }
                 }
                 elapsed += 16;

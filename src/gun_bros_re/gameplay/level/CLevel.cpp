@@ -12,7 +12,7 @@
 #include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 
@@ -481,11 +481,11 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool fire, bool advan
     if (m_powerups != nullptr) { UpdatePowerup(*m_powerups, deltaMs); }
     if (m_peerPowerups != nullptr) { UpdatePowerup(*m_peerPowerups, deltaMs); }
     if (m_props != nullptr) { m_props->Update(worldDeltaMs); }
-    if (m_pickups != nullptr && m_effects != nullptr) {
+    if (m_pickups != nullptr && m_effectSprites != nullptr) {
         for (const PendingPickup &spawn : m_pendingPickups) {
             SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0);
         }
-        m_pickups->Update(worldDeltaMs, *this, *m_effects);
+        m_pickups->Update(worldDeltaMs, *this);
         for (const ZPickupCollection &pickup : m_pickups->collections) {
             if (m_match != nullptr && pickup.objectId >= CMPMatch::PickupIdBase &&
                 !CollectMatchWeapon(pickup.peer, pickup.objectId - CMPMatch::PickupIdBase)) {
@@ -1155,11 +1155,11 @@ bool CLevel::IsActivePortal(int propId) const {
 }
 
 void CLevel::PlayLevelSound(const GameObjectRef &sound) {
-    if (m_effects == nullptr) { return; }
+    if (m_effectSprites == nullptr) { return; }
     ZGunCue cue;
     cue.kind = ZGunCue::Kind::Sound;
     cue.resource = sound;
-    m_effects->Emit(cue, 0, 0, 0, 0);
+    Emit(cue, 0, 0, 0, 0);
 }
 
 void CLevel::OnWaveCleared(unsigned perfectRewardPercent) {
@@ -1339,8 +1339,8 @@ void CLevel::UpdateCamera(int deltaMs) {
     SetViewCenter(m_map->GetCamera().GetX(), m_map->GetCamera().GetY());
     const float width = m_viewWidth * scale;
     const float height = m_viewHeight * scale;
-    if (m_effects != nullptr) {
-        m_effects->SetViewBounds(GetViewCenterX(), GetViewCenterY(), width, height);
+    if (m_effectSprites != nullptr) {
+        SetViewBounds(GetViewCenterX(), GetViewCenterY(), width, height);
     }
     m_cameraLeft = m_map->GetCamera().GetX() - width * 0.5f;
     m_cameraTop = m_map->GetCamera().GetY() - height * 0.5f;

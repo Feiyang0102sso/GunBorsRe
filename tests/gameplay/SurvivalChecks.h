@@ -36,7 +36,7 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture);
 
 int CheckSurvivalPowerupCapture(SurvivalPowerupCaptureFixture fixture);
 
-unsigned CheckLevelSounds(CLevel &level, ZWeaponEffects &effects);
+unsigned CheckLevelSounds(CLevel &level, CLevel &effects);
 unsigned CheckTriggerRoutes(CGame &session, CMap &map, CLevel &scene, float startX, float startY, float startFacing);
 
 namespace MapDetail {

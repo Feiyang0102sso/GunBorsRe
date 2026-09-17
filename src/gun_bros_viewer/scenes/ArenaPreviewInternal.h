@@ -11,7 +11,6 @@
 #include "engine/graphics/ZMarkerBatch.h"
 #include "engine/core/ZMatrix4d.h"
 #include "gun_bros_re/gameplay/CBullet.h"
-#include "gun_bros_re/gameplay/level/CLevel.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -34,6 +33,5 @@ struct ArenaScene {
     const ZPlayerTemplateData &playerData;
     ZPlayerModel &player;
     ZPlayerVitals &vitals;
-    ZWeaponEffects &effects;
     CLevel &scene;
 };

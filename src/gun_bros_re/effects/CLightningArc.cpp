@@ -1,7 +1,7 @@
 /** @file CLightningArc.cpp
  * @brief Port of CLightningArc and CMeshLine mode 2; Windows uses the effect RNG.
  */
-#include "gun_bros_re/gameplay/CLightningArc.h"
+#include "gun_bros_re/effects/CLightningArc.h"
 #include <cmath>
 
 namespace {

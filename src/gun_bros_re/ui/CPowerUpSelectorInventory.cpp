@@ -12,13 +12,13 @@ CPowerUpSelector::CPowerUpSelector()
     : m_ownedResources(std::make_unique<ZHudResources>()), m_resources(*m_ownedResources) {}
 
 CPowerUpSelector::CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
-    ZPlayerVitals &vitals, CLevel &level, ZWeaponEffects &effects, CProfileManager &profile, ZCombatId owner)
+    ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile, ZCombatId owner)
     : CPowerUpSelector() {
-    BindPowerups(toc, tables, player, vitals, level, effects, profile, owner);
+    BindPowerups(toc, tables, player, vitals, level, profile, owner);
 }
 
 void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
-    ZPlayerVitals &vitals, CLevel &level, ZWeaponEffects &effects, CProfileManager &profile, ZCombatId owner) {
+    ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile, ZCombatId owner) {
     m_resources.m_toc = &toc;
     m_resources.m_tables = &tables;
     m_player = &player;
@@ -28,7 +28,7 @@ void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, ZP
     m_owner = owner;
     m_powerup = std::make_unique<CPowerup>(toc, tables, level);
     m_powerup->SetOwner(owner);
-    m_powerup->BindActor(player, vitals, effects);
+    m_powerup->BindActor(player, vitals);
     m_powerup->m_selector = this;
 }
 

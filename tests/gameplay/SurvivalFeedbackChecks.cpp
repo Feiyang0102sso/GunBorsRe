@@ -122,8 +122,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // Native HandleCollision does not pause a projectile when a state
             // has no hit handler. A dormant original turret must not swallow a
             // penetrating round before it reaches the ordinary enemy behind it.
-            ZWeaponEffects probeEffects(toc, tables, program);
-            CLevel probe(tables, program, enemies, player, vitals, probeEffects, loaded.playerTemplate->gameScale);
+            CLevel probe(toc, tables, program);
+    probe.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
             probe.Reset();
             ZCombatEnemy *front = nullptr, *back = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
@@ -144,10 +144,10 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 if ((bullet.GetFlags() & 0x140) == 0x40) { round = ref; break; }
             }
             if (round.IsNull()) { return 1; }
-            if (probeEffects.SpawnProjectile(round, 600, 350, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            if (probe.SpawnProjectile(round, 600, 350, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
             float matrix[16];
             probe.PlayerMatrix(matrix);
-            for (unsigned tick = 0; tick < 90; ++tick) { probeEffects.Update(player, matrix, 0, 16); }
+            for (unsigned tick = 0; tick < 90; ++tick) { probe.Update(player, matrix, 0, 16); }
             const float damage = back->model.enemy.combat.totalDamage;
             if (damage <= 0) { ++checkFailures; }
             std::printf("[feedback-piercing] bullet=%08x:%u front-pending=%d back-damage=%.2f failures=%u\n",
@@ -157,24 +157,24 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // the camera rectangle travelling away from it, and keeps one that
             // is still heading towards it. Same real BULLET template, same
             // update path; only the camera rectangle is supplied here.
-            ZWeaponEffects cullEffects(toc, tables, program);
-            CLevel cullScene(tables, program, enemies, player, vitals, cullEffects, loaded.playerTemplate->gameScale);
+            CLevel cullScene(toc, tables, program);
+    cullScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
             cullScene.Reset();
             cullScene.SetViewCenter(600, 450);
-            cullEffects.SetViewBounds(600, 450, 200, 200);  // y in [350, 550]
+            cullScene.SetViewBounds(600, 450, 200, 200);  // y in [350, 550]
             float cullMatrix[16];
             cullScene.PlayerMatrix(cullMatrix);
             // Both start just below the view. One travels away from it, one
             // towards it; the outbound one is the only one culled at once.
-            if (cullEffects.SpawnProjectile(round, 600, 560, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
-            if (cullEffects.SpawnProjectile(round, 600, 560, 0, -90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            if (cullScene.SpawnProjectile(round, 600, 560, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            if (cullScene.SpawnProjectile(round, 600, 560, 0, -90, 600, kBrotherCombatId, 0) == 0) { return 1; }
             // 160ms: the outbound one is well clear of the near edge and gone,
             // the inbound one has entered the view and is still travelling.
-            for (unsigned tick = 0; tick < 10; ++tick) { cullEffects.Update(player, cullMatrix, 0, 16); }
-            const std::size_t afterOutbound = cullEffects.GetBulletCount();
+            for (unsigned tick = 0; tick < 10; ++tick) { cullScene.Update(player, cullMatrix, 0, 16); }
+            const std::size_t afterOutbound = cullScene.GetBulletCount();
             // Out the far side, well before the 3000ms expiry could retire it.
-            for (unsigned tick = 0; tick < 30; ++tick) { cullEffects.Update(player, cullMatrix, 0, 16); }
-            const std::size_t afterCrossing = cullEffects.GetBulletCount();
+            for (unsigned tick = 0; tick < 30; ++tick) { cullScene.Update(player, cullMatrix, 0, 16); }
+            const std::size_t afterCrossing = cullScene.GetBulletCount();
             if (afterOutbound != 1 || afterCrossing != 0) { ++checkFailures; }
             std::printf("[feedback-cull] leaving-culled inbound-alive=%zu after-far-edge=%zu age=640ms failures=%u\n",
                 afterOutbound, afterCrossing, checkFailures);
@@ -206,8 +206,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // A single-part original enemy supplies an independent GetBounds
         // centre. Check the final screen rectangle, not just its dimensions.
         {
-            ZWeaponEffects anchorEffects(toc, tables, program);
-            CLevel anchorScene(tables, program, enemies, player, vitals, anchorEffects, loaded.playerTemplate->gameScale);
+            CLevel anchorScene(toc, tables, program);
+    anchorScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
             ZCombatEnemy *target = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 0) {
@@ -254,8 +254,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             GameHostSettings().effectsVolume, ZAudioPlayer::GetEffectsGain(), checkFailures);
         for (unsigned kinds = 1; kinds <= 2; ++kinds) {
             std::vector<GameObjectRef> batchDeathSounds;
-            ZWeaponEffects deathEffects(toc, tables, program);
-            CLevel deathScene(tables, program, enemies, player, vitals, deathEffects, loaded.playerTemplate->gameScale);
+            CLevel deathScene(toc, tables, program);
+    deathScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
             deathScene.Reset();
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal >= kinds) { continue; }
@@ -300,33 +300,33 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 }
             }
             deathScene.Update(16, 0, 0, false);
-            const auto sounds = deathEffects.GetSoundCueCount();
+            const auto sounds = deathScene.GetSoundCueCount();
             if (sounds != kinds) { ++checkFailures; }
             std::printf("[audio-health-check] group-death kinds=%u actors=%u sounds=%zu expected=%u failures=%u\n",
                 kinds, kinds * 12, sounds, kinds, checkFailures);
             // Repeat the actual authored sound across a production tick
             // boundary. Do not assume a random death move always cues at t=0.
             deathScene.Update(16, 0, 0, false);
-            const auto beforeRepeat = deathEffects.GetSoundCueCount();
-            for (const auto &sound : batchDeathSounds) { deathEffects.PlayMoveSound(sound); }
+            const auto beforeRepeat = deathScene.GetSoundCueCount();
+            for (const auto &sound : batchDeathSounds) { deathScene.PlayMoveSound(sound); }
             // Host audio adaptation: the copy already playing still covers it.
-            if (deathEffects.GetSoundCueCount() != beforeRepeat) { ++checkFailures; }
+            if (deathScene.GetSoundCueCount() != beforeRepeat) { ++checkFailures; }
             std::printf("[audio-health-check] next-tick kinds=%u new-sounds=%zu failures=%u\n",
-                kinds, deathEffects.GetSoundCueCount() - beforeRepeat, checkFailures);
+                kinds, deathScene.GetSoundCueCount() - beforeRepeat, checkFailures);
             // ... and is audible again once that copy has finished. Its own
             // scene has no actors, so nothing else can cue a sound meanwhile.
-            ZWeaponEffects windowEffects(toc, tables, program);
-            CLevel windowScene(tables, program, enemies, player, vitals, windowEffects, loaded.playerTemplate->gameScale);
+            CLevel windowScene(toc, tables, program);
+    windowScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
             windowScene.Reset();
             const GameObjectRef &repeated = batchDeathSounds.front();
-            windowEffects.PlayMoveSound(repeated);
-            const auto opened = windowEffects.GetSoundCueCount();
+            windowScene.PlayMoveSound(repeated);
+            const auto opened = windowScene.GetSoundCueCount();
             windowScene.Update(16, 0, 0, false);
-            windowEffects.PlayMoveSound(repeated);
-            const auto covered = windowEffects.GetSoundCueCount();
+            windowScene.PlayMoveSound(repeated);
+            const auto covered = windowScene.GetSoundCueCount();
             for (unsigned tick = 0; tick < 250; ++tick) { windowScene.Update(16, 0, 0, false); }
-            windowEffects.PlayMoveSound(repeated);
-            const auto reopened = windowEffects.GetSoundCueCount();
+            windowScene.PlayMoveSound(repeated);
+            const auto reopened = windowScene.GetSoundCueCount();
             if (opened != 1 || covered != 1 || reopened != 2) { ++checkFailures; }
             std::printf("[audio-health-check] move-window wav=%08x:%u first=%zu covered=%zu after-4s=%zu failures=%u\n",
                 repeated.packHash, repeated.localIndex, opened, covered, reopened, checkFailures);
@@ -354,14 +354,14 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 ZGunCue sound;
                 sound.kind = ZGunCue::Kind::Sound;
                 sound.resource = effectSound;
-                const auto before = windowEffects.GetSoundCueCount();
+                const auto before = windowScene.GetSoundCueCount();
                 unsigned peakVoices = 0;
                 for (unsigned tick = 0; tick < 5; ++tick) {
-                    windowEffects.Emit(sound, 600, 450, 0, 0, kPlayerCombatId);
-                    peakVoices = std::max(peakVoices, windowEffects.GetVoiceCount());
+                    windowScene.Emit(sound, 600, 450, 0, 0, kPlayerCombatId);
+                    peakVoices = std::max(peakVoices, windowScene.GetVoiceCount());
                     windowScene.Update(16, 0, 0, false);
                 }
-                const auto retriggers = windowEffects.GetSoundCueCount() - before;
+                const auto retriggers = windowScene.GetSoundCueCount() - before;
                 if (retriggers != 5 || peakVoices > 1) { ++checkFailures; }
                 std::printf("[audio-health-check] one-voice sound=%08x:%u retriggers=%zu peak-voices=%u failures=%u\n",
                     effectSound.packHash, effectSound.localIndex, retriggers, peakVoices, checkFailures);

@@ -192,15 +192,14 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             if (!found) { return 1; }
         }
     }
-    ZWeaponEffects effects(toc, tables, program, loaded.particlePool);
+    CLevel scene(toc, tables, program, loaded.particlePool, loaded.particleSystem);
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnResources({
-            toc, tables, enemies, vitals, progressData, window, survivalHud, program, loaded, player, effects
+            toc, tables, enemies, vitals, progressData, window, survivalHud, program, loaded, player, scene
         });
         if (result >= 0) { return result; }
     }
-
-    CLevel scene(tables, program, enemies, player, vitals, effects, loaded.playerTemplate->gameScale);
+    scene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
     if (gameContext != nullptr) {
         music.SetEnabled(gameContext->profile.musicEnabled);
         ZAudioPlayer::SetEffectsEnabled(gameContext->profile.soundEnabled);
@@ -323,7 +322,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (gameContext != nullptr) { pickupProfile = &gameContext->profile; }
     else { pickupProfile = &researchProfile; }
     CPowerUpSelector &powerups = survivalHud.PowerupSelector();
-    powerups.BindPowerups(toc, tables, player, vitals, scene, effects, *pickupProfile);
+    powerups.BindPowerups(toc, tables, player, vitals, scene, *pickupProfile);
     if (!powerups.InitPowerups()) { return 1; }
     CProfileManager peerResearchProfile = *pickupProfile;
     CProfileManager *peerProfile = &peerResearchProfile;
@@ -353,7 +352,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         }
     }
     player.gunSlot = equippedWeaponSlot;
-    CPowerUpSelector peerPowerups(toc, tables, brotherModel, brother.vitals, scene, effects, *peerProfile, kBrotherCombatId);
+    CPowerUpSelector peerPowerups(toc, tables, brotherModel, brother.vitals, scene, *peerProfile, kBrotherCombatId);
     if ((launch.localLive || launch.deathmatch) && !peerPowerups.InitPowerups()) { return 1; }
     if (launch.localLive || launch.deathmatch) { scene.SetPowerup(&peerPowerups.GetPowerup(), kBrotherCombatId); }
     if (launch.deathmatch) { powerups.SetDeathmatch(&match); peerPowerups.SetDeathmatch(&match); }
@@ -363,10 +362,10 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     }
 
     scene.SetPowerup(&powerups.GetPowerup());
-    ZPickupScene pickups(toc, tables, program, pickupProfile, loaded.particleSystemPool);
+    ZPickupScene pickups(toc, tables, program, pickupProfile);
     if (launch.localLive || launch.deathmatch) { pickups.SetPeerProfile(peerProfile); }
     if (!pickups.Init()) { return 1; }
-    session.SetPickups(&pickups, &effects);
+    session.SetPickups(&pickups);
     if (launch.deathmatch) { scene.SetDeathmatch(&match, &weapons, &pickups); }
     const GameObjectRef *archiveLevel = nullptr;
     if (archiveMission != nullptr) { archiveLevel = &archiveMission->data.level; }
@@ -411,13 +410,13 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     // layers in script order; previously spawned props survive layer switches.
     LoadProps(toc, loaded);
     BuildCollisionScene(loaded);
-    ZMapPropWorld props(loaded, scene, session.GetLevel(), effects);
+    ZMapPropWorld props(loaded, scene, session.GetLevel());
     session.SetProps(&props);
     scene.SetProps(&props);
     session.Restart(startX, startY, startFacing);
     if (!session.SubmitChallenges(false)) { return 1; }
     loading.Finish();
-    ZSurvivalState state{launch, vitals, window, program, batch, loaded, player, effects, scene, brother, brotherModel, session, startX, startY, startFacing, toc, tables, enemies, capturePath, weapons, survivalHud, props, withBrother, progress, weaponSlot, equippedWeaponSlot, powerups, pickups, pickupProfile, tutorial, accountedXplodium, packIndex, archiveLevel, horde, match, peerPowerups, peerProfile, brotherConfiguration};
+    ZSurvivalState state{launch, vitals, window, program, batch, loaded, player, scene, brother, brotherModel, session, startX, startY, startFacing, toc, tables, enemies, capturePath, weapons, survivalHud, props, withBrother, progress, weaponSlot, equippedWeaponSlot, powerups, pickups, pickupProfile, tutorial, accountedXplodium, packIndex, archiveLevel, horde, match, peerPowerups, peerProfile, brotherConfiguration};
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnStage(ZSurvivalPhase::Bound, state);
         if (result >= 0) { return result; }
@@ -495,7 +494,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     GameObjectRef rightPowerup = powerups.GetEquipped(1);
     ZSurvivalFrameDriver *frameDriver = nullptr;
     if (gameContext != nullptr) { frameDriver = gameContext->frameDriver; }
-    ZSurvivalFrame frame{pickupProfile, survivalHud, session, scene, player, vitals, effects,
+    ZSurvivalFrame frame{pickupProfile, survivalHud, session, scene, player, vitals,
         window, music, leftPowerup, rightPowerup, paused, shopOpen, equippedWeaponSlot, accumulator};
     if (frameDriver != nullptr) {
         const int result = frameDriver->OnFrame(ZSurvivalFramePhase::Begin, frame);
@@ -577,7 +576,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         state.transitionTime = session.GetTransitionElapsed();
         state.perfectBonus = scene.GetLastWaveBonus();
         state.damageHits = vitals.hits;
-        PopulateSurvivalDebugInfo(state, scene, effects, packShortName, mapIndex, showCollisions);
+        PopulateSurvivalDebugInfo(state, scene, packShortName, mapIndex, showCollisions);
         state.dialog = session.GetDialogText();
         state.tutorialStep = session.GetLevel().GetTutorialStep();
         if (archiveMission != nullptr) { state.mission = archiveMission->title; }
@@ -754,7 +753,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 liveShop.Close(liveShop.Owner()); deathShop = false;
             }
             if (result.resetClock) {
-                effects.SetPaused(paused || shopOpen);
+                scene.SetPaused(paused || shopOpen);
                 accumulator = 0;
                 previous = window.GetTicksMs();
             }
@@ -983,7 +982,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                     continue;
                 }
                 if (!EquipControlledPlayer(tables, loaded, program, weapons[nextWeapon])) { return 1; }
-                effects.RetireOwner(kPlayerCombatId);
+                scene.RetireOwner(kPlayerCombatId);
                 weaponSlot = nextWeapon;
             }
             if (gameContext != nullptr && !vitals.dead) { gameContext->profile.activeWeaponSlot = equippedWeaponSlot; }
@@ -1045,7 +1044,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
         }
 
-        effects.SetPaused(worldPaused || (launch.deathmatch && session.IsDeathmatchFading()));
+        scene.SetPaused(worldPaused || (launch.deathmatch && session.IsDeathmatchFading()));
         if (session.IsBossSkipActive()) {
             session.AdvanceBossSkip();
             accumulator = 0;
@@ -1088,7 +1087,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 session.UpdateAfterDeath(16);
             }
             if (pendingWeapon < weapons.size() && player.weapon->brother.TakeWeaponSwap()) {
-                effects.RetireOwner(kPlayerCombatId);
+                scene.RetireOwner(kPlayerCombatId);
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::BeforeWeaponSwap, frame);
             if (result >= 0) { return result; }
@@ -1164,7 +1163,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         Matrix4dTranslate(mvp, -camera.x, -camera.y);
         batch.Draw(program, mvp);
         pickups.Draw(mvp, kLevelCameraScale);
-        effects.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
+        scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
         // Historical explanation of the old separate model pass:
         // The AI brother is a 3D model like the player and the enemies: with no
         // depth test his torso, legs and gun paint over each other in submission
@@ -1178,7 +1177,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             drawBrother = &brotherModel;
         }
         DrawMapObjects(loaded, batch, program, mvp, true, &scene, drawBrother, brother.y, width);
-        effects.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer);
+        scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
         
         if (launch.scenario != nullptr) {
             const int result = launch.scenario->OnStage(ZSurvivalPhase::WorldDrawn, state);
@@ -1188,7 +1187,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         if (showCollisions) {
             const CBrotherAI *collisionBrother = nullptr;
             if (withBrother) { collisionBrother = &brother; }
-            DrawCollisionOverlay(markers, markerProgram, mvp, 1 / camera.zoom, &loaded, &scene, collisionBrother, &effects);
+            DrawCollisionOverlay(markers, markerProgram, mvp, 1 / camera.zoom, &loaded, &scene, collisionBrother, &scene);
         }
         const auto performanceWorld = std::chrono::steady_clock::now();
         ZInputPadState hudState = buildHudState();

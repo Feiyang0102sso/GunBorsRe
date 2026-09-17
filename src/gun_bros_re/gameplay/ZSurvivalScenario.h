@@ -15,7 +15,7 @@ struct ZSurvivalResources {
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZWeaponEffects & effects;
+    CLevel & scene;
 };
 
 struct ZSurvivalState {
@@ -26,7 +26,6 @@ struct ZSurvivalState {
     ZQuadBatch & batch;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZWeaponEffects & effects;
     CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;

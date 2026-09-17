@@ -54,10 +54,8 @@ public:
     bool IsBossSkipActive() const { return m_bossSkipActive; }
 
     void SetProps(ZPropWorld *props) { m_level.SetProps(props); }
-    void SetPickups(ZPickupScene *pickups, ZWeaponEffects *effects) {
-        m_effects = effects;
+    void SetPickups(ZPickupScene *pickups) {
         m_level.SetPickups(pickups);
-        m_level.SetEffects(effects);
     }
     CLevel &GetLevel() { return m_level; }
     const CLevel &GetLevel() const { return m_level; }
@@ -115,7 +113,6 @@ private:
     std::string m_dialogText;
     bool m_dialogBound = false;
     unsigned m_dialogSerial = 0;
-    ZWeaponEffects *m_effects = nullptr;
 };
 
 #endif

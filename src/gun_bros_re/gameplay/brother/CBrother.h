@@ -33,6 +33,8 @@
 #include "gun_bros_re/gameplay/CGun.h"
 #include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include "engine/graphics/CMoveSetMeshController.h"
+#include "gun_bros_re/effects/CParticleEffectPlayer.h"
+#include <array>
 // CGameSpriteGluRef lives here, next to its first user
 // Historical location above; now declared in original gameAssetRef module.
 
@@ -40,6 +42,20 @@ class CPowerUpSelector;
 
 class CBrother : public ZGameScriptObject {
 public:
+    /** Original six strengthening players share the brother's 25-slot pool.
+     * Stable actor state survives this port's interchangeable weapon banks.
+     */
+    struct PowerupParticles {
+        std::shared_ptr<CParticlePool> pool = std::make_shared<CParticlePool>(25);
+        std::array<CParticleEffectPlayer, 6> players;
+        float x = 0, y = 0;
+        void Apply(const ZGunCue &cue, const CParticleEffect *effect);
+        void Update(int deltaMs, std::uint32_t &randomState);
+        void Draw(ZSpriteRenderer &renderer, const float *projection) const;
+        void Stop();
+        std::size_t GetParticleCount() const;
+        std::size_t GetEffectCount() const;
+    };
     /** Actor-owned state survives equipment changes, as in original CBrother. */
     struct PowerupState {
         int shieldMs = 0;
@@ -50,6 +66,7 @@ public:
         int frenzyMs[3]{};
         float frenzyMultiplier[3]{1, 1, 1};
         GameObjectRef effects[6];
+        std::shared_ptr<PowerupParticles> particles;
     };
     class Template {
     public:
@@ -92,6 +109,7 @@ public:
     bool UsePowerup(CPowerUpSelector &selector, bool fromSelector = false);
     void SetVitals(ZPlayerVitals *vitals) { m_vitals = vitals; }
     void SetPowerupState(PowerupState *powerups);
+    std::shared_ptr<PowerupParticles> GetPowerupParticles() const { return m_powerupParticles; }
     void StartShield(const GameObjectRef &effect, int durationMs);
     void StartAutoFire(const GameObjectRef &effect, int durationSeconds);
     bool IsAutoFire() const { return m_powerups != nullptr && m_powerups->autoFireMs > 0; }
@@ -178,7 +196,7 @@ private:
     int m_knockbackDurationMs = 0;
     ZPlayerVitals *m_vitals = nullptr;
     PowerupState *m_powerups = nullptr;
-    std::shared_ptr<CParticlePool> m_particlePool;
+    std::shared_ptr<PowerupParticles> m_powerupParticles;
     void PowerupEffect(const GameObjectRef &effect, int slot, bool active);
     GameObjectRef m_grenades[2];
     unsigned m_grenadeStock[2]{};

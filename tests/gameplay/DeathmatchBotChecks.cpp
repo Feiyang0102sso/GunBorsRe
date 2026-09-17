@@ -120,7 +120,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         for (unsigned elapsed = 0; elapsed < 10000 && !session.IsReadyForResults(); elapsed += 16) {
             session.Update(16, 1, 1, true);
             if (session.IsDeathmatchFading() && scenario < 2 &&
-                (!fixture.vitals.deathAnimationComplete || fixture.effects.HasActorBurst(kPlayerCombatId))) { return 1; }
+                (!fixture.vitals.deathAnimationComplete || fixture.scene.HasActorBurst(kPlayerCombatId))) { return 1; }
         }
         if (!session.IsReadyForResults() || score0 != match.Score(0) || score1 != match.Score(1) ||
             (scenario == 1 && (!bot.vitals.deathAnimationComplete || match.GetResult() != CMPMatch::Result::Draw))) { return 1; }

@@ -32,8 +32,7 @@ int SurvivalCheckScenario::OnPowerupInventory(SurvivalPowerupInventoryFixture fi
 int SurvivalCheckScenario::OnSceneReady(SurvivalSceneFixture scene) {
     // The death fixture is the common view every scene-stage check wants.
     SurvivalDeathFixture fixture{scene.checkFailures, scene.packShortName, false, scene.vitals,
-        scene.window, scene.program, scene.batch, scene.loaded, scene.player, scene.effects,
-        scene.scene, scene.brother, scene.brotherModel, scene.session,
+        scene.window, scene.program, scene.batch, scene.loaded, scene.player, scene.scene, scene.brother, scene.brotherModel, scene.session,
         scene.startX, scene.startY, scene.startFacing};
 
     if (m_development.deathmatchCheck) {
@@ -94,7 +93,7 @@ int SurvivalCheckScenario::OnLoopStarting(CLevel &scene, ZPlayerVitals &vitals) 
 
 int SurvivalCheckScenario::OnResources(ZSurvivalResources resources) {
     m_failures = 0;
-    return OnRewards({m_failures, m_development.check, resources.toc, resources.tables, resources.enemies, resources.vitals, resources.progressData, resources.window, resources.survivalHud, resources.program, resources.loaded, resources.player, resources.effects});
+    return OnRewards({m_failures, m_development.check, resources.toc, resources.tables, resources.enemies, resources.vitals, resources.progressData, resources.window, resources.survivalHud, resources.program, resources.loaded, resources.player, resources.scene});
 }
 
 int SurvivalCheckScenario::OnInventory(CResTOCManager &toc, CProfileManager &profile) {
@@ -119,7 +118,7 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
                 !state.scene.SwapBrotherWeapon() || state.scene.GetBrotherWeaponSlot() != 0) { return 1; }
             std::printf("[brother-equipment-check] pistol-rifle-pistol=1 player-unchanged=1\n");
         }
-        return OnSceneReady({m_failures, state.launch.packShortName, state.launch.mapIndex, state.launch.localLive, m_development.deathStudy, state.toc, state.tables, state.vitals, state.window, state.program, state.batch, state.loaded, state.player, state.effects, state.scene, state.brother, state.brotherModel, state.session, state.survivalHud, state.progress, state.match, state.pickups, state.powerups, state.peerPowerups, state.peerProfile, state.launch.gameContext, state.startX, state.startY, state.startFacing});
+        return OnSceneReady({m_failures, state.launch.packShortName, state.launch.mapIndex, state.launch.localLive, m_development.deathStudy, state.toc, state.tables, state.vitals, state.window, state.program, state.batch, state.loaded, state.player, state.scene, state.brother, state.brotherModel, state.session, state.survivalHud, state.progress, state.match, state.pickups, state.powerups, state.peerPowerups, state.peerProfile, state.launch.gameContext, state.startX, state.startY, state.startFacing});
     }
     if (phase == ZSurvivalPhase::Ready) {
         int result = -1;
@@ -127,7 +126,7 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
         if (result >= 0) { return result; }
         result = OnFeedback({m_failures, state.capturePath, m_development.feedbackStudy, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.survivalHud, state.program, state.loaded, state.player, state.scene, state.session, state.props, state.startX, state.startY, state.startFacing});
         if (result >= 0) { return result; }
-        result = OnLevelSounds({m_failures, m_development.check, state.session, state.effects});
+        result = OnLevelSounds({m_failures, m_development.check, state.session, state.scene});
         if (result >= 0) { return result; }
         result = OnPropRoutes({m_failures, m_development.check, state.loaded, state.scene});
         if (result >= 0) { return result; }
@@ -139,7 +138,7 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
         if (result >= 0) { return result; }
         result = OnTutorial({m_failures, state.capturePath, m_development.check, state.launch.gameContext, state.tables, state.weapons, state.vitals, state.progress, state.program, state.loaded, state.player, state.weaponSlot, state.equippedWeaponSlot, state.scene, state.brother, state.session, state.powerups, state.pickups, state.pickupProfile, state.tutorial, state.accountedXplodium});
         if (result >= 0) { return result; }
-        result = OnWaves({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, m_development.checkWaves, state.launch.startWave, state.launch.gameContext, state.withBrother, m_development.powerupStudy, state.launch.archiveMission, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.progress, state.window, state.program, state.loaded, state.player, state.weaponSlot, state.effects, state.scene, state.brother, state.brotherModel, state.session, state.pickups, state.props, state.tutorial, state.startX, state.startY, state.startFacing, state.packIndex, state.archiveLevel});
+        result = OnWaves({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, m_development.checkWaves, state.launch.startWave, state.launch.gameContext, state.withBrother, m_development.powerupStudy, state.launch.archiveMission, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.progress, state.window, state.program, state.loaded, state.player, state.weaponSlot, state.scene, state.brother, state.brotherModel, state.session, state.pickups, state.props, state.tutorial, state.startX, state.startY, state.startFacing, state.packIndex, state.archiveLevel});
         if (result >= 0) { return result; }
         result = OnHorde({m_failures, state.capturePath, m_development.check, state.launch.startWave, state.vitals, state.loaded, state.scene, state.session, state.horde});
         if (result >= 0) { return result; }

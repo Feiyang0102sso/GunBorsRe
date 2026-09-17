@@ -1,6 +1,12 @@
 # ZWeaponEffects 职责核对与拆分方案
 
-2026-09-17。状态：调研完成，方案待进入实施；本次未修改运行代码。
+2026-09-17。状态：夜间授权实施已完成组合层迁移，`ZWeaponEffects.h/.cpp` 已删除；R03 与枪械／手雷速度单位链也已完成。分阶段证据、验证和保留边界见 [夜间迁移交接](weapon-effects-night-migration.md)。
+
+## 当前落点
+
+UI 和屏幕粒子直接持有 `CParticleEffectPlayer`；地图临时效果归 `CParticleSystem` 的 20 个实例槽／200 容量池（实际可领取 199 个粒子）。兄弟强化播放器由 `CBrother` 持有，保留相对坐标；普通爆裂使用地图系统、世界坐标及角色锚点。弹体状态与行为归 `CBullet`，实例生命周期归 `CLevel`；四槽附属效果、带状拖尾和独立效果层分别归 `EffectContainer`、`TrailEffectHolder/CRibbonTrailEffect`、`CEffectLayer`。Sprite 缓存、投影、BIG 缓存与 Windows 音频各保留范围明确的 Z 适配，没有新的同功能组合类。
+
+以下为实施前的调研记录，文中“当前”“尚未”指当时状态。已确认事实和历史问题保留供追溯，最新实现与未完成项以交接及路线图为准。
 
 ## 结论与范围
 

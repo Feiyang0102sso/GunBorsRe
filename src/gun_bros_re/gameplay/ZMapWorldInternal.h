@@ -54,7 +54,7 @@
 #include "gun_bros_re/ZHostSettings.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/ZPackTables.h"
 
 #include "engine/resources/CArrayInputStream.h"
@@ -74,7 +74,7 @@
 #include "gun_bros_re/gameplay/CLayerTile.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/CProp.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/TileSet.h"
@@ -445,7 +445,7 @@ bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
  * the bite size is fixed rather than taken from the wall clock.
  */
 void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
-            ZWeaponEffects *effects = nullptr, bool firing = false);
+            CLevel *effects = nullptr, bool firing = false);
 
 /**
  * Draw every model the object layer places -- enemies and players alike.
@@ -460,6 +460,7 @@ struct ZMapRenderItem {
     const ZPlacedProp *prop = nullptr;
     ZPlayerModel *player = nullptr;
     ZEnemyModel *enemy = nullptr;
+    CParticleSystem::RenderItem particle;
     float matrix[kMatrix4dElements] = {};
 };
 

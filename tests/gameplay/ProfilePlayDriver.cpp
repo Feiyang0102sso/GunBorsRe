@@ -17,7 +17,6 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
     auto &scene = frame.scene;
     auto &player = frame.player;
     auto &vitals = frame.vitals;
-    auto &effects = frame.effects;
     auto &window = frame.window;
     auto &music = frame.music;
     auto &leftPowerup = frame.leftPowerup;
@@ -118,7 +117,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
             std::printf("[pause-bgm-check] frame=%u menu=%d paused-stream=%d gain=%.2f expected=%.2f failures=%u\n",
                 controlFrame, paused || shopOpen, playback.paused, playback.volume, expectedVolume, checkFailures);
         }
-        shotsBeforeSwap = effects.GetShotCount();
+        shotsBeforeSwap = scene.GetShotCount();
         checkSwapFiring = controlFrame == 2 || controlFrame == controlClickCount + 2;
         frame.forceFire = checkSwapFiring;
 
@@ -126,7 +125,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
     }
     case ZSurvivalFramePhase::AfterSimulation: {
         if (checkSwapFiring) {
-            const std::size_t shots = effects.GetShotCount() - shotsBeforeSwap;
+            const std::size_t shots = scene.GetShotCount() - shotsBeforeSwap;
             if (shots == 0) { ++checkFailures; }
             std::printf("[combat-swap-check] fire-after-switch=%zu failures=%u\n", shots, checkFailures);
         }

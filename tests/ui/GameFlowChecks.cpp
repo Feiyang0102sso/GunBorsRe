@@ -392,6 +392,9 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
         !LoadArmorCatalog(toc, tables, armor)) { return 1; }
     const auto savePath = std::filesystem::path(TestOutput::Path("audio-transitions")) / std::to_string(GetTickCount64());
     CProfileManager profile;
+    // Match the front end: native saves restore slot state but do not bind
+    // the BIG refinery template needed after the postgame -> refinery transition.
+    profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     if (!LoadProfile(toc, tables, profile, savePath, TestOutput::Fixtures())) { return 1; }
     ZWindow window;
     if (!window.Open("Audio transition verification", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }

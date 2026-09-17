@@ -139,8 +139,8 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
         !EquipPlayerWeapon(tables, playerData.script, pistol->data, "feedback player", player) ||
         !CreatePlayerBuffers(player, program)) { return 1; }
-    ZWeaponEffects effects(toc, tables, program);
-    CLevel scene(tables, program, enemies, player, vitals, effects, playerData.gameScale);
+    CLevel scene(toc, tables, program);
+    scene.BindCombat(enemies, player, vitals, playerData.gameScale);
     unsigned failures = 0;
     failures += CheckOriginalCircleCircle();
     failures += CheckEnemyMovement(scene, player, vitals);
@@ -149,11 +149,11 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     blast.ownerType = 1;
     blast.x = scene.GetPlayer().x - 20;
     blast.y = scene.GetPlayer().y;
-    const auto beforeBlast = effects.GetSoundCueCount();
+    const auto beforeBlast = scene.GetSoundCueCount();
     scene.Splash(blast, 100, 360, 300, 100);
     const unsigned knockbackState = player.weapon->brother.GetStateId();
     for (int elapsed = 0; elapsed < 768; elapsed += 16) { scene.Update(16, 0, 0, false); }
-    const auto blastSounds = effects.GetSoundCueCount() - beforeBlast;
+    const auto blastSounds = scene.GetSoundCueCount() - beforeBlast;
     if (knockbackState != 10 || blastSounds == 0 || vitals.health != 100) { ++failures; }
     std::printf("[actor-feedback-check] barrel state=%u sounds=%zu hp=%.0f\n", knockbackState, blastSounds, vitals.health);
 
@@ -163,10 +163,10 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     ranged.ownerType = 1;
     ranged.projectile = 123;
     ranged.damage = 1;
-    const auto beforeRanged = effects.GetSoundCueCount();
+    const auto beforeRanged = scene.GetSoundCueCount();
     scene.ApplyHit(kPlayerCombatId, ranged);
     for (int elapsed = 0; elapsed < 768; elapsed += 16) { scene.Update(16, 0, 0, false); }
-    const auto rangedSounds = effects.GetSoundCueCount() - beforeRanged;
+    const auto rangedSounds = scene.GetSoundCueCount() - beforeRanged;
     if (rangedSounds != 0 || vitals.health != 99) { ++failures; }
     std::printf("[actor-feedback-check] ranged sounds=%zu hp=%.0f\n", rangedSounds, vitals.health);
 
@@ -197,14 +197,14 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         brother.Reset(200, 200, 0);
         pickupScene.Reset();
         if (!pickupScene.Spawn(entry.ref, brother.x, brother.y)) { return 1; }
-        pickupScene.Update(16, scene, effects);
+        pickupScene.Update(16, scene);
         brotherCollections += pickupScene.collected;
         if (pickupScene.GetCount() != 1 || pickupScene.collected != 0) { ++failures; }
         scene.GetPlayer().x = brother.x;
         scene.GetPlayer().y = brother.y;
         scene.Update(16, 0, 0, false);
         const unsigned collectedBefore = pickupScene.collected;
-        pickupScene.Update(16, scene, effects);
+        pickupScene.Update(16, scene);
         playerCollections += pickupScene.collected - collectedBefore;
         if (pickupScene.GetCount() != 0 || pickupScene.collected - collectedBefore != 1) { ++failures; }
     }
@@ -214,7 +214,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     CBrother *originalHost = &partner.weapon->brother;
     bool swapAnimation = false;
     bool swapped = false;
-    const auto beforeSwap = effects.GetSoundCueCount();
+    const auto beforeSwap = scene.GetSoundCueCount();
     for (int elapsed = 0; elapsed < 240000; elapsed += 16) {
         scene.Update(16, 0, 0, false);
         // BIG states 4/5 lower the old gun and raise the new one.
@@ -223,7 +223,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         if (scene.GetBrotherWeaponSlot() == 1) { swapped = true; }
         if (swapped && state != 4 && state != 5) { break; }
     }
-    const auto swapSounds = effects.GetSoundCueCount() - beforeSwap;
+    const auto swapSounds = scene.GetSoundCueCount() - beforeSwap;
     if (!swapAnimation || !swapped || swapSounds == 0 || originalHost != &partner.weapon->brother) { ++failures; }
     std::printf("[actor-feedback-check] AI swap animation=%d swapped=%d sounds=%zu host-preserved=%d\n",
         swapAnimation, swapped, swapSounds, originalHost == &partner.weapon->brother);
@@ -261,7 +261,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         scene.Reset();
         ZCombatEnemy *enemy = scene.Spawn(index, scene.GetPlayer().x + 8, scene.GetPlayer().y);
         if (!enemy) { return 1; }
-        const auto beforeMelee = effects.GetSoundCueCount();
+        const auto beforeMelee = scene.GetSoundCueCount();
         bool knockedBack = false;
         bool hadContact = false;
         // Let the actual enemy script enable its attack; no injected force/damage table.
@@ -296,7 +296,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
             forceMs, firstStep, lateStep, travel);
         failures += CheckMeleeEscape(scene, player, index);
         for (int elapsed = 0; elapsed < 768; elapsed += 16) { scene.Update(16, 0, 0, false); }
-        const auto meleeSounds = effects.GetSoundCueCount() - beforeMelee;
+        const auto meleeSounds = scene.GetSoundCueCount() - beforeMelee;
         if (!knockedBack || meleeSounds == 0) { ++failures; }
         std::printf("[actor-feedback-check] melee enemy=%08x:%u knockback=%d sounds=%zu hits=%u\n",
             enemies[index].packHash, enemies[index].ordinal, knockedBack, meleeSounds, vitals.hits);

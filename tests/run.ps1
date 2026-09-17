@@ -162,7 +162,11 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
     } elseif ($suite -eq 'Smoke') {
         # The actual GUI entry uses explicit screenshot/profile arguments. Pipe
         # redirection keeps OpenGameLog from writing to the real userdata directory.
-        Add-Check 'game-menu' @('--skip-intro', '--menu-page', '2') -Game
+        if ($Configuration -eq 'Release') {
+            Add-Check 'game-menu' @('--skip-intro') -Game
+        } else {
+            Add-Check 'game-menu' @('--skip-intro', '--menu-page', '2') -Game
+        }
     } elseif ($suite -eq 'Campaign') {
         Add-Check 'campaign-doors' @('--campaign-door-check')
         Add-Check 'debug-map-profile' @('--debug-map-profile-check')
@@ -276,6 +280,7 @@ try {
     $before | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $reportDirectory 'protected-before.json') -Encoding UTF8
     $checks.ToArray() | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $reportDirectory 'plan.json') -Encoding UTF8
     Write-Output "[validation] $Configuration $Phase logs=$reportDirectory"
+    if ($Configuration -eq 'Release') { . (Join-Path $PSScriptRoot 'ZRuntimeTestWindow.ps1') }
     foreach ($check in $checks) {
         $caseDirectory = Join-Path $reportDirectory "$($check.Suite)/$($check.Name)"
         $logDirectory = Join-Path $caseDirectory 'logs'
@@ -286,8 +291,11 @@ try {
             $caseExe = $formalExe
             $imageDirectory = Join-Path $caseDirectory 'images'
             New-Item -ItemType Directory -Path $imageDirectory -Force | Out-Null
-            $arguments = @('--mute', '--profile', (Join-Path $caseDirectory 'saves'),
-                '--screenshot', (Join-Path $imageDirectory 'menu.png')) + $check.Arguments
+            $arguments = @('--mute', '--profile', (Join-Path $caseDirectory 'saves'))
+            if ($Configuration -eq 'Debug') {
+                $arguments += @('--screenshot', (Join-Path $imageDirectory 'menu.png'))
+            }
+            $arguments += $check.Arguments
         }
         $stdout = Join-Path $logDirectory 'stdout.log'
         $stderr = Join-Path $logDirectory 'stderr.log'
@@ -304,13 +312,29 @@ try {
         $startInfo.RedirectStandardError = $true
         foreach ($argument in $arguments) { $startInfo.ArgumentList.Add($argument) }
         $process = [System.Diagnostics.Process]::Start($startInfo)
-        $stdoutFile = [System.IO.File]::Open($stdout, 'Create', 'Write', 'Read')
-        $stderrFile = [System.IO.File]::Open($stderr, 'Create', 'Write', 'Read')
+        # Disable file buffering so readiness messages are visible while the
+        # running process is idle, not only after CopyToAsync completes.
+        $stdoutFile = [System.IO.FileStream]::new($stdout, 'Create', 'Write', 'Read', 1)
+        $stderrFile = [System.IO.FileStream]::new($stderr, 'Create', 'Write', 'Read', 1)
+        $releaseMenu = $check.Game -and $Configuration -eq 'Release'
+        $menuClosed = $false
         try {
             # Drain both pipes concurrently, writing logs even if a check stalls.
             $stdoutCopy = $process.StandardOutput.BaseStream.CopyToAsync($stdoutFile)
             $stderrCopy = $process.StandardError.BaseStream.CopyToAsync($stderrFile)
-            $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+            if ($releaseMenu) {
+                # Release has no capture arguments. As in verify-runtime.ps1,
+                # wait for menu initialization and close our own test window.
+                while (-not $process.WaitForExit(200) -and $timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+                    if (Select-String -LiteralPath $stdout -SimpleMatch '[menu] ready' -Quiet) {
+                        $menuClosed = [ZRuntimeTestWindow]::Close($process.Id)
+                        if ($menuClosed) { break }
+                    }
+                }
+                $completed = $process.WaitForExit(10000)
+            } else {
+                $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+            }
             if (-not $completed) { $process.Kill($true); $process.WaitForExit() }
             $null = $stdoutCopy.GetAwaiter().GetResult()
             $null = $stderrCopy.GetAwaiter().GetResult()
@@ -324,6 +348,7 @@ try {
         $timer.Stop()
         $status = 'Passed'
         if ($exitCode -ne $check.ExpectedExit) { $status = 'Failed' }
+        if ($releaseMenu -and -not $menuClosed) { $status = 'Failed' }
         if (-not $completed) { $status = 'TimedOut' }
         if ($check.Name -eq 'props' -and $status -eq 'Passed') {
             # Do not allow exit 1 to hide another resource error or a crash.

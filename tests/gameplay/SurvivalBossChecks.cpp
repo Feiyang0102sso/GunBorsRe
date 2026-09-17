@@ -108,8 +108,8 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         // independent explosion assertions stay meaningful on the old code.
         const ZEnemyTemplateData *bossData = boss->data;
         std::size_t bossEntry = static_cast<std::size_t>(bossData - enemies.data());
-        ZWeaponEffects blastEffects(toc, tables, program);
-        CLevel blastScene(tables, program, enemies, player, vitals, blastEffects, loaded.playerTemplate->gameScale);
+        CLevel blastScene(toc, tables, program);
+    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
         for (unsigned kind = 0; kind < 3; ++kind) {
             blastScene.Reset();
             vitals.invincible = true;
@@ -138,7 +138,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             for (unsigned number = 0; number < throws; ++number) {
                 blastEnemy.combat.x = 600;
                 blastEnemy.combat.y = 450;
-                if (blastEffects.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
+                if (blastScene.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
                 float matrix[16];
                 blastScene.PlayerMatrix(matrix);
                 for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
@@ -146,7 +146,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                     blastEnemy.combat.y = 450;
                     blastEnemy.combat.behaviour = 7;
                     blastEnemy.combat.targetAlive = false;
-                    blastEffects.Update(player, matrix, 0, 16);
+                    blastScene.Update(player, matrix, 0, 16);
                     blastEnemy.Update(16);
                 }
                 unsigned expectedParts = parts;
@@ -239,14 +239,14 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                         blastEnemy.Update(16);
                     }
                     const float before = blastEnemy.combat.health;
-                    blastEffects.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0);
+                    blastScene.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0);
                     float matrix[16];
                     blastScene.PlayerMatrix(matrix);
                     for (int time = 0; time < 4000; time += 16) {
                         blastEnemy.combat.x = 600; blastEnemy.combat.y = 450;
                         blastEnemy.combat.behaviour = 7;
                         blastEnemy.combat.targetAlive = false;
-                        blastEffects.Update(player, matrix, 0, 16);
+                        blastScene.Update(player, matrix, 0, 16);
                         blastEnemy.Update(16);
                     }
                     float expectedDamage = 0;

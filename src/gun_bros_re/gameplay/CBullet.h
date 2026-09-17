@@ -42,18 +42,22 @@
 #include "gun_bros_re/data/CGameAssetRef.h"  // CGameSpriteGluRef
 #include "gun_bros_re/gameplay/CGun.h"
 #include "gun_bros_re/gameplay/ZCombatTypes.h"
-#include "gun_bros_re/gameplay/CLightningArc.h"
+#include "gun_bros_re/effects/CLightningArc.h"
 
 #include <cstdint>
 #include <array>
+#include <map>
+#include "gun_bros_re/effects/EffectContainer.h"
+class CParticleEffect;
+class CParticlePool;
+#include "gun_bros_re/gameplay/ZProjectileTypes.h"
+class ZSpriteRenderer;
+class ZEffectColors;
+class ZShaderProgram;
+struct ZPlayerModel;
+struct ZBulletVisual;
+struct ZEffectProjection;
 
-/** CBullet native12/13: authored point count, width, sample time and RGBA. */
-struct ZBulletRibbonSettings {
-    unsigned capacity = 0;
-    float width = 0;
-    unsigned intervalMs = 0;
-    std::array<std::uint16_t, 4> color{};
-};
 
 // What a CGameAssetRef holds when it points at nothing.
 constexpr std::int32_t kNoAssetId = -1;
@@ -136,8 +140,53 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
     std::vector<ZGunCue> TakeCues();
 
+    /** CBullet::Update owns travel, ray/actor collision and culling. */
+    void UpdateProjectile(ZProjectileWorld *world, ZSpriteRenderer &sprites,
+        const ZProjectileView &view, ZPlayerModel &player, const float *modelToScene,
+        float facingDegrees, int deltaMs, const ZWeaponCollision *collision, std::uint32_t &randomState);
+    /** Original bullet sprite/mesh/arc draw; callers provide the Windows renderer. */
+    void DrawProjectile(ZSpriteRenderer &sprites, ZEffectColors &colors, const ZShaderProgram &program,
+        const float *sceneMvp, const ZEffectProjection &projection, float meshCameraScale,
+        std::size_t &beamQuads, std::size_t &lightningQuads);
+    void DrawLightning(ZSpriteRenderer &sprites, ZEffectColors &colors,
+        const ZEffectProjection &projection, std::size_t &lightningQuads) const;
+    void AttachParticleEffect(const CParticleEffect &data, std::shared_ptr<CParticlePool> pool, bool trail, bool align);
+    void StopTrail();
+    void ApplyRibbonCue(const ZGunCue &cue);
+    void StopAttachedEffects();
+    void UpdateAttachedEffects(int deltaMs, std::uint32_t &randomState);
+    EffectContainer effects;
+    ZCombatId id = 0;
+    ZCombatId owner = kPlayerCombatId;
+    GameObjectRef weapon;
+    unsigned weaponSlot = 0;
+    unsigned weaponMasteryLimit = 0;
+    float masteryDamageMultiplier = 1;
+    bool critical = false;
+    int ownerType = 0;
+    float damageMultiplier = 1;
+    float powerupMultiplier = 1;
+    int part = 0;
+    bool pendingHit = false;
+    std::map<ZCombatId, int> hitUntil;
+    CLightningArc lightningArc;
+    ZBulletVisual *visual = nullptr;
+    ZGunCue source;
+    float x = 0, y = 0, z = 0;
+    float direction = 0;
+    float speed = 0;
+    float length = 0;
+    bool beam = false;
+    // CEnemy::FireBullet passes no anchor callback; only gun beams follow a muzzle.
+    bool followsMuzzle = false;
+    bool spawnCollision = false;
+    float spawnNormalX = 0, spawnNormalY = 0;
+
     int ageMs = 0;
     int animation = 0;
+    // Bind fixes cap slots from the resource; Flow only changes the body player.
+    int beamSourceAnimation = 0;
+    int beamEndAnimation = 0;
     int animationAgeMs = 0;
     bool animationFinished = false;
     bool removed = false;
@@ -154,6 +203,10 @@ public:
 
 private:
     friend class CGun;
+    EffectContainer::Handle m_trailHandle = 0;
+    EffectContainer::Handle m_ribbonHandle = 0;
+    bool m_retirementStarted = false;
+    EffectHolder::Anchor EffectAnchor(bool align, bool hit) const;
     CGun *m_sourceGun = nullptr;
     CScriptInterpreter m_interpreter;
     std::vector<ZGunCue> m_cues;

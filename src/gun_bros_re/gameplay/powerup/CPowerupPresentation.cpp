@@ -8,21 +8,30 @@
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "engine/core/ZMatrix4d.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CParticlePool.h"
+#include "gun_bros_re/effects/CParticlePool.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include <cstdio>
+#include "gun_bros_re/effects/CParticleEffectPlayer.h"
+#include "gun_bros_re/effects/ZParticleResources.h"
+#include "gun_bros_re/gameplay/ZCombatAudio.h"
+#include "engine/glu/sprite/ZSpriteRenderer.h"
 
 /** Host for CPowerup movies, screen particles and completion callbacks.
  * Desktop rendering state belongs to the same CPowerup as its interpreter.
  */
 struct CPowerup::Presentation {
     Presentation(CResTOCManager &source, ZPackTables &resources, CLevel &level)
-        : toc(source), tables(resources), scene(level) {}
+        : toc(source), tables(resources), scene(level), particleResources(resources), audio(resources) {}
     CResTOCManager &toc;
     ZPackTables &tables;
     CLevel &scene;
     ZShaderProgram program;
-    std::unique_ptr<ZWeaponEffects> particles;
+    ZParticleResources particleResources;
+    ZCombatAudio audio;
+    std::unique_ptr<ZSpriteRenderer> particleRenderer;
+    std::shared_ptr<CParticlePool> particlePool = std::make_shared<CParticlePool>(100);
+    std::array<CParticleEffectPlayer, 5> particles;
+    std::uint32_t particleRandom = 1;
     std::map<unsigned, std::unique_ptr<ZMovieRenderer>> renderers;
     ZMovieRenderer *renderer = nullptr;
     CMovie::Playback movie;
@@ -66,11 +75,10 @@ bool CPowerup::Start(const ZPowerupEntry &entry, bool fromSelector, unsigned sto
     }
     Presentation &presentation = *m_presentation;
     if (presentation.active || HasSelectorFrame()) { return false; }
-    if (!presentation.particles) {
+    if (!presentation.particleRenderer) {
         if (!presentation.program.Load(Paths::Shaders().c_str(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return false; }
         // CPowerup::Bind :188745 shares 100 slots across its five screen players.
-        presentation.particles = std::make_unique<ZWeaponEffects>(presentation.toc, presentation.tables, presentation.program,
-            std::make_shared<CParticlePool>(100));
+        presentation.particleRenderer = std::make_unique<ZSpriteRenderer>(presentation.toc, presentation.program);
     }
     // A previously accepted throw keeps its inventory reservation while other
     // effects run; only an explicit Reset cancels the complete host lifecycle.
@@ -184,22 +192,25 @@ bool CPowerup::ApplyPresentationActions() {
                     y = (presentation.random >> 8) / 16777216.0f;
                 }
                 // Original maintains at most five simultaneous screen emitters.
-                if (presentation.particles->GetEffectCount() < 5) {
-                    ZGunCue cue;
-                    cue.kind = ZGunCue::Kind::Effect;
-                    cue.resource = action.resource;
-                    presentation.particles->Emit(cue, x * 1024, y * 768, 0, 0);
+                for (auto &player : presentation.particles) {
+                    if (!player.IsDone()) { continue; }
+                    const auto *data = presentation.particleResources.Get(action.resource);
+                    if (data == nullptr) { ++failures; return false; }
+                    player.Init(*data, presentation.particlePool);
+                    player.SetLooping(false);
+                    player.SetPosition(x * 1024, y * 768, 0, 0);
                     ++effectCount;
+                    break;
                 }
             } else if (action.function == 9) {
                 ZGunCue cue;
                 cue.kind = ZGunCue::Kind::Sound;
                 cue.resource = action.resource;
-                if (m_effects != nullptr) {
+                if (GetLevelContext() != nullptr) {
                     float x = 0, y = 0;
                     presentation.scene.ActorPosition(m_owner, x, y);
-                    m_effects->Emit(cue, x, y, 0, 0, m_owner);
-                } else { presentation.particles->Emit(cue, 0, 0, 0, 0); }
+                    GetLevelContext()->Emit(cue, x, y, 0, 0, m_owner);
+                } else { presentation.audio.PlayCue(cue); }
             } else {
                 ++failures;
                 std::printf("[powerup-movie] unhandled native=%u\n", action.function);
@@ -213,7 +224,9 @@ bool CPowerup::ApplyPresentationActions() {
 void CPowerup::UpdatePresentation(int deltaMs) {
     Presentation &presentation = *m_presentation;
     if (deltaMs <= 0) { return; }
-    if (presentation.particles) { presentation.particles->AdvanceAmbientEffects(deltaMs); }
+    presentation.audio.BeginFrame();
+    presentation.audio.Update();
+    for (auto &player : presentation.particles) { player.Update(deltaMs, presentation.particleRandom); }
     if (!presentation.active) {
         // Native Hide may outlive Flow Exit. Let the selector finish closing;
         // only an explicit Reset cancels that playback without completion.
@@ -254,10 +267,12 @@ bool CPowerup::Draw() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
-    if (presentation.particles) {
+    if (presentation.particleRenderer) {
         float projection[16];
         Matrix4dOrthoTopLeft(1024, 768, 1, projection);
-        presentation.particles->Draw(projection);
+        presentation.particleRenderer->Begin();
+        for (const auto &player : presentation.particles) { player.QueueParticles(*presentation.particleRenderer); }
+        presentation.particleRenderer->Draw(projection);
     }
     if (m_selector != nullptr && !m_selector->DrawPowerupPresentation()) { return false; }
     if (presentation.movieActive && presentation.renderer != nullptr) { return presentation.renderer->Draw(presentation.movieOrdinal, presentation.movie.GetTime()); }
@@ -281,5 +296,6 @@ void CPowerup::ResetExecution() {
     presentation.occupiesPresentation = false;
     presentation.movie.Cancel();
     presentation.elapsed = 0;
-    if (presentation.particles) { presentation.particles->Clear(); }
+    for (auto &player : presentation.particles) { player.Stop(); }
+    presentation.audio.Clear();
 }

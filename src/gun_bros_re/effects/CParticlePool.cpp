@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/CParticlePool.h"
+#include "gun_bros_re/effects/CParticlePool.h"
 #include <cassert>
 
 CParticlePool::CParticlePool(std::size_t count) : m_particles(count) {

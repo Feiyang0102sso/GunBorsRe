@@ -116,6 +116,9 @@ public:
         int part = 0;
         int node = -1;
         int slot = 0;
+        int effectGroup = 3;
+        bool alignEffect = false;
+        float effectScale = 1;
         float x = 0;
         float y = 0;
         float direction = 0;

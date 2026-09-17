@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/CParticle.h"
+#include "gun_bros_re/effects/CParticle.h"
 #include <cmath>
 
 namespace {

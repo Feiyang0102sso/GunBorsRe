@@ -71,6 +71,10 @@ bool CBullet::Template::Init(CArrayInputStream &stream) {
 
 void CBullet::Bind(const Template &data, bool alternate) {
     maximumBeamLength = 3000; // CBullet::Bind :63673.
+    effects.Clear(); // CBullet::Bind :63653 clears old attachments.
+    m_trailHandle = 0;
+    m_ribbonHandle = 0;
+    m_retirementStarted = false;
     ribbon = {};
     lightning = {};
     m_trajectoryHeight = data.GetTrajectoryHeight();
@@ -78,6 +82,8 @@ void CBullet::Bind(const Template &data, bool alternate) {
     m_trajectoryType = data.GetTrajectoryType();
     if (!data.HasMesh()) { m_trajectoryHeight = 0; m_trajectoryDurationMs = 0; }
     animation = data.GetSpriteRef().animation;
+    beamSourceAnimation = static_cast<std::uint8_t>(animation + 1);
+    beamEndAnimation = static_cast<std::uint8_t>(animation + 2);
     flags = data.GetFlags();
     acceleration = data.GetAcceleration();
     m_damage = data.GetBaseDamage();
@@ -286,16 +292,22 @@ std::int16_t CBullet::FunctionResolver(std::uint8_t function,
         break;
     case 12:
         // SetRibbonTrail :60520 creates at most one trail per projectile.
-        if (ribbon.capacity == 0 && arguments[0] > 0) {
+        if (arguments[0] > 0) {
             ribbon.capacity = arguments[0];
             ribbon.width = arguments[1];
             ribbon.intervalMs = static_cast<std::uint16_t>(arguments[2]);
+            cue.kind = ZGunCue::Kind::RibbonTrail;
+            cue.ribbon = ribbon;
+            m_cues.push_back(cue);
         }
         break;
     case 13:
         for (unsigned channel = 0; channel < ribbon.color.size(); ++channel) {
             ribbon.color[channel] = static_cast<std::uint16_t>(arguments[channel]);
         }
+        cue.kind = ZGunCue::Kind::RibbonColor;
+        cue.ribbon = ribbon;
+        m_cues.push_back(cue);
         break;
     case 16:
         // Combat, homing and ribbon geometry are outside this visual host.

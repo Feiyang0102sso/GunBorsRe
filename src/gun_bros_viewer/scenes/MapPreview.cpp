@@ -158,11 +158,11 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     ZPackTables weaponTables(tocManager);
     std::vector<ZWeaponEntry> weapons;
     std::size_t weaponSlot = weaponIndex;
-    std::unique_ptr<ZWeaponEffects> weaponEffects;
+    std::unique_ptr<CLevel> weaponEffects;
     if (gameView) {
         if (!LoadWeaponCatalog(tocManager, weaponTables, weapons)) { return 1; }
         if (weaponSlot >= weapons.size()) { weaponSlot = 0; }
-        weaponEffects.reset(new ZWeaponEffects(tocManager, weaponTables, program, loaded.particlePool));
+        weaponEffects.reset(new CLevel(tocManager, weaponTables, program, loaded.particlePool));
     }
 
     int drawableWidth = 0;
@@ -345,7 +345,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 LoadPlacedPlayers(tocManager, program, replacement);
                 if (gameView) {
                     if (!EquipControlledPlayer(weaponTables, replacement, program, weapons[weaponSlot])) { return 1; }
-                    weaponEffects = std::make_unique<ZWeaponEffects>(tocManager, weaponTables, program, replacement.particlePool);
+                    weaponEffects = std::make_unique<CLevel>(tocManager, weaponTables, program, replacement.particlePool, replacement.particleSystem);
                 }
                 ReportSpawns(replacement);
                 if (!gameView) { turrets.Bind(replacement); }
@@ -506,9 +506,9 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         if (weaponEffects) {
             weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
         }
-        DrawMapObjects(loaded, batch, program, mvp, showProps);
+        DrawMapObjects(loaded, batch, program, mvp, showProps, weaponEffects.get());
         if (weaponEffects) {
-            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer);
+            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
         }
 
         if (showSpawns) {

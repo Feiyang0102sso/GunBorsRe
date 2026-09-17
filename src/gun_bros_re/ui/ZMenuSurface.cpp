@@ -273,8 +273,14 @@ namespace MenuDetail {
         movies.Rectangle(area.x, area.y, area.width, area.height, 0, 0, 0, area.alpha * 0.5f);
     }
 
+    void ZGameMenu::PrepareParticleResources() {
+        if (!particleResources) { particleResources = std::make_unique<ZParticleResources>(*resourceTables); }
+        if (!particleRenderer) { particleRenderer = std::make_unique<ZSpriteRenderer>(*resourceToc, imageProgram); }
+    }
+
     bool ZGameMenu::PrepareModeEffects() {
         if (modeEffects[0]) { return true; }
+        PrepareParticleResources();
         static const struct { const char *pack; int ordinals[2]; } binding =
 #include "gun_bros_re/ui/CMenuModeParticleData.inc"
         ;
@@ -284,16 +290,15 @@ namespace MenuDetail {
             if (binding.ordinals[index] < 0) { return false; }
             modeEffectRefs[index].packHash = resourceToc->GetPack(pack)->GetPackHash();
             modeEffectRefs[index].localIndex = static_cast<std::uint8_t>(binding.ordinals[index]);
-            std::vector<std::uint8_t> bytes;
-            if (!resourceTables->ReadSectionResource(modeEffectRefs[index].packHash, ZGameSection::ParticleEffect,
-                modeEffectRefs[index].localIndex, bytes)) { return false; }
-            CParticleEffect effect;
-            CArrayInputStream input(bytes);
-            if (!effect.Init(input) || input.Available() != 0) { return false; }
-            modeEffects[index] = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram, particlePool);
+            const auto *data = particleResources->Get(modeEffectRefs[index]);
+            if (data == nullptr) { return false; }
+            modeEffects[index] = std::make_unique<CParticleEffectPlayer>();
+            modeEffects[index]->Init(*data, particlePool);
+            modeEffects[index]->SetLooping(data->GetDurationMs() == 0);
         }
         // Bind stops the selection burst; the second emitter runs continuously.
-        return modeEffects[1]->StartPersistentEffect(modeEffectRefs[1], 0, 0) != 0;
+        modeEffects[0]->Stop();
+        return true;
     }
 
     void ZGameMenu::DrawModeEffects(const ZMovieRegion &label) {
@@ -305,7 +310,7 @@ namespace MenuDetail {
             float y = label.y;
             if (index == 1) { y += label.height / 2; }
             Matrix4dTranslate(transform, label.x + label.width / 2, y);
-            modeEffects[index]->Draw(transform);
+            modeEffects[index]->Draw(*particleRenderer, transform);
         }
     }
 
@@ -318,6 +323,7 @@ namespace MenuDetail {
         static const struct { const char *pack; int ordinals[9]; } liveBinding =
 #include "gun_bros_re/ui/CMenuLivePostGameParticleData.inc"
         ;
+        PrepareParticleResources();
         if (index >= postGameEffects.size()) { return false; }
         if (!postGameEffects[index]) {
             const char *packName = binding.pack;
@@ -329,12 +335,15 @@ namespace MenuDetail {
             GameObjectRef resource;
             resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
             resource.localIndex = static_cast<std::uint8_t>(ordinal);
-            auto effect = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram, particlePool);
+            const auto *data = particleResources->Get(resource);
+            if (data == nullptr) { return false; }
+            auto effect = std::make_unique<CParticleEffectPlayer>();
+            effect->Init(*data, particlePool);
             // CParticleEffectPlayer's constructor enables looping (:131269).
-            if (effect->StartPersistentEffect(resource, 0, 0, true) == 0) { return false; }
+            effect->SetLooping(true);
             postGameEffects[index] = std::move(effect);
         }
-        postGameEffects[index]->AdvanceAmbientEffects(elapsed);
+        postGameEffects[index]->Update(elapsed, particleRandom);
         return true;
     }
 
@@ -348,19 +357,23 @@ namespace MenuDetail {
         GameObjectRef resource;
         resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
         resource.localIndex = static_cast<std::uint8_t>(binding.ordinals[icon]);
+        PrepareParticleResources();
+        const auto *data = particleResources->Get(resource);
+        if (data == nullptr) { return false; }
         auto &effect = refineryEffects[slot];
-        effect.player = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram, particlePool);
+        effect.player = std::make_unique<CParticleEffectPlayer>();
         // SetupTransfer :174510/:174534 uses the original ICON_STANDARD particle.
         // Positions are local to CTransferEffect::Draw, including living particles.
-        effect.handle = effect.player->StartPersistentEffect(resource, 0, 0, true);
+        effect.player->Init(*data, particlePool);
+        effect.player->SetLooping(true);
         effect.x = x;
         effect.y = y;
-        return effect.handle != 0;
+        return true;
     }
 
     void ZGameMenu::AdvanceRefineryEffects(unsigned elapsed) {
         for (auto &effect : refineryEffects) {
-            if (effect.player) { effect.player->AdvanceAmbientEffects(elapsed); }
+            if (effect.player) { effect.player->Update(elapsed, particleRandom); }
         }
     }
 
@@ -374,8 +387,7 @@ namespace MenuDetail {
         // CTransferEffect::Update :174361 calls StopSpawning, not Clear.
         // StopEffect detaches the emitter while its living particles expire.
         // Correction: that old host name now explicitly becomes StopSpawning.
-        if (effect.player) { effect.player->StopSpawning(effect.handle); }
-        effect.handle = 0;
+        if (effect.player) { effect.player->StopSpawning(); }
     }
 
     void ZGameMenu::DrawRefineryEffects() {
@@ -384,7 +396,7 @@ namespace MenuDetail {
             float transform[16];
             std::copy(movies.CurrentProjection(), movies.CurrentProjection() + 16, transform);
             Matrix4dTranslate(transform, effect.x, effect.y);
-            effect.player->Draw(transform);
+            effect.player->Draw(*particleRenderer, transform);
         }
     }
 

@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
-unsigned CheckLevelSounds(CLevel &level, ZWeaponEffects &effects) {
+unsigned CheckLevelSounds(CLevel &level, CLevel &effects) {
     unsigned failures = 0, checked = 0;
     const auto &resources = level.GetTemplate().script.GetResources();
     for (unsigned index = 0; index < resources.size(); ++index) {

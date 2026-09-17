@@ -94,13 +94,13 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     ZPlayerVitals vitals;
     vitals.maximum = progress.GetHealth();
     vitals.health = vitals.maximum / 2;
-    ZWeaponEffects effects(toc, tables, program);
+    CLevel scene(toc, tables, program);
     std::vector<ZEnemyTemplateData> enemies;
-    CLevel scene(tables, program, enemies, player, vitals, effects, 1);
+    scene.BindCombat(enemies, player, vitals, 1);
     scene.SetPlayerProgress(&progress);
     CMap map;
     CGame session(scene, map, enemies);
-    CPowerUpSelector powerups(toc, tables, player, vitals, scene, effects, profile);
+    CPowerUpSelector powerups(toc, tables, player, vitals, scene, profile);
     ZSurvivalGameContext context{profile, savePath};
     CombatCheatResult result;
     // Start real BIG intervals, including >24h standard work, then advance only refinery time.

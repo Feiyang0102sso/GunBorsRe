@@ -31,7 +31,14 @@
 #include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include "gun_bros_re/gameplay/ZMultiplayerStatistics.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/ZProjectileTypes.h"
+#include "gun_bros_re/gameplay/ZBulletResources.h"
+#include "gun_bros_re/effects/ZParticleResources.h"
+#include "gun_bros_re/gameplay/ZCombatAudio.h"
+#include "gun_bros_re/effects/ZEffectColors.h"
+#include "gun_bros_re/effects/CEffectLayer.h"
+#include "gun_bros_re/effects/CParticleSystem.h"
+#include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "gun_bros_re/data/CChallengeManager.h"
 
 #include <cmath>
@@ -48,7 +55,6 @@ class CPowerup;
 class CPowerUpSelector;
 struct ZPowerupEntry;
 class ZPropWorld;
-class ZWeaponEffects;
 
 constexpr float kArenaWidth = 1200;
 constexpr float kArenaHeight = 900;
@@ -105,14 +111,70 @@ public:
     };
 
     CLevel();
-    CLevel(ZPackTables &tables, const ZShaderProgram &program,
-        const std::vector<ZEnemyTemplateData> &catalog, ZPlayerModel &player,
-        ZPlayerVitals &vitals, ZWeaponEffects &effects, float playerGameScale);
+    CLevel(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+        std::shared_ptr<CParticlePool> particlePool = nullptr, std::shared_ptr<CParticleSystem> mapParticles = nullptr);
+    ~CLevel();
+    /** Windows audio adaptation: coalesce identical one-shots within one tick. */
+    void BeginAudioFrame();
+    /** Consume gun cues, then advance both new and existing projectiles. */
+    void Update(ZPlayerModel &player, const float *modelToScene, float facingDegrees,
+                int deltaMs, const ZWeaponCollision *collision = nullptr);
+    /** Consume another brother's cues without advancing all projectiles twice. */
+    void EmitBrother(ZPlayerModel &player, const float *modelToScene, float facingDegrees,
+        ZCombatId owner, const ZWeaponCollision *collision = nullptr);
+    /** Optional world-to-screen projection for the rotating character preview. */
+    void Draw(const float *sceneMvp, const float *previewProjection = nullptr, float meshCameraScale = 1.0f,
+              ZWeaponDrawPass pass = ZWeaponDrawPass::All, bool mapParticlesInQueue = false);
+    std::vector<CParticleSystem::RenderItem> GetMapParticleItems() const;
+    void DrawMapParticle(const CParticleSystem::RenderItem &item, const float *sceneMvp);
+    void Clear();
+    void SetCombatWorld(ZProjectileWorld *world);
+    /**
+     * The camera rectangle CBullet::CanBeCulled :60583 tests against.
+     *
+     * Without one no projectile is culled, which is what the standalone
+     * research scenes and the arena had before.
+     */
+    void SetViewBounds(float centerX, float centerY, float width, float height);
+    /** Enemy/manual projectile speed is in world units per second. */
+    ZCombatId SpawnProjectile(const GameObjectRef &resource, float x, float y, float z,
+        float direction, float speed, ZCombatId owner, int ownerType, int part = 0, int node = 0);
+    void ResolveHit(ZCombatId projectile, ZHitResult result);
+    void Emit(const ZGunCue &cue, float x, float y, float z, float direction,
+        ZCombatId actor = 0, int slot = 0, int part = 0, int node = 0);
+    bool RemoveOldestProjectile(ZCombatId owner);
+    void RetireOwner(ZCombatId owner);
+    void PlayMoveSound(const GameObjectRef &sound);
+    /** CPickup owns an emitter handle; stopping it preserves living particles. */
+    // The historical StopEffect name now means immediate Stop. Use StopSpawning to drain.
+    std::uint64_t StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop = false);
+    void StopEffect(std::uint64_t handle);
+    /** CPickup::OnRemove :99723 and CTransferEffect::Update :174361 drain. */
+    void StopSpawning(std::uint64_t handle);
+    /** Standalone research scenes have no brother/projectile update. */
+    void AdvanceAmbientEffects(int deltaMs);
+    /** Finite actor bursts include emitted particles after their emitter ends. */
+    bool HasActorBurst(ZCombatId actor) const;
+    void SetPaused(bool paused);
+    std::size_t GetBulletCount() const;
+    std::size_t GetParticleCount() const;
+    std::size_t GetEffectCount() const;
+    std::size_t GetTrailCount() const;
+    std::size_t GetRibbonCount() const;
+    std::size_t GetDrawnBeamQuadCount() const;
+    std::size_t GetDrawnLightningQuadCount() const;
+    std::size_t GetShotCount() const;
+    std::vector<ZWeaponProjectileState> GetProjectileStates() const;
+    std::size_t GetSoundCueCount() const;
+    /** Voices sounding right now. One WAV never occupies more than one. */
+    unsigned GetVoiceCount() const;
+
+    void BindCombat(const std::vector<ZEnemyTemplateData> &catalog, ZPlayerModel &player,
+        ZPlayerVitals &vitals, float playerGameScale);
 
     /** Bind the original session owner after the level runtime is constructed. */
     void AttachRuntime(CGame &game, const std::vector<ZEnemyTemplateData> &catalog);
     void SetPickups(ZPickupScene *pickups) { m_pickups = pickups; }
-    void SetEffects(ZWeaponEffects *effects) { m_effects = effects; }
     void SetPowerup(CPowerup *powerup, ZCombatId owner = kPlayerCombatId) {
         if (owner == kBrotherCombatId) { m_peerPowerups = powerup; }
         else { m_powerups = powerup; }
@@ -290,6 +352,8 @@ public:
     void SplashBrothers(float x, float y, float radius, float damage, float force, int forceMs);
     void SpawnFromProjectile(const GameObjectRef &resource, const ZCombatHit &hit) override;
     bool FindTarget(const ZCombatHit &hit, float radius, float &x, float &y) override;
+    bool ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float &angle) override;
+    bool LinkedParticleAnchor(ZCombatId actor, int node, float &x, float &y, float &z, float &angle) override;
     bool Anchor(ZCombatId actor, int part, int node,
         float &x, float &y, float &z, float &direction) override;
     std::vector<std::unique_ptr<ZCombatEnemy>> &GetEnemies() { return m_objects.GetEnemies(); }
@@ -611,7 +675,28 @@ private:
     const std::vector<ZEnemyTemplateData> *m_catalog = nullptr;
     CMPMatch *m_match = nullptr;
     ZPickupScene *m_pickups = nullptr;
-    ZWeaponEffects *m_effects = nullptr;
+    // CLevel owns live bullets; each bullet owns its four attached effects.
+    // CMap's system and the transient layer retain independent pools/lifetimes.
+    ZProjectileWorld *m_projectileWorld = nullptr;
+    ZCombatId m_nextProjectile = 1;
+    std::unique_ptr<ZSpriteRenderer> m_effectSprites;
+    std::unique_ptr<ZCombatAudio> m_combatAudio;
+    std::unique_ptr<ZBulletResources> m_bulletResources;
+    std::unique_ptr<ZParticleResources> m_particleResources;
+    ZProjectileView m_projectileView;
+    std::uint32_t m_effectRandom = 1;
+    std::size_t m_shotsFired = 0, m_drawnBeamQuads = 0, m_drawnLightningQuads = 0;
+    float m_effectPlayerX = 0, m_effectPlayerY = 0;
+    std::shared_ptr<CParticleSystem> m_mapParticles;
+    std::shared_ptr<CParticlePool> m_effectLayerPool;
+    CEffectLayer m_effectLayer;
+    ZEffectColors m_effectColors;
+    std::vector<std::unique_ptr<CBullet>> m_bullets;
+    std::map<ZCombatId, std::weak_ptr<CBrother::PowerupParticles>> m_brotherParticles;
+    float RandomProjectile(float minimum, float maximum);
+    CParticleEffectPlayer *StartParticleEffect(const GameObjectRef &ref, float x, float y, float z, float angle);
+    void EmitBulletCue(const ZGunCue &cue, float x, float y, float z, float direction, CBullet *owner = nullptr);
+    void AdvanceParticles(int deltaMs);
     ZPropWorld *m_props = nullptr;
     bool CommitPowerupUse(CPowerUpSelector &selector, const GameObjectRef &resource, unsigned count);
     CPowerup *m_powerups = nullptr;

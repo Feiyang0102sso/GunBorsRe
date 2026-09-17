@@ -2,6 +2,8 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+2026-09-17 夜间更新：`ZWeaponEffects.h/.cpp` 已删除，未留下别名或转发壳。UI 直接播放粒子；地图临时实例、弹体、附属效果、带状拖尾分别归 `CParticleSystem`、`CBullet/CLevel`、`EffectContainer`、`TrailEffectHolder/CRibbonTrailEffect`；兄弟强化播放器归 `CBrotherParticles.cpp`。`CBrotherPowerups.cpp` 保持独立。原版依据、各阶段验证与保留的宿主适配见 [夜间交接](weapon-effects-night-migration.md)，具体路径见 [文件名映射](source-name-map.md)。以下批次描述中的旧状态保留为历史记录。
+
 后续主线（2026-09-16）：用户指定继续处理运行行为硬编码、重复执行逻辑与原版职责归位，具体问题、优先级及验收见 [运行行为与原版职责对齐路线](runtime-alignment-roadmap.md)。本页保留上一阶段实际结果，不将下一阶段待办计为已完成。
 
 当前路径补充：`CLevel*` 文件已统一移入 `gameplay/level/`；`ZEnemyCombat.h` 已并入 `CEnemy.h`，原敌人、协作与死亡竞赛三个 Z 实现文件已归回 `CEnemy`、`CLevel` 的分文件实现。详细映射见 [文件名映射](source-name-map.md)，验证见路线第八节。下文历史路径按映射定位。
@@ -17,6 +19,8 @@
 角色目录归并：玩家、共用 Brother、默认伙伴 AI、两个自建 Bot 及模型组装共 13 个文件统一移入 `gameplay/brother/`。保留 `CBrotherPowerups.cpp`，不合并实现；仅变更路径，验证见路线第十三节。
 
 ## 结果
+
+2026-09-17 目录归并：UI 与战斗共享的 28 个特效源码文件已从 `gameplay/` 移到 `effects/`。仅更新路径与引用，逐文件内容核对保留原实现和注释；各原对象仍负责自己的实例与生命周期，工程继续通配收集到三种产物。详见 [归并与验证记录](effects-directory-migration.md)。
 
 以原职责拆分玩家、刷怪、输入面板、选择器、菜单绑定和 Movie 读取；把桌面适配及自建表示统一为 Z 命名。保留一个工程、三种产物和既有研究入口。没有修改 BIG、存档协议或原生脚本编号。
 

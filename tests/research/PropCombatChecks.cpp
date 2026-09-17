@@ -26,12 +26,12 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
         ZPlayerVitals vitals;
         // This fixture isolates props; no player damage or account is needed.
         vitals.dead = true;
-        ZWeaponEffects effects(toc, tables, program);
-        CLevel scene(tables, program, enemies, player, vitals, effects, 1.0f);
+        CLevel scene(toc, tables, program);
+    scene.BindCombat(enemies, player, vitals, 1.0f);
         CLevel level;
         CLevel::Template levelTemplate;
         level.Bind(levelTemplate, loaded.map);
-        ZMapPropWorld props(loaded, scene, level, effects);
+        ZMapPropWorld props(loaded, scene, level);
         scene.SetProps(&props);
         bool checkedEnemyDamage = false;
         for (ZPlacedProp &target : loaded.props) {
@@ -144,7 +144,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             GameObjectRef grenade;
             grenade.packHash = CStringToKey("pack5");
             grenade.localIndex = 90; // Original standard grenade, also used by boss checks.
-            if (effects.SpawnProjectile(grenade, centerX, centerY, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
+            if (scene.SpawnProjectile(grenade, centerX, centerY, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
             float matrix[16];
             scene.PlayerMatrix(matrix);
             for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
@@ -153,7 +153,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 enemy.combat.behaviour = 7;
                 enemy.combat.targetAlive = false;
                 // Match SurvivalSession: projectiles, then the prop update.
-                effects.Update(player, matrix, 0, 16);
+                scene.Update(player, matrix, 0, 16);
                 props.Update(16);
                 enemy.Update(16);
                 if (enemy.GetPartCount() == 1) { break; }

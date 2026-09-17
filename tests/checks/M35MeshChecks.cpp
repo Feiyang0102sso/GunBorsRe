@@ -39,8 +39,8 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/core/ZMatrix4d.h"
@@ -128,7 +128,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
     if (!window.Open("Weapon verification", 800, 600)) { return 1; }
     ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    ZWeaponEffects effects(toc, tables, program);
+    CLevel effects(toc, tables, program);
     // The observed Kraken failure: particle templates 0x10/0x20 must select
     // explosion animations 4/5, never laser animations 0/1 from the same atlas.
     ZParticleEmitterTemplate emitter;
@@ -196,6 +196,24 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         BuildPlayerGameMatrix(identity, 400, 450,
             PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
         if (i == 0) {
+            // Actual core pistol bullet, isolated from input timing. Original
+            // native factors 0, 0.5, 1 and 2 produce these 100ms distances.
+            for (const std::int16_t factor : {0, 128, 256, 512}) {
+                effects.Clear();
+                player.weapon->gun.TakeCues();
+                const std::int16_t fire[] = {0, 0, 0, 0, factor};
+                player.weapon->gun.FunctionResolver(1, fire, 5);
+                effects.EmitBrother(player, modelToScene, 0, kPlayerCombatId);
+                const auto before = effects.GetProjectileStates();
+                effects.Update(player, modelToScene, 0, 100);
+                const auto after = effects.GetProjectileStates();
+                if (before.size() != 1 || after.size() != 1) { return 1; }
+                const float travel = std::hypot(after[0].x - before[0].x, after[0].y - before[0].y);
+                const float expected = 43.0f * factor / 256.0f;
+                std::printf("[weapon-speed] factor=%d distance=%.3f expected=%.3f\n", factor, travel, expected);
+                if (std::abs(travel - expected) > 0.01f) { return 1; }
+            }
+            effects.Clear();
             // Regression: the default pistols must use the gun's player moves
             // and two distinct hands, even though the mesh is shared with rifles.
             ZMeshBoneTransform right{}, left{};
@@ -375,7 +393,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     glEnable(GL_BLEND);
     ZShaderProgram program;
     if (!program.Load(kShaderDirectory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    ZWeaponEffects effects(toc, tables, program);
+    CLevel effects(toc, tables, program);
     WeaponRayCheckWorld rayWorld;
     effects.SetCombatWorld(&rayWorld);
     // The fixture has a real 800x600 camera; off-screen rifle bullets retire by
@@ -563,6 +581,18 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
             std::printf("[boss-beam-check] %s:%u beam=%d animation=%d length=%.1f quads=%zu arc-quads=%zu\n",
                 sample.first, sample.second, shot.beam, shot.animation, shot.length,
                 effects.GetDrawnBeamQuadCount(), effects.GetDrawnLightningQuadCount());
+            if (shot.beam) {
+                const int sourceAnimation = static_cast<std::uint8_t>(sprite.animation + 1);
+                const int endAnimation = static_cast<std::uint8_t>(sprite.animation + 2);
+                if (shot.animation != sprite.animation || shot.beamSourceAnimation != sourceAnimation ||
+                    shot.beamEndAnimation != endAnimation) { ++failures; }
+                std::printf("[beam-binding-check] body=%d source=%d end=%d authored=%u failures=%u\n",
+                    shot.animation, shot.beamSourceAnimation, shot.beamEndAnimation, sprite.animation, failures);
+                CBullet reference;
+                reference.Bind(data, false);
+                reference.SetScriptSequenceFrame(0);
+                if (reference.beamSourceAnimation != sourceAnimation || reference.beamEndAnimation != endAnimation) { ++failures; }
+            }
         }
         if (sample.second == 104 && effects.GetDrawnLightningQuadCount() != 56) { ++failures; }
         if (sample.second == 104) {
@@ -599,7 +629,9 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
             std::printf("[boss-beam-check] beam span=%d..%d trough=%d%% of the brightest column\n",
                 firstLit, lastLit, troughPercent);
             // Measured: bead chain 3%, tiled beam body 44%.
-            if (firstLit < 0 || troughPercent < 25) { ++failures; }
+            // R03 correction: that brightness threshold encoded a visual guess.
+            // Keep the measurement for comparison; validate BIG slots, not smoothness.
+            if (firstLit < 0) { ++failures; }
         }
         Capture::SaveFrame(window, TestOutput::Path("boss-beam-") + std::string(sample.first) + "-" + std::to_string(sample.second) + ".png");
     }

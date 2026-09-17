@@ -5,7 +5,7 @@
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:130974, :131811, :132332.
  */
 
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 
 #include <algorithm>
 #include <cstring>

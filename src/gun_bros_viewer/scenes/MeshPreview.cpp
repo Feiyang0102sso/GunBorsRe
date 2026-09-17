@@ -41,8 +41,8 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/core/ZMatrix4d.h"

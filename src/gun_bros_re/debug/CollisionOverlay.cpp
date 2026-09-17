@@ -58,7 +58,7 @@ void Enemy(ZMarkerBatch &markers, const CEnemy &enemy, float gameScale,
 
 void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
     const float *projection, float pixelSize, const MapDetail::ZLoadedMap *map,
-    const CLevel *combat, const CBrotherAI *brother, const ZWeaponEffects *effects) {
+    const CLevel *combat, const CBrotherAI *brother, const CLevel *effects) {
     if (map != nullptr) {
         /** Collect the exact collision scene used by player movement. */
         // Nested widths keep coincident movement / bullet / terrain edges visible.

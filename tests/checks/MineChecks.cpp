@@ -5,7 +5,7 @@
 #include "engine/platform/ZWindow.h"
 #include "engine/platform/ZGLLoader.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include <cstdio>
@@ -39,7 +39,7 @@ int RunMineCheck(const std::string &bigDirectory) {
     if (!window.Open("Mine diagnostic", 800, 600)) { return 1; }
     ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    ZWeaponEffects effects(toc, tables, program);
+    CLevel effects(toc, tables, program);
     MineCheckWorld world;
     effects.SetCombatWorld(&world);
     float identity[16], model[16];

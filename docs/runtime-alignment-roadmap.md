@@ -1,6 +1,8 @@
 # 下一阶段主线：运行行为与原版职责对齐
 
-日期：2026-09-16。
+日期：2026-09-17。
+
+最新进展：夜间迁移已删除 `ZWeaponEffects.h/.cpp`，UI、地图粒子、弹体、附属效果与音频适配完成职责拆分；R03 已移除，R10 的枪械／手雷速度链已核实并修正。详细依据、阶段验收及边界见 [夜间迁移交接](weapon-effects-night-migration.md)。下文旧批次记录保留历史语境。
 
 状态：用户已授权依次修复；首批统一 R09 粒子核心，第二批恢复播放器持有粒子、共享池及停止语义。用户指出 Z 组合文件仍未归位，第三批完成敌人与关卡的文件归属，第四批将 Powerup 播放职责收归同一原对象，第五批统一 R01 道具执行链，第六批删除 `ZPowerupScene` 并归位本地道具策略。具体结果与验证见本文末尾，其余事项以各条目记录为准。上一轮文件拆分与命名对齐的结果见 [source-alignment-result.md](source-alignment-result.md)。
 
@@ -49,9 +51,11 @@
 - 原版纠正：native 2 是 `Hide`，没有与 native 5 相同的 `OnSelectorHidden` 通知；native 4 通知事件 1，native 5 通知事件 2，native 13 通知事件 4。InputPad 已就绪时允许立即回调，不能强行补一个延时。
 - 验证状态及范围见第十四节；其他菜单的手动 Movie 时钟仍需按消费者逐步接入，不把本轮记作全部动画系统迁移完成。
 
-### R03：光束动画的启发式资源修补
+### R03：光束动画的启发式资源修补（已完成）
 
-- 位置：[ZWeaponEffects.cpp](../src/gun_bros_re/gameplay/ZWeaponEffects.cpp)，`IsBeamSourceAnimation`、`Impl::BeamBodyAnimation` 及 `Draw` 调用。
+- 2026-09-17：删除 `IsBeamSourceAnimation/BeamBodyAnimation`。真实 pack5 BULLET 逻辑 104 是物理文件 108，资源绑定主体动画 1、端帽 2/3；Flow 后续换主体不改变 Bind 固定的端帽。当前执行位于 `CBullet.cpp`、`CBulletDrawing.cpp`，真实 BIG 断言及武器／特效回归通过。以下保留原问题记录，旧文件已删除。
+
+- 原位置：已删除的 `ZWeaponEffects.cpp`，`IsBeamSourceAnimation`、`Impl::BeamBodyAnimation` 及 `Draw` 调用。
 - 已确认：根据第一帧边界 `bottom > 0` 判断动画是源端帽，再将原动画编号减一。注释明确称其为有意偏离原始字节，针对线索为 `pack5 BULLET104`，但规则实际应用于光束绘制。
 - 影响：实际绘制路径；把按 ID 的补丁改成外观判定仍然是补丁，不能据此证明原语义。
 - 目标：回查 `CBullet::Bind` 63647、`Draw` 62998、Sprite 映射与原样本，区分读取/槽位解释错误和原版真实行为；明确根因后替换，不能仅因当前图像好看而保留。
@@ -95,9 +99,9 @@
 
 ### R09：粒子重复实现与凭空寿命
 
-- 实施进度：共享出生、插值、运动、寿命、原发射窗口、播放器回收及共享粒子池已接入。原 `CEffectLayer/CParticleSystem` 的播放器槽位管理、局部/世界锚点完整语义和地图放置效果独立池尚待恢复，不能将本条整体关闭。
+- 实施进度：共享粒子核心、地图系统 20 槽／199 可领取粒子、独立 `CEffectLayer` 粒子 20 槽、角色强化持有关系、相对／世界坐标和锚点失效收尾已恢复；地图动态粒子逐粒进入绘制队列。UI、强化和预放置效果没有合并进地图系统。预放置 `CParticleEffectProp` 的完整类归位与独立池、原全局随机序列以及全部粒子参数仍待逐项核对，不能将本条整体关闭。
 
-- 位置：[ZMapParticles.cpp](../src/gun_bros_re/gameplay/ZMapParticles.cpp) 的 `SpawnParticle`；[ZWeaponEffects.cpp](../src/gun_bros_re/gameplay/ZWeaponEffects.cpp) 的 `Impl::SpawnParticle`。
+- 原位置：`ZMapParticles.cpp::SpawnParticle` 与已删除的 `ZWeaponEffects.cpp::Impl::SpawnParticle`，现共用 `CParticleEffectPlayer/CParticle`。
 - 已确认：两套出生、随机、运动和生命周期实现。地图版对非正寿命补 750ms；武器版直接不生成。地图版还设有每效果 2048 粒子、每发射器每帧 64 次生成上限，来源待核对。
 - 影响：地图预览与战斗/菜单可能对相同资源得出不同结果；尚未统计当前 BIG 是否实际触发所有回退和上限。
 - 目标：核对 `CParticle`、`CParticleEmitter`、`CParticleEffectPlayer` 及 `entries/particle_effect.bt`，恢复一套共享行为。通用机制是否进入 engine 依原职责和依赖决定，不能直接把整个 `ZWeaponEffects` 搬入引擎。
@@ -105,7 +109,7 @@
 ### R10：固定移动速度与弹速倍率
 
 - 已确认：[CPlayer.cpp](../src/gun_bros_re/gameplay/brother/CPlayer.cpp) 的基础速度为 220，输入归一化；与原 `CPlayer::UpdateMovement` 101384 消费摇杆幅度的分段计算不同。Bot 也复制了 220 的速度假设。
-- 待核对：[ZWeaponEffects.cpp](../src/gun_bros_re/gameplay/ZWeaponEffects.cpp) 使用 `kShotSpeed = 450` 乘 `cue.speed`；本轮未完成原 `CGun::FireBullet`、`CBullet::Fire` 的单位核对，不能宣称 450 已证实错误。
+- 弹速已核对并修正（2026-09-17）：原 `CGun::FireBullet` 128140–128145 与 `CBrother::ThrowGrenade` 138729–138735 使用 IEEE float ±430；枪械另乘 Flow 参数 4 的 8.8 倍率，`CBullet::UpdateDirect` 按毫秒 ×0.001 积分。现由 CGun／CBrother 产生绝对初速，CLevel 不再持有 450。真实枪械倍率 0/128/256/512 的 100ms 位移为 0/21.5/43/86，相关回归通过。玩家／Bot 移动速度仍待处理。
 - 目标：输入适配仅提供方向和幅度，玩法计算归 `CPlayer`；核对速度单位和倍率消费链后消除无依据的宿主缩放。
 
 ### R11：目录位置被当成默认资源、缺引用可能退到首项
@@ -400,3 +404,12 @@ PROP native 16 保留 `CParticleSystem::AddEffect` 的非循环属性；设置�
 - 后续顺序：UI／屏幕粒子解除武器组合依赖 → 恢复地图 `CParticleSystem` 和归属 → 弹体／附属效果归回原类 → 分离音频和必要绘制适配后删除 `ZWeaponEffects`。
 - 新增待修差异：原地图系统 20 个效果实例槽尚未恢复；兄弟普通粒子的默认池与锚点尚未按原调用归位。R03 光束启发式、速度单位和 Viewer 转场表继续分别跟踪。
 - 补充说明见方案中的“粒子、图片与动画帧”和“地图系统的范围与原版执行流程”，统一术语见 [特效术语](../CONTEXT.md)。多个粒子可共用同一图片／动画；发射器数、粒子数和帧数不能混用。示例的 15 个粒子与 8 帧仅作解释，不是原资源配置。效果槽满不排队，粒子池满不积压补发；200 是分配容量，按原空闲栈语义可分配 199 个粒子。
+
+## 十六、实施记录：删除武器特效组合层（2026-09-17）
+
+- 用户授权夜间实施，实际工作 06:32–08:38 UTC。`ZWeaponEffects.h/.cpp` 已删除，无别名／转发壳；`ZShot` 并入 `CBullet`，实例归 `CLevel`，四槽附属效果归原持有者。完整文件表见 [源码映射](source-name-map.md#夜间特效组合层迁移)。
+- UI 直接使用共享粒子播放器；地图 `CParticleSystem` 20 槽与 199 个可领取粒子分别限制，兄弟普通爆裂恢复地图池、零角度锚点及死亡归属；强化播放器归 `CBrother` 并保留相对坐标。独立效果层、预放置效果、UI 与强化未混入地图临时系统。
+- 恢复链接效果的组、朝向、缩放参数和当前部件锚点；地图动态粒子逐粒进入组／Y 队列。Ribbon 按 native 顺序竞争四槽，满槽不自动重试；停止发射、立即停止、非光束拖尾排空和光束即时清理分别处理。
+- R03 删除 bounds 减一启发式；真实 BULLET104 绑定主体 1／端帽 2、3。枪械初速经原 IEEE 常量、Flow 8.8 倍率及毫秒积分核实，450 修正为 430；手雷由 CBrother 产生 430，CLevel 不再硬写初速。
+- Debug／Release 三产物构建均退出码 0；Debug 集中 21/21、最终补验 2/2；Release 七项功能回归与修正后的正式菜单冒烟均通过，独立 Viewer 开火及既有 Release 资源／作弊码／保存验证均通过。修复 Release 冒烟参数与日志缓冲问题，未恢复 Release 截图。命令、退出码、失败诊断和截图见 [夜间交接](weapon-effects-night-migration.md#最终验证与交接)。
+- 本轮没有关闭全部 R09/R10：预放置效果完整类归位、全局随机序列、玩家移动速度、弹体最终移除回调与完整绘制队列仍需核对；R08 Viewer 手写转场表保持为独立待办。未提交 Git，原始资源只读。

@@ -4,11 +4,16 @@
  */
 
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/gameplay/CParticlePool.h"
+#include "gun_bros_re/effects/CParticlePool.h"
 
 #include <cstdio>
 #include <algorithm>
 #include <cmath>
+
+namespace {
+// ThrowGrenade :138729-138735 uses the same native magnitude, without a Flow factor.
+constexpr float kGrenadeLaunchSpeed = 430.0f;
+}
 
 CBrother::Template::Template() : m_gameScale(0.0f) {}
 
@@ -43,7 +48,7 @@ CBrother::CBrother() : m_triggerHeld(false), m_baseMoves(nullptr), m_gun(nullptr
     m_fireElapsed(0), m_torsoUsesWeapon(false), m_moving(false),
     m_shooting(false), m_canFire(true) {
     // CBrother::CBrother :139099 owns 25 slots for its native powerup players.
-    m_particlePool = std::make_shared<CParticlePool>(25);
+    m_powerupParticles = std::make_shared<PowerupParticles>();
     for (int i = 0; i < 11; ++i) { m_moveAliases[i] = -1; }
     for (int i = 0; i < 7; ++i) { m_variables[i] = 0; }
     m_variables[0] = 1;
@@ -272,6 +277,8 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         break;
     case 11: {
         ZGunCue cue;
+        // FunctionResolver :138969 binds GetParticleEffectAnchor :134152.
+        cue.anchorToActor = true;
         cue.kind = ZGunCue::Kind::Effect;
         std::uint32_t ordinal = 0;
         if (m_interpreter.GetResource(arguments[0], cue.resource.packHash, ordinal)) {
@@ -293,6 +300,7 @@ std::int16_t CBrother::FunctionResolver(std::uint8_t function,
         if (!CanThrowGrenade(slot)) { break; }
         ZGunCue cue;
         cue.kind = ZGunCue::Kind::Grenade;
+        cue.speed = kGrenadeLaunchSpeed;
         cue.resource = m_grenades[slot];
         cue.hand = slot;
         m_cues.push_back(cue);
@@ -504,6 +512,8 @@ unsigned CBrother::TakeThrownGrenades(unsigned slot) {
 void CBrother::SetPowerupState(PowerupState *powerups) {
     m_powerups = powerups;
     if (m_powerups == nullptr) { return; }
+    if (!m_powerups->particles) { m_powerups->particles = m_powerupParticles; }
+    m_powerupParticles = m_powerups->particles;
     if (IsShield()) { PowerupEffect(m_powerups->effects[0], 100, true); }
     if (IsAutoFire()) { PowerupEffect(m_powerups->effects[4], 104, true); }
     if (IsFrenzy()) { PowerupEffect(m_powerups->effects[5], 105, true); }
@@ -514,7 +524,7 @@ void CBrother::SetPowerupState(PowerupState *powerups) {
 
 void CBrother::PowerupEffect(const GameObjectRef &effect, int slot, bool active) {
     ZGunCue cue;
-    cue.particlePool = m_particlePool;
+    cue.brotherPowerup = true;
     // StopShield/StopFrenzy use Stop, not a detached trail (:137300-137363).
     cue.stopParticlesImmediately = true;
     cue.kind = ZGunCue::Kind::StopTrail;

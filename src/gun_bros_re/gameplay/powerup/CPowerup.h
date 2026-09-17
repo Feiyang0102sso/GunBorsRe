@@ -16,7 +16,7 @@ class CLevel;
 class CPowerUpSelector;
 struct ZPowerupEntry;
 struct ZPlayerModel;
-class ZWeaponEffects;
+class CLevel;
 
 struct ZPowerupAction {
     std::uint8_t function = 0;
@@ -78,7 +78,7 @@ public:
      */
     bool Start(const ZPowerupEntry &entry, bool fromSelector = false, unsigned stock = 1);
     /** Stable model ownership survives replacement of its current weapon bank. */
-    void BindActor(ZPlayerModel &player, ZPlayerVitals &vitals, ZWeaponEffects &effects);
+    void BindActor(ZPlayerModel &player, ZPlayerVitals &vitals);
     void SetOwner(ZCombatId owner);
     /** Report actual projectile creation; inventory remains the caller's job. */
     unsigned TakeThrownPowerups(GameObjectRef &resource);
@@ -106,7 +106,6 @@ private:
     bool ApplyActorAction(const ZPowerupAction &action);
     ZPlayerModel *m_player = nullptr;
     ZPlayerVitals *m_vitals = nullptr;
-    ZWeaponEffects *m_effects = nullptr;
     ZCombatId m_owner = kPlayerCombatId;
     GameObjectRef m_resource;
     GameObjectRef m_pendingGrenade;

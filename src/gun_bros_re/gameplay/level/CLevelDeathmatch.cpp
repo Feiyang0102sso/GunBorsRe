@@ -141,6 +141,10 @@ bool CLevel::RespawnDeathmatch(unsigned peer, bool initial, bool resumeFromShop)
         angle = std::atan2(opponentY - y, opponentX - x) * 180 / 3.14159265f + 90;
     }
     if (!initial && !m_match->Respawn(peer, resumeFromShop)) { return false; }
+    // Retire the old life's anchors before moving the reused actor ID.
+    ZCombatId actor = kPlayerCombatId;
+    if (peer == 1) { actor = kBrotherCombatId; }
+    RetireOwner(actor);
     m_auxiliaryMs[peer] = 0;
     m_matchSwap[peer] = false;
     ZPlayerModel *model = m_playerModel;
@@ -183,7 +187,7 @@ void CLevel::RecordMatchDeath(unsigned peer, int killer) {
 bool CLevel::AdvanceDeathmatchEnding(int deltaMs) {
     // PLAYER export 2 emits the burst before state 7's move reaches native 1.
     // Continue both dead actors, including simultaneous final kills, without AI or combat.
-    m_effects->BeginAudioFrame();
+    BeginAudioFrame();
     ZPlayerModel *models[] = {m_playerModel, m_brotherModel};
     ZPlayerVitals *vitals[] = {m_vitals, &m_brother->vitals};
     const ZCombatId actors[] = {kPlayerCombatId, kBrotherCombatId};
@@ -196,13 +200,13 @@ bool CLevel::AdvanceDeathmatchEnding(int deltaMs) {
         if (peer == 1) { x = m_brother->x; y = m_brother->y; direction = m_brother->facing; }
         for (const auto &cue : model.weapon->brother.TakeCues()) {
             if (cue.kind == ZGunCue::Kind::Grenade || cue.kind == ZGunCue::Kind::Splash) { continue; }
-            m_effects->Emit(cue, x, y, 0, direction - 90, actors[peer], cue.hand, -1, -1);
+            Emit(cue, x, y, 0, direction - 90, actors[peer], cue.hand, -1, -1);
         }
         if (!vitals[peer]->deathAnimationComplete) { complete = false; }
     }
-    m_effects->AdvanceAmbientEffects(deltaMs);
+    AdvanceAmbientEffects(deltaMs);
     for (unsigned peer = 0; peer < 2; ++peer) {
-        if (vitals[peer]->dead && m_effects->HasActorBurst(actors[peer])) { complete = false; }
+        if (vitals[peer]->dead && HasActorBurst(actors[peer])) { complete = false; }
     }
     return complete;
 }

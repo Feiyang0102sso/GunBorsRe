@@ -11,7 +11,6 @@
 #include <map>
 
 class CLevel;
-class ZWeaponEffects;
 class CParticlePool;
 
 struct ZPickupCollection {
@@ -23,13 +22,13 @@ struct ZPickupCollection {
 class ZPickupScene {
 public:
     ZPickupScene(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
-        CProfileManager *profile = nullptr, std::shared_ptr<CParticlePool> particlePool = nullptr);
+        CProfileManager *profile = nullptr);
     bool Init();
     void SetPeerProfile(CProfileManager *profile) { m_peerProfile = profile; }
     void Reset();
     bool Spawn(const GameObjectRef &ref, float x, float y, int objectId = 0);
-    void Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects);
-    void UpdateEffects(int deltaMs, ZWeaponEffects &effects);
+    void Update(int deltaMs, CLevel &scene);
+    void UpdateEffects(int deltaMs, CLevel &effects);
     void Draw(const float *mvp, float scale);
     std::size_t GetCount() const { return m_instances.size(); }
     bool GetObjectPosition(int objectId, float &x, float &y) const;
@@ -62,8 +61,7 @@ private:
     const ZShaderProgram &m_program;
     CProfileManager *m_profile;
     CProfileManager *m_peerProfile = nullptr;
-    ZWeaponEffects *m_effects = nullptr;
-    std::shared_ptr<CParticlePool> m_particlePool;
+    CLevel *m_effects = nullptr;
     ZQuadBatch m_batch;
     std::vector<ZPickupEntry> m_catalog;
     std::vector<std::unique_ptr<Visual>> m_visuals;

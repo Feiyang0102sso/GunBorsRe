@@ -51,12 +51,11 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     std::size_t entry = enemyIndex % catalog.size();
     if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
         !Equip(tables, playerData, weapons[weapon], player, program)) { return 1; }
-    ZWeaponEffects effects(toc, tables, program);
-    CLevel scene(tables, program, catalog, player, vitals, effects,
-        playerData.gameScale);
+    CLevel scene(toc, tables, program);
+    scene.BindCombat(catalog, player, vitals, playerData.gameScale);
     
     if (onSceneReady != nullptr) {
-        ArenaScene ready{window, toc, tables, program, catalog, weapons, playerData, player, vitals, effects, scene};
+        ArenaScene ready{window, toc, tables, program, catalog, weapons, playerData, player, vitals, scene};
         return onSceneReady(ready);
     }
 
@@ -107,8 +106,8 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
             else if (controls.IsPressed(key, ViewerAction::FreezeGrenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[1]); }
             else if (controls.IsPressed(key, ViewerAction::ShockGrenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[2]); }
             else if (controls.IsPressed(key, ViewerAction::ResetView)) { camera.zoom = kDefaultZoom; }
-            else if (controls.IsPressed(key, ViewerAction::Pause)) { paused = !paused; accumulator = 0; effects.SetPaused(paused); }
-            else if (controls.IsPressed(key, ViewerAction::Step)) { paused = true; step = true; effects.SetPaused(true); }
+            else if (controls.IsPressed(key, ViewerAction::Pause)) { paused = !paused; accumulator = 0; scene.SetPaused(paused); }
+            else if (controls.IsPressed(key, ViewerAction::Step)) { paused = true; step = true; scene.SetPaused(true); }
             else if (controls.IsPressed(key, ViewerAction::Collisions)) { collisions = !collisions; }
             else { nextWeapon = SelectWeaponKey(weapons, nextWeapon, controls.WeaponSelectionKey(key)); }
         }
@@ -121,7 +120,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         if (nextWeapon != weapon && !vitals.dead) {
             // Release the old gun's continuous effects; enemy attacks and
             // already launched projectiles keep their independent lifetimes.
-            effects.RetireOwner(kPlayerCombatId);
+            scene.RetireOwner(kPlayerCombatId);
             if (Equip(tables, playerData, weapons[nextWeapon], player, program)) { weapon = nextWeapon; }
         }
         int width = 0, height = 0;
@@ -177,7 +176,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         markers.Draw(markerProgram, projection, 0.12f, 0.48f, 1, 1);
         float playerMatrix[16], model[16], mvp[16];
         scene.PlayerMatrix(playerMatrix);
-        effects.Draw(projection, nullptr, 1, ZWeaponDrawPass::BehindPlayer);
+        scene.Draw(projection, nullptr, 1, ZWeaponDrawPass::BehindPlayer);
         // Actor meshes share a depth buffer; UI and billboards are layered after.
         glEnable(GL_DEPTH_TEST);
         for (auto &actor : scene.GetEnemies()) {
@@ -189,7 +188,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         }
         Matrix4dMultiply(projection, playerMatrix, mvp);
         DrawPlayer(player, program, mvp);
-        effects.Draw(projection, nullptr, 1, ZWeaponDrawPass::InFrontOfPlayer);
+        scene.Draw(projection, nullptr, 1, ZWeaponDrawPass::InFrontOfPlayer);
         glDisable(GL_DEPTH_TEST);
         // Every bar uses the same predicate as projectile damage filtering.
         for (auto &actor : scene.GetEnemies()) {
@@ -215,7 +214,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
                 (barY - camera.y) * camera.scale - 26, 160, 18, labelProjection);
         }
         if (collisions) {
-            DrawCollisionOverlay(markers, markerProgram, projection, 1 / camera.scale, nullptr, &scene, nullptr, &effects);
+            DrawCollisionOverlay(markers, markerProgram, projection, 1 / camera.scale, nullptr, &scene, nullptr, &scene);
         }
         // Diagnostic information is screen-space host UI, independent of zoom.
         glViewport(0, 0, width, height);

@@ -8,8 +8,8 @@
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "engine/graphics/CBitmapFont.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/core/ZMatrix4d.h"
 #include <cstdio>
@@ -78,7 +78,7 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
     const char *directory = Paths::Shaders().c_str();
     if (!program.Load(directory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
     ZPickupScene pickups(toc, tables, program);
-    ZWeaponEffects effects(toc, tables, program);
+    CLevel effects(toc, tables, program);
     ZQuadBatch labels;
     CBitmapFont font;
     if (!pickups.Init() || !labels.Create(program) || !font.Init(*toc.GetPack(toc.GetCorePackIndex()), 0)) { return 1; }

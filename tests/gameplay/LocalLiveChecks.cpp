@@ -53,10 +53,10 @@ bool CaptureRescueEffect(SurvivalDeathFixture &fixture, const char *name) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     BuildGeometry(fixture.loaded, fixture.batch, true, true, false);
     fixture.batch.Draw(fixture.program, mvp);
-    fixture.effects.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
+    fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
     DrawMapObjects(fixture.loaded, fixture.batch, fixture.program, mvp, true, &scene,
         &fixture.brotherModel, fixture.brother.y, width);
-    fixture.effects.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer);
+    fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
     return Capture::SaveFrame(fixture.window, TestOutput::Path(name));
 }
 
@@ -152,18 +152,18 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     // Actual wave Flow must spawn enemies, acquire targets and emit gun shots.
     session.SetHud(nullptr);
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
-    for (unsigned elapsed = 0; elapsed < 45000 && fixture.effects.GetShotCount() == 0; elapsed += 16) {
+    for (unsigned elapsed = 0; elapsed < 45000 && fixture.scene.GetShotCount() == 0; elapsed += 16) {
         session.Update(16, 0, 0, false);
     }
-    if (scene.GetSpawnCount() == 0 || bot.GetTargetCount() == 0 || fixture.effects.GetShotCount() == 0) {
-        std::printf("[local-live-check] no combat spawned=%u targets=%u shots=%zu\n", scene.GetSpawnCount(), bot.GetTargetCount(), fixture.effects.GetShotCount());
+    if (scene.GetSpawnCount() == 0 || bot.GetTargetCount() == 0 || fixture.scene.GetShotCount() == 0) {
+        std::printf("[local-live-check] no combat spawned=%u targets=%u shots=%zu\n", scene.GetSpawnCount(), bot.GetTargetCount(), fixture.scene.GetShotCount());
         return 1;
     }
     const float botBefore = bot.x;
     scene.GetPlayer().x += 350;
     for (unsigned elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
     if (bot.x == botBefore) { return 1; }
-    std::printf("[local-live-check] spawned=%u targets=%u shots=%zu movement=1\n", scene.GetSpawnCount(), bot.GetTargetCount(), fixture.effects.GetShotCount());
+    std::printf("[local-live-check] spawned=%u targets=%u shots=%zu movement=1\n", scene.GetSpawnCount(), bot.GetTargetCount(), fixture.scene.GetShotCount());
 
     // Two weapon slots of one peer can both assist the same accepted kill.
     bool checkedAssist = false;
@@ -172,7 +172,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
         if (target.combat.dead || target.combat.health <= 0 || !target.CanReceiveProjectile(0, kBrotherCombatId)) { continue; }
         // Keep autonomous shots out of this attribution assertion, without
         // changing the original enemy template or accepting zero-damage hits.
-        fixture.effects.Clear();
+        fixture.scene.Clear();
         bot.vitals.stunMs = 100;
         const auto id = target.combat.id;
         ZCombatHit assist;
@@ -215,12 +215,12 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     // Corpses may already have been removed; never assume a live front().
     std::vector<std::pair<float, float>> pausedEnemies;
     for (const auto &enemy : scene.GetEnemies()) { pausedEnemies.push_back({enemy->model.enemy.combat.x, enemy->model.enemy.combat.y}); }
-    const auto shotsBeforePause = fixture.effects.GetShotCount();
+    const auto shotsBeforePause = fixture.scene.GetShotCount();
     session.SetSuspended(true);
     for (unsigned tick = 0; tick < 100; ++tick) { session.Update(16, 1, 1, true); }
     if (scene.GetEnemies().size() != pausedEnemies.size()) { return 1; }
     if (scene.GetPlayer().x != pausedPlayerX || scene.GetPlayer().y != pausedPlayerY || bot.x != pausedBotX || bot.y != pausedBotY ||
-        fixture.effects.GetShotCount() != shotsBeforePause ||
+        fixture.scene.GetShotCount() != shotsBeforePause ||
         hud->LiveWaveRemaining() != waitBefore) { return 1; }
     for (unsigned index = 0; index < pausedEnemies.size(); ++index) {
         if (scene.GetEnemies()[index]->model.enemy.combat.x != pausedEnemies[index].first ||
@@ -296,7 +296,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
         bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y);
     scene.Update(16, 0, 0, false);
     if (scene.GetReviveEffectState() != 1) { return 1; }
-    fixture.effects.AdvanceAmbientEffects(250);
+    fixture.scene.AdvanceAmbientEffects(250);
     if (!CaptureRescueEffect(fixture, "live-revive-waiting.png")) { return 1; }
     if (scene.GetReviveProgress() != progressBefore) {
         std::printf("[local-live-check] outside-radius moved %.1f,%.1f progress=%.4f before=%.4f\n", bot.x, bot.y, scene.GetReviveProgress(), progressBefore); return 1;

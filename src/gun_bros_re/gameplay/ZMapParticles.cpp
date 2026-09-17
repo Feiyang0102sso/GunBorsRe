@@ -63,6 +63,7 @@ void StartParticleEffect(ZLoadedMap &loaded, std::uint64_t visualKey,
     active.zOrderGroup = zOrderGroup;
     active.randomState = static_cast<std::uint32_t>(visualKey) ^ randomSalt;
     active.player.Init(found->second.effect, loaded.particlePool);
+    active.player.SetWorldSpace(true);
     active.player.SetLooping(false);
     active.player.SetPosition(x, y, 0, 0);
 

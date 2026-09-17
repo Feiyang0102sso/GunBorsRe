@@ -42,12 +42,12 @@ bool MakeTimedPowerup(ZPowerupEntry &entry, bool unsupported = false) {
 }
 
 unsigned CheckPowerupRuntime(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
-    ZPlayerModel &player, ZPlayerVitals &vitals, ZWeaponEffects &effects) {
+    ZPlayerModel &player, ZPlayerVitals &vitals) {
     ZPowerupEntry timed;
     ZPowerupEntry unsupported;
     if (!MakeTimedPowerup(timed) || !MakeTimedPowerup(unsupported, true)) { return 1; }
     CPowerup powerup(toc, tables, scene);
-    powerup.BindActor(player, vitals, effects);
+    powerup.BindActor(player, vitals);
     const float savedHealth = vitals.health;
     const bool savedDead = vitals.dead;
     const bool savedPaused = scene.IsPaused();

@@ -41,7 +41,7 @@ void CLevel::Actions(ZCombatEnemy &actor) {
             QueuePickupSpawn(action.resource, x, y);
         } else if (action.kind == CEnemy::Action::Kind::Bullet) {
             if (action.slot != 1) { direction = action.direction - 90; }
-            m_effects->SpawnProjectile(action.resource, x, y, z, direction,
+            SpawnProjectile(action.resource, x, y, z, direction,
                 action.speed, state.id, ownerType, action.part, action.node);
         } else if (action.kind == CEnemy::Action::Kind::Stun) {
             if (ownerType == 1 && std::hypot(m_actor.x - x, m_actor.y - y) < action.radius) {
@@ -57,9 +57,9 @@ void CLevel::Actions(ZCombatEnemy &actor) {
                 if (action.owner == kPlayerCombatId) { actor.assistMask[0] |= 1u << action.slot; }
                 if (action.owner == kBrotherCombatId) { actor.assistMask[1] |= 1u << action.slot; }
             }
-            m_effects->ResolveHit(action.projectile, action.result);
+            ResolveHit(action.projectile, action.result);
         } else if (action.kind == CEnemy::Action::Kind::RemoveBullet) {
-            m_effects->RemoveOldestProjectile(state.id);
+            RemoveOldestProjectile(state.id);
         } else if (action.kind == CEnemy::Action::Kind::Broadcast) {
             for (auto &other : m_objects.GetEnemies()) {
                 if (other.get() != &actor && !other->model.enemy.combat.dead) {
@@ -77,6 +77,10 @@ void CLevel::Actions(ZCombatEnemy &actor) {
         } else {
             ZGunCue cue;
             cue.resource = action.resource;
+            cue.effectGroup = action.effectGroup;
+            cue.effectScale = action.effectScale;
+            cue.alignEffect = action.alignEffect;
+            cue.linkedEnemyEffect = action.kind == CEnemy::Action::Kind::LinkedEffect;
             cue.kind = ZGunCue::Kind::Effect;
             if (action.kind == CEnemy::Action::Kind::Sound) { cue.kind = ZGunCue::Kind::Sound; }
             if (action.kind == CEnemy::Action::Kind::LoopSound) { cue.kind = ZGunCue::Kind::LoopSound; }
@@ -84,7 +88,7 @@ void CLevel::Actions(ZCombatEnemy &actor) {
             if (action.kind == CEnemy::Action::Kind::LinkedEffect) { cue.kind = ZGunCue::Kind::Trail; }
             if (action.kind == CEnemy::Action::Kind::StopEffect) { cue.kind = ZGunCue::Kind::StopTrail; }
             if (action.kind == CEnemy::Action::Kind::Shake || action.kind == CEnemy::Action::Kind::Reward) { continue; }
-            m_effects->Emit(cue, x, y, z, direction, state.id, action.slot, action.part, action.node);
+            Emit(cue, x, y, z, direction, state.id, action.slot, action.part, action.node);
         }
     }
 }
@@ -94,7 +98,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     m_playerModel->weapon->brother.SetLevelContext(GetScriptLevel());
     if (deltaMs <= 0) { return; }
     if (IsDeathmatch() && (m_matchShopping[0] || IsMatchSpawnPending(0))) { moveX = 0; moveY = 0; shoot = false; }
-    m_effects->BeginAudioFrame();
+    BeginAudioFrame();
     UpdateExperienceTexts(deltaMs);
     BeginCombatFrame();
     m_actor.Update(deltaMs, moveX, moveY, shoot, *this, !IsMatchSpawnPending(0));
@@ -154,7 +158,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
                 GameObjectRef resource;
                 resource.packHash = sound.packHash;
                 resource.localIndex = sound.localIndex;
-                m_effects->PlayMoveSound(resource);
+                PlayMoveSound(resource);
             }
         }
         ResolveMovement(state.previousX, state.previousY, state.x, state.y,
@@ -204,12 +208,12 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     float matrix[16];
     if (m_brotherModel != nullptr) {
         BrotherMatrix(matrix);
-        m_effects->EmitBrother(*m_brotherModel, matrix, m_brother->facing, kBrotherCombatId, m_weaponCollision);
+        EmitBrother(*m_brotherModel, matrix, m_brother->facing, kBrotherCombatId, m_weaponCollision);
     }
     PlayerMatrix(matrix);
     {
         PerformanceProbe::Scope timing(PerformanceProbe::counters.effectsMs);
-        m_effects->Update(*m_playerModel, matrix, m_actor.facing, deltaMs, m_weaponCollision);
+        Update(*m_playerModel, matrix, m_actor.facing, deltaMs, m_weaponCollision);
     }
     for (auto &actor : m_objects.GetEnemies()) {
         Actions(*actor);
@@ -234,7 +238,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         }
         if (state.hitFlash > 0) { lastDamage = state.lastDamage; }
         if (state.removed) {
-            m_effects->RetireOwner(state.id);
+            RetireOwner(state.id);
             kills += state.deathCount;
             hits += state.hitCount;
             damageDealt += state.totalDamage;
@@ -330,14 +334,14 @@ void CLevel::UpdateLocalRevive(int deltaMs) {
     const bool inRange = std::hypot(m_actor.x - m_brother->x, m_actor.y - m_brother->y) < 125;
     if (actor != nullptr) { effectState = 1; if (inRange) { effectState = 2; } }
     if (effectState != m_reviveEffectState || target != m_reviveEffectTarget) {
-        m_effects->StopEffect(m_reviveEffectHandle);
+        StopEffect(m_reviveEffectHandle);
         m_reviveEffectHandle = 0;
         m_reviveEffectState = effectState;
         m_reviveEffectTarget = target;
         if (effectState != 0 && !m_reviveEffects[effectState - 1].IsNull()) {
             float x = 0, y = 0;
             ActorPosition(target, x, y);
-            m_reviveEffectHandle = m_effects->StartPersistentEffect(m_reviveEffects[effectState - 1], x, y, true);
+            m_reviveEffectHandle = StartPersistentEffect(m_reviveEffects[effectState - 1], x, y, true);
         }
     }
     if (actor == nullptr) { return; }

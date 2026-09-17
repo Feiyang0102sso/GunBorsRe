@@ -125,7 +125,7 @@ void CLevel::Reset() {
     m_reviveProgress = 0;
     m_reviveCount = 0;
     m_reviveTarget = 0;
-    m_effects->StopEffect(m_reviveEffectHandle);
+    StopEffect(m_reviveEffectHandle);
     m_reviveEffectHandle = 0;
     m_reviveEffectState = 0;
     m_reviveEffectTarget = 0;
@@ -134,7 +134,7 @@ void CLevel::Reset() {
     m_experienceTexts.clear();
     m_actor.ResetXplodiumRemainder();
     m_hasViewCenter = false;
-    m_effects->Clear();
+    Clear();
     m_objects.Clear();
     m_vitals->Reset();
     m_playerModel->powerups = {};

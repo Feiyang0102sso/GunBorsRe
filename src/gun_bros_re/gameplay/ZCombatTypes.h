@@ -112,6 +112,17 @@ public:
     virtual void SpawnFromProjectile(const GameObjectRef &resource,
         const ZCombatHit &hit) = 0;
     virtual bool FindTarget(const ZCombatHit &hit, float radius, float &x, float &y) = 0;
+    /** Ordinary brother particles remain anchored while death Flow finishes. */
+    virtual bool ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float &angle) {
+        return Anchor(actor, -1, -1, x, y, z, angle);
+    }
+    /** Linked enemy particles use its current part and actor facing. */
+    virtual bool LinkedParticleAnchor(ZCombatId actor, int node, float &x, float &y, float &z, float &angle) {
+        float direction = 0;
+        if (!Anchor(actor, 0, node, x, y, z, direction)) { return false; }
+        angle = direction + 90;
+        return true;
+    }
     virtual bool Anchor(ZCombatId actor, int part, int node,
         float &x, float &y, float &z, float &direction) = 0;
 };

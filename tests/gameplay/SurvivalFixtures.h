@@ -15,7 +15,7 @@ struct SurvivalRewardsFixture {
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZWeaponEffects & effects;
+    CLevel & scene;
 };
 
 struct SurvivalPowerupInventoryFixture {
@@ -34,7 +34,6 @@ struct SurvivalDeathFixture {
     ZQuadBatch & batch;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZWeaponEffects & effects;
     CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
@@ -88,7 +87,7 @@ struct SurvivalLevelSoundsFixture {
     unsigned & checkFailures;
     bool check;
     CGame & session;
-    ZWeaponEffects & effects;
+    CLevel & scene;
 };
 
 struct SurvivalPropRoutesFixture {
@@ -170,7 +169,6 @@ struct SurvivalWavesFixture {
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
     std::size_t & weaponSlot;
-    ZWeaponEffects & effects;
     CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
@@ -235,7 +233,6 @@ struct SurvivalSceneFixture {
     ZQuadBatch & batch;
     MapDetail::ZLoadedMap & loaded;
     ZPlayerModel & player;
-    ZWeaponEffects & effects;
     CLevel & scene;
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;

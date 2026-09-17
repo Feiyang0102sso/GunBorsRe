@@ -252,14 +252,14 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     session.Update(16, 0, 0, false);
     if (!session.IsFinished() || session.IsReadyForResults()) { ++failures; }
     const float frozenX = scene.GetPlayer().x, frozenY = scene.GetPlayer().y;
-    const auto frozenShots = fixture.effects.GetShotCount();
+    const auto frozenShots = fixture.scene.GetShotCount();
     unsigned wrapUpMs = 0;
     unsigned burstCompleteMs = 0, fadeStartedMs = 0;
     bool capturedBurst = false;
     while (!session.IsReadyForResults() && wrapUpMs < 10000) {
         session.Update(16, 1, 1, true);
         wrapUpMs += 16;
-        const bool burstActive = fixture.effects.HasActorBurst(kBrotherCombatId);
+        const bool burstActive = fixture.scene.HasActorBurst(kBrotherCombatId);
         if (burstActive && wrapUpMs >= 160 && !capturedBurst) {
             bool CaptureRescueEffect(SurvivalDeathFixture &, const char *);
             if (!CaptureRescueEffect(fixture, "deathmatch-final-burst.png")) { return 1; }
@@ -272,7 +272,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
             const unsigned holdMs = fadeStartedMs - burstCompleteMs;
             if (burstCompleteMs == 0 || holdMs < 784 || holdMs > 816) { ++failures; }
         }
-        if (scene.GetPlayer().x != frozenX || scene.GetPlayer().y != frozenY || fixture.effects.GetShotCount() != frozenShots) { ++failures; break; }
+        if (scene.GetPlayer().x != frozenX || scene.GetPlayer().y != frozenY || fixture.scene.GetShotCount() != frozenShots) { ++failures; break; }
     }
     if (!session.IsReadyForResults() || wrapUpMs <= 16 || powerups.UseSelected()) { ++failures; }
     if (!capturedBurst || fadeStartedMs == 0) { ++failures; }

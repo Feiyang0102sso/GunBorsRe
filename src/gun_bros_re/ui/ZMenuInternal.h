@@ -33,9 +33,11 @@
 #include "gun_bros_re/data/Planet.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CBGM.h"
-#include "gun_bros_re/gameplay/ZWeaponEffects.h"
-#include "gun_bros_re/gameplay/CParticlePool.h"
-#include "gun_bros_re/gameplay/CParticleEffect.h"
+#include "gun_bros_re/effects/CParticleEffectPlayer.h"
+#include "gun_bros_re/effects/ZParticleResources.h"
+#include "engine/glu/sprite/ZSpriteRenderer.h"
+#include "gun_bros_re/effects/CParticlePool.h"
+#include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/ZMapScene.h"
 #include "gun_bros_re/ZStartupSequence.h"
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
@@ -561,15 +563,16 @@ public:
     void PlanetFlagLines(float centerX, float centerY, const ZMovieRegion &area);
     float dragX = 0, dragY = 0;
     bool pointerHeld = false, pointerPressed = false;
+    void PrepareParticleResources();
     bool PrepareModeEffects();
     bool StartModeSelectionEffect() {
         if (!PrepareModeEffects()) { return false; }
-        modeEffects[0]->Clear();
-        return modeEffects[0]->StartPersistentEffect(modeEffectRefs[0], 0, 0) != 0;
+        modeEffects[0]->Start();
+        return true;
     }
     bool AdvanceModeEffects(unsigned elapsed) {
         if (!PrepareModeEffects()) { return false; }
-        for (auto &effect : modeEffects) { effect->AdvanceAmbientEffects(elapsed); }
+        for (auto &effect : modeEffects) { effect->Update(elapsed, particleRandom); }
         return true;
     }
     void DrawModeEffects(const ZMovieRegion &label);
@@ -591,7 +594,7 @@ public:
         float transform[16];
         std::copy(movies.CurrentProjection(), movies.CurrentProjection() + 16, transform);
         Matrix4dTranslate(transform, icon.x + icon.width / 2, icon.y + icon.height / 2);
-        postGameEffects[index]->Draw(transform);
+        postGameEffects[index]->Draw(*particleRenderer, transform);
     }
     /** Native refinery transfer players keep living particles after arrival. */
     bool StartRefineryEffect(unsigned slot, unsigned icon, float x, float y);
@@ -631,13 +634,15 @@ private:
     ZPackTables *resourceTables = nullptr;
     ZShaderProgram textProgram;
     ZShaderProgram imageProgram;
-    std::array<std::unique_ptr<ZWeaponEffects>, 2> modeEffects;
+    std::unique_ptr<ZParticleResources> particleResources;
+    std::unique_ptr<ZSpriteRenderer> particleRenderer;
+    std::uint32_t particleRandom = 1;
+    std::array<std::unique_ptr<CParticleEffectPlayer>, 2> modeEffects;
     // CMenuSystem::Init :97381 supplies one shared pool to its menu players.
     std::shared_ptr<CParticlePool> particlePool = std::make_shared<CParticlePool>(200);
-    std::array<std::unique_ptr<ZWeaponEffects>, 16> postGameEffects;
+    std::array<std::unique_ptr<CParticleEffectPlayer>, 16> postGameEffects;
     struct RefineryEffect {
-        std::unique_ptr<ZWeaponEffects> player;
-        std::uint64_t handle = 0;
+        std::unique_ptr<CParticleEffectPlayer> player;
         float x = 0, y = 0;
     };
     std::array<RefineryEffect, kRefinementSlotCount> refineryEffects;

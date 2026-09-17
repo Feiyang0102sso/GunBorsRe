@@ -2,7 +2,6 @@
 class ZPackTables;
 class CPlayerProgress;
 class CLevel;
-class CLevel;
 struct ZPlayerModel;
 struct ZSurvivalGameContext;
 int RunDebugMapProfileCheck();

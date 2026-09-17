@@ -20,7 +20,6 @@ struct ZSurvivalFrame {
     CLevel &scene;
     ZPlayerModel &player;
     ZPlayerVitals &vitals;
-    ZWeaponEffects &effects;
     ZWindow &window;
     CBGM &music;
     GameObjectRef &leftPowerup;

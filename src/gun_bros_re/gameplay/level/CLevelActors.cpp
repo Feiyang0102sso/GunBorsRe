@@ -49,7 +49,7 @@ bool CLevel::SwapBrotherWeapon() {
     if (IsDeathmatch()) { return FinishMatchWeaponSwap(1); }
     if (m_brotherScript == nullptr || m_brotherModel == nullptr || m_brother->vitals.dead) { return true; }
     const unsigned next = 1 - m_brotherWeaponSlot;
-    m_effects->RetireOwner(kBrotherCombatId);
+    RetireOwner(kBrotherCombatId);
     // CBrother native 3 changes the gun while the same body/script continues
     // the swap sequence. Reuse the two stable banks used by the local player.
     if (m_brotherModel->uiOtherWeapon == nullptr) {
@@ -258,4 +258,31 @@ void CLevel::EnemyCircle(const ZCombatEnemy &actor, int part, float &x, float &y
     x = state.x;
     y = state.y;
     EnemyCollisionCircle(enemy, actor.data->gameScale, part, x, y, radius);
+}
+
+bool CLevel::ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float &angle) {
+    // CBrother::GetParticleEffectAnchor :134152 returns position and zero
+    // rotation even while dying. Respawn explicitly detaches the previous life.
+    if (actor == kPlayerCombatId) {
+        if (IsMatchSpawnPending(0)) { return false; }
+        x = m_actor.x; y = m_actor.y; z = 0; angle = 0;
+        return true;
+    }
+    if (actor == kBrotherCombatId && m_brother != nullptr) {
+        if (IsMatchSpawnPending(1)) { return false; }
+        x = m_brother->x; y = m_brother->y; z = 0; angle = 0;
+        return true;
+    }
+    return Anchor(actor, -1, -1, x, y, z, angle);
+}
+
+bool CLevel::LinkedParticleAnchor(ZCombatId id, int node, float &x, float &y, float &z, float &angle) {
+    auto *actor = Find(id);
+    if (actor == nullptr) { return false; }
+    const auto &state = actor->model.enemy.combat;
+    float nodeDirection = 0;
+    // GetParticleEffectAnchor :68615 re-reads the active part on each update.
+    if (!Anchor(id, state.variables[14], node, x, y, z, nodeDirection)) { return false; }
+    angle = state.facing;
+    return true;
 }

@@ -246,6 +246,7 @@ namespace MapDetail {
         ZGunCue cue;
         cue.kind = ZGunCue::Kind::Effect;
         cue.resource = action.resource;
+        cue.effectGroup = action.group;
         float x = prop.x, y = prop.y;
         ZCombatId owner = 0;
         if (action.kind == ZPropAction::Kind::Sound) { cue.kind = ZGunCue::Kind::Sound; }
@@ -254,14 +255,14 @@ namespace MapDetail {
         }
         if (action.kind == ZPropAction::Kind::AttachedEffect || action.kind == ZPropAction::Kind::StopEffect) {
             // CProp native 16/17 uses CMap's CParticleSystem (:124680).
-            cue.particlePool = m_map.particleSystemPool;
             // AddEffect starts a one-shot even when native 16 adds an anchor.
             cue.loopParticles = false;
+            cue.anchorToActor = true;
             owner = kPlayerCombatId;
             cue.kind = ZGunCue::Kind::Trail;
             if (action.kind == ZPropAction::Kind::StopEffect) { cue.kind = ZGunCue::Kind::StopTrail; }
         }
-        m_effects.Emit(cue, x, y, 0, 0, owner, prop.objectId + 1000);
+        m_scene.Emit(cue, x, y, 0, 0, owner, prop.objectId + 1000, -1, -1);
         if (action.kind == ZPropAction::Kind::Portal) { m_level.HandleEvent(3); }
     }
 }
