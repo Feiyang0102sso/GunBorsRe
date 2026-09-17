@@ -156,7 +156,7 @@ void ReportPartTable(std::size_t index, const EnemyTemplate &entry,
                 enemy.GetPartCount() == 1 ? "" : "s");
 
     for (std::uint32_t i = 0; i < enemy.GetPartCount(); ++i) {
-        const ZEnemyPart &part = enemy.GetPart(i);
+        const CEnemy::Part &part = enemy.GetPart(i);
         const std::int32_t moveIndex = part.controller.GetMoveIndex();
         const std::int32_t configIndex = part.controller.GetMeshConfigIndex();
 

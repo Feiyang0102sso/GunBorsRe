@@ -6,14 +6,14 @@
 #include "gun_bros_re/gameplay/ZGameScriptObject.h"
 
 #include "gun_bros_re/gameplay/CEnemy.h"
-#include "gun_bros_re/gameplay/CLevel.h"
-#include "gun_bros_re/gameplay/CBrother.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CGun.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/gameplay/CArmor.h"
 #include "gun_bros_re/gameplay/CPickup.h"
 #include "gun_bros_re/gameplay/CProp.h"
-#include "gun_bros_re/gameplay/CPowerup.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/gameplay/CMissionScriptContext.h"
 
 #include <cstdio>

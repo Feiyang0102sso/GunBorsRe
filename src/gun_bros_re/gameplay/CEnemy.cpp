@@ -4,7 +4,7 @@
  */
 
 #include "gun_bros_re/gameplay/CEnemy.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 
 #include <cmath>
 #include <cstdio>
@@ -21,7 +21,7 @@ constexpr std::uint8_t kExportSpawn = 0;
 
 }  // namespace
 
-ZEnemyPart::ZEnemyPart()
+CEnemy::Part::Part()
     : boneIndex(kEnemyNoBoneIndex),
       extraAngleDegrees(0.0f),
       extraAngleDegreesPerSecond(0.0f),
@@ -56,7 +56,7 @@ void CEnemy::Bind(const CScript &script, const CMoveSetMesh &moveSet,
     m_partCount = 1;
 
     for (std::size_t i = 0; i < kEnemyPartSlots; ++i) {
-        m_parts[i] = ZEnemyPart();
+        m_parts[i] = CEnemy::Part();
         m_parts[i].controller.SetMoveSet(&moveSet, configMeshes);
 
         // Part 0 does not loop, every other part does. Copied from Bind, where
@@ -203,7 +203,7 @@ std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
             return 0;
         }
 
-        ZEnemyPart &part = m_parts[partIndex];
+        CEnemy::Part &part = m_parts[partIndex];
         part.controller.SetMove(arguments[1]);
 
         // Three arguments attach the part to a bone; two leave it free. The
@@ -241,7 +241,7 @@ std::int16_t CEnemy::FunctionResolver(std::uint8_t function,
         // it to offset 136, and CEnemy::Update (:67820) adds `speed * seconds`
         // to the angle at offset 140 every frame. It is not an angle, which is
         // why setting it once makes a blade turn forever.
-        ZEnemyPart &part = m_parts[partIndex];
+        CEnemy::Part &part = m_parts[partIndex];
         part.extraAngleDegreesPerSecond = static_cast<float>(arguments[1]);
 
         // The axis is normalised on the way in, and a zero-length one leaves

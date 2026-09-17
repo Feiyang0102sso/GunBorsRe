@@ -10,7 +10,7 @@
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/Planet.h"
 #include "gun_bros_re/data/Mission.h"
 #include "gun_bros_re/data/CProfileManager.h"

@@ -4,7 +4,7 @@
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/ZHostSettings.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include <cstdio>
 #include <cstdarg>
 #include <sstream>

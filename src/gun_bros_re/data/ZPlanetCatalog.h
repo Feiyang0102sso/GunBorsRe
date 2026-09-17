@@ -6,7 +6,7 @@
 #include "gun_bros_re/data/Planet.h"
 #include "gun_bros_re/data/Mission.h"
 #include "gun_bros_re/gameplay/CMissionScriptContext.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/ZPackTables.h"
 #include <map>

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 
 namespace {
 
@@ -41,17 +42,56 @@ std::uint32_t ZParticleEmitterTemplate::GetParticleLifetimeMs() const {
     std::uint32_t lifetime = 0;
     for (std::size_t channel = 0; channel < interpolators.size(); ++channel) {
         const std::vector<ZParticleInterpolatorKey> &keys = interpolators[channel];
-        for (std::size_t key = 0; key < keys.size(); ++key) {
-            const std::uint32_t end = keys[key].startMs + keys[key].durationMs;
-            if (end > lifetime) {
-                lifetime = end;
-            }
+        // CParticle::IsDone checks the last key of each channel (:133278).
+        if (keys.empty()) { continue; }
+        const std::uint32_t end = keys.back().startMs + keys.back().durationMs;
+        if (end > lifetime) {
+            lifetime = end;
         }
     }
     return lifetime;
 }
 
 CParticleEffect::CParticleEffect() : m_spritePackHash(0) {}
+
+std::uint32_t ZParticleEmitterTemplate::GetMaximumLifetimeMs() const {
+    std::uint32_t lifetime = 0;
+    for (const auto &channel : interpolators) {
+        for (const auto &key : channel) { lifetime = std::max(lifetime, key.startMs + key.durationMs); }
+    }
+    return lifetime;
+}
+
+std::size_t ZParticleEmitterTemplate::GetParticleCount() const {
+    // CParticleEmitter::GetParticleCount :131970 rounds lifetime/min interval.
+    if (intervalMinimumSeconds == 0 || intervalMaximumSeconds == 0) { return 1; }
+    const float lifetimeSeconds = GetMaximumLifetimeMs() * 0.001f;
+    return static_cast<std::size_t>(std::round(lifetimeSeconds / intervalMinimumSeconds));
+}
+
+int CParticleEffect::GetDurationMs() const {
+    int duration = 0;
+    for (const auto &emitter : m_emitters) {
+        duration = std::max(duration, static_cast<int>(emitter.endSeconds * 1000));
+    }
+    return duration;
+}
+
+int CParticleEffect::GetMaximumLifetimeMs() const {
+    int lifetime = 0;
+    for (const auto &emitter : m_emitters) {
+        // Init stores this maximum in seconds; Update truncates it back to ms.
+        const float seconds = emitter.GetMaximumLifetimeMs() * 0.001f;
+        lifetime = std::max(lifetime, static_cast<int>(seconds * 1000));
+    }
+    return lifetime;
+}
+
+std::size_t CParticleEffect::GetParticleCount() const {
+    std::size_t count = 0;
+    for (const auto &emitter : m_emitters) { count += emitter.GetParticleCount(); }
+    return count;
+}
 
 bool CParticleEffect::Init(CArrayInputStream &stream) {
     m_spritePackHash = stream.ReadUInt32();

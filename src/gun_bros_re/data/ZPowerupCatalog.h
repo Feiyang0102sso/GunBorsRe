@@ -3,7 +3,7 @@
  */
 #ifndef GUN_BROS_RE_ZPOWERUPCATALOG_H
 #define GUN_BROS_RE_ZPOWERUPCATALOG_H
-#include "gun_bros_re/gameplay/CPowerup.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/data/ZPackTables.h"
 #include <string>
 struct ZPowerupEntry {

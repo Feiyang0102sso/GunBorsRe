@@ -1,7 +1,7 @@
 #pragma once
 /** Windows arena camera and consumable shortcuts; no authored combat values. */
 #include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/gameplay/CBrother.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include <algorithm>
 #include <array>
 #include <cmath>

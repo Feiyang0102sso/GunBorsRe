@@ -96,7 +96,7 @@ void SurvivalPilot::Plan(const ZCombatEnemy &target) {
             }
         }
     }
-    const ZEnemyCombat &enemy = target.model.enemy.combat;
+    const CEnemy::CombatState &enemy = target.model.enemy.combat;
     const float angle = m_elapsed * 0.0003f;
     const float desiredX = enemy.x + std::cos(angle) * kAttackDistance;
     const float desiredY = enemy.y + std::sin(angle) * kAttackDistance;
@@ -159,19 +159,19 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
             // accept collision callbacks without being combat targets.
             if (!actor->model.enemy.combat.enabled || !actor->model.enemy.combat.targetable ||
                 !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
-            const ZEnemyCombat &enemy = actor->model.enemy.combat;
+            const CEnemy::CombatState &enemy = actor->model.enemy.combat;
             const float distance = std::hypot(enemy.x - m_scene.GetPlayer().x, enemy.y - m_scene.GetPlayer().y);
             if (distance < nearest) { nearest = distance; target = actor.get(); }
         }
     }
     if (target == nullptr) { return; }
-    const ZEnemyCombat &enemy = target->model.enemy.combat;
+    const CEnemy::CombatState &enemy = target->model.enemy.combat;
     float aimX = enemy.x;
     float aimY = enemy.y;
     const unsigned partCount = target->model.enemy.GetPartCount();
     if (partCount > 1) {
         const unsigned part = static_cast<unsigned>(m_elapsed / 1800) % partCount;
-        const ZEnemyPart &piece = target->model.enemy.GetPart(part);
+        const CEnemy::Part &piece = target->model.enemy.GetPart(part);
         if (piece.visible && piece.radius > 0) {
             float radius = 0;
             m_scene.EnemyCircle(*target, part, aimX, aimY, radius);

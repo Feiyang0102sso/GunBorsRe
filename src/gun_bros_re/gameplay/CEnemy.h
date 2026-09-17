@@ -42,7 +42,9 @@
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/graphics/CMoveSetMeshController.h"
-#include "gun_bros_re/gameplay/ZEnemyCombat.h"
+#include "gun_bros_re/gameplay/ZCombatTypes.h"
+#include "gun_bros_re/gameplay/CCollisionData.h"
+#include <array>
 
 #include <cstdint>
 #include <vector>
@@ -70,38 +72,141 @@ constexpr std::uint8_t kEnemyScriptSetPart = 0x0B;
 constexpr std::uint8_t kEnemyScriptSetPartRadius = 0x0C;
 constexpr std::uint8_t kEnemyScriptSetPartDirection = 0x10;
 
-/** One of the eight slots, in the order Bind leaves them. */
-struct ZEnemyPart {
-    CMoveSetMeshController controller;
-
-    // Which bone of PART 0's mesh this hangs off, or -1 for none. Part 0 is
-    // itself always -1: it is the parent, so it has nothing to hang from.
-    std::int32_t boneIndex;
-
-    // The extra turn, as DrawHeirarchy takes it: degrees about an axis. Bind
-    // seeds the axis pointing along y and both the angle and the speed at
-    // zero.
-    //
-    // The SPEED is what makes a blade spin: CEnemy::Update (:67820) does
-    // `angle += speed * deltaSeconds` for every part whose speed is not zero,
-    // and nothing else ever writes the angle. So a part turns forever or not
-    // at all, and which of the two is a script call away.
-    float extraAngleDegrees;
-    float extraAngleDegreesPerSecond;
-    float extraAxisX, extraAxisY, extraAxisZ;
-
-    // Collision radius, set by 0x0C. Kept because the script writes it and
-    // dropping it would silently lose data; nothing reads it until M5.
-    float radius;
-    bool visible = true;
-    bool followsFacing = true;
-    float hitFlash = 0;
-
-    ZEnemyPart();
-};
-
 class CEnemy : public ZGameScriptObject {
 public:
+    /** One of the eight slots, in the order Bind leaves them. */
+    struct Part {
+        CMoveSetMeshController controller;
+
+        // Which bone of PART 0's mesh this hangs off, or -1 for none. Part 0 is
+        // itself always -1: it is the parent, so it has nothing to hang from.
+        std::int32_t boneIndex;
+
+        // The extra turn, as DrawHeirarchy takes it: degrees about an axis. Bind
+        // seeds the axis pointing along y and both the angle and the speed at
+        // zero.
+        //
+        // The SPEED is what makes a blade spin: CEnemy::Update (:67820) does
+        // `angle += speed * deltaSeconds` for every part whose speed is not zero,
+        // and nothing else ever writes the angle. So a part turns forever or not
+        // at all, and which of the two is a script call away.
+        float extraAngleDegrees;
+        float extraAngleDegreesPerSecond;
+        float extraAxisX, extraAxisY, extraAxisZ;
+
+        // Collision radius, set by 0x0C. Kept because the script writes it and
+        // dropping it would silently lose data; nothing reads it until M5.
+        float radius;
+        bool visible = true;
+        bool followsFacing = true;
+        float hitFlash = 0;
+
+        Part();
+    };
+
+    /** Script-native side effects are consumed by the scene after actor update. */
+    struct Action {
+        enum class Kind {
+            Bullet, Effect, LinkedEffect, StopEffect, Sound, LoopSound, StopSound,
+            Splash, Broadcast, SpawnEnemy, RemoveBullet, CollisionResolved,
+            Shake, Reward, Stun, LevelEvent, SpawnPickup, TurretActive, Teleported
+        };
+        Kind kind = Kind::Effect;
+        GameObjectRef resource;
+        int part = 0;
+        int node = -1;
+        int slot = 0;
+        float x = 0;
+        float y = 0;
+        float direction = 0;
+        float speed = 0;
+        float damage = 0;
+        float radius = 0;
+        float force = 0;
+        int durationMs = 0;
+        ZCombatId projectile = 0;
+        ZCombatId owner = 0;
+        ZHitResult result = ZHitResult::Pending;
+    };
+
+    /** Runtime state next to the original enemy's script and part table.
+     * Grouped for the desktop port; not a separate original CEnemyCombat class.
+     */
+    struct CombatState {
+        GameObjectRef templateRef;
+        // IDs are the original class 7 variable IDs (:68982), not field offsets.
+        // 0 move speed; 1 facing mode; 2 hit part; 3 damage /256;
+        // 4 splash-hit flag; 5 hit world angle; 6 bullet speed; 7 hit edge group;
+        // 8 facing; 9 relative hit angle; 10 turn speed; 11 aim node;
+        // 12 contact force; 13 contact force time; 14 active part;
+        // 15 health bar visibility; 16 collision allegiance; 17 contact damage;
+        // 18 path index; 19 critical hit; 20 wave index.
+        std::array<std::int16_t, 21> variables{};
+        bool enabled = false;
+        ZCombatId id = 0;
+        // Local equivalent of the projectile creator's participant ownership.
+        ZCombatId summoner = 0;
+        float x = 0;
+        float y = 0;
+        float previousX = 0;
+        float previousY = 0;
+        float facing = 0;
+        float health = 0;
+        float maxHealth = 0;
+        float lastDamage = 0;
+        float totalDamage = 0;
+        float hitFlash = 0;
+        int healthBarFlashMs = 0; // CEnemy::Damage mem+1240, independent of mesh tint.
+        bool dead = false;
+        bool removed = false;
+        int portalObjectId = -1;
+        bool portalActive = false;
+        bool targetable = true;
+        bool turret = false;
+        int targetType = 0;
+        ZCombatId targetId = 0;
+        float targetX = 0;
+        float targetY = 0;
+        bool hasNavigationTarget = false;
+        float navigationX = 0;
+        float navigationY = 0;
+        // CFlock snapshot for this logical tick; independent of script state.
+        float flockX = 0;
+        float flockY = 0;
+        bool targetAlive = false;
+        float targetRange = 100000;
+        int behaviour = 7;
+        float arrivalDistance = 0;
+        bool arrived = false;
+        float destinationX = 0;
+        float destinationY = 0;
+        int movementTimer = -1;
+        float rotationStart = 0;
+        float rotationEnd = 0;
+        float rotationTime = 0;
+        float rotationDuration = 0;
+        bool rotationSmooth = false;
+        int functionTimer = 0;
+        int timerFunction = 0;
+        int eventTimer = 0;
+        int autoFireInterval = 0;
+        int autoFireTimer = 0;
+        int autoFireResource = -1;
+        float triggerDistance = 0;
+        bool triggerInside = false;
+        float scaleFactor = 1;
+        int deathCount = 0;
+        int hitCount = 0;
+        unsigned deferredMechanisms = 0; // 1 boss presentation, 2 level context, 4 rewards.
+        std::uint32_t randomState = 1;
+        GameObjectRef bullet;
+        CCollisionData collision;
+        ZCombatHit pendingHit;
+        bool collisionPending = false;
+        ZHitResult collisionResult = ZHitResult::Pending;
+        std::vector<Action> actions;
+    };
+
     CEnemy();
 
     /**
@@ -158,8 +263,8 @@ public:
     const CScriptInterpreter &GetInterpreter() const { return m_interpreter; }
 
     std::uint32_t GetPartCount() const { return m_partCount; }
-    ZEnemyPart &GetPart(std::size_t index) { return m_parts[index]; }
-    const ZEnemyPart &GetPart(std::size_t index) const { return m_parts[index]; }
+    Part &GetPart(std::size_t index) { return m_parts[index]; }
+    const Part &GetPart(std::size_t index) const { return m_parts[index]; }
 
     /**
      * Move every live part's clock on, then let the script's own animation
@@ -169,7 +274,7 @@ public:
 
     // Arena enables world simulation before loading the model. Existing model
     // viewers still execute scripts, but do not move their display objects.
-    ZEnemyCombat combat;
+    CombatState combat;
     CStunController stun;
     void ConfigureTemplate(float radius, bool targetable,
         const GameObjectRef &bullet, const CCollisionData &collision);
@@ -183,7 +288,7 @@ public:
     bool TriggerEvent(std::uint8_t event);
     void HandleMessage(int message);
     void OnScriptStateEntered() override;
-    std::vector<ZEnemyAction> TakeActions();
+    std::vector<Action> TakeActions();
     std::size_t GetUnsupportedFunctionCount() const;
 
     // --- the script's view of this object ---
@@ -237,7 +342,7 @@ private:
     void ResolvePendingHit(bool apply);
     const CMoveSetMesh *m_moveSet;
     std::vector<const CMesh *> m_configMeshes;
-    ZEnemyPart m_parts[kEnemyPartSlots];
+    Part m_parts[kEnemyPartSlots];
 
     // Bind leaves this at one: an enemy is a single model until its script
     // says otherwise.

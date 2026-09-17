@@ -44,7 +44,8 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
     std::size_t particles = 0;
     float worldRadius = 0;
     for (const auto &effect : loaded.activeParticleEffects) {
-        for (const auto &particle : effect.particles) {
+        for (std::size_t index = 0; index < effect.player.GetParticleCount(); ++index) {
+            const auto &particle = effect.player.GetParticle(index);
             ++particles;
             const float dx = particle.x - effect.x;
             const float dy = particle.y - effect.y;

@@ -201,6 +201,67 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
         break;
     }
     if (before.width == 0 || std::abs(after.x - before.x - 17) > 0.01f) { ++failures; }
+    // Exercise completion against the same BIG-backed instances used to draw.
+    unsigned start = 0, end = 0;
+    if (!layout->GetChapterRange(0, start, end) || !hud.m_selector.BeginPowerupPresentation(true) ||
+        !hud.m_selector.HideOnlyItems()) { ++failures; }
+    hud.ResetSelector(); // The game closes its shop immediately after UseNow.
+    if (!hud.m_selector.m_selectorBound) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(0);
+    if (hud.m_selector.m_powerupItems.GetTime() != end) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(end - start);
+    if (!hud.m_selector.m_powerupItemsVisible) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(1);
+    if (hud.m_selector.m_powerupItemsVisible || !hud.m_selector.HasPowerupFrame()) { ++failures; }
+    const auto *menu = hud.m_resources.m_movies.GetMovie(hud.m_resources.m_movies.Ordinal("GLU_MOVIE_POWERUP_MENU_NEW"));
+    if (!menu->GetChapterRange(3, start, end) || !hud.m_selector.HideSelector()) { ++failures; }
+    const unsigned closingHalf = (end - start) / 2;
+    hud.m_selector.UpdatePowerupPresentation(closingHalf);
+    if (!hud.m_selector.IsPowerupFrameClosing()) { ++failures; }
+    glClearColor(0.04f, 0.05f, 0.07f, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (!hud.m_selector.DrawPowerupPresentation() ||
+        !Capture::SaveFrame(window, TestOutput::Path("selector-closing-completion.png"))) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(end - start - closingHalf);
+    if (!hud.m_selector.IsPowerupFrameClosing()) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(1);
+    if (hud.m_selector.HasPowerupFrame() || hud.m_selector.m_presentationState != 8) { ++failures; }
+    hud.m_selector.EndPowerupPresentation();
+    if (!hud.m_selector.BeginPowerupPresentation(true) || !hud.m_selector.HideSelector()) { ++failures; }
+    hud.m_selector.EndPowerupPresentation();
+    hud.m_selector.UpdatePowerupPresentation(10000);
+    if (hud.m_selector.HasPowerupFrame() || hud.m_selector.m_powerupMenu.TakeCompletion()) { ++failures; }
+    if (!hud.m_selector.BeginPowerupPresentation(true)) { ++failures; }
+    hud.m_selector.FinishPowerupPresentation();
+    if (hud.m_selector.HasPowerupFrame()) { ++failures; }
+    if (!hud.m_selector.BeginPowerupPresentation(true) || !hud.m_selector.Hide()) { ++failures; }
+    hud.m_selector.FinishPowerupPresentation();
+    if (!hud.m_selector.HasPowerupFrame()) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(10000);
+    if (!hud.m_selector.IsPowerupFrameClosing()) { ++failures; }
+    hud.m_selector.UpdatePowerupPresentation(10000);
+    if (hud.m_selector.HasPowerupFrame()) { ++failures; }
+    hud.m_selector.EndPowerupPresentation();
+
+    // Hidden HUD restoration must finish the Base alpha, then its real Movie.
+    state.inputHidden = true;
+    if (!hud.DrawControls(state) || !hud.RestoreForPowerup(hud.m_selector.GetPowerup())) { ++failures; }
+    hud.Advance(0);
+    if (hud.m_baseAlpha != 0 || hud.m_animationPowerup == nullptr) { ++failures; }
+    hud.Advance(250);
+    if (std::abs(hud.m_baseAlpha - 0.5f) > 0.001f || hud.m_animationPowerup == nullptr) { ++failures; }
+    hud.Advance(250);
+    const auto *peripheral = hud.m_resources.m_movies.GetMovie(hud.m_resources.m_movies.Ordinal("GLU_MOVIE_HUD_PAUSE"));
+    if (!peripheral->GetChapterRange(5, start, end)) { ++failures; }
+    hud.Advance(static_cast<int>(end - start));
+    if (hud.m_animationPowerup == nullptr) { ++failures; }
+    hud.Advance(1);
+    if (hud.m_animationPowerup != nullptr || hud.m_controlsHidden) { ++failures; }
+    if (!hud.DrawControls(state) || !hud.RestoreForPowerup(hud.m_selector.GetPowerup())) { ++failures; }
+    hud.CancelPowerupAnimation(hud.m_selector.GetPowerup());
+    hud.Advance(10000);
+    if (hud.m_animationPowerup != nullptr || hud.m_restorePeripheral.TakeCompletion()) { ++failures; }
+    std::printf("[selector-completion] items, frame, pause, cancel and input-pad restoration failures=%u\n", failures);
     if (glGetError() != GL_NO_ERROR || iconHits == 0 || choices == 0) { ++failures; }
     std::printf("[selector-check] entries=%zu purchases=%u icon-hits=%u choices=%u prompts=3 region-mutation=1 native-reload=1 failures=%u\n",
         hud.m_selector.m_selectorEntries.size(), purchases, iconHits, choices, failures);

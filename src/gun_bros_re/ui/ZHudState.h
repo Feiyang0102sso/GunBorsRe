@@ -8,10 +8,10 @@
 #include "gun_bros_re/gameplay/CInputPadMeter.h"
 #include "gun_bros_re/ui/CMenuPopupPrompt.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/CLevelIndicator.h"
+#include "gun_bros_re/gameplay/level/CLevelIndicator.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 
 enum class ZInputPadAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
     BroOps, SwapWeapon, OpenShop, CloseShop, SelectItem, BuyItem, EquipLeft, EquipRight, UseNow, CancelItem, UseLeft, Sound, Music, DockedSticks,

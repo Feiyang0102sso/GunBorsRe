@@ -2,6 +2,20 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+后续主线（2026-09-16）：用户指定继续处理运行行为硬编码、重复执行逻辑与原版职责归位，具体问题、优先级及验收见 [运行行为与原版职责对齐路线](runtime-alignment-roadmap.md)。本页保留上一阶段实际结果，不将下一阶段待办计为已完成。
+
+当前路径补充：`CLevel*` 文件已统一移入 `gameplay/level/`；`ZEnemyCombat.h` 已并入 `CEnemy.h`，原敌人、协作与死亡竞赛三个 Z 实现文件已归回 `CEnemy`、`CLevel` 的分文件实现。详细映射见 [文件名映射](source-name-map.md)，验证见路线第八节。下文历史路径按映射定位。
+
+第四批补充：`ZPowerupMoviePlayer.*` 已删除，其脚本和播放职责归同一个 `CPowerup`，呈现方法位于 `CPowerupPresentation.cpp`，详见路线第九节。
+
+第五批补充：`ZPowerupScene` 不再按道具编号选择执行器；角色原生调用归 `CPowerupActions.cpp`，所有使用共享持久脚本生命周期，详见路线第十节。R02 的部分模拟 UI 回调仍为待办。
+
+第六批补充：`ZPowerupScene.h/.cpp` 实际删除，职责分归现有 `CPowerUpSelector`、`CBrother`、`CLevel` 与本地 Bot；正式游戏不再另建一份玩家道具宿主和目录。Z 文件从 140 个降至 138 个，详细归属与验证见路线第十一节。
+
+目录归并：`CPowerup` 本体四个文件统一移入 `gameplay/powerup/`，仅更新路径，不改逻辑或注释。角色、关卡、UI 和数据读取文件继续按所属对象放置，验证见路线第十二节。
+
+角色目录归并：玩家、共用 Brother、默认伙伴 AI、两个自建 Bot 及模型组装共 13 个文件统一移入 `gameplay/brother/`。保留 `CBrotherPowerups.cpp`，不合并实现；仅变更路径，验证见路线第十三节。
+
 ## 结果
 
 以原职责拆分玩家、刷怪、输入面板、选择器、菜单绑定和 Movie 读取；把桌面适配及自建表示统一为 Z 命名。保留一个工程、三种产物和既有研究入口。没有修改 BIG、存档协议或原生脚本编号。
@@ -12,12 +26,12 @@
 
 | 原组合 | 当前归属 | 核对依据与边界 |
 |---|---|---|
-| `CombatScene` 的玩家状态、经验、矿石、移动、射击、击退 | `gun_bros_re/gameplay/CPlayer.*` | `CPlayer::AddExperience` 101185、`AddXplodium` 101116、`Move` 100623、`UpdateMovement` 101384、`UpdateShooting` 101314；玩家 BT。玩家状态只有一份，模型及生命状态为非拥有引用 |
+| `CombatScene` 的玩家状态、经验、矿石、移动、射击、击退 | `gun_bros_re/gameplay/brother/CPlayer.*` | `CPlayer::AddExperience` 101185、`AddXplodium` 101116、`Move` 100623、`UpdateMovement` 101384、`UpdateShooting` 101314；玩家 BT。玩家状态只有一份，模型及生命状态为非拥有引用 |
 | `SurvivalSession::ChooseSpawnNode` | `CEnemySpawner::GetSpawnPoint`，`CLayerPathLink/Mesh::GetSpawnLocation` | 146098、146112、166819、168115；LEVEL 与 MAP BT。保留节点锁定、最近五点、屏外边界和随机调用顺序 |
 | 宿主击杀计数 | `CLevel::OnEnemyKilled` / `GetKills` | 119306；只在交付死亡事件时计数，Bind 重置，宿主读取同一计数 |
 | 旧战斗组合层的敌人存储、预加载、UID、延迟生成与回收 | `gameplay/CLevelObjectPool.*` | 原 `levelObjectPool.cpp`：构造 145287、`GetEnemy` 145509、`Release` 145426、`Clear` 145701；保留 100 个敌人槽、活动上限以及尸体到实际回收前仍占槽的语义 |
 | 旧战斗组合层的击杀奖励、分数、连杀、波次奖励和关卡事件队列 | `CLevel::RewardEnemy`、`ResolveWaveReward` 及 `CLevel` 事件入口 | `CLevel::OnEnemyKilled` 119306–119912、`OnWaveCleared` 116897；奖励及统计状态随关卡，死亡确认后直接进入关卡原生链，不再通过宿主公开容器二次轮询 |
-| Powerup 编号白名单 | `ZPowerupScene` 的 STORE 引用、模式标志与 `CPowerup` Flow 查询 | POWERUP 2/3/4 没有专用 STORE 条目且 Flow 不提供装备入口；删除 `IsPlayablePowerup`，不再用 `pack5` 编号重复表达资源事实 |
+| Powerup 编号白名单 | `CPowerUpSelector` 的 STORE 引用、模式标志与 `CPowerup` Flow 查询 | POWERUP 2/3/4 没有专用 STORE 条目且 Flow 不提供装备入口；删除 `IsPlayablePowerup`，不再用 `pack5` 编号重复表达资源事实 |
 | `ZLevelHost` 的组合职责 | `gameplay/CGame.*`、`CLevel.*` | 原 `CGame::Update` 76355–76663、`CGame::Bind` 76803；`CLevel::UpdateNormal` 121150、`UpdateAfterDeath` 121047、`Update` 121697。`CGame` 引用活动 `CLevel` 并处理 HUD、对话、转场和结果；生成、对象查询、拾取、触发、相机及世界更新归 `CLevel` |
 | `SurvivalHud` 与两个 `Original*Selector` | `ui/CInputPad.*`、`CPowerUpSelector.*` | `powerUpSelector.cpp` 183797–187670；Movie BT。选择、购买提示、命中区域、滚动和动画归选择器 |
 | 面板与选择器的资源缓存 | `ui/ZHudResources.*`，状态输入 `ZHudState.h` | 桌面共享缓存；两消费者使用同一缓存，不复制 BIG 数据。删除只写不读的 `originalUi` |
@@ -53,7 +67,7 @@
 
 - 旧战斗组合层及其头文件已经删除，没有保留兼容门面或类型别名。敌人对象生命周期进入 `CLevelObjectPool`，玩家移动进入 `CPlayer`；命中查询、逐帧协调和本地模式状态成为 `CLevel` 的原生职责，并分散在 `CLevelWorld.cpp`、`CLevelActors.cpp`、`CLevelProjectiles.cpp`、`CLevelCombat.cpp` 等实现文件。当前对象池只恢复已消费的敌人路径，尚未纳入原池中的 Bullet、Prop、Pickup、Platform。
 - 本轮没有改玩家桌面固定速度为原模拟摇杆加速，也没有把桌面确定性随机流冒充原全局随机发生器。相关差异写在 `CPlayer.cpp` 与 `ZRandom.h`。
-- Movie 的分类型解析职责已分离，但未恢复全部原 `CMovie*` 子类继承树；GL 资源缓存和绘制仍是桌面实现。
+- Movie 的分类型解析职责已分离；2026-09-16 补充 `CMovie::Playback` 实例状态，并用于 Powerup Movie、选择器关闭和 InputPad 恢复通知，移除固定 300ms 回调。未恢复全部原 `CMovie*` 子类继承树或迁移所有菜单时钟；GL 资源缓存和绘制仍是桌面实现。实现与验证见 [运行时路线第十四节](runtime-alignment-roadmap.md)。
 - `SurvivalDevelopment` 继续承载历史研究配置；共享生命周期视图仍较宽。它们没有测试实现，进一步缩窄需结合运行入口的后续整理，不能仅靠改名宣称完成。
 - 不更改资源数值、协议、硬编码旧问题或未实现分支。本次通过构建和回归不等于整个游戏已完成原版复刻。
 

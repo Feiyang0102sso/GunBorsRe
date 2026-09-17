@@ -8,7 +8,7 @@ int CheckSurvivalPowerupInventory(SurvivalPowerupInventoryFixture fixture);
 int CheckSurvivalDeath(SurvivalDeathFixture fixture);
 int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud);
 int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
-    ZPowerupScene &playerPowerups, ZPowerupScene &peerPowerups, CProfileManager &peerProfile);
+    CPowerUpSelector &playerPowerups, CPowerUpSelector &peerPowerups, CProfileManager &peerProfile);
 
 int CheckSurvivalBoss(SurvivalBossFixture fixture);
 
@@ -28,7 +28,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture);
 
 int CheckSurvivalWaves(SurvivalWavesFixture fixture);
 int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud);
-int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CProfileManager &profile);
+int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, CProfileManager &profile);
 
 int CheckSurvivalHorde(SurvivalHordeFixture fixture);
 

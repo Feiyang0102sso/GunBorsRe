@@ -3,7 +3,7 @@
 #include "gun_bros_re/cheats/CheatCodes.h"
 #include "gun_bros_re/ui/ZMenuInternal.h"
 #include "gun_bros_re/gameplay/CGame.h"
-#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include <ctime>
 
@@ -156,7 +156,7 @@ bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZM
 }
 
 bool ApplyCombatCheat(const std::string &cheat, CLevel &scene, ZPlayerVitals &vitals,
-    ZPowerupScene &powerups, CGame &session, ZSurvivalGameContext *context, CombatCheatResult &result,
+    CPowerUpSelector &powerups, CGame &session, ZSurvivalGameContext *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
     if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
     if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
@@ -167,7 +167,7 @@ bool ApplyCombatCheat(const std::string &cheat, CLevel &scene, ZPlayerVitals &vi
         result.botShop = cheat == GameCheats::BrotherShop && scene.IsLocalLive();
         result.botPowerup = cheat == GameCheats::BrotherPowerup && scene.IsLocalLive();
     }
-    if (cheat == GameCheats::Suicide && !powerups.IsMovieActive() && scene.Suicide()) {
+    if (cheat == GameCheats::Suicide && !powerups.GetPowerup().IsPresentationActive() && scene.Suicide()) {
         result.resume = true;
         std::printf("[death] suicide started\n");
     }

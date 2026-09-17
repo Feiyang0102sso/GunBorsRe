@@ -1,6 +1,6 @@
 /** Real BIG actors must separate while pursuing the same distant target. */
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CFlock.h"
 #include <cmath>
 #include <cstdio>
@@ -78,9 +78,9 @@ int CheckFlockMovement(CLevel &scene) {
     }
     if (!enemy.combat.arrived || enemy.combat.x != 700 || enemy.combat.y != 440) { ++failures; }
     // Verify the original cutoff, coincidence and removal from the next list.
-    ZEnemyCombat left;
-    ZEnemyCombat right;
-    std::vector<ZEnemyCombat *> neighbours = {&left, &right};
+    CEnemy::CombatState left;
+    CEnemy::CombatState right;
+    std::vector<CEnemy::CombatState *> neighbours = {&left, &right};
     right.x = 100;
     CFlock::RefreshFlock(neighbours);
     if (left.flockX != -10 || right.flockX != 10) { ++failures; }

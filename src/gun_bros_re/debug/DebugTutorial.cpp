@@ -2,7 +2,7 @@
 #include "gun_bros_re/debug/DebugTutorial.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 

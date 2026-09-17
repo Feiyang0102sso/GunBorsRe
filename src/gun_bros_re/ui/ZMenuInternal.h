@@ -15,7 +15,7 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/ui/ZLoadingScreen.h"
 #include "gun_bros_re/ui/ZMenuData.h"
@@ -31,9 +31,10 @@
 #include "gun_bros_re/ui/CMenuMesh.h"
 #include "gun_bros_re/ui/CMenuPopupPrompt.h"
 #include "gun_bros_re/data/Planet.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CBGM.h"
 #include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/CParticlePool.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 #include "gun_bros_re/gameplay/ZMapScene.h"
 #include "gun_bros_re/ZStartupSequence.h"
@@ -631,6 +632,8 @@ private:
     ZShaderProgram textProgram;
     ZShaderProgram imageProgram;
     std::array<std::unique_ptr<ZWeaponEffects>, 2> modeEffects;
+    // CMenuSystem::Init :97381 supplies one shared pool to its menu players.
+    std::shared_ptr<CParticlePool> particlePool = std::make_shared<CParticlePool>(200);
     std::array<std::unique_ptr<ZWeaponEffects>, 16> postGameEffects;
     struct RefineryEffect {
         std::unique_ptr<ZWeaponEffects> player;

@@ -4,6 +4,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
 #include "gun_bros_re/ui/ZMenuData.h"
 #include "gun_bros_re/ui/ZTextLayout.h"
 #include "engine/platform/ZWindow.h"
@@ -132,6 +133,7 @@ bool CPowerUpSelector::DrawSelectorItem(const ZInputPadState &state, unsigned in
 }
 
 bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
+    if (!m_presentingPowerup) { m_presentationSnapshot = state; }
     if (!m_selectorBound) {
         m_selectorEntries.clear();
         unsigned gameType = 0;
@@ -141,7 +143,8 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
             // The STORE exclusion bits also drive the front-end mode labels.
             if (m_resources.m_store[storeIndex].data.IsExcludedFromGameType(gameType)) { continue; }
             const auto &ref = m_resources.m_store[storeIndex].data.objects.front().object;
-            if (state.deathmatch && state.remoteShop && ref.localIndex != 13 && ref.localIndex != 1 && ref.localIndex != 8 && ref.localIndex != 9) { continue; }
+            if (state.deathmatch && state.remoteShop &&
+                !ZDeathmatchBot::IsGrenadePowerup(ref) && !ZDeathmatchBot::IsHealthPowerup(ref)) { continue; }
             for (const auto &powerup : m_resources.m_powerups) {
                 if (powerup.resource.packHash == ref.packHash && powerup.resource.localIndex == ref.localIndex &&
                     (powerup.data.field112 != 0) == state.afterDeathShop) { m_selectorEntries.push_back(storeIndex); }
@@ -173,15 +176,18 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
         !m_resources.m_movies.GetMovie(layout)->GetChapterRange(1, layoutStart, layoutEnd)) { return false; }
     unsigned time = menuStart + m_selectorTime;
     if (time > idleEnd) { time = idleStart + (m_selectorTime - idleStart) % (idleEnd - idleStart + 1); }
+    if (m_presentingPowerup) { time = m_powerupMenu.GetTime(); }
     const bool ready = m_selectorTime >= std::max(idleStart, layoutStart);
     unsigned layoutTime = layoutStart;
     if (m_selectorTime < layoutStart) { layoutTime = m_selectorTime; }
     else { layoutTime += static_cast<unsigned>((m_selectorPosition - std::floor(m_selectorPosition)) * (layoutEnd - layoutStart + 1)); }
+    if (m_presentingPowerup && m_presentationState != 0 && m_powerupItems.IsBound()) { layoutTime = m_powerupItems.GetTime(); }
     const int base = static_cast<int>(std::floor(m_selectorPosition)) - 3;
     class Content : public ZMovieRegionCallback {
     public:
         Content(CPowerUpSelector &owner, const ZInputPadState &value, int offset) : hud(owner), state(value), base(offset) {}
         bool DrawMovieRegion(const ZMovieRegion &area) override {
+            if (hud.m_presentingPowerup && !hud.m_powerupItemsVisible) { return true; }
             if (area.type < 2) { return true; }
             const int index = base + static_cast<int>(area.type) - 2;
             if (index < 0 || index >= static_cast<int>(hud.m_selectorEntries.size())) { return true; }
@@ -253,6 +259,7 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
         CPowerUpSelector &hud; const ZInputPadState &state; unsigned layout, layoutTime, menuTime; ZMovieRegionCallback &content;
     } panel(*this, state, layout, layoutTime, time, content);
     if (!m_resources.m_movies.Draw(menu, time, 512, 384, 1024, 768, 0, 1, &panel)) { return false; }
+    if (m_presentingPowerup) { m_selectorHits.clear(); return m_resources.m_movies.Failures() == 0; }
     ZMovieRegion resume;
     if (!m_resources.m_movies.Region(menu, 0, time, resume)) { return false; }
     unsigned cancelIndex = 0;

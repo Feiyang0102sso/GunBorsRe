@@ -225,7 +225,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                         moveX = dx; moveY = dy;
                         if (std::hypot(dx, dy) <= 95) { inGrenadeRange = true; moveX = 0; moveY = 0; }
                     }
-                    if (inGrenadeRange) { powerups.Select(13); powerups.Use(); }
+                    if (inGrenadeRange) { powerups.Select(13); powerups.UseSelected(); }
                 }
             }
             vitals.invincible = true;
@@ -387,18 +387,18 @@ int CheckSurvivalPowerupCapture(SurvivalPowerupCaptureFixture fixture) {
 
     if (powerupStudy && !capturePath.empty()) {
         powerups.Select(5);
-        powerups.Use();
+        powerups.UseSelected();
         powerups.Select(16);
-        powerups.Use();
+        powerups.UseSelected();
         for (int elapsed = 0; elapsed < 256; elapsed += 16) {
             scene.Update(16, 0, 0, false);
-            powerups.Update(16);
+            scene.UpdatePowerup(powerups.GetPowerup(), 16);
         }
         powerups.Select(19);
-        powerups.Use();
+        powerups.UseSelected();
         for (int elapsed = 0; elapsed < 1400; elapsed += 16) {
             scene.Update(16, 0, 0, false);
-            powerups.Update(16);
+            scene.UpdatePowerup(powerups.GetPowerup(), 16);
         }
         capturePath = TestOutput::Path("powerup-play-check.png");
     }

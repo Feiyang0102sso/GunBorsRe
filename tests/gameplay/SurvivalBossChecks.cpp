@@ -121,8 +121,8 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             bool introComplete = false;
             for (int elapsed = 0; elapsed < 60000 && !introComplete; elapsed += 16) {
                 blastEnemy.Update(16);
-                for (const ZEnemyAction &action : blastEnemy.combat.actions) {
-                    if (action.kind == ZEnemyAction::Kind::LevelEvent && action.slot == 11) { introComplete = true; }
+                for (const CEnemy::Action &action : blastEnemy.combat.actions) {
+                    if (action.kind == CEnemy::Action::Kind::LevelEvent && action.slot == 11) { introComplete = true; }
                 }
                 blastEnemy.combat.actions.clear();
             }
@@ -226,7 +226,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                 for (int time = 0; time < 60000 && !ready; time += 16) {
                     blastEnemy.Update(16);
                     for (const auto &action : blastEnemy.combat.actions) {
-                        if (action.kind == ZEnemyAction::Kind::LevelEvent && action.slot == 11) { ready = true; }
+                        if (action.kind == CEnemy::Action::Kind::LevelEvent && action.slot == 11) { ready = true; }
                     }
                     blastEnemy.combat.actions.clear();
                 }

@@ -1,5 +1,5 @@
 #include "gun_bros_re/gameplay/CTargetingController.h"
-#include "gun_bros_re/gameplay/CBrotherAI.h"
+#include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include <cmath>
 #include <cstdio>
 namespace {

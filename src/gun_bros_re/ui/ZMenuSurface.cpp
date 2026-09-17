@@ -290,7 +290,7 @@ namespace MenuDetail {
             CParticleEffect effect;
             CArrayInputStream input(bytes);
             if (!effect.Init(input) || input.Available() != 0) { return false; }
-            modeEffects[index] = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram);
+            modeEffects[index] = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram, particlePool);
         }
         // Bind stops the selection burst; the second emitter runs continuously.
         return modeEffects[1]->StartPersistentEffect(modeEffectRefs[1], 0, 0) != 0;
@@ -329,7 +329,7 @@ namespace MenuDetail {
             GameObjectRef resource;
             resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
             resource.localIndex = static_cast<std::uint8_t>(ordinal);
-            auto effect = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram);
+            auto effect = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram, particlePool);
             // CParticleEffectPlayer's constructor enables looping (:131269).
             if (effect->StartPersistentEffect(resource, 0, 0, true) == 0) { return false; }
             postGameEffects[index] = std::move(effect);
@@ -349,7 +349,7 @@ namespace MenuDetail {
         resource.packHash = resourceToc->GetPack(pack)->GetPackHash();
         resource.localIndex = static_cast<std::uint8_t>(binding.ordinals[icon]);
         auto &effect = refineryEffects[slot];
-        effect.player = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram);
+        effect.player = std::make_unique<ZWeaponEffects>(*resourceToc, *resourceTables, imageProgram, particlePool);
         // SetupTransfer :174510/:174534 uses the original ICON_STANDARD particle.
         // Positions are local to CTransferEffect::Draw, including living particles.
         effect.handle = effect.player->StartPersistentEffect(resource, 0, 0, true);
@@ -373,7 +373,8 @@ namespace MenuDetail {
         auto &effect = refineryEffects[slot];
         // CTransferEffect::Update :174361 calls StopSpawning, not Clear.
         // StopEffect detaches the emitter while its living particles expire.
-        if (effect.player) { effect.player->StopEffect(effect.handle); }
+        // Correction: that old host name now explicitly becomes StopSpawning.
+        if (effect.player) { effect.player->StopSpawning(effect.handle); }
         effect.handle = 0;
     }
 

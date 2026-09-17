@@ -35,75 +35,38 @@ bool EnsureParticleEffectVisual(CResTOCManager &tocManager, ZLoadedMap &loaded,
         return false;
     }
 
-    const std::vector<ZParticleEmitterTemplate> &emitters =
-        visual.effect.GetEmitters();
+    const std::vector<ZParticleEmitterTemplate> &emitters = visual.effect.GetEmitters();
     visual.emitters.resize(emitters.size());
-    for (std::size_t emitterIndex = 0; emitterIndex < emitters.size();
-         ++emitterIndex) {
-        const ZSpriteArchetype *archetype =
-            spritePack->spriteGlu.GetArchetype(emitters[emitterIndex].archetype);
-        if (archetype == nullptr) {
-            continue;
-        }
-
+    for (std::size_t emitterIndex = 0; emitterIndex < emitters.size(); ++emitterIndex) {
+        const auto *archetype = spritePack->spriteGlu.GetArchetype(emitters[emitterIndex].archetype);
+        if (archetype == nullptr) { continue; }
         CSpriteIterator iterator(spritePack->spriteGlu, *archetype);
         for (int animation = 0; animation < 32; ++animation) {
             if ((emitters[emitterIndex].animationMask & (1u << animation)) != 0) {
-                ExpandSlot(iterator, *archetype, static_cast<std::uint8_t>(animation),
-                           visual.emitters[emitterIndex].animations[animation]);
+                ExpandSlot(iterator, *archetype, static_cast<std::uint8_t>(animation), visual.emitters[emitterIndex].animations[animation]);
             }
         }
     }
-
     loaded.particleEffects.insert(std::make_pair(visualKey, visual));
     return true;
 }
 
-/** Deterministic local random stream, independent from map animation timing. */
-float NextParticleRandom(std::uint32_t &state) {
-    state = state * 1664525u + 1013904223u;
-    const std::uint32_t fraction = (state >> 8) & 0x00FFFFFFu;
-    return static_cast<float>(fraction) / 16777215.0f;
-}
-
-float ParticleRandomRange(std::uint32_t &state, float minimum, float maximum) {
-    return minimum + (maximum - minimum) * NextParticleRandom(state);
-}
-
-float ParticleRangeAt(float minimum, float maximum, float randomValue) {
-    return minimum + (maximum - minimum) * randomValue;
-}
-
 /** Queue one cached effect at a prop's world position. */
 void StartParticleEffect(ZLoadedMap &loaded, std::uint64_t visualKey,
-                         float x, float y, int zOrderGroup,
-                         std::uint32_t randomSalt) {
-    const std::map<std::uint64_t, ZParticleEffectVisual>::const_iterator found =
-        loaded.particleEffects.find(visualKey);
-    if (found == loaded.particleEffects.end()) {
-        return;
-    }
-
+    float x, float y, int zOrderGroup, std::uint32_t randomSalt) {
+    const auto found = loaded.particleEffects.find(visualKey);
+    if (found == loaded.particleEffects.end()) { return; }
     ZActiveParticleEffect active;
     active.visualKey = visualKey;
     active.x = x;
     active.y = y;
     active.zOrderGroup = zOrderGroup;
-    active.ageMs = 0.0f;
     active.randomState = static_cast<std::uint32_t>(visualKey) ^ randomSalt;
+    active.player.Init(found->second.effect, loaded.particlePool);
+    active.player.SetLooping(false);
+    active.player.SetPosition(x, y, 0, 0);
 
-    const std::vector<ZParticleEmitterTemplate> &emitters =
-        found->second.effect.GetEmitters();
-    active.nextSpawnMs.resize(emitters.size());
-    for (std::size_t emitter = 0; emitter < emitters.size(); ++emitter) {
-        float startMs = emitters[emitter].startSeconds * kSecondsToMilliseconds;
-        if (startMs < 0.0f) {
-            startMs = 0.0f;
-        }
-        active.nextSpawnMs[emitter] = startMs;
-        active.randomState ^= static_cast<std::uint32_t>(emitter * 7919u);
-    }
-    loaded.activeParticleEffects.push_back(active);
+    loaded.activeParticleEffects.push_back(std::move(active));
 }
 
 /** Original script resource indices and z groups for one state transition. */
@@ -167,222 +130,18 @@ void StartTransitionParticles(CResTOCManager &tocManager, ZLoadedMap &loaded,
     }
 }
 
-/** Create one live particle from an emitter's pattern and velocity. */
-void SpawnParticle(ZActiveParticleEffect &active,
-                   const ZParticleEmitterTemplate &emitter,
-                   std::uint32_t emitterIndex) {
-    if (active.particles.size() >= kMaximumParticlesPerEffect) {
-        return;
-    }
-
-    ZLiveParticle particle;
-    particle.emitterIndex = emitterIndex;
-    const int animation = emitter.SelectAnimation(NextParticleRandom(active.randomState));
-    if (animation < 0) { return; }
-    particle.animationIndex = static_cast<std::uint8_t>(animation);
-    particle.x = active.x;
-    particle.y = active.y;
-    particle.velocityX = 0.0f;
-    particle.velocityY = 0.0f;
-    particle.ageMs = 0.0f;
-    particle.lifetimeMs = static_cast<float>(emitter.GetParticleLifetimeMs());
-    if (particle.lifetimeMs <= 0.0f) {
-        particle.lifetimeMs = kParticleFallbackLifetimeMs;
-    }
-    for (std::size_t channel = 0; channel < particle.randomValues.size();
-         ++channel) {
-        particle.randomValues[channel] = NextParticleRandom(active.randomState);
-    }
-
-    if (emitter.pattern == ZParticleSpawnPattern::Line) {
-        const float distance = NextParticleRandom(active.randomState);
-        particle.x += emitter.patternValues[0] +
-                      (emitter.patternValues[2] - emitter.patternValues[0]) *
-                          distance;
-        particle.y += emitter.patternValues[1] +
-                      (emitter.patternValues[3] - emitter.patternValues[1]) *
-                          distance;
-    } else if (emitter.pattern == ZParticleSpawnPattern::Rectangle) {
-        particle.x += ParticleRandomRange(active.randomState,
-                                          emitter.patternValues[0],
-                                          emitter.patternValues[2]);
-        particle.y += ParticleRandomRange(active.randomState,
-                                          emitter.patternValues[1],
-                                          emitter.patternValues[3]);
-    } else {
-        const float outerRadius = ParticleRandomRange(
-            active.randomState, emitter.patternValues[2],
-            emitter.patternValues[3]);
-        const float innerWidth = ParticleRandomRange(
-            active.randomState, emitter.patternValues[4],
-            emitter.patternValues[5]);
-        const float radius = ParticleRandomRange(active.randomState,
-                                                 outerRadius - innerWidth,
-                                                 outerRadius);
-        const float angle = ParticleRandomRange(active.randomState, 0.0f,
-                                                360.0f) /
-                            kRadiansToDegrees;
-        particle.x += emitter.patternValues[0] + std::sin(angle) * radius;
-        particle.y += emitter.patternValues[1] - std::cos(angle) * radius;
-    }
-
-    if (emitter.velocity == ZParticleSpawnVelocity::Linear) {
-        particle.velocityX = ParticleRandomRange(
-            active.randomState, emitter.velocityValues[0],
-            emitter.velocityValues[1]);
-        particle.velocityY = ParticleRandomRange(
-            active.randomState, emitter.velocityValues[2],
-            emitter.velocityValues[3]);
-    } else {
-        const float direction = ParticleRandomRange(
-            active.randomState, emitter.velocityValues[0],
-            emitter.velocityValues[1]) /
-                                kRadiansToDegrees;
-        const float speed = ParticleRandomRange(
-            active.randomState, emitter.velocityValues[2],
-            emitter.velocityValues[3]);
-        particle.velocityX = std::sin(direction) * speed;
-        particle.velocityY = std::cos(direction) * speed;
-    }
-
-    active.particles.push_back(particle);
-}
-
-/** Resolve one particle channel at an age using the original timed ranges. */
-float ParticleChannelValue(const ZParticleEmitterTemplate &emitter,
-                           const ZLiveParticle &particle,
-                           std::size_t channel, float defaultValue) {
-    const std::vector<ZParticleInterpolatorKey> &keys =
-        emitter.interpolators[channel];
-    float value = defaultValue;
-    const float randomValue = particle.randomValues[channel];
-    for (std::size_t keyIndex = 0; keyIndex < keys.size(); ++keyIndex) {
-        const ZParticleInterpolatorKey &key = keys[keyIndex];
-        float startValue = value;
-        if (!key.keepPreviousStart) {
-            startValue = ParticleRangeAt(key.startMinimum, key.startMaximum,
-                                         randomValue);
-        }
-        const float endValue = ParticleRangeAt(key.endMinimum, key.endMaximum,
-                                               randomValue);
-        const float startMs = static_cast<float>(key.startMs);
-        const float endMs = startMs + static_cast<float>(key.durationMs);
-        if (particle.ageMs < startMs) {
-            return value;
-        }
-        if (key.durationMs == 0 || particle.ageMs >= endMs) {
-            value = endValue;
-            continue;
-        }
-
-        const float progress = (particle.ageMs - startMs) /
-                               static_cast<float>(key.durationMs);
-        return startValue + (endValue - startValue) * progress;
-    }
-    return value;
-}
-
 /** Advance emitters and their live particles. */
+// Original UpdateEmitters emits once per update at zero interval.
 void AdvanceParticleEffects(ZLoadedMap &loaded, std::uint16_t deltaMs) {
-    const float elapsedSeconds = static_cast<float>(deltaMs) /
-                                 kSecondsToMilliseconds;
-    std::size_t activeIndex = 0;
-    while (activeIndex < loaded.activeParticleEffects.size()) {
-        ZActiveParticleEffect &active =
-            loaded.activeParticleEffects[activeIndex];
-        const std::map<std::uint64_t, ZParticleEffectVisual>::const_iterator found =
-            loaded.particleEffects.find(active.visualKey);
-        if (found == loaded.particleEffects.end()) {
-            loaded.activeParticleEffects.erase(
-                loaded.activeParticleEffects.begin() + activeIndex);
-            continue;
-        }
-
-        const std::vector<ZParticleEmitterTemplate> &emitters =
-            found->second.effect.GetEmitters();
-        active.ageMs += static_cast<float>(deltaMs);
-        bool futureSpawnExists = false;
-        for (std::size_t emitterIndex = 0; emitterIndex < emitters.size();
-             ++emitterIndex) {
-            const ZParticleEmitterTemplate &emitter = emitters[emitterIndex];
-            float &nextSpawnMs = active.nextSpawnMs[emitterIndex];
-            if (nextSpawnMs < 0.0f) {
-                continue;
-            }
-
-            float startMs = emitter.startSeconds * kSecondsToMilliseconds;
-            if (startMs < 0.0f) {
-                startMs = 0.0f;
-            }
-            const float endMs = emitter.endSeconds * kSecondsToMilliseconds;
-            const bool oneShot = endMs <= startMs;
-            std::size_t spawned = 0;
-            while (nextSpawnMs <= active.ageMs &&
-                   spawned < kMaximumSpawnsPerEmitterPerFrame) {
-                if (!oneShot && nextSpawnMs > endMs) {
-                    nextSpawnMs = -1.0f;
-                    break;
-                }
-
-                SpawnParticle(active, emitter,
-                              static_cast<std::uint32_t>(emitterIndex));
-                spawned++;
-                if (oneShot) {
-                    nextSpawnMs = -1.0f;
-                    break;
-                }
-
-                float intervalMs = ParticleRandomRange(
-                    active.randomState, emitter.intervalMinimumSeconds,
-                    emitter.intervalMaximumSeconds) *
-                                   kSecondsToMilliseconds;
-                if (intervalMs < 1.0f) {
-                    // Original UpdateEmitters emits once per update at zero interval.
-                    nextSpawnMs = active.ageMs + 1.0f;
-                    break;
-                }
-                nextSpawnMs += intervalMs;
-            }
-            if (nextSpawnMs >= 0.0f &&
-                (oneShot || nextSpawnMs <= endMs)) {
-                futureSpawnExists = true;
-            }
-        }
-
-        std::size_t particleIndex = 0;
-        while (particleIndex < active.particles.size()) {
-            ZLiveParticle &particle = active.particles[particleIndex];
-            if (particle.emitterIndex >= emitters.size()) {
-                active.particles.erase(active.particles.begin() + particleIndex);
-                continue;
-            }
-
-            const ZParticleEmitterTemplate &emitter =
-                emitters[particle.emitterIndex];
-            particle.ageMs += static_cast<float>(deltaMs);
-            if (particle.ageMs >= particle.lifetimeMs) {
-                active.particles.erase(active.particles.begin() + particleIndex);
-                continue;
-            }
-
-            const float speedScale = ParticleChannelValue(
-                emitter, particle, 5, 1.0f);
-            particle.velocityX += emitter.accelerationX * elapsedSeconds;
-            particle.velocityY += emitter.accelerationY * elapsedSeconds;
-            particle.x += particle.velocityX * speedScale * elapsedSeconds;
-            particle.y += particle.velocityY * speedScale * elapsedSeconds;
-            particleIndex++;
-        }
-
-        if (!futureSpawnExists && active.particles.empty()) {
-            loaded.activeParticleEffects.erase(
-                loaded.activeParticleEffects.begin() + activeIndex);
-            continue;
-        }
-        activeIndex++;
+    for (std::size_t index = 0; index < loaded.activeParticleEffects.size();) {
+        auto &active = loaded.activeParticleEffects[index];
+        // Match CParticleEffectPlayer: update existing particles before births.
+        active.player.Update(deltaMs, active.randomState);
+        if (active.player.IsDone()) {
+            loaded.activeParticleEffects.erase(loaded.activeParticleEffects.begin() + index);
+        } else { ++index; }
     }
 }
-
 /** Select the looping sprite step belonging to a particle's current age. */
 std::size_t ParticleAnimationStep(const ZPropSlot &animation, float ageMs) {
     if (animation.stepDurationsMs.empty()) {
@@ -431,8 +190,8 @@ void AddParticleQuads(const ZLoadedMap &loaded, ZQuadBatch &batch,
             visual.effect.GetEmitters();
 
         for (std::size_t particleIndex = 0;
-             particleIndex < active.particles.size(); ++particleIndex) {
-            const ZLiveParticle &particle = active.particles[particleIndex];
+             particleIndex < active.player.GetParticleCount(); ++particleIndex) {
+            const auto &particle = active.player.GetParticle(particleIndex);
             if (particle.emitterIndex >= emitters.size() ||
                 particle.emitterIndex >= visual.emitters.size()) {
                 continue;
@@ -443,7 +202,7 @@ void AddParticleQuads(const ZLoadedMap &loaded, ZQuadBatch &batch,
             const ZParticleEmitterVisual &emitterVisual =
                 visual.emitters[particle.emitterIndex];
             const ZPropSlot *animation =
-                &emitterVisual.animations[particle.animationIndex];
+                &emitterVisual.animations[particle.animation];
             if (animation->quadsByStep.empty()) {
                 continue;
             }
@@ -454,25 +213,17 @@ void AddParticleQuads(const ZLoadedMap &loaded, ZQuadBatch &batch,
                 continue;
             }
 
-            const float scaleX = ParticleChannelValue(
-                emitter, particle, 0, 1.0f);
-            const float scaleY = ParticleChannelValue(
-                emitter, particle, 1, 1.0f);
-            const float uniformScale = ParticleChannelValue(
-                emitter, particle, 2, 1.0f);
-            float alpha = ParticleChannelValue(emitter, particle, 3, 1.0f);
+            const float scaleX = particle.Value(0);
+            const float scaleY = particle.Value(1);
+            const float uniformScale = particle.Value(2);
+            float alpha = particle.Value(3);
             if (alpha < 0.0f) {
                 alpha = 0.0f;
             }
             if (alpha > 1.0f) {
                 alpha = 1.0f;
             }
-            float rotation = ParticleChannelValue(emitter, particle, 4, 0.0f);
-            if (emitter.alignToVelocity) {
-                rotation += std::atan2(particle.velocityY,
-                                       particle.velocityX) *
-                            kRadiansToDegrees;
-            }
+            const float rotation = particle.Rotation(emitter);
 
             const std::vector<ZSpriteQuad> &quads = animation->quadsByStep[step];
             for (std::size_t quadIndex = 0; quadIndex < quads.size();

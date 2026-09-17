@@ -15,7 +15,7 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include "engine/resources/CResTOCManager.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 
 #include <cstdio>
 #include <cstring>

@@ -1,7 +1,7 @@
 /** BIG match validation and authoritative life budget regressions. */
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
-#include "gun_bros_re/gameplay/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
 #include <cstdio>
 #include "gun_bros_re/gameplay/CPickup.h"
 #include "engine/core/CStringToKey.h"

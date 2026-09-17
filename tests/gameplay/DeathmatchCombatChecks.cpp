@@ -4,9 +4,9 @@
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "gun_bros_re/gameplay/CGame.h"
-#include "gun_bros_re/gameplay/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
 #include "gun_bros_re/gameplay/ZPickupScene.h"
-#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gameplay/SurvivalStudy.h"
@@ -62,7 +62,7 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
     return 0;
 }
 
-int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickupScene &pickups, ZPowerupScene &powerups, CProfileManager &profile, ZSurvivalGameContext &context) {
+int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickupScene &pickups, CPowerUpSelector &powerups, CProfileManager &profile, ZSurvivalGameContext &context) {
     auto &scene = fixture.scene; auto &session = fixture.session; auto &bot = fixture.brother;
     auto &player = fixture.player; auto &opponent = fixture.brotherModel; auto &vitals = fixture.vitals;
     if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
@@ -143,20 +143,20 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
     if (powerups.SelectResource(forbidden)) { return 1; }
     for (unsigned use = 0; use < 2; ++use) {
         bot.vitals.health = 1;
-        if (!powerups.UseMatchConsumable(false) || bot.vitals.health <= 1) { std::printf("[deathmatch-check] heal failed use=%u\n", use); return 1; }
+        if (!ZDeathmatchBot::UseMatchConsumable(powerups, false) || bot.vitals.health <= 1) { std::printf("[deathmatch-check] heal failed use=%u\n", use); return 1; }
     }
     bot.vitals.health = 1;
-    if (powerups.UseMatchConsumable(false) || match.GetLife(1).healthPacks != 2) { return 1; }
+    if (ZDeathmatchBot::UseMatchConsumable(powerups, false) || match.GetLife(1).healthPacks != 2) { return 1; }
     bot.vitals.health = bot.vitals.maximum;
     for (unsigned use = 0; use < 2; ++use) {
         bool requested = false;
         for (unsigned time = 0; time < 6000; time += 16) {
-            if (!requested) { requested = powerups.UseMatchConsumable(true); }
+            if (!requested) { requested = ZDeathmatchBot::UseMatchConsumable(powerups, true); }
             session.Update(16, 0, 0, false);
         }
         if (match.GetLife(1).grenades != use + 1) { std::printf("[deathmatch-check] grenade commit failed count=%u\n", match.GetLife(1).grenades); return 1; }
     }
-    if (powerups.UseMatchConsumable(true) || !match.EnterShop(1) || !match.EnterShop(1) || match.EnterShop(1)) { return 1; }
+    if (ZDeathmatchBot::UseMatchConsumable(powerups, true) || !match.EnterShop(1) || !match.EnterShop(1) || match.EnterShop(1)) { return 1; }
 
     // Friendly fire remains disabled on the shooter; the opposing actor takes damage.
     ZCombatHit hit; hit.owner = kPlayerCombatId; hit.ownerType = 0; hit.damage = 100000;

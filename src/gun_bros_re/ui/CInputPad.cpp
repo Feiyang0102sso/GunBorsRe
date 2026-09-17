@@ -10,7 +10,7 @@
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "engine/graphics/ZPNG.h"
 #include <algorithm>
 #include <cstdio>

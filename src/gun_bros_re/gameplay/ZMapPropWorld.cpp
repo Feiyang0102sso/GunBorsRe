@@ -253,6 +253,10 @@ namespace MapDetail {
             x = m_scene.GetPlayer().x; y = m_scene.GetPlayer().y;
         }
         if (action.kind == ZPropAction::Kind::AttachedEffect || action.kind == ZPropAction::Kind::StopEffect) {
+            // CProp native 16/17 uses CMap's CParticleSystem (:124680).
+            cue.particlePool = m_map.particleSystemPool;
+            // AddEffect starts a one-shot even when native 16 adds an anchor.
+            cue.loopParticles = false;
             owner = kPlayerCombatId;
             cue.kind = ZGunCue::Kind::Trail;
             if (action.kind == ZPropAction::Kind::StopEffect) { cue.kind = ZGunCue::Kind::StopTrail; }

@@ -154,6 +154,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         return 1;
     }
     ZAudioPlayer audio;
+    ZLoadedMap loaded;
     ZPackTables weaponTables(tocManager);
     std::vector<ZWeaponEntry> weapons;
     std::size_t weaponSlot = weaponIndex;
@@ -161,7 +162,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     if (gameView) {
         if (!LoadWeaponCatalog(tocManager, weaponTables, weapons)) { return 1; }
         if (weaponSlot >= weapons.size()) { weaponSlot = 0; }
-        weaponEffects.reset(new ZWeaponEffects(tocManager, weaponTables, program));
+        weaponEffects.reset(new ZWeaponEffects(tocManager, weaponTables, program, loaded.particlePool));
     }
 
     int drawableWidth = 0;
@@ -172,7 +173,6 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 catalog[slot].packName.c_str(), catalog[slot].mapIndex, slot + 1,
                 catalog.size());
 
-    ZLoadedMap loaded;
     if (!LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
                  loaded)) {
         return 1;
@@ -345,7 +345,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 LoadPlacedPlayers(tocManager, program, replacement);
                 if (gameView) {
                     if (!EquipControlledPlayer(weaponTables, replacement, program, weapons[weaponSlot])) { return 1; }
-                    weaponEffects->Clear();
+                    weaponEffects = std::make_unique<ZWeaponEffects>(tocManager, weaponTables, program, replacement.particlePool);
                 }
                 ReportSpawns(replacement);
                 if (!gameView) { turrets.Bind(replacement); }

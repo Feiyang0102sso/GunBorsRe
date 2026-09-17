@@ -1,10 +1,11 @@
+#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
 /** Hard DM uses real PvP rules and Flow with virtual inventory; Easy stays limited. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
 #include "engine/core/CStringToKey.h"
 
 int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
-    CMPMatch &match, ZPowerupScene &powerups, CProfileManager &profile) {
+    CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile) {
     auto &session = fixture.session;
     auto &scene = fixture.scene;
     auto &bot = static_cast<ZDeathmatchBot &>(fixture.brother);
@@ -66,11 +67,11 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             bool requested = false;
             const auto previousUses = match.GetLife(1).grenades;
             for (unsigned elapsed = 0; elapsed < 6000 && match.GetLife(1).grenades == previousUses; elapsed += 16) {
-                if (!requested) { requested = powerups.UseMatchConsumable(true); }
+                if (!requested) { requested = ZDeathmatchBot::UseMatchConsumable(powerups, true); }
                 session.Update(16, 0, 0, false);
             }
             if (!requested || match.GetLife(1).grenades != previousUses + 1 ||
-                !powerups.SelectResource(grenade) || powerups.Use()) { return 1; }
+                !powerups.SelectResource(grenade) || powerups.UseSelected()) { return 1; }
             const int cooldown = powerups.Cooldowns().at(grenade.localIndex);
             if (cooldown <= 0) { return 1; }
             for (int elapsed = 0; elapsed < cooldown + 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
@@ -78,7 +79,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         // The shared automatic path must select and execute a PvP item beyond Easy's set.
         bool usedOther = false;
         for (unsigned attempt = 0; attempt < 30 && !usedOther; ++attempt) {
-            if (powerups.UseAny()) {
+            if (ZLocalCoopBot::UseAnyPowerup(powerups)) {
                 const auto id = powerups.GetSelected()->resource.localIndex;
                 usedOther = id != 1 && id != 8 && id != 9 && id != 13;
             }
@@ -88,13 +89,13 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             powerups.failures != 0 || match.CanShop(1) || match.EnterShop(1)) { return 1; }
         // Changing a DM rule cannot grant stock when the same peer host runs Live.
         powerups.SetDeathmatch(nullptr);
-        if (!powerups.SelectResource(grenade) || powerups.GetCount() != 0 || powerups.Use()) { return 1; }
+        if (!powerups.SelectResource(grenade) || powerups.GetCount() != 0 || powerups.UseSelected()) { return 1; }
         powerups.SetDeathmatch(&match);
         match.SetBotLevel(CMPMatch::BotLevel::Easy);
         bot.Configure(42, *chosen[0], *chosen[1], CMPMatch::BotLevel::Easy);
         session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
         if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true) ||
-            !powerups.SelectResource(grenade) || powerups.GetCount() != 0 || powerups.Use()) { return 1; }
+            !powerups.SelectResource(grenade) || powerups.GetCount() != 0 || powerups.UseSelected()) { return 1; }
         std::printf("[dm-bot] level=%u allowed=%u excluded=%u heals=5 grenades=3 extra-item=%d cooldown=1 no-stock-write=1 no-shop=1\n",
             static_cast<unsigned>(difficulty), allowed, excluded, usedOther);
     }

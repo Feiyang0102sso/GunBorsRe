@@ -1,3 +1,4 @@
+#include "gun_bros_re/gameplay/CParticleEffectPlayer.h"
 /** @file ZWeaponEffects.cpp
  * @brief BIG-backed projectile sprites, meshes, particles and weapon audio.
  */
@@ -144,17 +145,15 @@ struct ZShot {
 struct ZEffectInstance {
     ZCombatId burstActor = 0;
     std::uint64_t handle = 0;
-    bool persistent = false;
-    float loopDurationMs = 0;
-    std::vector<unsigned> emitterCycles;
+
+    CParticleEffectPlayer player;
     ZCombatId actor = 0;
     int slot = 0;
     int part = 0;
     int node = 0;
     const CParticleEffect *data = nullptr;
     float x = 0, y = 0, z = 0, angle = 0;
-    float ageMs = 0;
-    std::vector<float> nextSpawn;
+
     ZShot *owner = nullptr;
 };
 
@@ -168,16 +167,6 @@ struct ZRibbonInstance {
     float x = 0, y = 0, z = 0;
 };
 
-struct ZParticle {
-    ZCombatId burstActor = 0;
-    const CParticleEffect *data = nullptr;
-    std::size_t emitter = 0;
-    float x = 0, y = 0, velocityX = 0, velocityY = 0;
-    float ageMs = 0, lifetimeMs = 0, angle = 0;
-    float z = 0;
-    int animation = 0;
-    std::array<float, kParticleInterpolatorChannelCount> random{};
-};
 
 /** Nearest intersection prevents fast projectiles from tunnelling through walls. */
 float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData *scene,
@@ -206,19 +195,6 @@ float SegmentFraction(float x, float y, float dx, float dy, const CCollisionData
     return fraction;
 }
 
-float ParticleValue(const ZParticleEmitterTemplate &emitter, const ZParticle &particle,
-                    std::size_t channel, float value) {
-    const float random = particle.random[channel];
-    for (const ZParticleInterpolatorKey &key : emitter.interpolators[channel]) {
-        if (particle.ageMs < key.startMs) { return value; }
-        float start = value;
-        if (!key.keepPreviousStart) { start = key.startMinimum + (key.startMaximum - key.startMinimum) * random; }
-        const float end = key.endMinimum + (key.endMaximum - key.endMinimum) * random;
-        if (key.durationMs == 0 || particle.ageMs >= key.startMs + key.durationMs) { value = end; }
-        else { return start + (end - start) * (particle.ageMs - key.startMs) / key.durationMs; }
-    }
-    return value;
-}
 }
 
 struct ZWeaponEffects::Impl {
@@ -253,7 +229,7 @@ struct ZWeaponEffects::Impl {
     std::map<std::uint64_t, CParticleEffect> effects;
     std::vector<std::unique_ptr<ZShot>> shots;
     std::vector<ZEffectInstance> activeEffects;
-    std::vector<ZParticle> particles;
+    std::shared_ptr<CParticlePool> particlePool;
     std::map<ZCombatId, ZRibbonInstance> ribbons;
     std::map<std::uint64_t, std::unique_ptr<ZTexture>> ribbonColors;
 
@@ -569,7 +545,8 @@ struct ZWeaponEffects::Impl {
         }
     }
 
-    void StartEffect(const GameObjectRef &ref, float x, float y, float z, float angle, ZShot *owner) {
+    void StartEffect(const GameObjectRef &ref, float x, float y, float z, float angle, ZShot *owner,
+        std::shared_ptr<CParticlePool> ownerPool = nullptr) {
         const std::uint64_t key = ResourceKey(ref);
         auto found = effects.find(key);
         if (found == effects.end()) {
@@ -584,11 +561,11 @@ struct ZWeaponEffects::Impl {
         effect.data = &found->second;
         effect.owner = owner;
         effect.x = x; effect.y = y; effect.z = z; effect.angle = angle;
-        for (const ZParticleEmitterTemplate &emitter : effect.data->GetEmitters()) {
-            effect.nextSpawn.push_back(std::max(0.0f, emitter.startSeconds * 1000.0f));
-            effect.emitterCycles.push_back(0);
-        }
-        activeEffects.push_back(effect);
+        if (!ownerPool) { ownerPool = particlePool; }
+        effect.player.Init(*effect.data, std::move(ownerPool));
+        effect.player.SetLooping(owner != nullptr);
+
+        activeEffects.push_back(std::move(effect));
     }
 
     void DetachRibbon(ZShot *owner) {
@@ -602,8 +579,11 @@ struct ZWeaponEffects::Impl {
         if (owner == nullptr) { return; }
         std::size_t index = 0;
         while (index < activeEffects.size()) {
-            if (activeEffects[index].owner == owner) { activeEffects.erase(activeEffects.begin() + index); }
-            else { ++index; }
+            if (activeEffects[index].owner == owner) {
+                activeEffects[index].player.StopSpawning();
+                activeEffects[index].owner = nullptr;
+            }
+            ++index;
         }
     }
 
@@ -642,8 +622,8 @@ struct ZWeaponEffects::Impl {
             if (cue.alignEffect) { angle = direction + 90.0f; }
             if (cue.kind == ZGunCue::Kind::Trail) {
                 StopTrail(owner);
-                StartEffect(cue.resource, x, y, z, angle, owner);
-            } else { StartEffect(cue.resource, x, y, z, angle, nullptr); }
+                StartEffect(cue.resource, x, y, z, angle, owner, cue.particlePool);
+            } else { StartEffect(cue.resource, x, y, z, angle, nullptr, cue.particlePool); }
         } else if (cue.kind == ZGunCue::Kind::Sound || cue.kind == ZGunCue::Kind::LoopSound ||
                    cue.kind == ZGunCue::Kind::StopSound) {
             ZCombatId soundOwner = kPlayerCombatId;
@@ -652,126 +632,40 @@ struct ZWeaponEffects::Impl {
         }
     }
 
-    void SpawnParticle(const ZEffectInstance &effect, std::size_t index) {
-        const ZParticleEmitterTemplate &emitter = effect.data->GetEmitters()[index];
-        ZParticle particle;
-        particle.burstActor = effect.burstActor;
-        particle.data = effect.data;
-        particle.emitter = index;
-        particle.lifetimeMs = static_cast<float>(emitter.GetParticleLifetimeMs());
-        if (particle.lifetimeMs <= 0) { return; }
-        particle.angle = effect.angle;
-        particle.z = effect.z;
-        // CParticle::Spawn selects an animation once using RandomBit.
-        particle.animation = emitter.SelectAnimation(Random(0, 1));
-        if (particle.animation < 0) { return; }
-        for (float &value : particle.random) { value = Random(0, 1); }
-        float x = 0, y = 0;
-        if (emitter.pattern == ZParticleSpawnPattern::Line) {
-            const float fraction = Random(0, 1);
-            x = emitter.patternValues[0] + (emitter.patternValues[2] - emitter.patternValues[0]) * fraction;
-            y = emitter.patternValues[1] + (emitter.patternValues[3] - emitter.patternValues[1]) * fraction;
-        } else if (emitter.pattern == ZParticleSpawnPattern::Rectangle) {
-            x = Random(emitter.patternValues[0], emitter.patternValues[2]);
-            y = Random(emitter.patternValues[1], emitter.patternValues[3]);
-        } else {
-            const float outer = Random(emitter.patternValues[2], emitter.patternValues[3]);
-            const float width = Random(emitter.patternValues[4], emitter.patternValues[5]);
-            const float radius = Random(outer - width, outer);
-            const float angle = Random(0, 360) * kRadians;
-            x = emitter.patternValues[0] + std::sin(angle) * radius;
-            y = emitter.patternValues[1] - std::cos(angle) * radius;
-        }
-        float vx = 0, vy = 0;
-        if (emitter.velocity == ZParticleSpawnVelocity::Linear) {
-            vx = Random(emitter.velocityValues[0], emitter.velocityValues[1]);
-            vy = Random(emitter.velocityValues[2], emitter.velocityValues[3]);
-        } else {
-            const float angle = Random(emitter.velocityValues[0], emitter.velocityValues[1]) * kRadians;
-            const float speed = Random(emitter.velocityValues[2], emitter.velocityValues[3]);
-            vx = std::sin(angle) * speed; vy = std::cos(angle) * speed;
-        }
-        const float cosine = std::cos(effect.angle * kRadians), sine = std::sin(effect.angle * kRadians);
-        particle.x = effect.x + x * cosine - y * sine;
-        particle.y = effect.y + x * sine + y * cosine;
-        particle.velocityX = vx * cosine - vy * sine;
-        particle.velocityY = vx * sine + vy * cosine;
-        particles.push_back(particle);
-    }
-
+    // CParticle::Spawn selects an animation once using RandomBit.
     void AdvanceParticles(int deltaMs) {
-        for (ZParticle &particle : particles) {
-            const ZParticleEmitterTemplate &emitter = particle.data->GetEmitters()[particle.emitter];
-            particle.ageMs += deltaMs;
-            const float seconds = deltaMs * 0.001f;
-            particle.velocityX += emitter.accelerationX * seconds;
-            particle.velocityY += emitter.accelerationY * seconds;
-            const float speed = ParticleValue(emitter, particle, 5, 1);
-            particle.x += particle.velocityX * seconds * speed;
-            particle.y += particle.velocityY * seconds * speed;
-        }
-        std::size_t p = 0;
-        while (p < particles.size()) {
-            if (particles[p].ageMs >= particles[p].lifetimeMs) { particles.erase(particles.begin() + p); }
-            else { ++p; }
-        }
-        std::size_t i = 0;
-        while (i < activeEffects.size()) {
-            ZEffectInstance &effect = activeEffects[i];
+        if (deltaMs <= 0) { return; }
+        for (std::size_t index = 0; index < activeEffects.size();) {
+            auto &effect = activeEffects[index];
             if (effect.actor != 0 && world != nullptr) {
                 float direction = 0;
-                if (!world->Anchor(effect.actor, effect.part, effect.node,
-                    effect.x, effect.y, effect.z, direction)) {
-                    activeEffects.erase(activeEffects.begin() + i);
-                    continue;
+                if (world->Anchor(effect.actor, effect.part, effect.node, effect.x, effect.y, effect.z, direction)) {
+                    effect.angle = direction + 90;
+                } else {
+                    effect.player.StopSpawning();
+                    effect.actor = 0;
                 }
-                effect.angle = direction + 90;
             }
             if (effect.owner != nullptr) {
-                effect.x = effect.owner->x; effect.y = effect.owner->y; effect.z = effect.owner->z;
+                effect.x = effect.owner->x;
+                effect.y = effect.owner->y;
+                effect.z = effect.owner->z;
             }
-            effect.ageMs += deltaMs;
-            bool pending = false;
-            for (std::size_t j = 0; j < effect.nextSpawn.size(); ++j) {
-                const ZParticleEmitterTemplate &emitter = effect.data->GetEmitters()[j];
-                float end = std::max(0.0f, std::max(emitter.startSeconds, emitter.endSeconds) * 1000.0f);
-                const bool loop = effect.loopDurationMs > 1;
-                const float start = std::max(0.0f, emitter.startSeconds * 1000.0f);
-                end += effect.emitterCycles[j] * effect.loopDurationMs;
-                // An attached infinite emitter stays alive between emissions.
-                const bool continuous = (effect.owner != nullptr || effect.actor != 0 || effect.persistent)
-                    && emitter.startSeconds == -1.0f && emitter.endSeconds == -1.0f;
-                while (effect.nextSpawn[j] <= effect.ageMs && (continuous || loop || effect.nextSpawn[j] <= end)) {
-                    // CParticleEffectPlayer::Update :131499 wraps the authored
-                    // effect period and preserves each emitter's interval remainder.
-                    // Finite menu sparkles need this in addition to infinite emitters.
-                    if (loop && !continuous && effect.nextSpawn[j] > end) {
-                        const float windowLength = std::max(0.0f, emitter.endSeconds * 1000.0f - start);
-                        effect.nextSpawn[j] += effect.loopDurationMs - windowLength;
-                        ++effect.emitterCycles[j];
-                        end += effect.loopDurationMs;
-                        continue;
-                    }
-                    SpawnParticle(effect, j);
-                    const float interval = Random(emitter.intervalMinimumSeconds, emitter.intervalMaximumSeconds) * 1000.0f;
-                    // UpdateEmitters stops after one spawn when the authored
-                    // interval rounds to zero; it does not emit 1000 per second.
-                    if (interval < 1.0f) {
-                        effect.nextSpawn[j] = effect.ageMs + 1.0f;
-                        break;
-                    }
-                    effect.nextSpawn[j] += interval;
-                }
-                if (continuous || loop || effect.nextSpawn[j] <= end) { pending = true; }
-            }
-            if (!pending) { activeEffects.erase(activeEffects.begin() + i); }
-            else { ++i; }
+            effect.player.SetPosition(effect.x, effect.y, effect.z, effect.angle);
+            effect.player.Update(deltaMs, randomState);
+            if (effect.player.IsDone()) { activeEffects.erase(activeEffects.begin() + index); }
+            else { ++index; }
         }
     }
 };
 
-ZWeaponEffects::ZWeaponEffects(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program)
-    : m_impl(new Impl(toc, tables, program)) {}
+ZWeaponEffects::ZWeaponEffects(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+    std::shared_ptr<CParticlePool> particlePool) : m_impl(new Impl(toc, tables, program)) {
+    // CMap allocates 200 slots (:91849). Menus/powerups supply
+    // their shared owner pool explicitly instead of allocating per effect.
+    if (!particlePool) { particlePool = std::make_shared<CParticlePool>(200); }
+    m_impl->particlePool = std::move(particlePool);
+}
 ZWeaponEffects::~ZWeaponEffects() = default;
 
 std::vector<ZWeaponProjectileState> ZWeaponEffects::GetProjectileStates() const {
@@ -788,19 +682,15 @@ std::vector<ZWeaponProjectileState> ZWeaponEffects::GetProjectileStates() const 
 
 void ZWeaponEffects::SetCombatWorld(ZProjectileWorld *world) { m_impl->world = world; }
 
-std::uint64_t ZWeaponEffects::StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop) {
+std::uint64_t ZWeaponEffects::StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop,
+    std::shared_ptr<CParticlePool> particlePool) {
     const std::size_t previous = m_impl->activeEffects.size();
-    m_impl->StartEffect(resource, x, y, 0, 0, nullptr);
+    m_impl->StartEffect(resource, x, y, 0, 0, nullptr, std::move(particlePool));
     if (m_impl->activeEffects.size() == previous) { return 0; }
     ZEffectInstance &effect = m_impl->activeEffects.back();
-    effect.persistent = true;
-    if (loop) {
-        // CParticleEffect::Init :131032 derives the period from emitter end times.
-        for (const auto &emitter : effect.data->GetEmitters()) {
-            const int endMs = static_cast<int>(emitter.endSeconds * 1000.0f);
-            effect.loopDurationMs = std::max(effect.loopDurationMs, static_cast<float>(endMs));
-        }
-    }
+    // CParticleEffect::Init :131032 derives the period from emitter end times.
+    // An attached infinite emitter stays alive between emissions.
+    effect.player.SetLooping(loop || effect.data->GetDurationMs() == 0);
     effect.handle = m_impl->nextEffectHandle++;
     return effect.handle;
 }
@@ -809,6 +699,16 @@ void ZWeaponEffects::StopEffect(std::uint64_t handle) {
     if (handle == 0) { return; }
     for (auto iterator = m_impl->activeEffects.begin(); iterator != m_impl->activeEffects.end(); ++iterator) {
         if (iterator->handle == handle) { m_impl->activeEffects.erase(iterator); return; }
+    }
+}
+
+void ZWeaponEffects::StopSpawning(std::uint64_t handle) {
+    if (handle == 0) { return; }
+    for (auto &effect : m_impl->activeEffects) {
+        if (effect.handle != handle) { continue; }
+        effect.player.StopSpawning();
+        effect.handle = 0;
+        return;
     }
 }
 
@@ -912,15 +812,20 @@ void ZWeaponEffects::Emit(const ZGunCue &cue, float x, float y, float z, float d
     if (actor != 0 && (cue.kind == ZGunCue::Kind::Trail || cue.kind == ZGunCue::Kind::StopTrail)) {
         for (std::size_t i = 0; i < scene.activeEffects.size();) {
             const ZEffectInstance &effect = scene.activeEffects[i];
-            if (effect.actor == actor && effect.slot == slot) { scene.activeEffects.erase(scene.activeEffects.begin() + i); }
-            else { ++i; }
+            if (effect.actor == actor && effect.slot == slot) {
+                if (cue.stopParticlesImmediately) { scene.activeEffects[i].player.Stop(); }
+                else { scene.activeEffects[i].player.StopSpawning(); }
+                scene.activeEffects[i].actor = 0;
+            }
+            ++i;
         }
         if (cue.kind == ZGunCue::Kind::Trail) {
             const std::size_t previous = scene.activeEffects.size();
-            scene.StartEffect(cue.resource, x, y, z, direction + 90, nullptr);
+            scene.StartEffect(cue.resource, x, y, z, direction + 90, nullptr, cue.particlePool);
             if (scene.activeEffects.size() > previous) {
                 ZEffectInstance &effect = scene.activeEffects.back();
                 effect.actor = actor;
+                effect.player.SetLooping(cue.loopParticles);
                 effect.slot = slot;
                 effect.part = part;
                 effect.node = node;
@@ -938,9 +843,6 @@ bool ZWeaponEffects::HasActorBurst(ZCombatId actor) const {
     for (const auto &effect : m_impl->activeEffects) {
         if (effect.burstActor == actor) { return true; }
     }
-    for (const auto &particle : m_impl->particles) {
-        if (particle.burstActor == actor) { return true; }
-    }
     return false;
 }
 
@@ -951,7 +853,7 @@ void ZWeaponEffects::Clear() {
     m_impl->shots.clear();
     m_impl->ribbons.clear();
     m_impl->activeEffects.clear();
-    m_impl->particles.clear();
+
     m_impl->audio.StopAll();
     m_impl->frameSounds.clear();
     m_impl->loopSound = 0;
@@ -962,8 +864,18 @@ std::size_t ZWeaponEffects::GetBulletCount() const { return m_impl->shots.size()
 std::size_t ZWeaponEffects::GetRibbonCount() const { return m_impl->ribbons.size(); }
 std::size_t ZWeaponEffects::GetDrawnBeamQuadCount() const { return m_impl->drawnBeamQuads; }
 std::size_t ZWeaponEffects::GetDrawnLightningQuadCount() const { return m_impl->drawnLightningQuads; }
-std::size_t ZWeaponEffects::GetParticleCount() const { return m_impl->particles.size(); }
-std::size_t ZWeaponEffects::GetEffectCount() const { return m_impl->activeEffects.size(); }
+std::size_t ZWeaponEffects::GetParticleCount() const {
+    std::size_t count = 0;
+    for (const auto &effect : m_impl->activeEffects) { count += effect.player.GetParticleCount(); }
+    return count;
+}
+std::size_t ZWeaponEffects::GetEffectCount() const {
+    std::size_t count = 0;
+    for (const auto &effect : m_impl->activeEffects) {
+        if (!effect.player.IsDone()) { ++count; }
+    }
+    return count;
+}
 std::size_t ZWeaponEffects::GetTrailCount() const {
     std::size_t count = 0;
     for (const ZEffectInstance &effect : m_impl->activeEffects) {
@@ -1366,21 +1278,22 @@ void ZWeaponEffects::Draw(const float *sceneMvp, const float *previewProjection,
         scene.batch.Draw(scene.program, sceneMvp);
         return;
     }
-    for (const ZParticle &particle : scene.particles) {
-        const ZParticleEmitterTemplate &emitter = particle.data->GetEmitters()[particle.emitter];
-        ZVisualAnimation *animation = &scene.Animation(particle.data->GetSpritePackHash(), emitter.archetype, particle.animation);
-        const float uniformScale = ParticleValue(emitter, particle, 2, 1) * projection.scale;
-        float angle = particle.angle + ParticleValue(emitter, particle, 4, 0);
-        if (emitter.alignToVelocity) {
-            angle += std::atan2(particle.velocityY, particle.velocityX) / kRadians + 90 - particle.angle;
+    for (const auto &effect : scene.activeEffects) {
+        for (std::size_t index = 0; index < effect.player.GetParticleCount(); ++index) {
+            const auto &particle = effect.player.GetParticle(index);
+            const ZParticleEmitterTemplate &emitter = effect.data->GetEmitters()[particle.emitterIndex];
+            ZVisualAnimation *animation = &scene.Animation(effect.data->GetSpritePackHash(), emitter.archetype, particle.animation);
+            const float uniformScale = particle.Value(2) * projection.scale;
+            float angle = particle.Rotation(emitter);
+
+            angle = projection.Direction(angle - 90) + 90;
+            float x = particle.x, y = particle.y;
+            projection.Position(x, y, particle.z);
+            scene.AddSprite(*animation, particle.ageMs, x, y,
+                particle.Value(0) * uniformScale,
+                particle.Value(1) * uniformScale, angle,
+                std::clamp(particle.Value(3), 0.0f, 1.0f));
         }
-        angle = projection.Direction(angle - 90) + 90;
-        float x = particle.x, y = particle.y;
-        projection.Position(x, y, particle.z);
-        scene.AddSprite(*animation, particle.ageMs, x, y,
-            ParticleValue(emitter, particle, 0, 1) * uniformScale,
-            ParticleValue(emitter, particle, 1, 1) * uniformScale, angle,
-            std::clamp(ParticleValue(emitter, particle, 3, 1), 0.0f, 1.0f));
     }
     scene.batch.Upload();
     scene.batch.Draw(scene.program, sceneMvp);

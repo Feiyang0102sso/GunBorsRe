@@ -2,7 +2,7 @@
  * @brief CTargetingController::Update/ClearTarget, iOS :223185/:223439.
  */
 #include "gun_bros_re/gameplay/CTargetingController.h"
-#include "gun_bros_re/gameplay/CBrotherAI.h"
+#include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

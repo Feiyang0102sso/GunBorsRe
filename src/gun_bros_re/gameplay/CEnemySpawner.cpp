@@ -3,7 +3,7 @@
  */
 #include "gun_bros_re/gameplay/ILayerPath.h"
 #include "gun_bros_re/gameplay/CEnemySpawner.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include <cstdio>
 
 void CEnemySpawner::Bind(CLevel &level, ZLevelWorld *world) {

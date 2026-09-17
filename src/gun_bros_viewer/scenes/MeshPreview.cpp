@@ -35,7 +35,7 @@
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
@@ -54,7 +54,7 @@
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
-#include "gun_bros_re/gameplay/CBrother.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"

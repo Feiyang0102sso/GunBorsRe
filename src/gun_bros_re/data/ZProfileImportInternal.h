@@ -6,7 +6,7 @@
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "engine/core/CCrc32.h"
 #include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "gun_bros_re/gameplay/ZMapScene.h"
 #include <algorithm>

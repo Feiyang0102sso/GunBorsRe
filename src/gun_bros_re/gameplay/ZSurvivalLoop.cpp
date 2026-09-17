@@ -6,8 +6,8 @@
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
-#include "gun_bros_re/gameplay/ZLocalCoopBot.h"
-#include "gun_bros_re/gameplay/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
 #include "gun_bros_re/data/ZLocalBotFriend.h"
 #include "gun_bros_re/gameplay/ZLiveShopSession.h"
 #include "gun_bros_re/ZLocalOnlineServices.h"
@@ -192,7 +192,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             if (!found) { return 1; }
         }
     }
-    ZWeaponEffects effects(toc, tables, program);
+    ZWeaponEffects effects(toc, tables, program, loaded.particlePool);
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnResources({
             toc, tables, enemies, vitals, progressData, window, survivalHud, program, loaded, player, effects
@@ -322,8 +322,9 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     CProfileManager *pickupProfile = nullptr;
     if (gameContext != nullptr) { pickupProfile = &gameContext->profile; }
     else { pickupProfile = &researchProfile; }
-    ZPowerupScene powerups(toc, tables, player, vitals, scene, effects, *pickupProfile);
-    if (!powerups.Init()) { return 1; }
+    CPowerUpSelector &powerups = survivalHud.PowerupSelector();
+    powerups.BindPowerups(toc, tables, player, vitals, scene, effects, *pickupProfile);
+    if (!powerups.InitPowerups()) { return 1; }
     CProfileManager peerResearchProfile = *pickupProfile;
     CProfileManager *peerProfile = &peerResearchProfile;
     if (launch.botFriend != nullptr) { peerProfile = &launch.botFriend->profile; }
@@ -352,17 +353,17 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         }
     }
     player.gunSlot = equippedWeaponSlot;
-    ZPowerupScene peerPowerups(toc, tables, brotherModel, brother.vitals, scene, effects, *peerProfile, kBrotherCombatId);
-    if ((launch.localLive || launch.deathmatch) && !peerPowerups.Init()) { return 1; }
-    if (launch.localLive || launch.deathmatch) { session.SetPeerPowerups(&peerPowerups); }
+    CPowerUpSelector peerPowerups(toc, tables, brotherModel, brother.vitals, scene, effects, *peerProfile, kBrotherCombatId);
+    if ((launch.localLive || launch.deathmatch) && !peerPowerups.InitPowerups()) { return 1; }
+    if (launch.localLive || launch.deathmatch) { scene.SetPowerup(&peerPowerups.GetPowerup(), kBrotherCombatId); }
     if (launch.deathmatch) { powerups.SetDeathmatch(&match); peerPowerups.SetDeathmatch(&match); }
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnInventory(toc, researchProfile);
         if (result >= 0) { return result; }
     }
 
-    session.SetPowerups(&powerups);
-    ZPickupScene pickups(toc, tables, program, pickupProfile);
+    scene.SetPowerup(&powerups.GetPowerup());
+    ZPickupScene pickups(toc, tables, program, pickupProfile, loaded.particleSystemPool);
     if (launch.localLive || launch.deathmatch) { pickups.SetPeerProfile(peerProfile); }
     if (!pickups.Init()) { return 1; }
     session.SetPickups(&pickups, &effects);
@@ -696,7 +697,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             const bool wasActive = liveShop.Active();
             liveShop.Update(frameTicks);
             if (wasActive && !liveShop.Active() && deathShop) { scene.FinishDeathChoice(liveShop.Owner()); deathShop = false; }
-            if (!liveShop.Active() && !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) {
+            if (!liveShop.Active() && !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) {
                 for (unsigned peer = 0; peer < 2; ++peer) {
                     const ZPlayerVitals *down = &vitals;
                     if (peer == 1) { down = &brother.vitals; }
@@ -725,10 +726,10 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
             if (!paused && !liveShop.Active() && !session.IsTransitioning() && !brother.vitals.dead &&
                 !scene.IsRescuePending() && !session.IsBossSkipActive() &&
-                !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) {
+                !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) {
                 localBot->AdvanceActions(menuElapsed);
-                if (localBot->TakePowerupRequest()) { peerPowerups.UseAny(); }
-                if (!peerPowerups.IsMovieActive() && localBot->TakeShopRequest()) { openShop(1); }
+                if (localBot->TakePowerupRequest()) { ZLocalCoopBot::UseAnyPowerup(peerPowerups); }
+                if (!peerPowerups.GetPowerup().IsPresentationActive() && localBot->TakeShopRequest()) { openShop(1); }
             }
         }
         survivalHud.AdvanceMenu(static_cast<unsigned>(frameTicks - menuTicks));
@@ -737,8 +738,8 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
             CombatCheatResult result;
             if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result, progressData, progress)) { return 1; }
-            if (result.botShop && !brother.vitals.dead && !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) { openShop(1, true); }
-            if (result.botPowerup && !liveShop.Active() && !powerups.IsMovieActive()) { peerPowerups.UseAny(true); }
+            if (result.botShop && !brother.vitals.dead && !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) { openShop(1, true); }
+            if (result.botPowerup && !liveShop.Active() && !powerups.GetPowerup().IsPresentationActive()) { ZLocalCoopBot::UseAnyPowerup(peerPowerups, true); }
             if (result.challengesUpdated && !gameContext->tutorial && !launch.deathmatch) {
                 // Discard the old day's pending wave deltas before binding the new list.
                 scene.TakeChallengeKills();
@@ -795,7 +796,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         const bool hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
         ZInputPadAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
         // Input-pad controls cannot interrupt the active powerup presentation.
-        if (powerups.IsMovieActive() || peerPowerups.IsMovieActive()) { action = ZInputPadAction::None; }
+        if (powerups.GetPowerup().IsPresentationActive() || peerPowerups.GetPowerup().IsPresentationActive()) { action = ZInputPadAction::None; }
         if (launch.deathmatch && session.IsFinished()) { action = ZInputPadAction::None; }
         if (action == ZInputPadAction::Exit) {
             // Surrender leaves a paused menu; the same BGM continues into results.
@@ -838,11 +839,11 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 }
             }
             if (action == ZInputPadAction::UseNow) {
-                if (powerups.SelectResource(resource) && powerups.Use(true)) { closeShop(); }
+                if (powerups.SelectResource(resource) && powerups.UseSelected(true)) { closeShop(); }
             }
         }
         if (action == ZInputPadAction::UseLeft && !paused && !shopOpen && !session.IsTransitioning()) {
-            if (powerups.SelectResource(leftPowerup)) { powerups.Use(); }
+            if (powerups.SelectResource(leftPowerup)) { powerups.UseSelected(); }
         }
         if (action == ZInputPadAction::Sound || action == ZInputPadAction::Music || action == ZInputPadAction::DockedSticks) {
             if (action == ZInputPadAction::Sound) { pickupProfile->soundEnabled = !pickupProfile->soundEnabled; }
@@ -897,7 +898,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
 
         for (ZKeyCode key : inputs) {
             if ((launch.localLive || launch.deathmatch) && liveShop.Active() && liveShop.Owner() == 1) { continue; }
-            if (powerups.IsMovieActive() || peerPowerups.IsMovieActive()) { continue; }
+            if (powerups.GetPowerup().IsPresentationActive() || peerPowerups.GetPowerup().IsPresentationActive()) { continue; }
             // The original death script hides the input pad. Do not open an
             // invisible pause menu while the formal death animation is running.
             if (vitals.dead && gameContext != nullptr && !shopOpen && !launch.deathmatch) { continue; }
@@ -916,7 +917,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 !paused && !vitals.dead && !session.IsTransitioning()) {
                 GameObjectRef item = rightPowerup;
                 if (key == ZKeyCode::Q) { item = leftPowerup; }
-                if (powerups.SelectResource(item)) { powerups.Use(); }
+                if (powerups.SelectResource(item)) { powerups.UseSelected(); }
                 continue;
             }
             if (key == ZKeyCode::Digit1 && gameContext != nullptr && !paused && !vitals.dead && !session.IsTransitioning()) {
@@ -1004,7 +1005,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         scene.SetViewCenter(camera.x + width / camera.zoom * 0.5f, camera.y + height / camera.zoom * 0.5f);
         scene.SetTextView(camera.x, camera.y, camera.zoom * 1024 / width, camera.zoom * 768 / height);
         float mouseX = 0, mouseY = 0;
-        if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead && !powerups.IsMovieActive() && !peerPowerups.IsMovieActive()) {
+        if (capturePath.empty() && window.GetMousePosition(mouseX, mouseY) && !vitals.dead && !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) {
             scene.GetPlayer().facing = std::atan2(camera.y + mouseY / camera.zoom - scene.GetPlayer().y,
                 camera.x + mouseX / camera.zoom - scene.GetPlayer().x) * kRadiansToDegrees + 90;
         }
@@ -1066,7 +1067,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         unsigned performanceUpdateSteps = 0;
         while (accumulator >= 16) {
             ++performanceUpdateSteps;
-            if (powerups.IsMovieActive() || peerPowerups.IsMovieActive()) {
+            if (powerups.GetPowerup().IsPresentationActive() || peerPowerups.GetPowerup().IsPresentationActive()) {
                 session.Update(16, 0, 0, false);
                 accumulator -= 16;
                 continue;
@@ -1253,7 +1254,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             hudState.aimY = -std::cos(scene.GetPlayer().facing / kRadiansToDegrees);
         }
         if (!survivalHud.DrawExperienceTexts(scene.GetExperienceTexts(), horde) || !survivalHud.Draw(hudState)) { return 1; }
-        if (!powerups.DrawMovies() || (launch.localLive && !peerPowerups.DrawMovies())) { return 1; }
+        if (!powerups.GetPowerup().Draw() || (launch.localLive && !peerPowerups.GetPowerup().Draw())) { return 1; }
         if (gameContext != nullptr && gameContext->debugTutorial &&
             !survivalHud.DrawTutorialDebugNotice(window.GetTicksMs())) { return 1; }
         

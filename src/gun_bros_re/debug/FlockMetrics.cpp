@@ -2,7 +2,7 @@
  * @brief Nearest-neighbour spacing over the live actors. Diagnostic only.
  */
 #include "gun_bros_re/debug/FlockMetrics.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include <cmath>
 #include <limits>
 

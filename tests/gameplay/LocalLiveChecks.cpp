@@ -4,7 +4,7 @@
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
-#include "gun_bros_re/gameplay/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "TestOutput.h"
 using namespace MapDetail;

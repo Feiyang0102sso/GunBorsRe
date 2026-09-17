@@ -59,6 +59,9 @@ struct ZParticleEmitterTemplate {
 
     /** Latest interpolator end, which is the lifetime of one particle. */
     std::uint32_t GetParticleLifetimeMs() const;
+    /** Emitter allocation uses ALL keys, unlike CParticle::IsDone's last keys. */
+    std::uint32_t GetMaximumLifetimeMs() const;
+    std::size_t GetParticleCount() const;
     /** Utility::RandomBit chooses one set bit, which is an animation ordinal. */
     int SelectAnimation(float random) const;
 };
@@ -69,6 +72,9 @@ public:
     CParticleEffect();
 
     bool Init(CArrayInputStream &stream);
+    int GetDurationMs() const;
+    int GetMaximumLifetimeMs() const;
+    std::size_t GetParticleCount() const;
 
     std::uint32_t GetSpritePackHash() const { return m_spritePackHash; }
     const std::vector<ZParticleEmitterTemplate> &GetEmitters() const {

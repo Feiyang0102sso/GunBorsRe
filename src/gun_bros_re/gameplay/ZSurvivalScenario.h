@@ -45,7 +45,7 @@ struct ZSurvivalState {
     CPlayerProgress & progress;
     std::size_t & weaponSlot;
     unsigned & equippedWeaponSlot;
-    ZPowerupScene & powerups;
+    CPowerUpSelector & powerups;
     ZPickupScene & pickups;
     CProfileManager * pickupProfile;
     bool tutorial;
@@ -54,7 +54,7 @@ struct ZSurvivalState {
     const GameObjectRef * archiveLevel;
     bool horde;
     CMPMatch & match;
-    ZPowerupScene & peerPowerups;
+    CPowerUpSelector & peerPowerups;
     CProfileManager * peerProfile;
     const CPlayerConfiguration &brotherConfiguration;
     bool finalizeProgress = false;

@@ -3,12 +3,18 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/ZPickupScene.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/ZWeaponEffects.h"
+#include "gun_bros_re/gameplay/CParticlePool.h"
 #include <cstdio>
 
 ZPickupScene::ZPickupScene(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
-    CProfileManager *profile) : m_toc(toc), m_tables(tables), m_program(program), m_profile(profile) {}
+    CProfileManager *profile, std::shared_ptr<CParticlePool> particlePool)
+    : m_toc(toc), m_tables(tables), m_program(program), m_profile(profile) {
+    // CPickup::Spawn :99889 uses CMap's CParticleSystem, not its effect-layer pool.
+    if (!particlePool) { particlePool = std::make_shared<CParticlePool>(200); }
+    m_particlePool = std::move(particlePool);
+}
 
 bool ZPickupScene::GetObjectPosition(int objectId, float &x, float &y) const {
     for (const auto &instance : m_instances) {
@@ -55,7 +61,7 @@ bool ZPickupScene::Init() {
 
 void ZPickupScene::Reset() {
     if (m_effects != nullptr) {
-        for (const auto &instance : m_instances) { m_effects->StopEffect(instance->effectHandle); }
+        for (const auto &instance : m_instances) { m_effects->StopSpawning(instance->effectHandle); }
     }
     m_instances.clear();
     collections.clear();
@@ -110,7 +116,7 @@ void ZPickupScene::UpdateEffects(int deltaMs, ZWeaponEffects &effects) {
         const GameObjectRef &resource = instance->visual->entry->data.particleEffect;
         if (resource.IsNull()) { continue; }
         // CPickup::Spawn anchors the looping effect one world unit above it.
-        instance->effectHandle = effects.StartPersistentEffect(resource, instance->x, instance->y - 1);
+        instance->effectHandle = effects.StartPersistentEffect(resource, instance->x, instance->y - 1, true, m_particlePool);
         if (instance->effectHandle == 0) { ++failures; }
     }
 }
@@ -128,7 +134,7 @@ void ZPickupScene::Update(int deltaMs, CLevel &scene, ZWeaponEffects &effects) {
         }
         if (!playerTouch && !peerTouch) { ++index; continue; }
         if (instance.pickup.Collect()) {
-            effects.StopEffect(instance.effectHandle);
+            effects.StopSpawning(instance.effectHandle);
             ++collected;
             for (const ZPickupAction &action : instance.pickup.TakeActions()) {
                 if (action.kind == ZPickupAction::Kind::Xplodium) {

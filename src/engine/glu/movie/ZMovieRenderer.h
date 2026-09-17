@@ -22,7 +22,8 @@ struct ZMovieRegion {
     }
 };
 
-/** Host adapter owns GL caches; CMovie itself remains pure original data. */
+/** Host adapter owns GL caches; CMovie resource data stays shared and pure.
+ * Each consumer owns its CMovie::Playback independently of this cache. */
 class ZMovieRegionCallback {
 public:
     virtual ~ZMovieRegionCallback() = default;

@@ -1,8 +1,9 @@
+#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
 /** Exercise Live decisions against the real BIG catalog and actor instances. */
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/gameplay/ZLiveShopSession.h"
 
-int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CProfileManager &profile) {
+int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, CProfileManager &profile) {
     ZLiveShopSession shop;
     if (!shop.RequestForWave(1, 0, 0, false) || !shop.Close(1) ||
         shop.RequestForWave(1, 1000, 0, false) ||
@@ -40,7 +41,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CPr
     for (auto &actor : scene.GetEnemies()) {
         auto &enemy = actor->model.enemy.combat;
         enemy.dead = false; enemy.removed = false; enemy.enabled = true; enemy.health = 1;
-        enemy.x = fixture.brother.x + ZPowerupScene::BotGrenadeRadius + 1;
+        enemy.x = fixture.brother.x + ZLocalCoopBot::BotGrenadeRadius + 1;
         enemy.y = fixture.brother.y;
     }
     auto &last = scene.GetEnemies().back()->model.enemy.combat;
@@ -51,28 +52,28 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CPr
     // Fixture identities only. Production derives the category from BIG.
     for (unsigned ordinal : {0u, 10u, 11u}) {
         item.localIndex = static_cast<std::uint8_t>(ordinal);
-        if (!powerups.SelectResource(item) || !powerups.CanBotUseSelected()) { return 1; }
+        if (!powerups.SelectResource(item) || !ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         last.dead = true;
-        if (powerups.CanBotUseSelected()) { return 1; }
+        if (ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         last.dead = false;
     }
     for (unsigned ordinal : {13u, 14u, 15u}) {
         item.localIndex = static_cast<std::uint8_t>(ordinal);
-        if (!powerups.SelectResource(item) || powerups.CanBotUseSelected()) { return 1; }
+        if (!powerups.SelectResource(item) || ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         first.x = fixture.brother.x;
-        if (powerups.CanBotUseSelected()) { return 1; }
-        second.x = fixture.brother.x + ZPowerupScene::BotGrenadeRadius;
-        if (!powerups.CanBotUseSelected()) { return 1; }
+        if (ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
+        second.x = fixture.brother.x + ZLocalCoopBot::BotGrenadeRadius;
+        if (!ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         second.health = 0;
-        if (powerups.CanBotUseSelected()) { return 1; }
+        if (ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         second.health = 1;
         second.removed = true;
-        if (powerups.CanBotUseSelected()) { return 1; }
+        if (ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         second.removed = false;
         second.enabled = false;
-        if (powerups.CanBotUseSelected()) { return 1; }
+        if (ZLocalCoopBot::CanUseSelectedPowerup(powerups)) { return 1; }
         second.enabled = true;
-        first.x = second.x = fixture.brother.x + ZPowerupScene::BotGrenadeRadius + 1;
+        first.x = second.x = fixture.brother.x + ZLocalCoopBot::BotGrenadeRadius + 1;
     }
     // UseAny must skip an owned air strike at ten enemies without consuming it.
     const auto inventory = profile.powerups;
@@ -80,12 +81,12 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, ZPowerupScene &powerups, CPr
     item.localIndex = 0;
     profile.AddPowerup(item, 1);
     last.dead = true;
-    if (powerups.UseAny() || profile.GetPowerupCount(item) != 1 || powerups.IsMovieActive()) { return 1; }
+    if (ZLocalCoopBot::UseAnyPowerup(powerups) || profile.GetPowerupCount(item) != 1 || powerups.GetPowerup().IsPresentationActive()) { return 1; }
     last.dead = false;
-    if (!powerups.UseAny() || profile.GetPowerupCount(item) != 0 || !powerups.IsMovieActive()) { return 1; }
+    if (!ZLocalCoopBot::UseAnyPowerup(powerups) || profile.GetPowerupCount(item) != 0 || !powerups.GetPowerup().IsPresentationActive()) { return 1; }
     if (session.StartBossSkip()) { return 1; }
-    for (unsigned elapsed = 0; elapsed < 15000 && powerups.IsMovieActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
-    if (powerups.IsMovieActive() || powerups.failures != 0) { return 1; }
+    for (unsigned elapsed = 0; elapsed < 15000 && powerups.GetPowerup().IsPresentationActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
+    if (powerups.GetPowerup().IsPresentationActive() || powerups.failures != 0) { return 1; }
     profile.powerups = inventory;
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     std::printf("[live-policy] wave-limit=1 cheat-exempt=1 rescue-block=1 airstrike-10-11=1 grenade-radius-250=1 inventory=1\n");

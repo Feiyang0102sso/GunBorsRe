@@ -4,7 +4,7 @@
 #ifndef GUN_BROS_RE_ZWEAPONEFFECTS_H
 #define GUN_BROS_RE_ZWEAPONEFFECTS_H
 
-#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
 #include "gun_bros_re/gameplay/CCollisionData.h"
 
 /** Original map selectors plus prop bullet shapes, assembled by the scene. */
@@ -28,12 +28,15 @@ struct ZWeaponProjectileState {
     bool collisionEnabled = false;
 };
 
+class CParticlePool;
+
 /** Game-layer adapter for CBullet and particle effects; not an original class.
  * Engine backends own only generic mesh/quad drawing and WAV playback.
  */
 class ZWeaponEffects {
 public:
-    ZWeaponEffects(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program);
+    ZWeaponEffects(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+        std::shared_ptr<CParticlePool> particlePool = nullptr);
     ~ZWeaponEffects();
     /** Windows audio adaptation: coalesce identical one-shots within one tick. */
     void BeginAudioFrame();
@@ -65,8 +68,12 @@ public:
     void RetireOwner(ZCombatId owner);
     void PlayMoveSound(const GameObjectRef &sound);
     /** CPickup owns an emitter handle; stopping it preserves living particles. */
-    std::uint64_t StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop = false);
+    // The historical StopEffect name now means immediate Stop. Use StopSpawning to drain.
+    std::uint64_t StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop = false,
+        std::shared_ptr<CParticlePool> particlePool = nullptr);
     void StopEffect(std::uint64_t handle);
+    /** CPickup::OnRemove :99723 and CTransferEffect::Update :174361 drain. */
+    void StopSpawning(std::uint64_t handle);
     /** Standalone research scenes have no brother/projectile update. */
     void AdvanceAmbientEffects(int deltaMs);
     /** Finite actor bursts include emitted particles after their emitter ends. */

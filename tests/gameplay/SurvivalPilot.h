@@ -4,7 +4,7 @@
  */
 #ifndef GUN_BROS_RE_SURVIVALPILOT_H
 #define GUN_BROS_RE_SURVIVALPILOT_H
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
 
 class SurvivalPilot : public ZSurvivalInputDriver {

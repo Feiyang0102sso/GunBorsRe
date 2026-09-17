@@ -2,14 +2,14 @@
 #define NOMINMAX
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/gameplay/CGame.h"
-#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "engine/core/CStringToKey.h"
 #include <chrono>
 #include "gun_bros_re/debug/PerformanceProbe.h"
 
-int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, ZPowerupScene &powerups, CProfileManager &profile) {
+int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile) {
     auto &scene = fixture.scene;
     auto &player = fixture.player;
     auto &bot = fixture.brother;
@@ -166,25 +166,25 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, ZPowe
     health.packHash = CStringToKey("pack5"); health.localIndex = 1;
     fixture.vitals.health = fixture.vitals.maximum / 2;
     profile.AddPowerup(health, 2);
-    if (!powerups.SelectResource(health) || !powerups.Use()) { ++failures; }
+    if (!powerups.SelectResource(health) || !powerups.UseSelected()) { ++failures; }
     const auto *healthEntry = powerups.GetSelected();
     if (healthEntry == nullptr || powerups.Cooldowns().at(health.localIndex) != healthEntry->data.field124 * 1000) { ++failures; }
     // Health packs have zero configured cooldown; full health rejects a retry.
     fixture.vitals.health = fixture.vitals.maximum;
-    if (powerups.Use()) { ++failures; }
+    if (powerups.UseSelected()) { ++failures; }
     session.Update(16, 0, 0, false);
     GameObjectRef grenade;
     grenade.packHash = health.packHash; grenade.localIndex = 13;
     profile.AddPowerup(grenade, 2);
     const unsigned grenadeCount = profile.GetPowerupCount(grenade);
-    if (!powerups.SelectResource(grenade) || !powerups.Use()) { ++failures; }
+    if (!powerups.SelectResource(grenade) || !powerups.UseSelected()) { ++failures; }
     for (unsigned elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
-    if (profile.GetPowerupCount(grenade) != grenadeCount - 1 || powerups.Cooldowns().at(grenade.localIndex) <= 0 || powerups.Use()) { ++failures; }
+    if (profile.GetPowerupCount(grenade) != grenadeCount - 1 || powerups.Cooldowns().at(grenade.localIndex) <= 0 || powerups.UseSelected()) { ++failures; }
     std::printf("[dm-presentation] health-grenade-uses=2 retries-rejected=1 failures=%u\n", failures);
     GameObjectRef turret;
     turret.packHash = CStringToKey("pack5"); turret.localIndex = 19;
     profile.AddPowerup(turret, 2);
-    if (!powerups.SelectResource(turret) || !powerups.Use()) { ++failures; }
+    if (!powerups.SelectResource(turret) || !powerups.UseSelected()) { ++failures; }
     ZCombatId turretId = 0;
     for (unsigned elapsed = 0; elapsed < 5000; elapsed += 16) {
         session.Update(16, 0, 0, false);
@@ -274,7 +274,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, ZPowe
         }
         if (scene.GetPlayer().x != frozenX || scene.GetPlayer().y != frozenY || fixture.effects.GetShotCount() != frozenShots) { ++failures; break; }
     }
-    if (!session.IsReadyForResults() || wrapUpMs <= 16 || powerups.Use()) { ++failures; }
+    if (!session.IsReadyForResults() || wrapUpMs <= 16 || powerups.UseSelected()) { ++failures; }
     if (!capturedBurst || fadeStartedMs == 0) { ++failures; }
     std::printf("[dm-final-kill] burst-complete=%u fade-start=%u result=%u\n", burstCompleteMs, fadeStartedMs, wrapUpMs);
     if (!bot.vitals.deathAnimationComplete || fixture.brotherModel.weapon->brother.IsVisible()) {

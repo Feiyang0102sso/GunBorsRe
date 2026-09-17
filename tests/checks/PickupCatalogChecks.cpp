@@ -116,9 +116,10 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
     window.Present();
     const std::size_t livingParticles = effects.GetParticleCount();
     pickups.Reset();
-    if (effects.GetEffectCount() != 0 || effects.GetParticleCount() != livingParticles) { return 1; }
+    // CPickup calls StopSpawning: players remain alive until their particles drain.
+    if (effects.GetEffectCount() != 5 || effects.GetParticleCount() != livingParticles) { return 1; }
     for (int elapsed = 0; elapsed < 30000; elapsed += 16) { effects.AdvanceAmbientEffects(16); }
-    if (effects.GetParticleCount() != 0) { return 1; }
+    if (effects.GetParticleCount() != 0 || effects.GetEffectCount() != 0) { return 1; }
     std::printf("[pickup-render-check] templates=%zu failures=0\n", catalog.size());
     return 0;
 }

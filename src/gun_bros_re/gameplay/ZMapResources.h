@@ -1,4 +1,5 @@
 #pragma once
+#include "gun_bros_re/gameplay/CParticleEffectPlayer.h"
 /** Desktop resource caches and placed-object storage shared by game and viewer.
  * Original CMap, CProp and CParticleEffect still own their parsed data/behavior.
  * Declare storage before consumers so referenced templates outlive their actors.
@@ -12,7 +13,7 @@
 #include "gun_bros_re/gameplay/CProp.h"
 #include "gun_bros_re/gameplay/TileSet.h"
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
-#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
 #include "gun_bros_re/gameplay/ZWeaponEffects.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include <array>
@@ -69,9 +70,6 @@ constexpr std::uint32_t kSpirePackHash = 0x00267587u;
 constexpr std::uint8_t kSpireTemplate = 33;
 
 constexpr float kSecondsToMilliseconds = 1000.0f;
-constexpr float kParticleFallbackLifetimeMs = 750.0f;
-constexpr std::size_t kMaximumParticlesPerEffect = 2048;
-constexpr std::size_t kMaximumSpawnsPerEmitterPerFrame = 64;
 
 enum class ZInteractivePropKind : std::uint8_t {
     None,
@@ -226,29 +224,14 @@ struct ZParticleEffectVisual {
     std::vector<ZParticleEmitterVisual> emitters;
 };
 
-/** One particle emitted by an active effect. */
-struct ZLiveParticle {
-    std::uint32_t emitterIndex;
-    std::uint8_t animationIndex;
-    float x;
-    float y;
-    float velocityX;
-    float velocityY;
-    float ageMs;
-    float lifetimeMs;
-    std::array<float, kParticleInterpolatorChannelCount> randomValues;
-};
-
 /** One effect attached to a prop position until its particles finish. */
 struct ZActiveParticleEffect {
     std::uint64_t visualKey;
     float x;
     float y;
     int zOrderGroup;
-    float ageMs;
     std::uint32_t randomState;
-    std::vector<float> nextSpawnMs;
-    std::vector<ZLiveParticle> particles;
+    CParticleEffectPlayer player;
 };
 
 /** One enemy template standing on the map, with the model it draws as. */
@@ -314,6 +297,10 @@ struct ZLoadedMap {
     // when a transition asks for one.
     std::map<std::uint64_t, ZParticleEffectVisual> particleEffects;
     std::vector<ZActiveParticleEffect> activeParticleEffects;
+    // CMap's transient effect pool, allocated with 200 slots (:91849).
+    std::shared_ptr<CParticlePool> particlePool = std::make_shared<CParticlePool>(200);
+    // CMap's CParticleSystem is a separate pool (:133966), used by pickups.
+    std::shared_ptr<CParticlePool> particleSystemPool = std::make_shared<CParticlePool>(200);
 };
 
 }

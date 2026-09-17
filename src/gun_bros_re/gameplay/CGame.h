@@ -4,10 +4,10 @@
 #ifndef GUN_BROS_RE_CGAME_H
 #define GUN_BROS_RE_CGAME_H
 
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/ZPickupScene.h"
-#include "gun_bros_re/gameplay/ZPowerupScene.h"
+#include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
 #include <chrono>
 
@@ -54,8 +54,6 @@ public:
     bool IsBossSkipActive() const { return m_bossSkipActive; }
 
     void SetProps(ZPropWorld *props) { m_level.SetProps(props); }
-    void SetPowerups(ZPowerupScene *powerups) { m_level.SetPowerups(powerups); }
-    void SetPeerPowerups(ZPowerupScene *powerups) { m_level.SetPeerPowerups(powerups); }
     void SetPickups(ZPickupScene *pickups, ZWeaponEffects *effects) {
         m_effects = effects;
         m_level.SetPickups(pickups);

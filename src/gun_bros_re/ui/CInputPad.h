@@ -4,6 +4,10 @@
 /** The same rectangles drive drawing and pointer input; no gameplay is owned here. */
 class CInputPad {
 public:
+    /** Native 13 restores actual Base/Peripheral states before its callback. */
+    bool RestoreForPowerup(CPowerup &powerup);
+    void CancelPowerupAnimation(CPowerup &powerup);
+    CPowerUpSelector &PowerupSelector() { return m_selector; }
     void BrowseRemoteShop(unsigned selection) { m_selector.BrowseRemoteShop(selection); }
     bool BackFromSelectorPrompt() { return m_selector.BackFromSelectorPrompt(); }
     void ReportSelectorPurchase(ZPurchaseResult result, const ZInputPadState &state) { m_selector.ReportSelectorPurchase(result, state); }
@@ -61,7 +65,13 @@ public:
     bool FindActionRegion(const ZInputPadState &state, ZInputPadAction action, ZMovieRegion &region) const;
 private:
     ZHudResources m_resources;
-    CPowerUpSelector m_selector{m_resources};
+    CPowerUpSelector m_selector{m_resources, this};
+    void UpdatePowerupAnimation(unsigned deltaMs);
+    CPowerup *m_animationPowerup = nullptr;
+    CMovie::Playback m_restorePeripheral;
+    float m_baseAlpha = 1;
+    bool m_controlsHidden = false, m_selectorWasOpen = false;
+    bool m_restoreBase = false, m_restorePeripheralPending = false;
     bool m_matchIntro = false, m_matchIntroCompleted = false;
     bool m_matchWrapUp = false;
     unsigned m_matchWrapUpTime = 0, m_matchWrapUpDuration = 0;
@@ -83,7 +93,7 @@ private:
     bool DrawPause(const ZInputPadState &state);
     bool DrawControls(const ZInputPadState &state);
     bool DrawMeter(const ZMovieRegion &area, unsigned slot);
-    bool DrawPowerup(const ZInputPadState &state, unsigned slot, float x, float y, unsigned movie, unsigned time);
+    bool DrawPowerup(const ZInputPadState &state, unsigned slot, float x, float y, unsigned movie, unsigned time, float alpha = 1);
     std::vector<Button> ControlButtons(const ZInputPadState &state) const;
     ZInputPadAction PausePointer(const ZInputPadState &state, float x, float y);
     std::string PauseText(const ZInputPadState &state, unsigned index, unsigned slot);

@@ -53,6 +53,9 @@
 
 #include <cstdint>
 #include <vector>
+#include <memory>
+
+class CParticlePool;
 
 // Stat tables in a gun template, all read the same way.
 constexpr std::uint32_t kGunStatTableCount = 6;
@@ -60,6 +63,10 @@ class CBullet;
 
 /** A visual cue emitted by the original weapon script. */
 struct ZGunCue {
+    // Runtime owner supplied by native objects, never inferred from resource IDs.
+    std::shared_ptr<CParticlePool> particlePool;
+    bool stopParticlesImmediately = false;
+    bool loopParticles = true;
     enum class Kind { Bullet, Effect, Trail, StopTrail, Sound, LoopSound, StopSound, Splash, SpawnEnemy, Grenade };
     Kind kind = Kind::Bullet;
     GameObjectRef resource;

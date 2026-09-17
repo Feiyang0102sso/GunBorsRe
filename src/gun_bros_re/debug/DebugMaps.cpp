@@ -5,7 +5,7 @@
  */
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/ZMapScene.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"

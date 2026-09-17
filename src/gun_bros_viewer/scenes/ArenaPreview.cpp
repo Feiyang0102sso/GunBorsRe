@@ -194,7 +194,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         // Every bar uses the same predicate as projectile damage filtering.
         for (auto &actor : scene.GetEnemies()) {
             CEnemy &enemy = actor->model.enemy;
-            const ZEnemyCombat &state = enemy.combat;
+            const CEnemy::CombatState &state = enemy.combat;
             if (state.removed || state.dead) { continue; }
             float barY = state.y - std::max(60.0f, actor->data->gameScale * 0.55f);
             markers.Begin();
@@ -233,7 +233,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         float damage = scene.damageDealt;
         unsigned deferred = 0;
         for (const auto &actor : scene.GetEnemies()) {
-            const ZEnemyCombat &state = actor->model.enemy.combat;
+            const CEnemy::CombatState &state = actor->model.enemy.combat;
             kills += state.deathCount; hits += state.hitCount;
             damage += state.totalDamage;
             deferred |= state.deferredMechanisms;
@@ -257,7 +257,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         std::snprintf(line, sizeof(line), "Alive %zu   Kills %u   Landed hits %u", scene.AliveCount(), kills, hits);
         controls.DrawLabel(line, 16, 158, hudWidth - 32, fontHeight, hudProjection);
         if (!scene.GetEnemies().empty()) {
-            const ZEnemyCombat &state = scene.GetEnemies().front()->model.enemy.combat;
+            const CEnemy::CombatState &state = scene.GetEnemies().front()->model.enemy.combat;
             std::snprintf(line, sizeof(line), "Filter %d   Target type %d", state.variables[16], state.targetType);
             controls.DrawLabel(line, 16, kInfoHeight + 8, hudWidth - 32, fontHeight, hudProjection);
         }

@@ -14,12 +14,67 @@
 #include <filesystem>
 #include <algorithm>
 
+/** Synthetic timelines test playback rules, never supply production resources. */
+static unsigned CheckMoviePlayback() {
+    CMovie movie;
+    movie.duration = 1000;
+    movie.chapter.starts = {0, 100, 400};
+    CMovie::Playback first, second;
+    first.Bind(movie);
+    second.Bind(movie);
+    unsigned failures = 0;
+    if (!first.SetChapter(1) || !second.SetChapter(1)) { return 1; }
+    first.Update(299);
+    if (first.GetTime() != 399 || first.IsDone() || first.TakeCompletion()) { ++failures; }
+    first.Update(50); // Cross an inclusive endpoint with a dropped frame.
+    if (first.GetTime() != 399 || !first.IsDone() || !first.TakeCompletion() || first.TakeCompletion()) { ++failures; }
+    first.Update(1000);
+    if (first.TakeCompletion() || second.GetTime() != 100) { ++failures; }
+    second.SetPaused(true);
+    second.Update(500);
+    if (second.GetTime() != 100 || second.IsDone()) { ++failures; }
+    second.SetPaused(false);
+    second.SetReverse(true);
+    second.SetChapter(1);
+    second.Update(299);
+    if (second.GetTime() != 100 || second.IsDone()) { ++failures; }
+    second.Update(1);
+    if (!second.TakeCompletion() || second.GetTime() != 100) { ++failures; }
+    second.SetChapter(0);
+    second.Cancel();
+    second.Update(1000);
+    if (second.TakeCompletion() || second.IsDone()) { ++failures; }
+    first.ResetPlayback();
+    first.SetLoop(true);
+    first.SetChapter(0, true);
+    first.SetLoopChapter(1);
+    first.Update(1000);
+    if (first.GetTime() != 103 || first.IsDone() || first.TakeCompletion()) { ++failures; }
+    first.SetReverse(true);
+    first.SetChapter(1);
+    first.Update(1000);
+    if (first.GetTime() != 296 || first.IsDone()) { ++failures; }
+    first.SetLoop(false);
+    first.SetChapter(1);
+    first.Update(1000);
+    first.SetChapter(0); // Replacing a finished animation clears its notification.
+    if (first.TakeCompletion() || first.IsDone() || first.SetChapter(9)) { ++failures; }
+    CMovie zero;
+    first.Bind(zero);
+    first.Update(0);
+    if (first.IsDone()) { ++failures; }
+    first.Update(1);
+    if (!first.TakeCompletion()) { ++failures; }
+    std::printf("[movie-playback] boundary, reverse, loop, pause, cancel, replacement, independent instances failures=%u\n", failures);
+    return failures;
+}
+
 int RunMovieCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
     std::ofstream report(TestOutput::Path("movie-check.txt"));
     unsigned movies = 0;
-    unsigned failures = 0;
+    unsigned failures = CheckMoviePlayback();
     const char *names[] = {
 #include "engine/glu/movie/MovieNames.inc"
     };

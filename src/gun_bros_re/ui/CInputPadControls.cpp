@@ -9,11 +9,59 @@
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "engine/graphics/ZPNG.h"
 #include <algorithm>
 #include <cstdio>
 #include <sstream>
+
+bool CInputPad::RestoreForPowerup(CPowerup &powerup) {
+    m_animationPowerup = &powerup;
+    m_restoreBase = m_controlsHidden || m_selectorWasOpen;
+    m_restorePeripheralPending = m_controlsHidden;
+    if (m_restorePeripheralPending) {
+        const auto *movie = m_resources.m_movies.GetMovie(m_resources.m_movies.Ordinal("GLU_MOVIE_HUD_PAUSE"));
+        if (movie == nullptr) { m_animationPowerup = nullptr; return false; }
+        m_restorePeripheral.Bind(*movie);
+        // Native 13 requests Peripheral state 1: SetState :88097 -> chapter 5.
+        if (!m_restorePeripheral.SetChapter(5)) { m_animationPowerup = nullptr; return false; }
+    }
+    if (!m_restoreBase && !m_restorePeripheralPending) {
+        m_animationPowerup = nullptr;
+        powerup.OnInputPadAnimationComplete();
+    }
+    return true;
+}
+
+void CInputPad::CancelPowerupAnimation(CPowerup &powerup) {
+    if (m_animationPowerup != &powerup) { return; }
+    m_animationPowerup = nullptr;
+    m_restorePeripheral.Cancel();
+    m_restoreBase = false;
+    m_restorePeripheralPending = false;
+}
+
+void CInputPad::UpdatePowerupAnimation(unsigned deltaMs) {
+    if (m_animationPowerup == nullptr || deltaMs == 0) { return; }
+    if (m_restoreBase) {
+        // Base::Update :88366 states 1/8. This is the original alpha rate
+        // (2 * deltaMs * 0.001), not a substitute completion timer.
+        m_baseAlpha = std::min(1.0f, m_baseAlpha + 2.0f * deltaMs * 0.001f);
+        if (m_baseAlpha < 1) { return; }
+        m_restoreBase = false;
+        if (m_restorePeripheralPending) { return; }
+    }
+    if (m_restorePeripheralPending) {
+        m_restorePeripheral.Update(deltaMs);
+        if (!m_restorePeripheral.TakeCompletion()) { return; }
+        m_restorePeripheralPending = false;
+    }
+    CPowerup *powerup = m_animationPowerup;
+    m_animationPowerup = nullptr;
+    m_controlsHidden = false;
+    m_selectorWasOpen = false;
+    powerup->OnInputPadAnimationComplete();
+}
 
 bool CInputPad::FindActionRegion(const ZInputPadState &state, ZInputPadAction action, ZMovieRegion &region) const {
     if (state.shopOpen) { return m_selector.FindActionRegion(action, region); }
@@ -76,7 +124,7 @@ bool CInputPad::DrawMeter(const ZMovieRegion &area, unsigned slot) {
         m_resources.m_movies.Gradient(x + 2 + filled, y + 2, interiorWidth - filled, interiorHeight, config[3], config[4], area.alpha);
 }
 
-bool CInputPad::DrawPowerup(const ZInputPadState &state, unsigned slot, float x, float y, unsigned movie, unsigned time) {
+bool CInputPad::DrawPowerup(const ZInputPadState &state, unsigned slot, float x, float y, unsigned movie, unsigned time, float alpha) {
     const GameObjectRef *object = &state.leftPowerup;
     unsigned count = state.leftCount;
     if (slot == 1) { object = &state.rightPowerup; count = state.rightCount; }
@@ -120,11 +168,20 @@ bool CInputPad::DrawPowerup(const ZInputPadState &state, unsigned slot, float x,
         unsigned count;
         const ZInputPadState &state;
     } callback(*this, powerup, count, state);
-    return m_resources.m_movies.Draw(movie, time, x, y, 1024, 768, 0, 1, &callback);
+    return m_resources.m_movies.Draw(movie, time, x, y, 1024, 768, 0, alpha, &callback);
 }
 
 bool CInputPad::DrawControls(const ZInputPadState &state) {
-    if (state.inputHidden) { return true; } // CBrother native 12 -> CInputPad::Hide.
+    // CBrother native 12 -> CInputPad::Hide. Restore owns the visible progress
+    // until its sequence completes, even while the actor is still reviving.
+    if (m_animationPowerup == nullptr) {
+        m_controlsHidden = state.inputHidden;
+        // A powerup owns the closing selector until native 13 restores Base.
+        if (state.shopOpen) { m_selectorWasOpen = true; }
+        else if (!m_selector.GetPowerup().IsPresentationActive()) { m_selectorWasOpen = false; }
+        if (m_controlsHidden) { m_baseAlpha = 0; return true; }
+        m_baseAlpha = 1;
+    }
     const float health = state.health / std::max(1.0f, state.maximumHealth);
     const float experience = float(state.experience) / std::max<std::uint64_t>(1, state.experienceDelta);
     if (!m_metersBound) {
@@ -145,7 +202,7 @@ bool CInputPad::DrawControls(const ZInputPadState &state) {
                 unsigned animation = 27;
                 // CInputPad::Base::SetState :87545: selector state 7 keeps
                 // the red button down (28); returning state 8 restores 27.
-                if (state.shopOpen) { animation = 28; }
+                if (state.shopOpen || hud.m_selectorWasOpen) { animation = 28; }
                 if (region.index == 3) {
                     animation = 35;
                     // Base::UpdateInput :88480 uses 36 for a held touch in
@@ -162,7 +219,7 @@ bool CInputPad::DrawControls(const ZInputPadState &state) {
         CInputPad &hud;
         const ZInputPadState &state;
     } baseCallback(*this, state);
-    if (!m_resources.m_movies.Draw(base, 0, 512, 384, 1024, 768, 0, 1, &baseCallback)) { return false; }
+    if (!m_resources.m_movies.Draw(base, 0, 512, 384, 1024, 768, 0, m_baseAlpha, &baseCallback)) { return false; }
     ZMovieRegion stickBounds;
     if (!m_resources.m_movies.SpriteBounds(1, 6, stickBounds)) { return false; }
     for (unsigned slot = 0; slot < 2; ++slot) {
@@ -175,17 +232,19 @@ bool CInputPad::DrawControls(const ZInputPadState &state) {
         // Windows keys/mouse supply the original normalized control vector.
         // Floating sticks remain hidden until their corresponding input is active.
         if (!state.dockedSticks && directionX == 0 && directionY == 0) { continue; }
-        if (!m_resources.m_movies.DrawSprite(1, 6 + slot, m_controlTime, x, y)) { return false; }
+        if (!m_resources.m_movies.DrawSprite(1, 6 + slot, m_controlTime, x, y, 1, m_baseAlpha)) { return false; }
         const unsigned movie = m_resources.m_movies.Ordinal(name);
         unsigned start = 0, end = 0;
         // CInputPad::Load :88166 starts chapter 0 and loops chapter 1.
         // Chapter 2 is the hide/flash sequence, not a perpetual idle effect.
         if (!m_resources.m_movies.GetMovie(movie)->GetChapterRange(1, start, end) ||
-            !DrawPowerup(state, slot, x, y, movie, start + m_controlTime % (end - start + 1))) { return false; }
+            !DrawPowerup(state, slot, x, y, movie, start + m_controlTime % (end - start + 1), m_baseAlpha)) { return false; }
         // Bind radius = sprite width * .42; ControlStick::Draw displacement *.35.
         const float travel = stickBounds.width * 0.42f * 0.35f;
-        if (!m_resources.m_movies.DrawSprite(1, 8, m_controlTime, float(int(x + directionX * travel)), float(int(y + directionY * travel)))) { return false; }
+        if (!m_resources.m_movies.DrawSprite(1, 8, m_controlTime, float(int(x + directionX * travel)), float(int(y + directionY * travel)), 1, m_baseAlpha)) { return false; }
     }
+    // SetAnimation :86309 restores components sequentially, not concurrently.
+    if (m_animationPowerup != nullptr && m_restoreBase && m_restorePeripheralPending) { return true; }
     class PeripheralCallback : public ZMovieRegionCallback {
     public:
         PeripheralCallback(CInputPad &owner, ZMovieRenderer &renderer, const ZInputPadState &snapshot) : hud(owner), movies(renderer), state(snapshot) {}
@@ -242,6 +301,7 @@ bool CInputPad::DrawControls(const ZInputPadState &state) {
     if (HasChallenges()) { chapter = 5; }
     if (!m_resources.m_movies.GetMovie(peripheral)->GetChapterRange(chapter, start, end)) { return false; }
     if (HasChallenges()) { start = end; }
+    if (m_animationPowerup != nullptr && m_restorePeripheralPending) { start = m_restorePeripheral.GetTime(); }
     if (!m_resources.m_movies.Draw(peripheral, start, 512, 384, 1024, 768, 0, 1, &peripheralCallback)) { return false; }
     if (HasChallenges()) {
         ZMovieRegion area;

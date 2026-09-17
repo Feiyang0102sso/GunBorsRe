@@ -1,7 +1,7 @@
 #pragma once
 /** Connects placed CProp instances to level events and combat queries. */
 #include "gun_bros_re/gameplay/ZMapResources.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 
 namespace MapDetail {
 void BuildCollisionScene(ZLoadedMap &loaded);

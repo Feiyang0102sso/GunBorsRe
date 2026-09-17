@@ -1,3 +1,4 @@
+#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
 /** Test-peer commands must not affect a real remote peer or the local account. */
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/cheats/CheatActions.h"
@@ -5,7 +6,7 @@
 #include "TestOutput.h"
 
 int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
-    ZPowerupScene &playerPowerups, ZPowerupScene &peerPowerups, CProfileManager &peerProfile) {
+    CPowerUpSelector &playerPowerups, CPowerUpSelector &peerPowerups, CProfileManager &peerProfile) {
     auto &scene = fixture.scene;
     auto &session = fixture.session;
     auto &bot = fixture.brother;
@@ -37,9 +38,9 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPac
     }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     const unsigned playerConsumed = playerPowerups.consumed;
-    if (!peerPowerups.UseAny(true)) { return 1; }
-    for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.IsMovieActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
-    if (peerPowerups.IsMovieActive() || playerPowerups.consumed != playerConsumed || peerPowerups.failures != 0) { return 1; }
+    if (!ZLocalCoopBot::UseAnyPowerup(peerPowerups, true)) { return 1; }
+    for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.GetPowerup().IsPresentationActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
+    if (peerPowerups.GetPowerup().IsPresentationActive() || playerPowerups.consumed != playerConsumed || peerPowerups.failures != 0) { return 1; }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     std::vector<ZPowerupEntry> catalog;
     if (!LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
@@ -59,10 +60,10 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPac
     if (session.IsDeathComplete() || !scene.NeedsDeathChoice(1) || !peerPowerups.UseAfterDeathPowerup()) { return 1; }
     scene.FinishDeathChoice(1);
     if (session.IsDeathComplete()) { return 1; }
-    for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.IsMovieActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
+    for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.GetPowerup().IsPresentationActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
     if (bot.vitals.dead || bot.vitals.health != bot.vitals.maximum || !fixture.vitals.dead ||
         peerProfile.GetPowerupCount(revive) + 1 != before || peerPowerups.failures != 0 || session.IsDeathComplete()) {
-        std::printf("[live-peer-actions] revive item failed dead=%d active=%d failures=%u\n", bot.vitals.dead, peerPowerups.IsMovieActive(), peerPowerups.failures); return 1;
+        std::printf("[live-peer-actions] revive item failed dead=%d active=%d failures=%u\n", bot.vitals.dead, peerPowerups.GetPowerup().IsPresentationActive(), peerPowerups.failures); return 1;
     }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     if (!command("stsuicide", result) || !fixture.vitals.dead || std::filesystem::exists(cheatSavePath)) { return 1; }

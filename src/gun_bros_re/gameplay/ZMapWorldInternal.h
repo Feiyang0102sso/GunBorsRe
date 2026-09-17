@@ -39,7 +39,7 @@
 
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
 #include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
-#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/gameplay/CGame.h"
@@ -72,7 +72,7 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/gameplay/CLayerObject.h"
 #include "gun_bros_re/gameplay/CLayerTile.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/CParticleEffect.h"
 #include "gun_bros_re/gameplay/CProp.h"
@@ -267,13 +267,6 @@ bool EnsureParticleEffectVisual(CResTOCManager &tocManager, ZLoadedMap &loaded,
                                 const ZScriptResourceRef &reference,
                                 std::uint64_t &visualKey);
 
-/** Deterministic local random stream, independent from map animation timing. */
-float NextParticleRandom(std::uint32_t &state);
-
-float ParticleRandomRange(std::uint32_t &state, float minimum, float maximum);
-
-float ParticleRangeAt(float minimum, float maximum, float randomValue);
-
 /** Queue one cached effect at a prop's world position. */
 void StartParticleEffect(ZLoadedMap &loaded, std::uint64_t visualKey,
                          float x, float y, int zOrderGroup,
@@ -289,16 +282,6 @@ void StartTransitionParticlesForProp(CResTOCManager &tocManager,
 /** Start each matching prop's script-authored particle cues. */
 void StartTransitionParticles(CResTOCManager &tocManager, ZLoadedMap &loaded,
                               ZInteractivePropKind kind, std::uint8_t state);
-
-/** Create one live particle from an emitter's pattern and velocity. */
-void SpawnParticle(ZActiveParticleEffect &active,
-                   const ZParticleEmitterTemplate &emitter,
-                   std::uint32_t emitterIndex);
-
-/** Resolve one particle channel at an age using the original timed ranges. */
-float ParticleChannelValue(const ZParticleEmitterTemplate &emitter,
-                           const ZLiveParticle &particle,
-                           std::size_t channel, float defaultValue);
 
 /** Advance emitters and their live particles. */
 void AdvanceParticleEffects(ZLoadedMap &loaded, std::uint16_t deltaMs);

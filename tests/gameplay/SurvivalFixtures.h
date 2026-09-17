@@ -140,7 +140,7 @@ struct SurvivalTutorialFixture {
     CLevel & scene;
     CBrotherAI & brother;
     CGame & session;
-    ZPowerupScene & powerups;
+    CPowerUpSelector & powerups;
     ZPickupScene & pickups;
     CProfileManager * pickupProfile;
     bool tutorial;
@@ -216,7 +216,7 @@ struct SurvivalPowerupCaptureFixture {
     std::string & capturePath;
     bool powerupStudy;
     CLevel & scene;
-    ZPowerupScene & powerups;
+    CPowerUpSelector & powerups;
 };
 
 /** Everything the scene-ready hook can reach, once the map, players, session
@@ -244,8 +244,8 @@ struct SurvivalSceneFixture {
     CPlayerProgress & progress;
     CMPMatch & match;
     ZPickupScene & pickups;
-    ZPowerupScene & powerups;
-    ZPowerupScene & peerPowerups;
+    CPowerUpSelector & powerups;
+    CPowerUpSelector & peerPowerups;
     CProfileManager * peerProfile;
     ZSurvivalGameContext * gameContext;
     float startX;

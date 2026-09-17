@@ -15,7 +15,7 @@
 #include <cmath>
 
 void EnemyRotationOffset(const CEnemy &enemy, float gameScale, float &x, float &y) {
-    const ZEnemyCombat &state = enemy.combat;
+    const CEnemy::CombatState &state = enemy.combat;
     x = 0;
     y = 0;
     const CMesh *mesh = enemy.GetPart(0).controller.GetAnimation().GetMesh();
@@ -277,7 +277,7 @@ void DrawEnemyModel(ZEnemyModel &model, const ZShaderProgram &program,
             config.buffer.SetFrame(config.mesh, 0);
         }
 
-        const ZEnemyPart &part = model.enemy.GetPart(i);
+        const CEnemy::Part &part = model.enemy.GetPart(i);
         if (!part.visible) {
             continue;
         }

@@ -12,6 +12,7 @@
 
 class CLevel;
 class ZWeaponEffects;
+class CParticlePool;
 
 struct ZPickupCollection {
     GameObjectRef resource;
@@ -22,7 +23,7 @@ struct ZPickupCollection {
 class ZPickupScene {
 public:
     ZPickupScene(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
-        CProfileManager *profile = nullptr);
+        CProfileManager *profile = nullptr, std::shared_ptr<CParticlePool> particlePool = nullptr);
     bool Init();
     void SetPeerProfile(CProfileManager *profile) { m_peerProfile = profile; }
     void Reset();
@@ -62,6 +63,7 @@ private:
     CProfileManager *m_profile;
     CProfileManager *m_peerProfile = nullptr;
     ZWeaponEffects *m_effects = nullptr;
+    std::shared_ptr<CParticlePool> m_particlePool;
     ZQuadBatch m_batch;
     std::vector<ZPickupEntry> m_catalog;
     std::vector<std::unique_ptr<Visual>> m_visuals;

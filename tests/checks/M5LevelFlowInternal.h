@@ -3,7 +3,7 @@
  * @brief Simulate spawn/death callbacks; this verifies flow, not gameplay AI.
  */
 #include "tests/checks/M5LevelFlow.h"
-#include "gun_bros_re/gameplay/CLevel.h"
+#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/CEnemy.h"
 #include "gun_bros_re/data/ZPackTables.h"

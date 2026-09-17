@@ -207,10 +207,10 @@ int CheckArena(ArenaScene &ready) {
         if (scene.SpawnNearby(0) == nullptr) { ++failures; break; }
     }
     for (std::size_t i = 0; i < scene.GetEnemies().size(); ++i) {
-        const ZEnemyCombat &one = scene.GetEnemies()[i]->model.enemy.combat;
+        const CEnemy::CombatState &one = scene.GetEnemies()[i]->model.enemy.combat;
         if (one.x < 40 || one.x > kArenaWidth - 40 || one.y < 145 || one.y > kArenaHeight - 40) { ++failures; }
         for (std::size_t j = i + 1; j < scene.GetEnemies().size(); ++j) {
-            const ZEnemyCombat &other = scene.GetEnemies()[j]->model.enemy.combat;
+            const CEnemy::CombatState &other = scene.GetEnemies()[j]->model.enemy.combat;
             if (one.id == other.id || std::hypot(one.x - other.x, one.y - other.y) < 70) { ++failures; }
         }
     }

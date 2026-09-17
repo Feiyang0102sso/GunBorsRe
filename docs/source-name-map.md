@@ -1,8 +1,40 @@
 # 源码文件名映射
 
-日期：2026-09-15。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+日期：2026-09-16。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+
+Brother 核心目录：`CBrother.h/.cpp`、`CBrotherPowerups.cpp`、`CPlayer.h/.cpp`、`ZPlayerModel.h/.cpp`、`CBrotherAI.h/.cpp`、`ZLocalCoopBot.h/.cpp`、`ZDeathmatchBot.h/.cpp` 共 13 个文件统一位于 `gun_bros_re/gameplay/brother/`。保留 `CBrotherPowerups.cpp` 的独立文件；数据、关卡与共享战斗模块不随之移动。
+
+Powerup 本体目录：`CPowerup.h/.cpp`、`CPowerupActions.cpp`、`CPowerupPresentation.cpp` 统一位于 `gun_bros_re/gameplay/powerup/`。角色入口保留在 `gameplay/brother/CBrotherPowerups.cpp`，关卡调度保留在 `gameplay/level/CLevelPowerups.cpp`；选择器、Catalog 与测试仍在各自职责目录。
 
 职责拆分新增的 `CPlayer`、`CMovieObject`、`CMovieChapter`、`ZHudResources`、`ZHudState`、`ZMapResources`、`ZMapPropWorld`、`CMenuInviteFriends` 和 `CMenuIncentives` 见 [重构结果](source-alignment-result.md)。表内的 Z 表示当前自建表示或适配，不表示数据来源不是原版。
+
+Movie 完成通知：`engine/glu/movie/CMovie.*` 内的嵌套 `Playback` 保存每个使用实例的播放状态；`ui/CPowerUpSelectorPresentation.cpp` 是现有选择器的分文件实现，负责商品隐藏／主框关闭；`CInputPadControls.cpp` 负责操作界面恢复。没有新增顶层播放管理器，也没有把 UI 回调放进共享渲染缓存。
+
+2026-09-16：新增 `gun_bros_re/gameplay/CParticle.*` 和 `CParticleEffectPlayer.*`，接收 `ZMapParticles`、`ZWeaponEffects` 内重复的粒子行为。两者均有原符号依据；本批恢复范围及未恢复的原粒子池边界见 [运行行为实施记录](runtime-alignment-roadmap.md#六实施记录r09-共享粒子核心2026-09-16)。
+
+同日第二批新增 `gun_bros_re/gameplay/CParticlePool.*`；播放器持有活动粒子，池按原所有者共享，宿主保留绘制缓存。停止与回收边界见 [粒子池实施记录](runtime-alignment-roadmap.md#七实施记录r09-粒子池与停止语义2026-09-16)。
+
+同日第三批：所有 `gameplay/CLevel*` 文件归入 `gameplay/level/`。`ZEnemyCombat.h` 已删除，部件、状态和动作归入 `CEnemy::Part/CombatState/Action`，不保留旧类型别名。`CEnemyCombat.cpp`、`CLevelCoop.cpp`、`CLevelDeathmatch.cpp` 是原类的分文件实现，不是三个新建 C 类。
+
+| 本批旧路径 | 当前路径 |
+|---|---|
+| `gun_bros_re/gameplay/ZEnemyCombat.cpp` | `gun_bros_re/gameplay/CEnemyCombat.cpp` |
+| `gun_bros_re/gameplay/ZEnemyCombat.h` | 已并入 `gun_bros_re/gameplay/CEnemy.h` |
+| `gun_bros_re/gameplay/ZLiveCombat.cpp` | `gun_bros_re/gameplay/level/CLevelCoop.cpp` |
+| `gun_bros_re/gameplay/ZDeathmatchCombat.cpp` | `gun_bros_re/gameplay/level/CLevelDeathmatch.cpp` |
+| `gun_bros_re/gameplay/ZDeathmatchNavigation.cpp` | `gun_bros_re/gameplay/level/ZDeathmatchNavigation.cpp`，仍属桌面 Bot 寻路 |
+| `gun_bros_re/gameplay/CLevel*.h/.cpp` | 同名文件统一放在 `gun_bros_re/gameplay/level/` |
+
+第四批：`ZPowerupMoviePlayer.h/.cpp` 已删除，脚本、Movie、屏幕粒子及完成事件归同一个 `CPowerup`；私有图形数据与方法实现放在 `CPowerupPresentation.cpp`。旧 `GetMoviePlayer` 调用改为 `GetPresentedPowerup`，不保留兼容播放器对象。
+
+第五批：删除 `ZPowerupScene::Use` 的按编号执行器分流；角色 native、实时查询和投掷预约收归 `CPowerupActions.cpp`，与 `CPowerupPresentation.cpp` 实现同一个 `CPowerup`。宿主保留库存、冷却和本地 Bot 政策，本批未额外删除 Z 文件。
+
+第六批：`ZPowerupScene.h/.cpp` 已删除，无替代宿主类。选项、装备和库存视图归 `ui/CPowerUpSelectorInventory.cpp`；使用条件归 `gameplay/brother/CBrotherPowerups.cpp`；活动更新、清理及库存提交归 `gameplay/level/CLevelPowerups.cpp`；本地策略归已有 `ZDeathmatchBot.cpp`、`ZLocalCoopBot.cpp`。正式玩家使用 InputPad 内同一个选择器与资源目录，关卡直接持有执行中的 `CPowerup` 引用。旧 `GetPresentedPowerup` 已改为选择器的 `GetPowerup`。
+
+| 本批旧路径 | 当前路径 |
+|---|---|
+| `gun_bros_re/gameplay/ZPowerupMoviePlayer.cpp` | `gun_bros_re/gameplay/powerup/CPowerupPresentation.cpp`，实现 `CPowerup` 成员 |
+| `gun_bros_re/gameplay/ZPowerupMoviePlayer.h` | 已并入 `gun_bros_re/gameplay/powerup/CPowerup.h`，图形细节不进入公共头文件 |
 
 | 旧路径 | 当前路径 |
 |---|---|
@@ -78,18 +110,18 @@
 | `gun_bros_re/data/StoreCatalog.h` | `gun_bros_re/data/ZStoreCatalog.h` |
 | `gun_bros_re/data/WeaponCatalog.cpp` | `gun_bros_re/data/ZWeaponCatalog.cpp` |
 | `gun_bros_re/data/WeaponCatalog.h` | `gun_bros_re/data/ZWeaponCatalog.h` |
-| `gun_bros_re/gameplay/BroAIDeathmatch.cpp` | `gun_bros_re/gameplay/ZLocalCoopBot.cpp` |
-| `gun_bros_re/gameplay/BroAIDeathmatch.h` | `gun_bros_re/gameplay/ZLocalCoopBot.h` |
+| `gun_bros_re/gameplay/BroAIDeathmatch.cpp` | `gun_bros_re/gameplay/brother/ZLocalCoopBot.cpp` |
+| `gun_bros_re/gameplay/BroAIDeathmatch.h` | `gun_bros_re/gameplay/brother/ZLocalCoopBot.h` |
 | `gun_bros_re/gameplay/CombatGeometry.h` | `gun_bros_re/gameplay/ZCombatGeometry.h` |
 | `gun_bros_re/gameplay/CombatScene.cpp` | 已按职责并入 `CLevelRuntime.cpp`、`CLevelWorld.cpp`、`CLevelActors.cpp`、`CLevelProjectiles.cpp`、`CLevelCombat.cpp` |
-| `gun_bros_re/gameplay/CombatScene.h` | 已并入 `gun_bros_re/gameplay/CLevel.h`，不保留兼容门面 |
+| `gun_bros_re/gameplay/CombatScene.h` | 已并入 `gun_bros_re/gameplay/level/CLevel.h`，不保留兼容门面 |
 | `gun_bros_re/gameplay/CombatTypes.h` | `gun_bros_re/gameplay/ZCombatTypes.h` |
-| `gun_bros_re/gameplay/DeathmatchBot.cpp` | `gun_bros_re/gameplay/ZDeathmatchBot.cpp` |
-| `gun_bros_re/gameplay/DeathmatchBot.h` | `gun_bros_re/gameplay/ZDeathmatchBot.h` |
+| `gun_bros_re/gameplay/DeathmatchBot.cpp` | `gun_bros_re/gameplay/brother/ZDeathmatchBot.cpp` |
+| `gun_bros_re/gameplay/DeathmatchBot.h` | `gun_bros_re/gameplay/brother/ZDeathmatchBot.h` |
 | `gun_bros_re/gameplay/DeathmatchCombat.cpp` | `gun_bros_re/gameplay/ZDeathmatchCombat.cpp` |
 | `gun_bros_re/gameplay/DeathmatchNavigation.cpp` | `gun_bros_re/gameplay/ZDeathmatchNavigation.cpp` |
-| `gun_bros_re/gameplay/EnemyCombat.cpp` | `gun_bros_re/gameplay/ZEnemyCombat.cpp` |
-| `gun_bros_re/gameplay/EnemyCombat.h` | `gun_bros_re/gameplay/ZEnemyCombat.h` |
+| `gun_bros_re/gameplay/EnemyCombat.cpp` | `gun_bros_re/gameplay/CEnemyCombat.cpp` |
+| `gun_bros_re/gameplay/EnemyCombat.h` | 已并入 `gun_bros_re/gameplay/CEnemy.h` |
 | `gun_bros_re/gameplay/EnemyModel.cpp` | `gun_bros_re/gameplay/ZEnemyModel.cpp` |
 | `gun_bros_re/gameplay/EnemyModel.h` | `gun_bros_re/gameplay/ZEnemyModel.h` |
 | `gun_bros_re/gameplay/GameScriptObject.cpp` | `gun_bros_re/gameplay/ZGameScriptObject.cpp` |
@@ -107,12 +139,12 @@
 | `gun_bros_re/gameplay/MultiplayerStatistics.h` | `gun_bros_re/gameplay/ZMultiplayerStatistics.h` |
 | `gun_bros_re/gameplay/PickupScene.cpp` | `gun_bros_re/gameplay/ZPickupScene.cpp` |
 | `gun_bros_re/gameplay/PickupScene.h` | `gun_bros_re/gameplay/ZPickupScene.h` |
-| `gun_bros_re/gameplay/PlayerModel.cpp` | `gun_bros_re/gameplay/ZPlayerModel.cpp` |
-| `gun_bros_re/gameplay/PlayerModel.h` | `gun_bros_re/gameplay/ZPlayerModel.h` |
-| `gun_bros_re/gameplay/PowerupMoviePlayer.cpp` | `gun_bros_re/gameplay/ZPowerupMoviePlayer.cpp` |
-| `gun_bros_re/gameplay/PowerupMoviePlayer.h` | `gun_bros_re/gameplay/ZPowerupMoviePlayer.h` |
-| `gun_bros_re/gameplay/PowerupScene.cpp` | `gun_bros_re/gameplay/ZPowerupScene.cpp` |
-| `gun_bros_re/gameplay/PowerupScene.h` | `gun_bros_re/gameplay/ZPowerupScene.h` |
+| `gun_bros_re/gameplay/PlayerModel.cpp` | `gun_bros_re/gameplay/brother/ZPlayerModel.cpp` |
+| `gun_bros_re/gameplay/PlayerModel.h` | `gun_bros_re/gameplay/brother/ZPlayerModel.h` |
+| `gun_bros_re/gameplay/PowerupMoviePlayer.cpp` | `gun_bros_re/gameplay/powerup/CPowerupPresentation.cpp` |
+| `gun_bros_re/gameplay/PowerupMoviePlayer.h` | 已并入 `gun_bros_re/gameplay/powerup/CPowerup.h` |
+| `gun_bros_re/gameplay/PowerupScene.cpp` | 组合层已删除，分归 `CPowerUpSelectorInventory.cpp`、`CBrotherPowerups.cpp`、`level/CLevelPowerups.cpp` 与现有 Bot 策略 |
+| `gun_bros_re/gameplay/PowerupScene.h` | 组合层已删除，接口归对应原对象，无别名或兼容头 |
 | `gun_bros_re/gameplay/SurvivalGameContext.h` | `gun_bros_re/gameplay/ZSurvivalGameContext.h` |
 | `gun_bros_re/gameplay/SurvivalInputDriver.cpp` | `gun_bros_re/gameplay/ZSurvivalInputDriver.cpp` |
 | `gun_bros_re/gameplay/SurvivalInputDriver.h` | `gun_bros_re/gameplay/ZSurvivalInputDriver.h` |

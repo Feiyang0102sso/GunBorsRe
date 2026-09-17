@@ -283,7 +283,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                     if (kinds == 2 && count == 0) {
                         // Inspect, but do not consume, the original death export.
                         for (const auto &action : actor->model.enemy.combat.actions) {
-                            if (action.kind != ZEnemyAction::Kind::Sound) { continue; }
+                            if (action.kind != CEnemy::Action::Kind::Sound) { continue; }
                             std::vector<std::uint8_t> bytes;
                             if (!tables.ReadSectionResource(action.resource.packHash, ZGameSection::SoundEffect, action.resource.localIndex, bytes)) { ++checkFailures; continue; }
                             CArrayInputStream input(bytes);

@@ -6,7 +6,7 @@
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "engine/graphics/ZPNG.h"
 #include "engine/graphics/CMesh.h"
-#include "gun_bros_re/gameplay/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "engine/core/ZMatrix4d.h"
 

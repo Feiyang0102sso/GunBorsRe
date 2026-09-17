@@ -12,11 +12,11 @@
 #include "TestOutput.h"
 
 // Declared where they are defined, in the deathmatch check translation units.
-int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, ZPickupScene &, ZPowerupScene &,
+int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, ZPickupScene &, CPowerUpSelector &,
     CProfileManager &, ZSurvivalGameContext &);
-int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, ZPowerupScene &, CProfileManager &);
+int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, CPowerUpSelector &, CProfileManager &);
 int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, ZPackTables &,
-    CMPMatch &, ZPowerupScene &, CProfileManager &);
+    CMPMatch &, CPowerUpSelector &, CProfileManager &);
 
 SurvivalCheckScenario::SurvivalCheckScenario(const SurvivalDevelopment &development)
     : m_development(development) {}

@@ -9,7 +9,7 @@ class CDailyBonusTracking;
 class CChallengeManager;
 class CLevel;
 class CGame;
-class ZPowerupScene;
+class CPowerUpSelector;
 struct ZPlayerVitals;
 struct ZSurvivalGameContext;
 namespace MenuDetail { struct ZMenuState; }
@@ -22,7 +22,7 @@ struct CombatCheatResult {
     bool botShop = false, botPowerup = false;
 };
 bool ApplyCombatCheat(const std::string &command, CLevel &scene, ZPlayerVitals &vitals,
-    ZPowerupScene &powerups, CGame &session, ZSurvivalGameContext *context, CombatCheatResult &result,
+    CPowerUpSelector &powerups, CGame &session, ZSurvivalGameContext *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
 bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZMenuState &state,
     const CDailyBonusTracking &daily, const std::filesystem::path &savePath,
