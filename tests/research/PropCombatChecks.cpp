@@ -22,7 +22,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
         ZLoadedMap loaded;
         if (!LoadMap(toc, entry.packIndex, entry.mapIndex, loaded)) { return 1; }
         LoadProps(toc, loaded);
-        ZPlayerModel player;
+        CBrother player;
         ZPlayerVitals vitals;
         // This fixture isolates props; no player damage or account is needed.
         vitals.dead = true;
@@ -108,13 +108,13 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             ++tested;
         }
         if (entry.packName == "pack2") {
-            ZPlayerTemplateData playerData;
+            CBrother::Template playerData;
             std::vector<ZWeaponEntry> weapons;
-            if (!FindPlayerTemplate(toc, tables, playerData) ||
+            if (!playerData.Load(toc, tables) ||
                 !LoadWeaponCatalog(toc, tables, weapons) || weapons.empty()) { return 1; }
-            if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
-                !EquipPlayerWeapon(tables, playerData.script, weapons[0].data, "barrel chain check", player) ||
-                !CreatePlayerBuffers(player, program)) { return 1; }
+            if (!player.BuildBody(tables, playerData.GetMoveSet()) ||
+                !player.EquipWeapon(tables, playerData.GetScript(), weapons[0].data, "barrel chain check") ||
+                !player.CreateBuffers(program)) { return 1; }
             scene.Reset();
             std::vector<ZPlacedProp *> cluster;
             float centerX = 0, centerY = 0;

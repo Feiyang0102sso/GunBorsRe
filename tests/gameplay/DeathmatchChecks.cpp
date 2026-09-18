@@ -1,7 +1,7 @@
 /** BIG match validation and authoritative life budget regressions. */
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include <cstdio>
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
 #include "engine/core/CStringToKey.h"
@@ -28,15 +28,15 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
     if (!LoadStoreCatalog(toc, tables, store)) { return 1; }
     CProfileManager shopper;
     CMPMatch::Life life;
-    if (ZDeathmatchBot::ChoosePurchase(store, shopper, 99, life) != nullptr) { return 1; }
+    if (ZLocalPVPBot::ChoosePurchase(store, shopper, 99, life) != nullptr) { return 1; }
     shopper.coins = 100000; shopper.warbucks = 100000;
     unsigned purchases = 0;
-    while (const auto *item = ZDeathmatchBot::ChoosePurchase(store, shopper, 99, life)) {
+    while (const auto *item = ZLocalPVPBot::ChoosePurchase(store, shopper, 99, life)) {
         if (++purchases > 4 || shopper.AcquireItem(item->data, 99) != ZPurchaseResult::Purchased) { return 1; }
     }
     if (purchases != 4 || shopper.statistics[12] != 4) { return 1; }
     shopper.powerups.clear(); life.grenades = 2; life.healthPacks = 2;
-    if (ZDeathmatchBot::ChoosePurchase(store, shopper, 99, life) != nullptr) { return 1; }
+    if (ZLocalPVPBot::ChoosePurchase(store, shopper, 99, life) != nullptr) { return 1; }
     std::vector<CMPMatch::Entry> entries;
     if (!LoadMPMatches(toc, tables, entries) || entries.size() != 5) { return 1; }
     const unsigned originalHealth[] = {120, 250, 280, 360, 470};

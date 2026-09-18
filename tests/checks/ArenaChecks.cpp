@@ -40,12 +40,12 @@ int CheckArena(ArenaScene &ready) {
         scene.Reset();
         scene.Update(kStepMs, 0, 0, false);
         const auto shotsBefore = scene.GetShotCount();
-        const bool requested = ThrowArenaGrenade(player.weapon->brother, grenade);
-        const bool replacedPending = ThrowArenaGrenade(player.weapon->brother, grenades[0]);
+        const bool requested = ThrowArenaGrenade(player, grenade);
+        const bool replacedPending = ThrowArenaGrenade(player, grenades[0]);
         unsigned thrown = 0;
         for (int tick = 0; tick < 180; ++tick) {
             scene.Update(kStepMs, 0, 0, false);
-            thrown += player.weapon->brother.TakeThrownGrenades(0);
+            thrown += player.TakeThrownGrenades(0);
         }
         const auto shots = scene.GetShotCount() - shotsBefore;
         std::printf("[arena-check] grenade=%s requested=%d thrown=%u shots=%zu\n",
@@ -57,22 +57,22 @@ int CheckArena(ArenaScene &ready) {
     vitals.invincible = false;
     // PLAYER pack0_core: event 0x0604 is authored in stun state 13
     // (@0x3BE), which transitions to recovery state 14. Idle ignores it.
-    player.weapon->brother.Stun(1000);
-    player.weapon->brother.ReceiveDamage(1);
-    const int hurtState = player.weapon->brother.GetStateId();
+    player.Stun(1000);
+    player.ReceiveDamage(1);
+    const int hurtState = player.GetStateId();
     scene.Reset();
     scene.Update(kStepMs, 0, 0, false);
-    player.weapon->brother.Stun(1000);
-    const int stunnedState = player.weapon->brother.GetStateId();
+    player.Stun(1000);
+    const int stunnedState = player.GetStateId();
     vitals.unlimitedHealth = true;
     const float lethalDamage = vitals.maximum * 100;
-    const ZHitResult unlimitedResult = player.weapon->brother.ReceiveDamage(lethalDamage);
+    const ZHitResult unlimitedResult = player.ReceiveDamage(lethalDamage);
     std::printf("[arena-check] unlimited result=%d hp=%.1f/%.1f dead=%d hits=%u incoming=%.1f flash=%.1f states=%d/%d/%d\n",
         static_cast<int>(unlimitedResult), vitals.health, vitals.maximum, vitals.dead,
-        vitals.hits, vitals.incomingDamage, vitals.flash, stunnedState, hurtState, player.weapon->brother.GetStateId());
+        vitals.hits, vitals.incomingDamage, vitals.flash, stunnedState, hurtState, player.GetStateId());
     if (unlimitedResult != ZHitResult::Hit || vitals.health != vitals.maximum || vitals.dead ||
         vitals.hits != 1 || vitals.incomingDamage != lethalDamage || vitals.flash != 1 ||
-        hurtState == stunnedState || player.weapon->brother.GetStateId() != hurtState) {
+        hurtState == stunnedState || player.GetStateId() != hurtState) {
         std::printf("[arena-check] FAIL unlimited health damage feedback\n");
         ++failures;
     }
@@ -181,16 +181,16 @@ int CheckArena(ArenaScene &ready) {
     // Invincibility logs incoming damage. Equipment must preserve health.
     vitals.Reset();
     vitals.invincible = true;
-    player.weapon->brother.ReceiveDamage(7);
+    player.ReceiveDamage(7);
     if (vitals.health != vitals.maximum || vitals.incomingDamage != 7) { ++failures; }
     vitals.invincible = false;
-    player.weapon->brother.ReceiveDamage(1);
+    player.ReceiveDamage(1);
     const float wounded = vitals.health;
     if (vitals.dead || wounded != vitals.maximum - 1) { ++failures; }
     Equip(tables, playerData, weapons[1], player, program);
     if (vitals.health != wounded || vitals.dead) { ++failures; }
-    player.weapon->brother.ReceiveDamage(vitals.maximum + 1);
-    player.weapon->brother.ReceiveDamage(99);
+    player.ReceiveDamage(vitals.maximum + 1);
+    player.ReceiveDamage(99);
     if (!vitals.dead || vitals.deaths != 1) { ++failures; }
     scene.Reset();
     if (vitals.health != vitals.maximum || vitals.dead || scene.GetBulletCount() != 0 || scene.AliveCount() != 0) { ++failures; }
@@ -213,7 +213,7 @@ int CheckArena(ArenaScene &ready) {
             if (one.id == other.id || std::hypot(one.x - other.x, one.y - other.y) < 70) { ++failures; }
         }
     }
-    player.weapon->brother.Stun(64);
+    player.Stun(64);
     const float stunnedX = scene.GetPlayer().x;
     scene.Update(16, 1, 0, true);
     if (scene.GetPlayer().x != stunnedX || vitals.stunMs <= 0) { ++failures; }
@@ -256,7 +256,7 @@ int CheckArena(ArenaScene &ready) {
         actor->model.enemy.combat.behaviour = 7;
         const std::size_t initialShots = scene.GetShotCount();
         scene.PlayerMatrix(matrix);
-        SetPlayerInput(player, false, true);
+        player.SetInput(false, true);
         for (int time = 0; time < 3000; time += 16) {
             actor->model.enemy.combat.variables[0] = 0;
             scene.Update(16, 0, 0, true);
@@ -281,7 +281,7 @@ int CheckArena(ArenaScene &ready) {
         if (!weapons[i].visualOnly && dealt <= 0) {
             std::printf("[arena-check] FAIL weapon %zu did not damage\n", i); ++failures;
         }
-        if (player.weapon->gun.IsBeam() && firstBeam == weapons.size()) { firstBeam = i; }
+        if (player.weapon->IsBeam() && firstBeam == weapons.size()) { firstBeam = i; }
     }
     if (firstBeam < weapons.size()) {
         const int steps[] = {8, 16, 32};
@@ -294,8 +294,8 @@ int CheckArena(ArenaScene &ready) {
             actor->model.enemy.combat.health = 10000;
             actor->model.enemy.combat.maxHealth = 10000;
             actor->model.enemy.GetPart(0).radius = 130;
-            player.weapon->gun.SetShooting(true);
-            player.weapon->gun.TakeCues();
+            player.weapon->SetShooting(true);
+            player.weapon->TakeCues();
             scene.PlayerMatrix(matrix);
             scene.SpawnProjectile(weapons[firstBeam].data.GetBulletRef(), 600, 600, 0, -90, 1, kPlayerCombatId, 0);
             for (int time = 0; time < 960; time += steps[run]) { scene.Update(player, matrix, 0, steps[run]); }
@@ -315,13 +315,13 @@ int CheckArena(ArenaScene &ready) {
     scene.Reset();
     const std::size_t outfit[] = {7, 11, 4};
     for (std::size_t index : outfit) {
-        if (!EquipPlayerArmor(tables, armorCatalog[index].data, program, player)) {
+        if (!player.EquipArmor(tables, armorCatalog[index].data, program)) {
             return 1;
         }
     }
-    if (std::abs(PlayerArmorMultiplier(player, 0) - 1.14f) > 0.0001f ||
-        std::abs(PlayerArmorMultiplier(player, 1) - 1.05f) > 0.0001f ||
-        std::abs(PlayerArmorMultiplier(player, 2) - 0.93f) > 0.0001f) {
+    if (std::abs(player.GetArmorMultiplier(0) - 1.14f) > 0.0001f ||
+        std::abs(player.GetArmorMultiplier(1) - 1.05f) > 0.0001f ||
+        std::abs(player.GetArmorMultiplier(2) - 0.93f) > 0.0001f) {
         ++failures;
     }
     const float originalMaximum = vitals.maximum;
@@ -357,12 +357,12 @@ int CheckArena(ArenaScene &ready) {
         ++failures;
     }
     if (!Equip(tables, playerData, weapons[0], player, program) ||
-        std::abs(PlayerArmorMultiplier(player, 0) - 1.14f) > 0.0001f ||
-        std::abs(PlayerArmorMultiplier(player, 1) - 1.05f) > 0.0001f) {
+        std::abs(player.GetArmorMultiplier(0) - 1.14f) > 0.0001f ||
+        std::abs(player.GetArmorMultiplier(1) - 1.05f) > 0.0001f) {
         ++failures;
     }
-    ClearPlayerArmor(player);
-    if (std::abs(PlayerArmorMultiplier(player, 0) - 1.0f) > 0.0001f) {
+    player.ClearArmor();
+    if (std::abs(player.GetArmorMultiplier(0) - 1.0f) > 0.0001f) {
         ++failures;
     }
     vitals.maximum = originalMaximum;

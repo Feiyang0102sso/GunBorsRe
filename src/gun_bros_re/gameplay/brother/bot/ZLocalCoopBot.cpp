@@ -1,10 +1,10 @@
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 /** Test peer input policy. Shared CBrother/CGun/Flow still execute all actions.
  * This policy is a Windows replacement for player input, not original game AI.
  */
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -161,12 +161,12 @@ void ZLocalCoopBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &worl
     else if (m_moving) { facing = std::atan2(y - previousY, x - previousX) / kRadians + 90; }
     brother.SetInput(m_moving, shooting);
 }
-bool ZLocalCoopBot::UseAnyPowerup(CPowerUpSelector &selector, bool grantTestCharge) {
+bool ZLocalCoopBot::UseAnyPowerup(CPowerUpSelector &selector, std::uint32_t &choice, bool grantTestCharge) {
     if (selector.m_resources.m_powerups.empty()) { return false; }
     // Input policy only: every attempt still enters the original CanUse/Use.
-    selector.m_player->powerupChoice = selector.m_player->powerupChoice * 1664525u + 1013904223u;
+    choice = choice * 1664525u + 1013904223u;
     for (unsigned offset = 0; offset < selector.m_resources.m_powerups.size(); ++offset) {
-        const unsigned index = (selector.m_player->powerupChoice % selector.m_resources.m_powerups.size() + offset) % selector.m_resources.m_powerups.size();
+        const unsigned index = (choice % selector.m_resources.m_powerups.size() + offset) % selector.m_resources.m_powerups.size();
         if (!selector.Select(index)) { continue; }
         if (!grantTestCharge && selector.m_level->IsLocalLive() && !CanUseSelectedPowerup(selector)) { continue; }
         const auto &ref = selector.m_resources.m_powerups[index].resource;
@@ -176,7 +176,7 @@ bool ZLocalCoopBot::UseAnyPowerup(CPowerUpSelector &selector, bool grantTestChar
         }
         if (selector.UseSelected()) { return true; }
         // Health and other selector-only actions still pass their original exports.
-        if (ZDeathmatchBot::HasUnlimitedInventory(selector) && selector.UseSelected(true)) { return true; }
+        if (ZLocalPVPBot::HasUnlimitedInventory(selector) && selector.UseSelected(true)) { return true; }
         if (granted) { selector.m_profile->ConsumePowerup(ref); }
     }
     return false;

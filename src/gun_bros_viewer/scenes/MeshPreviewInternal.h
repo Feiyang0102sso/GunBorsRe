@@ -1,3 +1,4 @@
+#include "gun_bros_viewer/scenes/BrotherPreview.h"
 #pragma once
 #include "engine/core/ZPaths.h"
 /**
@@ -33,7 +34,7 @@
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
@@ -51,7 +52,6 @@
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
-#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
@@ -636,6 +636,6 @@ private:
 
 /** Assemble the player, with one of the catalogue's guns in his hand. */
 bool BuildViewerCharacter(ZPackTables &tables, const CharacterSink &catalog,
-                          std::size_t gunSlot, ZPlayerModel &out);
+                          std::size_t gunSlot, ZBrotherPreview &out);
 
 }

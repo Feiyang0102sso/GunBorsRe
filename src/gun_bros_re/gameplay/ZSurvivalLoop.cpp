@@ -6,9 +6,9 @@
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
-#include "gun_bros_re/data/ZLocalBotFriend.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
 #include "gun_bros_re/gameplay/ZLiveShopSession.h"
 #include "gun_bros_re/ZLocalOnlineServices.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
@@ -134,10 +134,10 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (loaded.players.empty()) { return 1; }
     // The second brother will be driven by the partner system, not a stationary clone.
     loaded.players.resize(1);
-    ZPlayerModel &player = *loaded.players[0].model;
-    player.cooperative = launch.localLive;
-    player.deathmatch = launch.deathmatch;
-    player.vitals = &vitals;
+    CBrother &player = *loaded.players[0].model;
+    player.SetCooperative(launch.localLive);
+    player.SetDeathmatch(launch.deathmatch);
+    player.SetVitals(&vitals);
     if (gameContext != nullptr) {
         for (const auto &entry : gameContext->profile.weaponMastery) {
             const std::uint64_t key = (static_cast<std::uint64_t>(entry.resource.packHash) << 8) | entry.resource.localIndex;
@@ -174,7 +174,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (armorIndex >= 0) {
         std::vector<ZArmorEntry> armors;
         if (!LoadArmorCatalog(toc, tables, armors) || armorIndex >= static_cast<int>(armors.size()) ||
-            !EquipPlayerArmor(tables, armors[armorIndex].data, program, player)) { return 1; }
+            !player.EquipArmor(tables, armors[armorIndex].data, program)) { return 1; }
     }
     if (gameContext != nullptr) {
         std::vector<ZArmorEntry> armors;
@@ -184,7 +184,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             bool found = false;
             for (const ZArmorEntry &entry : armors) {
                 if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) {
-                    if (!EquipPlayerArmor(tables, entry.data, program, player)) { return 1; }
+                    if (!player.EquipArmor(tables, entry.data, program)) { return 1; }
                     found = true;
                     break;
                 }
@@ -199,7 +199,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         });
         if (result >= 0) { return result; }
     }
-    scene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    scene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
     if (gameContext != nullptr) {
         music.SetEnabled(gameContext->profile.musicEnabled);
         ZAudioPlayer::SetEffectsEnabled(gameContext->profile.soundEnabled);
@@ -207,7 +207,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     }
     CBrotherAI defaultBrother;
     std::unique_ptr<ZLocalCoopBot> localBot;
-    std::unique_ptr<ZDeathmatchBot> deathmatchBot;
+    std::unique_ptr<ZLocalPVPBot> deathmatchBot;
     CBrotherAI *partner = &defaultBrother;
     // A selected friend's equipment does not change the original Solo policy.
     // Construct the host multiplayer input policy only for a Live session.
@@ -216,11 +216,11 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         partner = localBot.get();
     }
     if (launch.deathmatch) {
-        deathmatchBot = std::make_unique<ZDeathmatchBot>();
+        deathmatchBot = std::make_unique<ZLocalPVPBot>();
         partner = deathmatchBot.get();
     }
     CBrotherAI &brother = *partner;
-    ZPlayerModel brotherModel;
+    CBrother brotherModel;
     CPlayerConfiguration brotherConfiguration;
     brotherConfiguration.SetDefaults(toc.GetPack(toc.GetCorePackIndex())->GetPackHash());
     // Local default partner: Whippersnappers and the free ER97E Elite rifle.
@@ -232,7 +232,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     }
     if (launch.deathmatch) {
         if (launch.botFriend != nullptr) { brotherConfiguration = launch.botFriend->profile.configuration; }
-        const auto selection = ZDeathmatchBot::ChooseLoadout(matches[launch.matchIndex], weapons, matchSeed);
+        const auto selection = ZLocalPVPBot::ChooseLoadout(matches[launch.matchIndex], weapons, matchSeed);
         const ZWeaponEntry *chosen[2]{};
         for (unsigned slot = 0; slot < 2; ++slot) {
             brotherConfiguration.guns[slot] = matches[launch.matchIndex].guns[selection[slot]];
@@ -253,12 +253,12 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             brother.vitals.maximum = botProgress.GetHealth();
         }
         brother.vitals.invincible = false;
-        brotherModel.vitals = &brother.vitals;
-        brotherModel.human = false;
-        brotherModel.cooperative = launch.localLive;
-        brotherModel.deathmatch = launch.deathmatch;
-        if (launch.deathmatch) { brotherModel.human = true; }
-        if (launch.localLive) { brotherModel.human = true; }
+        brotherModel.SetVitals(&brother.vitals);
+        brotherModel.SetHuman(false);
+        brotherModel.SetCooperative(launch.localLive);
+        brotherModel.SetDeathmatch(launch.deathmatch);
+        if (launch.deathmatch) { brotherModel.SetHuman(true); }
+        if (launch.localLive) { brotherModel.SetHuman(true); }
         brotherModel.brotherIndex = 1;
         if (gameContext != nullptr) { brotherModel.brotherIndex = 1 - gameContext->profile.playerBrother; }
         if ((launch.localLive || launch.localBot) && launch.botFriend != nullptr) { brotherModel.brotherIndex = launch.botFriend->profile.playerBrother; }
@@ -270,16 +270,15 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 break;
             }
         }
-        if (!BuildPlayerBody(tables, player.moveSet, brotherModel) ||
-            !EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapons[brotherWeaponSlot].data,
-                "AI brother", brotherModel) || !CreatePlayerBuffers(brotherModel, program)) { return 1; }
+        if (!brotherModel.BuildBody(tables, player.moveSet) ||
+            !brotherModel.EquipWeapon(tables, loaded.playerTemplate->GetScript(), weapons[brotherWeaponSlot].data, "AI brother") || !brotherModel.CreateBuffers(program)) { return 1; }
         for (const GameObjectRef &ref : brotherConfiguration.armor) {
             if (ref.IsNull()) { continue; }
             std::vector<std::uint8_t> payload;
             if (!tables.ReadSectionResource(ref.packHash, ZGameSection::Armor, ref.localIndex, payload)) { return 1; }
             CArrayInputStream input(payload);
             CArmor::Template armor;
-            if (!armor.Init(input) || !EquipPlayerArmor(tables, armor, program, brotherModel)) { return 1; }
+            if (!armor.Init(input) || !brotherModel.EquipArmor(tables, armor, program)) { return 1; }
         }
         scene.SetBrother(&brotherModel, &brother);
         const ZWeaponEntry *rifle = nullptr;
@@ -290,12 +289,12 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
         }
         if (rifle == nullptr) { return 1; }
-        scene.SetBrotherWeapons(loaded.playerTemplate->script, weapons[brotherWeaponSlot].data, rifle->data);
+        scene.SetBrotherWeapons(loaded.playerTemplate->GetScript(), weapons[brotherWeaponSlot].data, rifle->data);
 
     }
     scene.SetPlayerProgress(&progress);
     scene.SetLocalLive(launch.localLive);
-    if (launch.localLive && !scene.SetReviveResources(loaded.playerTemplate->script)) { return 1; }
+    if (launch.localLive && !scene.SetReviveResources(loaded.playerTemplate->GetScript())) { return 1; }
     scene.SetLocalBot(launch.localLive || launch.localBot || launch.deathmatch);
     survivalHud.SetLiveBrotherIndex(player.brotherIndex);
     survivalHud.SetLivePeerIndex(brotherModel.brotherIndex);
@@ -512,7 +511,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         state.stopwatchMs = session.GetLevel().GetStopwatchTime();
         state.bossIntroSerial = session.GetLevel().GetBossIntroSerial();
         state.xplodiumMultiplier = static_cast<int>(std::ceil(session.GetLevel().GetXplodiumMultiplierPercent() *
-            PlayerArmorMultiplier(player, 4) * CFriendPowerManager::Multiplier(player.friendCount, 6)));
+            player.GetArmorMultiplier(4) * CFriendPowerManager::Multiplier(player.friendCount, 6)));
         state.level = progress.GetLevel();
         state.experience = progress.GetExperienceInLevel();
         state.experienceDelta = progress.GetExperienceDelta();
@@ -560,11 +559,11 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         state.musicEnabled = pickupProfile->musicEnabled;
         state.dockedSticks = pickupProfile->options.DockedSticks();
         state.powerupStatus.healthPercent = static_cast<int>(std::lround(vitals.health * 100 / vitals.maximum));
-        state.powerupStatus.shield = player.weapon->brother.IsShield();
-        state.powerupStatus.frenzy = player.weapon->brother.IsFrenzy();
-        state.powerupStatus.autoFire = player.weapon->brother.IsAutoFire();
-        state.powerupStatus.turret = player.weapon->brother.IsTurretActive();
-        for (unsigned type = 0; type < 3; ++type) { state.powerupStatus.frenzyTypes[type] = player.weapon->brother.IsFrenzyType(type); }
+        state.powerupStatus.shield = player.IsShield();
+        state.powerupStatus.frenzy = player.IsFrenzy();
+        state.powerupStatus.autoFire = player.IsAutoFire();
+        state.powerupStatus.turret = player.IsTurretActive();
+        for (unsigned type = 0; type < 3; ++type) { state.powerupStatus.frenzyTypes[type] = player.IsFrenzyType(type); }
         state.dead = vitals.dead;
         state.inputHidden = vitals.inputHidden;
         if (launch.deathmatch) { state.inputHidden = false; }
@@ -603,7 +602,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     unsigned performanceSteps = 0;
     std::size_t performancePeakAlive = 0;
     bool performancePassed = true;
-    
+
     if (performanceStudy) {
         if (development->performanceSpawnStudy) {
             // User screenshot coordinates are a test input, not map resource data.
@@ -665,7 +664,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
             if (botShop.Visible(frameTicks) && !matchShopPurchased) {
                 // Shop decisions use the same catalog, price, balance and level checks as the player.
-                while (const auto *item = ZDeathmatchBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1))) {
+                while (const auto *item = ZLocalPVPBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1))) {
                     if (peerProfile->AcquireItem(item->data, peerProgress.GetLevel()) != ZPurchaseResult::Purchased) { break; }
                     std::printf("[deathmatch] bot purchased powerup=%u\n", item->data.objects.front().object.localIndex);
                 }
@@ -676,7 +675,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             if (!paused && !botShop.Active() && !brother.vitals.dead && !session.IsFinished()) {
                 deathmatchBot->UsePowerups(peerPowerups);
                 if (deathmatchBot->WantsShop() && match.CanShop(1) &&
-                    ZDeathmatchBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1)) != nullptr) {
+                    ZLocalPVPBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(), match.GetLife(1)) != nullptr) {
                     openShop(1); deathmatchBot->OnShopAttempt();
                 }
             }
@@ -724,18 +723,18 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 !scene.IsRescuePending() && !session.IsBossSkipActive() &&
                 !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) {
                 localBot->AdvanceActions(menuElapsed);
-                if (localBot->TakePowerupRequest()) { ZLocalCoopBot::UseAnyPowerup(peerPowerups); }
+                if (localBot->TakePowerupRequest()) { localBot->UsePowerup(peerPowerups); }
                 if (!peerPowerups.GetPowerup().IsPresentationActive() && localBot->TakeShopRequest()) { openShop(1); }
             }
         }
         survivalHud.AdvanceMenu(static_cast<unsigned>(frameTicks - menuTicks));
         menuTicks = frameTicks;
-        
+
         for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
             CombatCheatResult result;
             if (!ApplyCombatCheat(cheat, scene, vitals, powerups, session, gameContext, result, progressData, progress)) { return 1; }
             if (result.botShop && !brother.vitals.dead && !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) { openShop(1, true); }
-            if (result.botPowerup && !liveShop.Active() && !powerups.GetPowerup().IsPresentationActive()) { ZLocalCoopBot::UseAnyPowerup(peerPowerups, true); }
+            if (result.botPowerup && !liveShop.Active() && !powerups.GetPowerup().IsPresentationActive()) { localBot->UsePowerup(peerPowerups, true); }
             if (result.challengesUpdated && !gameContext->tutorial && !launch.deathmatch) {
                 // Discard the old day's pending wave deltas before binding the new list.
                 scene.TakeChallengeKills();
@@ -780,7 +779,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         survivalHud.ScrollMenuInput(inputState, menuScroll,
             float(menuDragX) * 1024 / inputWidth, float(menuDragY) * 768 / inputHeight);
         bool pointerDown = window.IsLeftMouseDown();
-        
+
         frame.inputState = inputState;
         frame.inputX = inputX; frame.inputY = inputY; frame.pointerDown = pointerDown;
         if (frameDriver != nullptr) {
@@ -970,8 +969,8 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                     // Keep the brother, torso controller, health and effects alive.
                     if (player.uiOtherWeapon == nullptr) {
                         primaryEquippedSlot = equippedWeaponSlot;
-                        if (!PreparePlayerUIWeapon(tables, weapons[nextWeapon].data, weapons[nextWeapon].owner, player) ||
-                            !CreatePlayerBuffers(player, program)) { return 1; }
+                        if (!player.PrepareSecondaryWeapon(tables, weapons[nextWeapon].data, weapons[nextWeapon].owner) ||
+                            !player.CreateBuffers(program)) { return 1; }
                     }
                     pendingWeapon = nextWeapon;
                     swapEventAccepted = false;
@@ -984,7 +983,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
             if (gameContext != nullptr && !vitals.dead) { gameContext->profile.activeWeaponSlot = equippedWeaponSlot; }
         }
-        
+
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::AfterKeys, frame);
             if (result >= 0) { return result; }
@@ -1022,7 +1021,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         if (worldPaused) { accumulator = 0; }
         if (!worldPaused && capturePath.empty()) { accumulator += static_cast<int>(std::min<std::uint64_t>(now - previous, 100)); }
         previous = now;
-        
+
         if (performanceStudy) {
             if (!development->performanceRealtimeStudy) { accumulator = 16; }
             if (performancePilot) { performancePilot->Update(16, moveX, moveY); }
@@ -1053,7 +1052,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         if (paused || shopOpen) { musicScale = 0.5f; }
         music.SetVolume(musicScale);
         music.Update();
-        
+
         frame.forceFire = false;
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::BeforeSimulation, frame);
@@ -1070,8 +1069,8 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
             if (!session.HasHud()) { survivalHud.Advance(16); }
             if (!vitals.dead && pendingWeapon < weapons.size() && !swapEventAccepted) {
-                SetPlayerInput(player, false, false);
-                swapEventAccepted = player.weapon->brother.OnSwapGun();
+                player.SetInput(false, false);
+                swapEventAccepted = player.OnSwapGun();
             }
             if (!vitals.dead || launch.localLive || launch.deathmatch) {
                 bool shoot = pendingWeapon >= weapons.size() &&
@@ -1083,14 +1082,14 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 // CLevel::UpdateAfterDeath keeps an already-used powerup alive.
                 session.UpdateAfterDeath(16);
             }
-            if (pendingWeapon < weapons.size() && player.weapon->brother.TakeWeaponSwap()) {
+            if (pendingWeapon < weapons.size() && player.TakeWeaponSwap()) {
                 scene.RetireOwner(kPlayerCombatId);
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::BeforeWeaponSwap, frame);
             if (result >= 0) { return result; }
         }
-                SelectPlayerUIWeapon(player, pendingEquippedSlot == primaryEquippedSlot);
-                
+                player.SelectWeapon(pendingEquippedSlot == primaryEquippedSlot);
+
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::AfterWeaponSwap, frame);
             if (result >= 0) { return result; }
@@ -1102,7 +1101,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 player.gunResource.packHash = weapons[weaponSlot].packHash;
                 player.gunResource.localIndex = static_cast<std::uint8_t>(weapons[weaponSlot].ordinal);
                 player.masteryExperience = gameContext->profile.GetWeaponExperience(player.gunResource);
-                player.ActiveWeapon().gun.SetMasteryExperience(player.masteryExperience);
+                player.ActiveWeapon().SetMasteryExperience(player.masteryExperience);
                 gameContext->profile.activeWeaponSlot = equippedWeaponSlot;
                 pendingWeapon = weapons.size();
 
@@ -1121,7 +1120,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
             accumulator -= 16;
         }
-        
+
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::AfterSimulation, frame);
             if (result >= 0) { return result; }
@@ -1169,13 +1168,13 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         // shares the same depth buffer.
         // Correction: the shared queue now clears depth per model and sorts
         // BOTH brothers and enemies among props, preserving internal depth.
-        ZPlayerModel *drawBrother = nullptr;
+        CBrother *drawBrother = nullptr;
         if (withBrother) {
             drawBrother = &brotherModel;
         }
         DrawMapObjects(loaded, batch, program, mvp, true, &scene, drawBrother, brother.y, width);
         scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
-        
+
         if (launch.scenario != nullptr) {
             const int result = launch.scenario->OnStage(ZSurvivalPhase::WorldDrawn, state);
             if (result >= 0) { return result; }
@@ -1253,7 +1252,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         if (!powerups.GetPowerup().Draw() || (launch.localLive && !peerPowerups.GetPowerup().Draw())) { return 1; }
         if (gameContext != nullptr && gameContext->debugTutorial &&
             !survivalHud.DrawTutorialDebugNotice(window.GetTicksMs())) { return 1; }
-        
+
         if (frameDriver != nullptr) {
             const int result = frameDriver->OnFrame(ZSurvivalFramePhase::Drawn, frame);
             if (result >= 0) { return result; }
@@ -1280,7 +1279,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             if (!Capture::SaveFrame(window, DevelopmentPath("flock-" + std::to_string(performanceFrame + 1) + ".png"))) { return 1; }
         }
         window.Present();
-        
+
         if (performanceStudy) {
             const auto performanceEnd = std::chrono::steady_clock::now();
             const double updateMs = std::chrono::duration<double, std::milli>(performanceUpdated - performanceStart).count();

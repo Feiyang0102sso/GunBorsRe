@@ -59,7 +59,7 @@ void PopulateSurvivalDebugInfo(ZInputPadState &state, const CLevel &scene,
     state.showCollisions = collisions;
 }
 
-void PopulateDebugBuffs(ZInputPadState &state, const ZPlayerModel &player) {
+void PopulateDebugBuffs(ZInputPadState &state, const CBrother &player) {
     state.buffs.clear();
     const int buffTimers[] = {player.powerups.shieldMs, player.powerups.frenzyMs[0],
         player.powerups.frenzyMs[1], player.powerups.frenzyMs[2], player.powerups.autoFireMs, player.powerups.legacyFrenzyMs};
@@ -71,7 +71,7 @@ void PopulateDebugBuffs(ZInputPadState &state, const ZPlayerModel &player) {
             DebugConfig::Text::BuffNames[index], (buffTimers[index] + 999) / 1000);
         state.buffs += buffText;
     }
-    if (player.weapon->brother.IsTurretActive()) { state.buffs += "   "; state.buffs += DebugConfig::Text::Turret; }
+    if (player.IsTurretActive()) { state.buffs += "   "; state.buffs += DebugConfig::Text::Turret; }
 }
 
 void DrawSurvivalDebugInfo(ZMovieRenderer &movies, const ZInputPadState &state) {

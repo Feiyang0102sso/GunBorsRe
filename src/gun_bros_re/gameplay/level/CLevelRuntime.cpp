@@ -98,7 +98,7 @@ bool CLevel::TouchesPickup(float x, float y) const {
         m_actor.previousX - m_actor.x, m_actor.previousY - m_actor.y, x, y, m_playerRadius + 10) <= 1;
 }
 
-void CLevel::BindCombat(const std::vector<ZEnemyTemplateData> &catalog, ZPlayerModel &player,
+void CLevel::BindCombat(const std::vector<ZEnemyTemplateData> &catalog, CBrother &player,
     ZPlayerVitals &vitals, float playerGameScale) {
     m_catalog = &catalog;
     m_playerModel = &player;

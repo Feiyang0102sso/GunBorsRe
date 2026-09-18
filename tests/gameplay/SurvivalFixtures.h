@@ -14,7 +14,7 @@ struct SurvivalRewardsFixture {
     CInputPad & survivalHud;
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
 };
 
@@ -33,10 +33,10 @@ struct SurvivalDeathFixture {
     ZShaderProgram & program;
     ZQuadBatch & batch;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
     CBrotherAI & brother;
-    ZPlayerModel & brotherModel;
+    CBrother & brotherModel;
     CGame & session;
     float startX;
     float startY;
@@ -54,7 +54,7 @@ struct SurvivalBossFixture {
     ZWindow & window;
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
     CGame & session;
     float startX;
@@ -74,7 +74,7 @@ struct SurvivalFeedbackFixture {
     CInputPad & survivalHud;
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
     CGame & session;
     MapDetail::ZMapPropWorld & props;
@@ -119,7 +119,7 @@ struct SurvivalBrotherPoseFixture {
     bool withBrother;
     CLevel & scene;
     CBrotherAI & brother;
-    ZPlayerModel & brotherModel;
+    CBrother & brotherModel;
 };
 
 struct SurvivalTutorialFixture {
@@ -133,7 +133,7 @@ struct SurvivalTutorialFixture {
     CPlayerProgress & progress;
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     std::size_t & weaponSlot;
     unsigned & equippedWeaponSlot;
     CLevel & scene;
@@ -166,11 +166,11 @@ struct SurvivalWavesFixture {
     ZWindow & window;
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     std::size_t & weaponSlot;
     CLevel & scene;
     CBrotherAI & brother;
-    ZPlayerModel & brotherModel;
+    CBrother & brotherModel;
     CGame & session;
     MapDetail::ZMapPropWorld & props;
     bool tutorial;
@@ -229,10 +229,10 @@ struct SurvivalSceneFixture {
     ZShaderProgram & program;
     ZQuadBatch & batch;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
     CBrotherAI & brother;
-    ZPlayerModel & brotherModel;
+    CBrother & brotherModel;
     CGame & session;
     CInputPad & survivalHud;
     CPlayerProgress & progress;

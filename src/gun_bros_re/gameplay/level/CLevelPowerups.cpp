@@ -4,7 +4,7 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -23,13 +23,13 @@ bool CLevel::UsePowerup(CPowerUpSelector &selector, const ZPowerupEntry &entry, 
 }
 
 bool CLevel::CommitPowerupUse(CPowerUpSelector &selector, const GameObjectRef &resource, unsigned count) {
-    if (!ZDeathmatchBot::HasUnlimitedInventory(selector) && !selector.m_profile->ConsumePowerup(resource, count)) {
+    if (!ZLocalPVPBot::HasUnlimitedInventory(selector) && !selector.m_profile->ConsumePowerup(resource, count)) {
         ++selector.failures;
         return false;
     }
     selector.consumed += count;
     if (selector.m_match != nullptr) {
-        ZDeathmatchBot::CommitPowerupBudget(selector, resource);
+        ZLocalPVPBot::CommitPowerupBudget(selector, resource);
         for (const auto &entry : selector.m_resources.m_powerups) {
             if (entry.resource.packHash == resource.packHash && entry.resource.localIndex == resource.localIndex) {
                 selector.m_cooldowns[resource.localIndex] = entry.data.field124 * 1000;

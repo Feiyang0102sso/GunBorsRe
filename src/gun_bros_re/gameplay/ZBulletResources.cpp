@@ -15,7 +15,7 @@ ZBulletVisual *ZBulletResources::Get(const GameObjectRef &ref) {
     CArrayInputStream stream(payload);
     if (!visual->data.Init(stream)) { return nullptr; }
     if (visual->data.HasMesh() && visual->data.HasImage()) {
-        visual->mesh.reset(new ZPlayerPart());
+        visual->mesh.reset(new ZBulletVisual::Mesh());
         const CGameAssetRef &mesh = visual->data.GetMeshRef();
         const CGameAssetRef &atlas = visual->data.GetImageRef();
         if (!LoadMeshAndAtlas(m_tables, "projectile", mesh.packHash, mesh.assetId, atlas.packHash,

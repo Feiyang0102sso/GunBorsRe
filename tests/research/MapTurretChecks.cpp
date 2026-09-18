@@ -106,7 +106,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     if (!preview.Empty()) { ++failures; }
     // Run the real game prop host: message 0 advances both original indicator scripts.
     ZPackTables tables(toc);
-    ZPlayerModel player;
+    CBrother player;
     ZPlayerVitals vitals;
     std::vector<ZEnemyTemplateData> catalog;
     CLevel scene(toc, tables, program);

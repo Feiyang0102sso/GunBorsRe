@@ -93,6 +93,9 @@ struct ZGunCue {
     int forceMs = 0;
 };
 
+class ZPackTables;
+class ZShaderProgram;
+
 class CGun : public ZGameScriptObject {
 public:
     class Template {
@@ -137,6 +140,12 @@ public:
     ~CGun();
     CGun(const CGun &) = delete;
     CGun &operator=(const CGun &) = delete;
+    /** Load the original BIG mesh/atlas references, then bind the owned template. */
+    bool Load(ZPackTables &tables, const Template &data, const std::string &owner);
+    /** Mesh identities used by the brother's move controllers. */
+    std::vector<const CMesh *> GetBodyMeshes() const;
+    bool CreateBuffers(const ZShaderProgram &program);
+
     /** Bind before OnEquip; overrides refer to this template's move set. */
     void Bind(const Template &data, const CMesh *mesh, bool beam = false);
     void OnEquip();
@@ -168,6 +177,10 @@ public:
     std::vector<ZGunCue> TakeCues();
 
 private:
+    friend class CBrother;
+    struct Drawing;
+    std::unique_ptr<Drawing> m_drawing;
+    Template m_templateData;
     void DetachBullets();
     std::vector<CBullet *> m_bullets;
     const Template *m_template;

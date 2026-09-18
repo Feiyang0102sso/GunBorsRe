@@ -379,23 +379,23 @@ std::size_t CLevel::GetTrailCount() const {
 std::size_t CLevel::GetShotCount() const { return m_shotsFired; }
 std::size_t CLevel::GetSoundCueCount() const { return m_combatAudio->GetSoundCueCount(); }
 
-void CLevel::EmitBrother(ZPlayerModel &player, const float *modelToScene, float facingDegrees,
+void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float facingDegrees,
     ZCombatId owner, const ZWeaponCollision *collision) {
     if (!player.weapon) { return; }
-    const auto strengthening = player.weapon->brother.GetPowerupParticles();
+    const auto strengthening = player.GetPowerupParticles();
     strengthening->x = modelToScene[3]; strengthening->y = modelToScene[7];
     m_brotherParticles[owner] = strengthening;
-    for (const ZGunCue &cue : player.weapon->brother.TakeCues()) {
+    for (const ZGunCue &cue : player.TakeCues()) {
         if (cue.kind == ZGunCue::Kind::Grenade) {
-            if (!player.weapon->brother.CanThrowGrenade(cue.hand)) { continue; }
+            if (!player.CanThrowGrenade(cue.hand)) { continue; }
             ZMeshBoneTransform origin{};
             // GetGunNodeLocation(1) uses torso node 2, independently of the gun.
-            if (!player.weapon->brother.GetTorso().GetAnimation().GetNodeAt(2, origin)) { continue; }
+            if (!player.GetTorso().GetAnimation().GetNodeAt(2, origin)) { continue; }
             const float x = modelToScene[0] * origin.posX + modelToScene[1] * origin.posY + modelToScene[2] * origin.posZ + modelToScene[3];
             const float y = modelToScene[4] * origin.posX + modelToScene[5] * origin.posY + modelToScene[6] * origin.posZ + modelToScene[7];
             const float z = modelToScene[8] * origin.posX + modelToScene[9] * origin.posY + modelToScene[10] * origin.posZ + modelToScene[11];
             if (SpawnProjectile(cue.resource, x, y, z, facingDegrees - 90, cue.speed, owner, 0) != 0) {
-                player.weapon->brother.OnGrenadeThrown(cue.hand);
+                player.OnGrenadeThrown(cue.hand);
             }
             continue;
         }
@@ -412,16 +412,16 @@ void CLevel::EmitBrother(ZPlayerModel &player, const float *modelToScene, float 
         }
         Emit(cue, modelToScene[3], modelToScene[7], 0, facingDegrees - 90, owner, cue.hand, -1, -1);
     }
-    for (const ZMoveSoundRef &sound : player.weapon->brother.GetTorso().TakeSounds()) {
+    for (const ZMoveSoundRef &sound : player.GetTorso().TakeSounds()) {
         m_combatAudio->PlayWav(sound.packHash, sound.localIndex, false, owner);
     }
-    for (const ZMoveSoundRef &sound : player.weapon->brother.GetLegs().TakeSounds()) {
+    for (const ZMoveSoundRef &sound : player.GetLegs().TakeSounds()) {
         m_combatAudio->PlayWav(sound.packHash, sound.localIndex, false, owner);
     }
     const float direction = facingDegrees - 90.0f;
     // CLevel::UpdateNormal iterates a growing object list: bullets spawned
     // by a player are advanced before their first draw in the same tick.
-    for (const ZGunCue &cue : player.ActiveWeapon().gun.TakeCues()) {
+    for (const ZGunCue &cue : player.ActiveWeapon().TakeCues()) {
         if (cue.kind == ZGunCue::Kind::Sound || cue.kind == ZGunCue::Kind::LoopSound || cue.kind == ZGunCue::Kind::StopSound) {
             m_combatAudio->PlayCue(cue, owner);
             continue;
@@ -442,10 +442,10 @@ void CLevel::EmitBrother(ZPlayerModel &player, const float *modelToScene, float 
             shot->weapon = player.gunResource;
             shot->weaponSlot = player.gunSlot;
             shot->followsMuzzle = true;
-            shot->weaponMasteryLimit = player.ActiveWeapon().data.GetMasteryLimit();
+            shot->weaponMasteryLimit = player.ActiveWeapon().GetTemplate()->GetMasteryLimit();
             float masteryRoll = 1;
-            if (player.ActiveWeapon().gun.GetMasteryLevel() > 0) { masteryRoll = RandomProjectile(0, 1); }
-            shot->masteryDamageMultiplier = player.ActiveWeapon().gun.GetMasteryDamageMultiplier(masteryRoll, &shot->critical);
+            if (player.ActiveWeapon().GetMasteryLevel() > 0) { masteryRoll = RandomProjectile(0, 1); }
+            shot->masteryDamageMultiplier = player.ActiveWeapon().GetMasteryDamageMultiplier(masteryRoll, &shot->critical);
             if (m_projectileWorld != nullptr) { shot->powerupMultiplier = m_projectileWorld->GetProjectilePowerupMultiplier(owner); }
             shot->part = hand;
             shot->visual = visual;
@@ -457,7 +457,7 @@ void CLevel::EmitBrother(ZPlayerModel &player, const float *modelToScene, float 
             shot->beam = (visual->data.GetFlags() & kBeamFlag) != 0;
             if (m_projectileWorld != nullptr) { shot->SetLevelContext(m_projectileWorld->GetScriptLevel()); }
             shot->Bind(visual->data, cue.alternate);
-            player.ActiveWeapon().gun.AddBullet(*shot);
+            player.ActiveWeapon().AddBullet(*shot);
             // CBullet::Fire :62212-62243 tests owner -> muzzle before movement.
             // A zero-speed mine can already be beyond the terrain at birth.
             if (collision != nullptr) {
@@ -484,7 +484,7 @@ void CLevel::EmitBrother(ZPlayerModel &player, const float *modelToScene, float 
     }
 }
 
-void CLevel::Update(ZPlayerModel &player, const float *modelToScene, float facingDegrees,
+void CLevel::Update(CBrother &player, const float *modelToScene, float facingDegrees,
     int deltaMs, const ZWeaponCollision *collision) {
     // Combat time, for the move-sound window in PlayWav. Advanced before the
     // early exit so a scene without a player still ages its cues.

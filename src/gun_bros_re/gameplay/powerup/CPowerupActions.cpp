@@ -3,14 +3,14 @@
  * Script-only research emits actions; a bound runtime mutates its actor directly.
  */
 #include "gun_bros_re/gameplay/powerup/CPowerup.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "engine/core/CStringToKey.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 
-void CPowerup::BindActor(ZPlayerModel &player, ZPlayerVitals &vitals) {
+void CPowerup::BindActor(CBrother &player, ZPlayerVitals &vitals) {
     m_player = &player;
     m_vitals = &vitals;
 }
@@ -29,7 +29,7 @@ ZPowerupStatus CPowerup::ReadActorStatus() const {
     ZPowerupStatus status;
     status.healthPercent = static_cast<int>(std::lround(m_vitals->health * 100 / m_vitals->maximum));
     if (!m_player->weapon) { return status; }
-    const CBrother &brother = m_player->weapon->brother;
+    const CBrother &brother = (*m_player);
     status.shield = brother.IsShield();
     status.frenzy = brother.IsFrenzy();
     status.autoFire = brother.IsAutoFire();
@@ -40,7 +40,7 @@ ZPowerupStatus CPowerup::ReadActorStatus() const {
 
 bool CPowerup::ApplyActorAction(const ZPowerupAction &action) {
     if (!m_player->weapon) { return false; }
-    CBrother &brother = m_player->weapon->brother;
+    CBrother &brother = (*m_player);
     if (action.function == 10) {
         if (!m_vitals->dead) { m_vitals->health = std::min(m_vitals->maximum, m_vitals->health + action.arguments[0]); }
     } else if (action.function == 11) {
@@ -76,7 +76,7 @@ bool CPowerup::ApplyActorAction(const ZPowerupAction &action) {
 unsigned CPowerup::TakeThrownPowerups(GameObjectRef &resource) {
     resource = {};
     if (m_player == nullptr || !m_player->weapon) { return 0; }
-    CBrother &brother = m_player->weapon->brother;
+    CBrother &brother = (*m_player);
     const unsigned thrown = brother.TakeThrownGrenades(0);
     if (thrown > 0) {
         resource = m_pendingGrenade;

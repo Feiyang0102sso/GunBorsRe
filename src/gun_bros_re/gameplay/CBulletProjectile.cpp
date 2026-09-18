@@ -27,7 +27,7 @@ bool ZProjectileView::PastBounds(float x, float y, float radius, float velocityX
 }
 
 void CBullet::UpdateProjectile(ZProjectileWorld *world, ZSpriteRenderer &sprites,
-    const ZProjectileView &view, ZPlayerModel &player, const float *modelToScene,
+    const ZProjectileView &view, CBrother &player, const float *modelToScene,
     float facingDegrees, int deltaMs, const ZWeaponCollision *collision, std::uint32_t &randomState) {
     int shotDeltaMs = deltaMs;
     if (ownerType == 1 && world != nullptr) {
@@ -75,7 +75,7 @@ void CBullet::UpdateProjectile(ZProjectileWorld *world, ZSpriteRenderer &sprites
     if (!hitWall && beam) {
         const float beamLength = static_cast<float>(maximumBeamLength);
         if (followsMuzzle && owner == kPlayerCombatId) {
-            if (!player.ActiveWeapon().gun.IsShooting()) { removed = true; }
+            if (!player.ActiveWeapon().IsShooting()) { removed = true; }
             ProjectMuzzle(player, modelToScene, source.hand, source.node, x, y, z);
             direction = facingDegrees - 90;
         } else if (followsMuzzle && world != nullptr && !world->Anchor(owner, part,

@@ -7,6 +7,7 @@
 #include "gun_bros_re/gameplay/CBullet.h"
 
 #include <cstdio>
+#include "gun_bros_re/gameplay/CGunDrawing.h"
 #include <algorithm>
 
 namespace {
@@ -143,7 +144,8 @@ void CGun::OnBulletRemoved(CBullet &bullet) {
 void CGun::Bind(const Template &data, const CMesh *mesh, bool beam) {
     DetachBullets();
     m_beam = beam;
-    m_template = &data;
+    m_templateData = data;
+    m_template = &m_templateData;
     m_overrides.assign(11, -1);
     m_cues.clear();
     m_ammo = 1;
@@ -155,7 +157,7 @@ void CGun::Bind(const Template &data, const CMesh *mesh, bool beam) {
     m_heatIntensity = 0.0f;
     m_targetHeat = 0.0f;
     m_animation.SetMesh(mesh);
-    m_interpreter.SetScript(data.GetScript(), *this);
+    m_interpreter.SetScript(m_templateData.GetScript(), *this);
 }
 
 void CGun::OnEquip() {

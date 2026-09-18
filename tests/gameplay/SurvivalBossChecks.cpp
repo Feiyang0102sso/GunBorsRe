@@ -109,7 +109,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         const ZEnemyTemplateData *bossData = boss->data;
         std::size_t bossEntry = static_cast<std::size_t>(bossData - enemies.data());
         CLevel blastScene(toc, tables, program);
-    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
         for (unsigned kind = 0; kind < 3; ++kind) {
             blastScene.Reset();
             vitals.invincible = true;
@@ -254,13 +254,13 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                     // pack5 Boss @0xACD explicitly sets HP to 1 * REV before
                     // ApplyCollision, so its fourth frag is an authored kill.
                     if (number == 3) {
-                        expectedDamage = 100 * PlayerArmorMultiplier(player, 1);
+                        expectedDamage = 100 * player.GetArmorMultiplier(1);
                         if (packShortName == "pack12") { expectedDamage = before; }
                     }
                     if (std::abs(before - blastEnemy.combat.health - expectedDamage) > 0.01f) { ++checkFailures; }
                     std::printf("[boss-rev10-grenade-check] %s wave=%d throw=%u initial=%.1f hp=%.1f damage=%.1f expected=%.1f armor-attack=%.2f failures=%u\n",
                         packShortName.c_str(), wave, number + 1, health, blastEnemy.combat.health,
-                        before - blastEnemy.combat.health, expectedDamage, PlayerArmorMultiplier(player, 1), checkFailures);
+                        before - blastEnemy.combat.health, expectedDamage, player.GetArmorMultiplier(1), checkFailures);
                 }
             }
         }

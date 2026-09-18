@@ -54,7 +54,7 @@ class CParticlePool;
 class ZSpriteRenderer;
 class ZEffectColors;
 class ZShaderProgram;
-struct ZPlayerModel;
+class CBrother;
 struct ZBulletVisual;
 struct ZEffectProjection;
 
@@ -142,7 +142,7 @@ public:
 
     /** CBullet::Update owns travel, ray/actor collision and culling. */
     void UpdateProjectile(ZProjectileWorld *world, ZSpriteRenderer &sprites,
-        const ZProjectileView &view, ZPlayerModel &player, const float *modelToScene,
+        const ZProjectileView &view, CBrother &player, const float *modelToScene,
         float facingDegrees, int deltaMs, const ZWeaponCollision *collision, std::uint32_t &randomState);
     /** Original bullet sprite/mesh/arc draw; callers provide the Windows renderer. */
     void DrawProjectile(ZSpriteRenderer &sprites, ZEffectColors &colors, const ZShaderProgram &program,

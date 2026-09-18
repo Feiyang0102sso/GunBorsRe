@@ -23,11 +23,11 @@ void Transform(const float *matrix, float localX, float localY, float localZ,
 void CLevel::PlayerMatrix(float *matrix) const {
     float identity[16];
     Matrix4dIdentity(identity);
-    const float scale = PlayerModelWorldScale(*m_playerModel, m_playerGameScale, m_cameraScale);
-    BuildPlayerGameMatrix(identity, m_actor.x, m_actor.y, scale, m_actor.facing, matrix);
+    const float scale = m_playerModel->GetWorldScale(m_playerGameScale, m_cameraScale);
+    MeshCameraBuildGameMatrix(identity, m_actor.x, m_actor.y, scale, m_actor.facing, matrix);
 }
 
-void CLevel::SetBrother(ZPlayerModel *model, CBrotherAI *brother) {
+void CLevel::SetBrother(CBrother *model, CBrotherAI *brother) {
     m_brotherModel = model;
     m_brother = brother;
 }
@@ -42,7 +42,7 @@ void CLevel::SetBrotherWeapons(const CScript &script, const CGun::Template &pist
 bool CLevel::RequestBrotherWeaponSwap() {
     if (IsDeathmatch()) { return RequestMatchWeaponSwap(1); }
     if (m_brother == nullptr || m_brotherModel == nullptr || m_brotherScript == nullptr || m_brother->vitals.dead) { return false; }
-    return m_brotherModel->weapon->brother.OnSwapGun();
+    return m_brotherModel->OnSwapGun();
 }
 
 bool CLevel::SwapBrotherWeapon() {
@@ -53,10 +53,10 @@ bool CLevel::SwapBrotherWeapon() {
     // CBrother native 3 changes the gun while the same body/script continues
     // the swap sequence. Reuse the two stable banks used by the local player.
     if (m_brotherModel->uiOtherWeapon == nullptr) {
-        if (!PreparePlayerUIWeapon(*m_tables, *m_brotherWeapons[1], "AI brother swap", *m_brotherModel) ||
-            !CreatePlayerBuffers(*m_brotherModel, *m_program)) { return false; }
+        if (!m_brotherModel->PrepareSecondaryWeapon(*m_tables, *m_brotherWeapons[1], "AI brother swap") ||
+            !m_brotherModel->CreateBuffers(*m_program)) { return false; }
     }
-    SelectPlayerUIWeapon(*m_brotherModel, next == 0);
+    m_brotherModel->SelectWeapon(next == 0);
     m_brotherWeaponSlot = next;
     m_brotherModel->gunSlot = next;
     m_brotherModel->gunResource = m_gunConfigurations[1][next];
@@ -85,8 +85,8 @@ void CLevel::ResetBrotherPosition(float x, float y, float facingDegrees) {
 void CLevel::BrotherMatrix(float *matrix) const {
     float identity[16];
     Matrix4dIdentity(identity);
-    const float scale = PlayerModelWorldScale(*m_brotherModel, m_playerGameScale, m_cameraScale);
-    BuildPlayerGameMatrix(identity, m_brother->x, m_brother->y, scale, m_brother->facing, matrix);
+    const float scale = m_brotherModel->GetWorldScale(m_playerGameScale, m_cameraScale);
+    MeshCameraBuildGameMatrix(identity, m_brother->x, m_brother->y, scale, m_brother->facing, matrix);
 }
 
 ZCombatId CLevel::FindBrotherTarget(float x, float y, float radius) {
@@ -183,9 +183,9 @@ bool CLevel::Anchor(ZCombatId id, int part, int node, float &x, float &y, float 
             x = m_brother->x; y = m_brother->y; z = 0; direction = m_brother->facing - 90;
             return !m_brother->vitals.dead;
         }
-        if (m_brother->vitals.dead || !m_brotherModel->weapon->gun.IsShooting()) { return false; }
+        if (m_brother->vitals.dead || !m_brotherModel->weapon->IsShooting()) { return false; }
         ZMeshBoneTransform muzzle;
-        if (!GetPlayerMuzzle(*m_brotherModel, part, node, muzzle)) { return false; }
+        if (!m_brotherModel->GetMuzzle(part, node, muzzle)) { return false; }
         float matrix[16];
         BrotherMatrix(matrix);
         Transform(matrix, muzzle.posX, muzzle.posY, muzzle.posZ, x, y, z);

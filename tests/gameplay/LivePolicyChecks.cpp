@@ -1,9 +1,10 @@
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 /** Exercise Live decisions against the real BIG catalog and actor instances. */
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/gameplay/ZLiveShopSession.h"
 
 int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, CProfileManager &profile) {
+    std::uint32_t powerupChoice = 0;
     ZLiveShopSession shop;
     if (!shop.RequestForWave(1, 0, 0, false) || !shop.Close(1) ||
         shop.RequestForWave(1, 1000, 0, false) ||
@@ -81,9 +82,9 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, 
     item.localIndex = 0;
     profile.AddPowerup(item, 1);
     last.dead = true;
-    if (ZLocalCoopBot::UseAnyPowerup(powerups) || profile.GetPowerupCount(item) != 1 || powerups.GetPowerup().IsPresentationActive()) { return 1; }
+    if (ZLocalCoopBot::UseAnyPowerup(powerups, powerupChoice) || profile.GetPowerupCount(item) != 1 || powerups.GetPowerup().IsPresentationActive()) { return 1; }
     last.dead = false;
-    if (!ZLocalCoopBot::UseAnyPowerup(powerups) || profile.GetPowerupCount(item) != 0 || !powerups.GetPowerup().IsPresentationActive()) { return 1; }
+    if (!ZLocalCoopBot::UseAnyPowerup(powerups, powerupChoice) || profile.GetPowerupCount(item) != 0 || !powerups.GetPowerup().IsPresentationActive()) { return 1; }
     if (session.StartBossSkip()) { return 1; }
     for (unsigned elapsed = 0; elapsed < 15000 && powerups.GetPowerup().IsPresentationActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
     if (powerups.GetPowerup().IsPresentationActive() || powerups.failures != 0) { return 1; }

@@ -22,7 +22,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         // A separate world exercises empty-wave minimums and damage rejection
         // without putting fixture currency into the actual survival/profile run.
         CLevel rewardProbe(toc, tables, program);
-        rewardProbe.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+        rewardProbe.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
         CLevel::Template percentageTemplate;
         CMap percentageMap;
         rewardProbe.Bind(percentageTemplate, percentageMap);
@@ -120,7 +120,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         for (unsigned death = 0; death < 3; ++death) {
             ZCombatEnemy *target = rewardProbe.Spawn(0, 600, 350);
             if (target == nullptr) { ++checkFailures; break; }
-            const unsigned experience = static_cast<unsigned>(std::ceil(target->data->experienceReward * PlayerArmorMultiplier(player, 3)));
+            const unsigned experience = static_cast<unsigned>(std::ceil(target->data->experienceReward * player.GetArmorMultiplier(3)));
             if (death == 0) { expectedExperience = experience; }
             ZCombatHit hit;
             hit.owner = kPlayerCombatId;

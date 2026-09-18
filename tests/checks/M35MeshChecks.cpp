@@ -34,7 +34,7 @@
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
@@ -52,7 +52,6 @@
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
-#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
@@ -107,9 +106,9 @@ int RunWeaponCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
     ZPackTables tables(toc);
     std::vector<ZWeaponEntry> weapons;
-    ZPlayerTemplateData playerTemplate;
+    CBrother::Template playerTemplate;
     if (!LoadWeaponCatalog(toc, tables, weapons) ||
-        !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
+        !playerTemplate.Load(toc, tables)) { return 1; }
 
     // Test the input mapping independently of each category's catalogue size.
     for (std::size_t i = 0; i < weapons.size(); ++i) {
@@ -167,42 +166,42 @@ int RunWeaponCheck(const std::string &bigDirectory) {
     for (std::size_t i = 0; i < weapons.size(); ++i) {
         if (!window.PumpEvents()) { return 1; }
         effects.Clear();
-        ZPlayerModel player;
+        CBrother player;
         const ZWeaponEntry &entry = weapons[i];
-        if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
-            !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-            !CreatePlayerBuffers(player, program)) { return 1; }
+        if (!player.BuildBody(tables, playerTemplate.GetMoveSet()) ||
+            !player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+            !player.CreateBuffers(program)) { return 1; }
         // Real thresholds exercise each boundary and both critical outcomes;
         // restoring zero keeps the existing firing regression at base mastery.
         if (entry.hasStoreEntry && entry.data.GetMasteryLimit() > 0) {
             for (unsigned tier = 0; tier < 3; ++tier) {
                 const unsigned threshold = entry.data.GetMasteryThreshold(tier);
-                player.weapon->gun.SetMasteryExperience(threshold - 1);
-                if (player.weapon->gun.GetMasteryLevel() != tier) { return 1; }
-                player.weapon->gun.SetMasteryExperience(threshold);
+                player.weapon->SetMasteryExperience(threshold - 1);
+                if (player.weapon->GetMasteryLevel() != tier) { return 1; }
+                player.weapon->SetMasteryExperience(threshold);
                 // Some scripted launchers intentionally have a zero fire-rate
                 // field; their attack state sets the timer itself.
-                if (player.weapon->gun.GetMasteryLevel() != tier + 1 || player.weapon->gun.GetMasterySpeedMod() < 100 ||
-                    player.weapon->gun.GetMasteryDamageMultiplier(0) <
-                    player.weapon->gun.GetMasteryDamageMultiplier(1)) {
+                if (player.weapon->GetMasteryLevel() != tier + 1 || player.weapon->GetMasterySpeedMod() < 100 ||
+                    player.weapon->GetMasteryDamageMultiplier(0) <
+                    player.weapon->GetMasteryDamageMultiplier(1)) {
                     std::printf("[mastery-check] FAIL %s tier=%u threshold=%u level=%u speed=%u interval=%u normal=%.2f critical=%.2f\n",
-                        entry.owner.c_str(), tier, threshold, player.weapon->gun.GetMasteryLevel(), player.weapon->gun.GetMasterySpeedMod(),
-                        player.weapon->gun.GetFireRateMs(), player.weapon->gun.GetMasteryDamageMultiplier(1), player.weapon->gun.GetMasteryDamageMultiplier(0));
+                        entry.owner.c_str(), tier, threshold, player.weapon->GetMasteryLevel(), player.weapon->GetMasterySpeedMod(),
+                        player.weapon->GetFireRateMs(), player.weapon->GetMasteryDamageMultiplier(1), player.weapon->GetMasteryDamageMultiplier(0));
                     return 1;
                 }
             }
-            player.weapon->gun.SetMasteryExperience(0);
+            player.weapon->SetMasteryExperience(0);
         }
-        BuildPlayerGameMatrix(identity, 400, 450,
-            PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
+        MeshCameraBuildGameMatrix(identity, 400, 450,
+            player.GetWorldScale(playerTemplate.GetGameScale(), 1), 0, modelToScene);
         if (i == 0) {
             // Actual core pistol bullet, isolated from input timing. Original
             // native factors 0, 0.5, 1 and 2 produce these 100ms distances.
             for (const std::int16_t factor : {0, 128, 256, 512}) {
                 effects.Clear();
-                player.weapon->gun.TakeCues();
+                player.weapon->TakeCues();
                 const std::int16_t fire[] = {0, 0, 0, 0, factor};
-                player.weapon->gun.FunctionResolver(1, fire, 5);
+                player.weapon->FunctionResolver(1, fire, 5);
                 effects.EmitBrother(player, modelToScene, 0, kPlayerCombatId);
                 const auto before = effects.GetProjectileStates();
                 effects.Update(player, modelToScene, 0, 100);
@@ -217,8 +216,8 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             // Regression: the default pistols must use the gun's player moves
             // and two distinct hands, even though the mesh is shared with rifles.
             ZMeshBoneTransform right{}, left{};
-            if (!player.weapon->brother.TorsoUsesWeapon() || entry.data.GetHandedness() != 2 ||
-                !GetPlayerMuzzle(player, 0, 0, right) || !GetPlayerMuzzle(player, 1, 0, left) ||
+            if (!player.TorsoUsesWeapon() || entry.data.GetHandedness() != 2 ||
+                !player.GetMuzzle(0, 0, right) || !player.GetMuzzle(1, 0, left) ||
                 (right.posX == left.posX && right.posY == left.posY && right.posZ == left.posZ)) {
                 std::printf("[weapon-check] pistol holding regression\n");
                 return 1;
@@ -231,9 +230,9 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             i == 33 || i == 34 || i == 36 || i == 44 || i == 46 || i == 68 || i == 69;
         if (checkLaunch) {
             const std::size_t launchSounds = effects.GetSoundCueCount();
-            SetPlayerInput(player, false, true);
+            player.SetInput(false, true);
             for (int elapsed = 0; elapsed < 160; elapsed += 16) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16);
             }
             if (effects.GetSoundCueCount() == launchSounds) {
@@ -242,17 +241,17 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             }
             std::printf("[weapon-check] %zu launch audio queued before impact\n", i);
             effects.Clear();
-            if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-                !CreatePlayerBuffers(player, program)) { return 1; }
+            if (!player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+                !player.CreateBuffers(program)) { return 1; }
         }
         // Reloading weapons must not loop attack sounds ahead of their next
         // shot. Use real scripts, no movement/impacts, and a held trigger.
         if ((i >= 12 && i <= 15) || (i >= 24 && i <= 26)) {
             const std::size_t startShots = effects.GetShotCount();
             const std::size_t startSounds = effects.GetSoundCueCount();
-            SetPlayerInput(player, false, true);
+            player.SetInput(false, true);
             for (int elapsed = 0; elapsed < 3200; elapsed += 16) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16);
                 if (effects.GetSoundCueCount() - startSounds > effects.GetShotCount() - startShots) {
                     std::printf("[weapon-check] FAIL %zu held attack precedes its projectile at %d ms\n", i, elapsed + 16);
@@ -264,9 +263,9 @@ int RunWeaponCheck(const std::string &bigDirectory) {
                 return 1;
             }
             const std::size_t releaseShots = effects.GetShotCount();
-            SetPlayerInput(player, false, false);
+            player.SetInput(false, false);
             for (int elapsed = 0; elapsed < 1600; elapsed += 16) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16);
             }
             if (effects.GetShotCount() != releaseShots) {
@@ -275,38 +274,38 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             }
             std::printf("[weapon-check] %zu reload keeps attack cues aligned with shots; release stops\n", i);
             effects.Clear();
-            if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-                !CreatePlayerBuffers(player, program)) { return 1; }
+            if (!player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+                !player.CreateBuffers(program)) { return 1; }
         }
         const std::size_t before = effects.GetShotCount();
         const std::size_t soundBefore = effects.GetSoundCueCount();
         if (i == 21) {
-            SetPlayerInput(player, false, true);
+            player.SetInput(false, true);
             int elapsed = 0;
-            while (elapsed < 12000 && player.weapon->gun.CanFire()) {
-                AdvancePlayer(player, 16);
+            while (elapsed < 12000 && player.weapon->CanFire()) {
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16, &impactScene);
                 elapsed += 16;
             }
             if (elapsed >= 12000) { std::printf("[weapon-check] Gatling never overheated\n"); return 1; }
             const std::size_t coolingShots = effects.GetShotCount();
-            SetPlayerInput(player, false, false);
-            AdvancePlayer(player, 16);
+            player.SetInput(false, false);
+            player.Update(16);
             effects.Update(player, modelToScene, 0, 16);
-            SetPlayerInput(player, false, true);
+            player.SetInput(false, true);
             for (int cooling = 0; cooling < 960; cooling += 16) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16);
             }
             if (effects.GetShotCount() != coolingShots) {
                 std::printf("[weapon-check] release/repress bypassed Gatling cooling\n"); return 1;
             }
             for (int cooling = 0; cooling < 1000; cooling += 16) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16);
             }
             if (effects.GetShotCount() == coolingShots) { return 1; }
-            SetPlayerInput(player, false, false);
+            player.SetInput(false, false);
             std::printf("[weapon-check] Gatling cooldown blocks repress and resumes automatically\n");
         }
         // Idle -> walk -> fire while walking -> stationary fire -> release -> fire again.
@@ -315,9 +314,9 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         const int durations[] = {400, 400, 1600, 1600, 800, 800, 4000};
         std::size_t settledReleaseShots = 0;
         for (int phase = 0; phase < 7; ++phase) {
-            SetPlayerInput(player, moving[phase], shooting[phase]);
+            player.SetInput(moving[phase], shooting[phase]);
             for (int elapsed = 0; elapsed < durations[phase]; elapsed += 16) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, modelToScene, 0, 16, &impactScene);
                 if (phase == 6 && elapsed == 2992) { settledReleaseShots = effects.GetShotCount(); }
                 if (i == 12 && phase == 2 && elapsed == 144 && effects.GetParticleCount() > 40) {
@@ -335,7 +334,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             Matrix4dMultiply(sceneMvp, modelToScene, modelMvp);
             effects.Draw(sceneMvp, nullptr, 1.0f, ZWeaponDrawPass::BehindPlayer);
             glEnable(GL_DEPTH_TEST);
-            DrawPlayer(player, program, modelMvp);
+            player.Draw(program, modelMvp);
             effects.Draw(sceneMvp, nullptr, 1.0f, ZWeaponDrawPass::InFrontOfPlayer);
             if (glGetError() != GL_NO_ERROR) { return 1; }
         }
@@ -349,8 +348,8 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         }
         else if (emitted == 0) {
             std::printf("[weapon-check] %zu failed to fire: %s\n", i, entry.name.c_str());
-            std::printf("  mode=%d ammo=%d defaultBullet=%08x:%u exports:", player.weapon->gun.GetFireMode(),
-                *player.weapon->gun.VariableResolver(0), entry.data.GetBulletRef().packHash,
+            std::printf("  mode=%d ammo=%d defaultBullet=%08x:%u exports:", player.weapon->GetFireMode(),
+                *player.weapon->VariableResolver(0), entry.data.GetBulletRef().packHash,
                 entry.data.GetBulletRef().localIndex);
             for (int value : entry.data.GetScript().GetExportFunctions()) { std::printf(" %d", value); }
             std::printf("\n");
@@ -367,7 +366,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         // Verify no continued firing after pending launch callbacks settle.
         bool liveBeam = false;
         for (const auto &shot : effects.GetProjectileStates()) { liveBeam = liveBeam || shot.beam; }
-        if (player.weapon->gun.IsShooting() || liveBeam || effects.GetShotCount() != settledReleaseShots) {
+        if (player.weapon->IsShooting() || liveBeam || effects.GetShotCount() != settledReleaseShots) {
             std::printf("[weapon-check] %zu release left live bullets=%zu\n", i, effects.GetBulletCount());
             return 1;
         }
@@ -385,8 +384,8 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
     ZPackTables tables(toc);
     std::vector<ZWeaponEntry> weapons;
-    ZPlayerTemplateData playerTemplate;
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
+    CBrother::Template playerTemplate;
+    if (!LoadWeaponCatalog(toc, tables, weapons) || !playerTemplate.Load(toc, tables)) { return 1; }
     ZWindow window;
     if (!window.Open("Weapon effect verification", 800, 600)) { return 1; }
     glViewport(0, 0, 800, 600);
@@ -413,20 +412,20 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         rayWorld.targetOffset = 50;
         rayWorld.targetDistance = 100;
         rayWorld.splashDamage.clear();
-        ZPlayerModel player;
-        if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
-            !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-            !CreatePlayerBuffers(player, program)) { return 1; }
-        if (kraken) { player.weapon->gun.SetMasteryExperience(entry.data.GetMasteryThreshold(2)); }
-        BuildPlayerGameMatrix(identity, 400, 540,
-            PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, modelToScene);
-        SetPlayerInput(player, false, true);
+        CBrother player;
+        if (!player.BuildBody(tables, playerTemplate.GetMoveSet()) ||
+            !player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+            !player.CreateBuffers(program)) { return 1; }
+        if (kraken) { player.weapon->SetMasteryExperience(entry.data.GetMasteryThreshold(2)); }
+        MeshCameraBuildGameMatrix(identity, 400, 540,
+            player.GetWorldScale(playerTemplate.GetGameScale(), 1), 0, modelToScene);
+        player.SetInput(false, true);
         unsigned beamFrames = 0, missingFrames = 0;
         unsigned ribbonFrames = 0;
         bool sawBeam = false;
         std::vector<GameObjectRef> seen;
         for (int elapsed = 0; elapsed < 6000; elapsed += 16) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, modelToScene, 0, 16);
             if (effects.GetRibbonCount() > 0) { ++ribbonFrames; }
             bool beam = false;
@@ -507,9 +506,9 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 // not apply the gun's mastery or critical multiplier again.
                 if (std::abs(damage - 5) > 0.001f) { ++failures; }
             }
-            if (rayWorld.splashDamage.empty() || player.weapon->gun.GetMasteryDamageMultiplier(0) <= 1) { ++failures; }
+            if (rayWorld.splashDamage.empty() || player.weapon->GetMasteryDamageMultiplier(0) <= 1) { ++failures; }
             std::printf("[splash-mastery-check] %s mastery=%u explosions=%zu maximum=%.2f expected=5 failures=%u\n",
-                entry.name.c_str(), player.weapon->gun.GetMasteryLevel(), rayWorld.splashDamage.size(), maximumDamage, failures);
+                entry.name.c_str(), player.weapon->GetMasteryLevel(), rayWorld.splashDamage.size(), maximumDamage, failures);
         }
         std::printf("[weapon-effects-check] off-axis-beam-contacts=%u\n", rayWorld.beamContacts);
         std::printf("[weapon-effects-check] weapon=%s beam-frames=%u missing-held-frames=%u\n", entry.name.c_str(), beamFrames, missingFrames);
@@ -517,7 +516,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         rayWorld.targetOffset = 0;
         unsigned clipped = 0;
         for (unsigned tick = 0; tick < 250; ++tick) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, modelToScene, 0, 16);
             for (const auto &shot : effects.GetProjectileStates()) {
                 if (!shot.beam) { continue; }
@@ -529,7 +528,7 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         rayWorld.targetDistance = 11;
         unsigned closeFrames = 0, invisibleFrames = 0;
         for (unsigned tick = 0; tick < 250; ++tick) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, modelToScene, 0, 16);
             bool hasBeam = false;
             for (const auto &shot : effects.GetProjectileStates()) { hasBeam = hasBeam || shot.beam; }
@@ -542,9 +541,9 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
         }
         if (invisibleFrames != 0) { ++failures; }
         std::printf("[weapon-effects-check] close-beam-frames=%u invisible=%u\n", closeFrames, invisibleFrames);
-        SetPlayerInput(player, false, false);
+        player.SetInput(false, false);
         for (unsigned tick = 0; tick < 625; ++tick) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, modelToScene, 0, 16);
         }
         if (effects.GetBulletCount() != 0 || effects.GetRibbonCount() != 0) { ++failures; }
@@ -554,10 +553,10 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     }
     // Mechanical Boss Flow pack6 ENEMY8 references pack1 BULLET16 and
     // pack5 BULLET104. Exercise those real visuals independently of aiming.
-    ZPlayerModel probe;
-    if (!BuildPlayerBody(tables, playerTemplate.moveSet, probe) ||
-        !EquipPlayerWeapon(tables, playerTemplate.script, weapons.front().data, weapons.front().owner, probe) ||
-        !CreatePlayerBuffers(probe, program)) { return 1; }
+    CBrother probe;
+    if (!probe.BuildBody(tables, playerTemplate.GetMoveSet()) ||
+        !probe.EquipWeapon(tables, playerTemplate.GetScript(), weapons.front().data, weapons.front().owner) ||
+        !probe.CreateBuffers(program)) { return 1; }
     for (const auto &sample : std::array<std::pair<const char *, unsigned>, 4>{{{"pack1", 0}, {"pack1", 13}, {"pack1", 16}, {"pack5", 104}}}) {
         effects.Clear();
         effects.SetCombatWorld(nullptr);

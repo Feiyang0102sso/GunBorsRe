@@ -1,3 +1,6 @@
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/platform/ZGLLoader.h"
+#include "engine/graphics/CMeshCamera.h"
 #include "engine/core/ZPaths.h"
 /** @file ZArmorCatalog.cpp
  * @brief Verify every armour script, model and texture from original archives.
@@ -6,7 +9,7 @@
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "engine/graphics/ZPNG.h"
 #include "engine/graphics/CMesh.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "engine/core/ZMatrix4d.h"
 
@@ -109,9 +112,9 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
     ZPackTables tables(toc);
     std::vector<ZArmorEntry> catalog;
     std::vector<ZWeaponEntry> weapons;
-    ZPlayerTemplateData data;
+    CBrother::Template data;
     if (!LoadArmorCatalog(toc, tables, catalog) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !FindPlayerTemplate(toc, tables, data)) {
+        !data.Load(toc, tables)) {
         return 1;
     }
     ZWindow window;
@@ -122,8 +125,8 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) {
         return 1;
     }
-    ZPlayerModel player;
-    if (!BuildPlayerBody(tables, data.moveSet, player)) {
+    CBrother player;
+    if (!player.BuildBody(tables, data.GetMoveSet())) {
         return 1;
     }
     unsigned checks = 0;
@@ -131,29 +134,27 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
     // Distinct original torso configurations: pistols, beam, heavy weapon.
     const std::size_t weaponIndices[] = {0, 47, 75};
     for (std::size_t weapon : weaponIndices) {
-        if (weapon >= weapons.size() || !EquipPlayerWeapon(tables, data.script, weapons[weapon].data,
-            weapons[weapon].owner, player) || !CreatePlayerBuffers(player, program)) {
+        if (weapon >= weapons.size() || !player.EquipWeapon(tables, data.GetScript(), weapons[weapon].data, weapons[weapon].owner) || !player.CreateBuffers(program)) {
             return 1;
         }
         for (std::size_t index = 0; index < catalog.size(); ++index) {
             if (!window.PumpEvents()) {
                 return 1;
             }
-            ClearPlayerArmor(player);
-            if (!EquipPlayerArmor(tables, catalog[index].data, program, player)) {
+            player.ClearArmor();
+            if (!player.EquipArmor(tables, catalog[index].data, program)) {
                 ++failures;
                 continue;
             }
-            SetPlayerInput(player, true, false);
-            AdvancePlayer(player, 160);
-            PosePlayer(player);
+            player.SetInput(true, false);
+            player.Update(160);
             const std::uint32_t slot = catalog[index].data.GetSlot();
-            const ZPlayerArmorState &armor = *player.armor[slot];
+            const CArmor &armor = *player.armor[slot];
             for (std::uint32_t part = 0; part < kArmorVariantCount; ++part) {
-                if (armor.parts[part]) {
+                if (armor.GetTemplate().HasMesh(part)) {
                     ZMeshBoneTransform attachment;
-                    if (!player.weapon->brother.GetTorso().GetAnimation().GetNodeAt(
-                        armor.parts[part]->boneIndex, attachment)) {
+                    if (!player.GetTorso().GetAnimation().GetNodeAt(
+                        armor.GetTemplate().GetAttachmentNode(part), attachment)) {
                         ++failures;
                         std::printf("[armor-render] missing node: %s part=%u weapon=%zu\n",
                             catalog[index].owner.c_str(), part, weapon);
@@ -163,13 +164,13 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
             float projection[16];
             float matrix[16];
             Matrix4dOrthoTopLeft(640, 480, 1000, projection);
-            BuildPlayerGameMatrix(projection, 320, 300, PlayerModelWorldScale(player, data.gameScale, 2), 0, matrix);
+            MeshCameraBuildGameMatrix(projection, 320, 300, player.GetWorldScale(data.GetGameScale(), 2), 0, matrix);
             glViewport(0, 0, 640, 480);
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            DrawPlayer(player, program, matrix);
+            player.Draw(program, matrix);
             if (glGetError() != GL_NO_ERROR) {
                 ++failures;
             }

@@ -14,7 +14,7 @@ struct ZSurvivalResources {
     CInputPad & survivalHud;
     ZShaderProgram & program;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
 };
 
@@ -25,10 +25,10 @@ struct ZSurvivalState {
     ZShaderProgram & program;
     ZQuadBatch & batch;
     MapDetail::ZLoadedMap & loaded;
-    ZPlayerModel & player;
+    CBrother & player;
     CLevel & scene;
     CBrotherAI & brother;
-    ZPlayerModel & brotherModel;
+    CBrother & brotherModel;
     CGame & session;
     float startX;
     float startY;

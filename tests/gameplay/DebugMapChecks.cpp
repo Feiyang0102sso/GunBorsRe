@@ -71,7 +71,7 @@ int RunDebugMapProfileCheck() {
     return 1;
 }
 
-int CheckDebugMapProfile(ZPackTables &tables, const ZPlayerModel &player,
+int CheckDebugMapProfile(ZPackTables &tables, const CBrother &player,
     const CPlayerProgress &progress, ZSurvivalGameContext &context, const CLevel &scene, const CLevel &level) {
     const auto &profile = context.profile;
     const auto &gun = profile.configuration.guns[profile.activeWeaponSlot];
@@ -89,9 +89,9 @@ int CheckDebugMapProfile(ZPackTables &tables, const ZPlayerModel &player,
         const auto &actual = player.armor[expected.GetSlot()];
         if (!actual) { return 1; }
         for (unsigned variant = 0; variant < kArmorVariantCount; ++variant) {
-            if (actual->data.GetMeshRef(variant).packHash != expected.GetMeshRef(variant).packHash ||
-                actual->data.GetMeshRef(variant).assetId != expected.GetMeshRef(variant).assetId ||
-                actual->data.GetImageRef(variant).assetId != expected.GetImageRef(variant).assetId) { return 1; }
+            if (actual->GetTemplate().GetMeshRef(variant).packHash != expected.GetMeshRef(variant).packHash ||
+                actual->GetTemplate().GetMeshRef(variant).assetId != expected.GetMeshRef(variant).assetId ||
+                actual->GetTemplate().GetImageRef(variant).assetId != expected.GetImageRef(variant).assetId) { return 1; }
         }
         ++checkedArmor;
     }

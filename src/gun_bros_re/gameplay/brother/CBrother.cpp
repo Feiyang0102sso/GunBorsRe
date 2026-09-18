@@ -7,6 +7,7 @@
 #include "gun_bros_re/effects/CParticlePool.h"
 
 #include <cstdio>
+#include "gun_bros_re/gameplay/brother/CBrotherDrawing.h"
 #include <algorithm>
 #include <cmath>
 
@@ -47,6 +48,7 @@ bool CBrother::Template::Init(CArrayInputStream &stream) {
 CBrother::CBrother() : m_triggerHeld(false), m_baseMoves(nullptr), m_gun(nullptr), m_timer(0),
     m_fireElapsed(0), m_torsoUsesWeapon(false), m_moving(false),
     m_shooting(false), m_canFire(true) {
+    m_drawing = std::make_unique<Drawing>();
     // CBrother::CBrother :139099 owns 25 slots for its native powerup players.
     m_powerupParticles = std::make_shared<PowerupParticles>();
     for (int i = 0; i < 11; ++i) { m_moveAliases[i] = -1; }
@@ -56,21 +58,68 @@ CBrother::CBrother() : m_triggerHeld(false), m_baseMoves(nullptr), m_gun(nullptr
     m_variables[4] = 1;
 }
 
+CBrother::~CBrother() = default;
+
+void CBrother::ClearScript() {
+    m_interpreter = CScriptInterpreter();
+    m_torso = CMoveSetMeshController();
+    m_legs = CMoveSetMeshController();
+    m_baseMoves = nullptr;
+    m_gun = nullptr;
+    m_bodyMeshes.clear();
+    m_weaponMeshes.clear();
+}
+
 void CBrother::Bind(const CScript &script, const CMoveSetMesh &moves,
     const std::vector<const CMesh *> &bodyMeshes, CGun &gun,
     const std::vector<const CMesh *> &weaponMeshes) {
+    // Full bind resets a life; SetUIGun deliberately preserves these timers.
+    // The caller may pass GetScript() during respawn; copy before clearing.
+    m_script = script;
+    ClearScript();
+    m_visible = true;
+    m_spawned = true;
+    m_immunityHidden = false;
+    m_weaponSwapRequested = false;
+    m_knockbackMs = 0;
+    m_knockbackDurationMs = 0;
+    m_triggerHeld = false;
+    m_timer = 0;
+    m_fireElapsed = 0;
+    m_torsoUsesWeapon = false;
+    m_moving = false;
+    m_shooting = false;
+    m_canFire = true;
+    m_cues.clear();
+    SetRandomSeed(1);
+    for (int i = 0; i < 11; ++i) { m_moveAliases[i] = -1; }
+    for (int i = 0; i < 7; ++i) { m_variables[i] = 0; }
+    m_variables[0] = 1;
+    m_variables[1] = 1;
+    m_variables[2] = m_human;
+    m_variables[4] = 1;
+    for (unsigned i = 0; i < 2; ++i) {
+        m_grenades[i] = {};
+        m_grenadeStock[i] = 0;
+        m_grenadesThrown[i] = 0;
+        m_grenadePending[i] = false;
+        m_grenadeAnimating[i] = false;
+    }
     m_baseMoves = &moves;
     m_gun = &gun;
     m_bodyMeshes = bodyMeshes;
     m_weaponMeshes = weaponMeshes;
     m_torso.SetMoveSet(&moves, bodyMeshes);
     m_legs.SetMoveSet(&moves, bodyMeshes);
-    m_interpreter.SetScript(script, *this);
+    m_interpreter.SetScript(m_script, *this);
     // Export 0 establishes the semantic move aliases; equipment replaces them.
     m_interpreter.CallExportFunction(0);
     gun.OnEquip();
     m_interpreter.CallExportFunction(1);
     m_fireElapsed = gun.GetTemplate()->GetFireIntervalMs();
+    // A full reset may clear the shared pool; ordinary swaps retain it.
+    m_powerupParticles = std::make_shared<PowerupParticles>();
+    RestorePowerupEffects();
 }
 
 void CBrother::SetScriptSequenceFrame(std::uint8_t frame) {
@@ -139,26 +188,24 @@ void CBrother::SetShooting(bool shooting) {
 
 void CBrother::Update(std::int32_t deltaMs) {
     if (deltaMs <= 0 || !m_spawned) { return; }
-    if (m_powerups != nullptr) {
-        if (m_powerups->legacyFrenzyMs > 0) {
-            m_powerups->legacyFrenzyMs = std::max(0, m_powerups->legacyFrenzyMs - deltaMs);
-            if (m_powerups->legacyFrenzyMs == 0) { StopFrenzy(); }
-        }
-        if (m_powerups->autoFireMs > 0) {
-            m_powerups->autoFireMs = std::max(0, m_powerups->autoFireMs - deltaMs);
-            if (m_powerups->autoFireMs == 0) { PowerupEffect({}, 104, false); }
-        }
-        if (m_powerups->shieldMs > 0) {
-            m_powerups->shieldMs = std::max(0, m_powerups->shieldMs - deltaMs);
-            if (m_powerups->shieldMs == 0) { PowerupEffect({}, 100, false); }
-        }
-        for (unsigned type = 0; type < 3; ++type) {
-            if (m_powerups->frenzyMs[type] <= 0) { continue; }
-            m_powerups->frenzyMs[type] = std::max(0, m_powerups->frenzyMs[type] - deltaMs);
-            if (m_powerups->frenzyMs[type] == 0) {
-                m_powerups->frenzyMultiplier[type] = 1;
-                PowerupEffect({}, 101 + type, false);
-            }
+    if (powerups.legacyFrenzyMs > 0) {
+        powerups.legacyFrenzyMs = std::max(0, powerups.legacyFrenzyMs - deltaMs);
+        if (powerups.legacyFrenzyMs == 0) { StopFrenzy(); }
+    }
+    if (powerups.autoFireMs > 0) {
+        powerups.autoFireMs = std::max(0, powerups.autoFireMs - deltaMs);
+        if (powerups.autoFireMs == 0) { PowerupEffect({}, 104, false); }
+    }
+    if (powerups.shieldMs > 0) {
+        powerups.shieldMs = std::max(0, powerups.shieldMs - deltaMs);
+        if (powerups.shieldMs == 0) { PowerupEffect({}, 100, false); }
+    }
+    for (unsigned type = 0; type < 3; ++type) {
+        if (powerups.frenzyMs[type] <= 0) { continue; }
+        powerups.frenzyMs[type] = std::max(0, powerups.frenzyMs[type] - deltaMs);
+        if (powerups.frenzyMs[type] == 0) {
+            powerups.frenzyMultiplier[type] = 1;
+            PowerupEffect({}, 101 + type, false);
         }
     }
     // Update :135184-135235 bypasses UpdateNormal during force/stun. Its
@@ -509,16 +556,14 @@ unsigned CBrother::TakeThrownGrenades(unsigned slot) {
     return count;
 }
 
-void CBrother::SetPowerupState(PowerupState *powerups) {
-    m_powerups = powerups;
-    if (m_powerups == nullptr) { return; }
-    if (!m_powerups->particles) { m_powerups->particles = m_powerupParticles; }
-    m_powerupParticles = m_powerups->particles;
-    if (IsShield()) { PowerupEffect(m_powerups->effects[0], 100, true); }
-    if (IsAutoFire()) { PowerupEffect(m_powerups->effects[4], 104, true); }
-    if (IsFrenzy()) { PowerupEffect(m_powerups->effects[5], 105, true); }
+void CBrother::RestorePowerupEffects() {
+    if (!powerups.particles) { powerups.particles = m_powerupParticles; }
+    m_powerupParticles = powerups.particles;
+    if (IsShield()) { PowerupEffect(powerups.effects[0], 100, true); }
+    if (IsAutoFire()) { PowerupEffect(powerups.effects[4], 104, true); }
+    if (IsFrenzy()) { PowerupEffect(powerups.effects[5], 105, true); }
     for (unsigned type = 0; type < 3; ++type) {
-        if (IsFrenzyType(type)) { PowerupEffect(m_powerups->effects[type + 1], 101 + type, true); }
+        if (IsFrenzyType(type)) { PowerupEffect(powerups.effects[type + 1], 101 + type, true); }
     }
 }
 
@@ -535,54 +580,50 @@ void CBrother::PowerupEffect(const GameObjectRef &effect, int slot, bool active)
 }
 
 void CBrother::StartShield(const GameObjectRef &effect, int durationMs) {
-    if (m_powerups == nullptr) { return; }
-    m_powerups->shieldMs = std::max(0, durationMs);
-    m_powerups->effects[0] = effect;
+    powerups.shieldMs = std::max(0, durationMs);
+    powerups.effects[0] = effect;
     PowerupEffect(effect, 100, durationMs > 0);
 }
 
 void CBrother::StartAutoFire(const GameObjectRef &effect, int durationSeconds) {
-    if (m_powerups == nullptr) { return; }
     // Unlike Q8 frenzy durations, native 22 passes whole seconds (:137216).
-    m_powerups->autoFireMs = std::max(0, durationSeconds) * 1000;
-    m_powerups->effects[4] = effect;
+    powerups.autoFireMs = std::max(0, durationSeconds) * 1000;
+    powerups.effects[4] = effect;
     PowerupEffect(effect, 104, durationSeconds > 0);
 }
 
 void CBrother::StartFrenzy(const GameObjectRef &effect, int durationMs, float attack, float defense, float speed) {
-    if (m_powerups == nullptr) { return; }
     if (durationMs <= 0) { StopFrenzy(); return; }
-    m_powerups->legacyFrenzyMs = durationMs;
+    powerups.legacyFrenzyMs = durationMs;
     // StartFrenzy :137333 retains these old fields. This iOS build's combat
     // reads the later per-type fields instead; do not invent a 1.5x combat boost.
-    m_powerups->legacyFrenzyMultiplier[0] = attack;
-    m_powerups->legacyFrenzyMultiplier[1] = defense;
-    m_powerups->legacyFrenzyMultiplier[2] = speed;
-    m_powerups->effects[5] = effect;
+    powerups.legacyFrenzyMultiplier[0] = attack;
+    powerups.legacyFrenzyMultiplier[1] = defense;
+    powerups.legacyFrenzyMultiplier[2] = speed;
+    powerups.effects[5] = effect;
     PowerupEffect(effect, 105, true);
 }
 
 void CBrother::StopFrenzy() {
-    if (m_powerups == nullptr) { return; }
-    m_powerups->legacyFrenzyMs = 0;
-    for (float &multiplier : m_powerups->legacyFrenzyMultiplier) { multiplier = 1; }
+    powerups.legacyFrenzyMs = 0;
+    for (float &multiplier : powerups.legacyFrenzyMultiplier) { multiplier = 1; }
     PowerupEffect({}, 105, false);
     // Original StopFrenzy :137295 also stops all three newer boost channels.
     for (unsigned type = 0; type < 3; ++type) { StartFrenzyType({}, 0, 1, type); }
 }
 
 void CBrother::StartFrenzyType(const GameObjectRef &effect, int durationMs, float multiplier, unsigned type) {
-    if (m_powerups == nullptr || type >= 3) { return; }
-    m_powerups->frenzyMs[type] = std::max(0, durationMs);
-    m_powerups->effects[type + 1] = effect;
-    m_powerups->frenzyMultiplier[type] = multiplier;
-    if (durationMs <= 0) { m_powerups->frenzyMultiplier[type] = 1; }
+    if (type >= 3) { return; }
+    powerups.frenzyMs[type] = std::max(0, durationMs);
+    powerups.effects[type + 1] = effect;
+    powerups.frenzyMultiplier[type] = multiplier;
+    if (durationMs <= 0) { powerups.frenzyMultiplier[type] = 1; }
     PowerupEffect(effect, 101 + type, durationMs > 0);
 }
 
 float CBrother::GetFrenzyMultiplier(unsigned type) const {
     if (!IsFrenzyType(type)) { return 1; }
-    return m_powerups->frenzyMultiplier[type];
+    return powerups.frenzyMultiplier[type];
 }
 
 float CBrother::GetProjectilePowerupMultiplier() const {

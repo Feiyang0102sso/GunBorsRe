@@ -1,3 +1,4 @@
+#include "gun_bros_viewer/scenes/BrotherPreview.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
@@ -13,7 +14,7 @@
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
@@ -32,7 +33,6 @@
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/CArmor.h"
-#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
@@ -68,7 +68,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
 
     ZPackTables tables(tocManager);
     std::vector<ZWeaponEntry> weapons;
-    ZPlayerTemplateData playerTemplate;
+    CBrother::Template playerTemplate;
     if (!LoadWeaponCatalog(tocManager, tables, weapons)) { return 1; }
 
     std::vector<ZArmorEntry> armors;
@@ -80,7 +80,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         return 1;
     }
 
-    if (!FindPlayerTemplate(tocManager, tables, playerTemplate)) {
+    if (!playerTemplate.Load(tocManager, tables)) {
         std::printf("[equipment] no player template found\n");
         return 1;
     }
@@ -88,7 +88,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         std::printf("[equipment] no gun names a weapon model\n");
         return 1;
     }
-    std::printf("\n[equipment] %s, %zu weapon models\n", playerTemplate.owner.c_str(),
+    std::printf("\n[equipment] %s, %zu weapon models\n", playerTemplate.GetOwner().c_str(),
                 weapons.size());
 
     std::size_t gunSlot = gunIndex;
@@ -114,28 +114,24 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
 
     // Held by pointer for the same reason one part is: swapping the gun
     // rebuilds the whole thing, and nothing in it can be moved.
-    std::unique_ptr<ZPlayerModel> character(new ZPlayerModel());
-    if (!BuildPlayerBody(tables, playerTemplate.moveSet, *character) ||
-        !EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
-                           weapons[gunSlot].owner, *character) ||
-        !CreatePlayerBuffers(*character, program)) {
+    std::unique_ptr<CBrother> character(new CBrother());
+    if (!character->BuildBody(tables, playerTemplate.GetMoveSet()) ||
+        !character->EquipWeapon(tables, playerTemplate.GetScript(), weapons[gunSlot].data, weapons[gunSlot].owner) ||
+        !character->CreateBuffers(program)) {
         return 1;
     }
 
-    std::size_t moveSlot = 0;
-    SelectPlayerMoveSlot(*character, moveSlot, true);
-    SetPlayerInput(*character, false, firePreview);
+    character->SetInput(false, firePreview);
     window.SetRightDrag(false);
     window.SetTitle(ViewerWindowTitle(equipmentView, WeaponSelectionLabel(weapons, gunSlot)));
     if (armorIndex >= 0) {
-        if (!EquipPlayerArmor(tables, armors[armorIndex].data, program, *character)) {
+        if (!character->EquipArmor(tables, armors[armorIndex].data, program)) {
             return 1;
         }
         window.SetTitle(ViewerWindowTitle(equipmentView, std::to_string(armorIndex) + "/" +
             std::to_string(armors.size() - 1) + " | " + armors[armorIndex].owner));
         std::printf("[armor] Left/Right: armor; B: remove all; 1-7,N/M: weapon; F: fire; WASD: walk\n");
     }
-    PosePlayer(*character);
     CLevel effects(tocManager, tables, program);
 
     glEnable(GL_DEPTH_TEST);
@@ -173,7 +169,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
                     next = armorIndex + static_cast<int>(armors.size()) - 1;
                 }
                 next %= static_cast<int>(armors.size());
-                if (!EquipPlayerArmor(tables, armors[next].data, program, *character)) {
+                if (!character->EquipArmor(tables, armors[next].data, program)) {
                     return 1;
                 }
                 armorIndex = next;
@@ -182,7 +178,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
                 continue;
             }
             if (armorIndex >= 0 && controls.IsPressed(key, ViewerAction::ClearArmor)) {
-                ClearPlayerArmor(*character);
+                character->ClearArmor();
                 continue;
             }
             const std::size_t gunCount = weapons.size();
@@ -224,19 +220,16 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
             std::printf("\n[equipment] --- weapon %zu of %zu ---\n", gunSlot + 1,
                         weapons.size());
 
-            std::unique_ptr<ZPlayerModel> replacement(new ZPlayerModel());
-            if (BuildPlayerBody(tables, playerTemplate.moveSet, *replacement) &&
-                EquipPlayerWeapon(tables, playerTemplate.script, weapons[gunSlot].data,
-                                  weapons[gunSlot].owner, *replacement) &&
-                CreatePlayerBuffers(*replacement, program)) {
+            std::unique_ptr<CBrother> replacement(new CBrother());
+            if (replacement->BuildBody(tables, playerTemplate.GetMoveSet()) &&
+                replacement->EquipWeapon(tables, playerTemplate.GetScript(), weapons[gunSlot].data, weapons[gunSlot].owner) &&
+                replacement->CreateBuffers(program)) {
                 // Weapon changes preserve all independently equipped armour slots.
                 for (std::uint32_t slot = 0; slot < kArmorSlotCount; ++slot) {
                     replacement->armor[slot] = std::move(character->armor[slot]);
                 }
                 character = std::move(replacement);
                 effects.Clear();
-                SelectPlayerMoveSlot(*character, moveSlot, true);
-                PosePlayer(*character);
                 window.SetTitle(ViewerWindowTitle(equipmentView, WeaponSelectionLabel(weapons, gunSlot)));
             } else {
                 std::printf("[equipment] staying on the previous weapon\n");
@@ -263,8 +256,8 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         if (elapsedMs > 0) {
             const bool moving = controls.IsDown(ViewerAction::MoveUp) || controls.IsDown(ViewerAction::MoveLeft) ||
                 controls.IsDown(ViewerAction::MoveDown) || controls.IsDown(ViewerAction::MoveRight);
-            SetPlayerInput(*character, moving, firePreview || controls.IsDown(ViewerAction::Fire));
-            AdvancePlayer(*character, static_cast<std::int32_t>(elapsedMs));
+            character->SetInput(moving, firePreview || controls.IsDown(ViewerAction::Fire));
+            character->Update(static_cast<std::int32_t>(elapsedMs));
         }
 
         int dragX = 0;
@@ -292,7 +285,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         float base[kMatrix4dElements];
-        BuildModelViewProjection(PlayerBounds(*character), view, drawableWidth,
+        BuildModelViewProjection(character->GetBounds(), view, drawableWidth,
                                  drawableHeight, base);
         float viewport[kMatrix4dElements];
         Matrix4dIdentity(viewport);
@@ -304,7 +297,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         Matrix4dMultiply(viewport, base, modelToScreen);
         // Simulate both viewers in the same world units. The turntable only
         // projects the result; spread is applied before the camera rotation.
-        const float worldScale = PlayerModelWorldScale(*character, playerTemplate.gameScale, 1);
+        const float worldScale = character->GetWorldScale(playerTemplate.GetGameScale(), 1);
         float modelToWorld[kMatrix4dElements];
         Matrix4dScale(worldScale, modelToWorld);
         float inverseScale[kMatrix4dElements];
@@ -315,7 +308,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         // Do not turn floating-point noise at 90 degrees into diagonal shots.
         while (warmUpRemaining > 0) {
             const int step = static_cast<int>(std::min<std::uint32_t>(warmUpRemaining, kWarmUpFrameMs));
-            AdvancePlayer(*character, step);
+            character->Update(step);
             effects.Update(*character, modelToWorld, 0, step);
             warmUpRemaining -= step;
         }
@@ -326,7 +319,7 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         effects.Draw(screenMvp, worldToScreen, 1.0f, ZWeaponDrawPass::BehindPlayer);
         glEnable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        DrawPlayer(*character, program, base);
+        character->Draw(program, base);
         effects.Draw(screenMvp, worldToScreen, 1.0f, ZWeaponDrawPass::InFrontOfPlayer);
 
         if (!controls.Draw()) { return 1; }
@@ -338,8 +331,8 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
             if (!screenshotPath.empty()) {
                 std::printf("[weapon-render] shots=%zu live=%zu torsoMove=%d legsMove=%d\n",
                     effects.GetShotCount(), effects.GetBulletCount(),
-                    character->weapon->brother.GetTorso().GetMoveIndex(),
-                    character->weapon->brother.GetLegs().GetMoveIndex());
+                    character->GetTorso().GetMoveIndex(),
+                    character->GetLegs().GetMoveIndex());
                 if (!Capture::SaveFrame(window, screenshotPath)) {
                     return 1;
                 }

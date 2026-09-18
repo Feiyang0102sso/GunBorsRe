@@ -116,10 +116,10 @@ public:
     /** Windows audio adaptation: coalesce identical one-shots within one tick. */
     void BeginAudioFrame();
     /** Consume gun cues, then advance both new and existing projectiles. */
-    void Update(ZPlayerModel &player, const float *modelToScene, float facingDegrees,
+    void Update(CBrother &player, const float *modelToScene, float facingDegrees,
                 int deltaMs, const ZWeaponCollision *collision = nullptr);
     /** Consume another brother's cues without advancing all projectiles twice. */
-    void EmitBrother(ZPlayerModel &player, const float *modelToScene, float facingDegrees,
+    void EmitBrother(CBrother &player, const float *modelToScene, float facingDegrees,
         ZCombatId owner, const ZWeaponCollision *collision = nullptr);
     /** Optional world-to-screen projection for the rotating character preview. */
     void Draw(const float *sceneMvp, const float *previewProjection = nullptr, float meshCameraScale = 1.0f,
@@ -168,7 +168,7 @@ public:
     /** Voices sounding right now. One WAV never occupies more than one. */
     unsigned GetVoiceCount() const;
 
-    void BindCombat(const std::vector<ZEnemyTemplateData> &catalog, ZPlayerModel &player,
+    void BindCombat(const std::vector<ZEnemyTemplateData> &catalog, CBrother &player,
         ZPlayerVitals &vitals, float playerGameScale);
 
     /** Bind the original session owner after the level runtime is constructed. */
@@ -218,7 +218,7 @@ public:
     ZCombatEnemy *SpawnNearby(std::size_t entry);
     void Update(int deltaMs, float moveX, float moveY, bool shoot);
     void PlayerMatrix(float *matrix) const;
-    void SetBrother(ZPlayerModel *model, CBrotherAI *brother);
+    void SetBrother(CBrother *model, CBrotherAI *brother);
     void SetLocalLive(bool enabled) { m_localLive = enabled; }
     bool IsLocalLive() const { return m_localLive; }
     bool IsDeathmatch() const { return m_match != nullptr; }
@@ -237,11 +237,6 @@ public:
     bool SelectMatchGun(unsigned peer, unsigned slot, const GameObjectRef &gun);
     void SetMatchShopping(unsigned peer, bool shopping) { m_matchShopping[peer] = shopping; }
     bool HasLineOfFire(float x, float y, float targetX, float targetY) const;
-    bool FindMatchDestination(float x, float y, bool cover, float targetX, float targetY,
-        float &goalX, float &goalY, unsigned choice = 0) const;
-    bool FindMatchSupply(float x, float y, float &goalX, float &goalY) const;
-    bool FindMatchRoute(float x, float y, float goalX, float goalY,
-        std::vector<ZCollisionPoint> &route) const;
     bool CanHitBrother(const ZCombatHit &hit, ZCombatId target) const;
     void RecordMatchDeath(unsigned peer, int killer);
     void SetLocalBot(bool enabled) { m_localBot = enabled; }
@@ -303,6 +298,12 @@ public:
     void ResolveMovement(float previousX, float previousY, float &x, float &y,
         float radius, bool player = true) const;
     MovementBounds GetPlayerMovementBounds() const { return {m_left, m_top, m_right, m_bottom}; }
+    /** Current BIG geometry, including the active prop collision snapshot. */
+    const CCollisionData *GetCollisionData() const { return m_collision; }
+    const ILayerPath *GetNavigationPath() const {
+        if (m_map == nullptr) { return nullptr; }
+        return m_map->GetPathLayer(m_pathLayer);
+    }
     void EnemyCircle(const ZCombatEnemy &enemy, int part, float &x, float &y, float &radius) const;
     struct HealthBar {
         float x, y, width, height, border, fraction, red;
@@ -588,8 +589,8 @@ private:
     ZPackTables *m_tables = nullptr;
     const ZShaderProgram *m_program = nullptr;
     CLevelObjectPool m_objects;
-    ZPlayerModel *m_playerModel = nullptr;
-    ZPlayerModel *m_brotherModel = nullptr;
+    CBrother *m_playerModel = nullptr;
+    CBrother *m_brotherModel = nullptr;
     CBrotherAI *m_brother = nullptr;
     const CScript *m_brotherScript = nullptr;
     const CGun::Template *m_brotherWeapons[2]{};

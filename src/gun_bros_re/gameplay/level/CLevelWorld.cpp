@@ -145,17 +145,15 @@ void CLevel::Reset() {
     if (m_playerModel->weapon != nullptr) {
         // Reset the script and gun state as well as health. The replacement
         // copies templates before retiring the old equipment.
-        if (EquipPlayerWeapon(*m_tables, m_playerModel->weapon->playerScript,
-            m_playerModel->ActiveWeapon().data, "arena reset", *m_playerModel)) {
-            CreatePlayerBuffers(*m_playerModel, *m_program);
+        if (m_playerModel->EquipWeapon(*m_tables, m_playerModel->GetScript(), *m_playerModel->ActiveWeapon().GetTemplate(), "arena reset")) {
+            m_playerModel->CreateBuffers(*m_program);
         }
     }
     m_actor.forceMs = 0;
     if (m_brotherModel != nullptr) {
         m_brother->Reset(m_actor.x, m_actor.y, m_actor.facing);
-        if (EquipPlayerWeapon(*m_tables, m_brotherModel->weapon->playerScript,
-            m_brotherModel->weapon->data, "brother reset", *m_brotherModel)) {
-            CreatePlayerBuffers(*m_brotherModel, *m_program);
+        if (m_brotherModel->EquipWeapon(*m_tables, m_brotherModel->GetScript(), *m_brotherModel->weapon->GetTemplate(), "brother reset")) {
+            m_brotherModel->CreateBuffers(*m_program);
             m_brotherWeaponSlot = 0;
         }
     }
@@ -163,7 +161,7 @@ void CLevel::Reset() {
     m_actor.y = 650;
     m_actor.previousX = m_actor.x;
     m_actor.previousY = m_actor.y;
-    m_playerModel->weapon->brother.SetLevelContext(GetScriptLevel());
+    m_playerModel->SetLevelContext(GetScriptLevel());
     m_actor.facing = 0;
     damageDealt = 0;
     lastDamage = 0;

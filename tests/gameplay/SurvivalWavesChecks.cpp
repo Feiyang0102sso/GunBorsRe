@@ -163,7 +163,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             }
             if (scene.GetShotCount() != before + 1 || consumableProbe.GetPowerupCount(consumable) != 1) { ++checkFailures; }
             std::printf("[powerup-play-check] item=%u shots=%zu stock=%u state=%d failures=%u\n", index,
-                scene.GetShotCount() - before, consumableProbe.GetPowerupCount(consumable), player.weapon->brother.GetStateId(), checkFailures);
+                scene.GetShotCount() - before, consumableProbe.GetPowerupCount(consumable), player.GetStateId(), checkFailures);
             if (!powerupProbe.UseSelected()) { ++checkFailures; }
             ZCombatHit cancel;
             cancel.ownerType = 1;
@@ -189,7 +189,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             const bool fromSelector = airstrikeCase++ >= 3;
             session.Restart(startX, startY, startFacing);
             CLevel airstrikeScene(toc, tables, program);
-    airstrikeScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    airstrikeScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             airstrikeScene.Reset();
             // Exercise the same session update as gameplay: movie-only tests
             // cannot detect actors continuing to move during an air strike.
@@ -314,24 +314,24 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         consumable.localIndex = 5;
         consumableProbe.AddPowerup(consumable, 2);
         powerupProbe.Select(5);
-        if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.weapon->brother.IsShield() || powerupProbe.GetCount() != 1) { ++checkFailures; }
+        if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.IsShield() || powerupProbe.GetCount() != 1) { ++checkFailures; }
         const float shieldHealth = vitals.health;
-        player.weapon->brother.ReceiveDamage(1);
+        player.ReceiveDamage(1);
         if (vitals.health != shieldHealth) { ++checkFailures; }
         // Equipment must not reset an actor's active shield timer.
         const int shieldMs = player.powerups.shieldMs;
         if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) || player.powerups.shieldMs != shieldMs) { ++checkFailures; }
-        AdvancePlayer(player, shieldMs);
-        if (player.weapon->brother.IsShield()) { ++checkFailures; }
-        player.weapon->brother.ReceiveDamage(1);
+        player.Update(shieldMs);
+        if (player.IsShield()) { ++checkFailures; }
+        player.ReceiveDamage(1);
         if (std::abs(vitals.health - (shieldHealth - 1)) > 0.001f) { ++checkFailures; }
         // Export 7 follows selector callbacks before applying the same shield.
-        if (!powerupProbe.UseSelected(true) || player.weapon->brother.IsShield() ||
+        if (!powerupProbe.UseSelected(true) || player.IsShield() ||
             !powerupProbe.GetPowerup().IsActive() || powerupProbe.GetCount() != 0) { ++checkFailures; }
         for (int elapsed = 0; elapsed < 2000 && powerupProbe.GetPowerup().IsActive(); elapsed += 16) {
             scene.UpdatePowerup(powerupProbe.GetPowerup(), 16);
         }
-        if (!player.weapon->brother.IsShield() || powerupProbe.GetPowerup().IsActive() ||
+        if (!player.IsShield() || powerupProbe.GetPowerup().IsActive() ||
             powerupProbe.GetPowerup().IsPresentationActive()) { ++checkFailures; }
         std::printf("[shield-selector-check] deferred application failures=%u\n", checkFailures);
         session.Restart(startX, startY, startFacing);
@@ -340,7 +340,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // projectiles. No caller-supplied aim or automatic pilot firing.
             if (!EquipControlledPlayer(tables, loaded, program, weapons[0])) { return 1; }
             CLevel aimScene(toc, tables, program);
-    aimScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    aimScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             aimScene.Reset();
             aimScene.GetPlayer().x = 600;
             aimScene.GetPlayer().y = 650;
@@ -378,17 +378,17 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             const int remainingMs = player.powerups.autoFireMs;
             if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) ||
                 player.powerups.autoFireMs != remainingMs) { ++checkFailures; }
-            AdvancePlayer(player, remainingMs - 1);
-            if (!player.weapon->brother.IsAutoFire()) { ++checkFailures; }
-            AdvancePlayer(player, 1);
-            if (player.weapon->brother.IsAutoFire()) { ++checkFailures; }
+            player.Update(remainingMs - 1);
+            if (!player.IsAutoFire()) { ++checkFailures; }
+            player.Update(1);
+            if (player.IsAutoFire()) { ++checkFailures; }
             std::printf("[autoaim-play-check] shots=%zu hits=%d hold/release/swap/90sec/expiry failures=%u\n",
                 releasedShots, target->model.enemy.combat.hitCount, checkFailures);
         }
         session.Restart(startX, startY, startFacing);
         {
             CLevel turretScene(toc, tables, program);
-    turretScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    turretScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             turretScene.Reset();
             ZCombatEnemy *target = turretScene.Spawn(0, 600, 460);
             if (target == nullptr) { return 1; }
@@ -403,7 +403,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             consumableProbe.AddPowerup(consumable, 2);
             CPowerUpSelector turretPowerup(toc, tables, player, vitals, turretScene, consumableProbe);
             if (!turretPowerup.InitPowerups() || !turretPowerup.Select(19) || !turretPowerup.UseSelected() ||
-                turretPowerup.GetCount() != 2 || !player.weapon->brother.IsTurretActive() || turretPowerup.UseSelected()) { ++checkFailures; }
+                turretPowerup.GetCount() != 2 || !player.IsTurretActive() || turretPowerup.UseSelected()) { ++checkFailures; }
             int firstActiveMs = -1, stoppedMs = -1;
             unsigned peakTurrets = 0;
             for (int elapsed = 0; elapsed < 40000; elapsed += 16) {
@@ -414,11 +414,11 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                     if (actor->model.enemy.combat.turret && !actor->model.enemy.combat.removed) { ++liveTurrets; }
                 }
                 peakTurrets = std::max(peakTurrets, liveTurrets);
-                if (player.weapon->brother.IsTurretActive() && liveTurrets == 1 && firstActiveMs < 0) {
+                if (player.IsTurretActive() && liveTurrets == 1 && firstActiveMs < 0) {
                     firstActiveMs = elapsed + 16;
                     if (turretPowerup.UseSelected() || turretPowerup.GetCount() != 1) { ++checkFailures; }
                 }
-                if (firstActiveMs >= 0 && !player.weapon->brother.IsTurretActive()) {
+                if (firstActiveMs >= 0 && !player.IsTurretActive()) {
                     stoppedMs = elapsed + 16;
                     break;
                 }
@@ -431,11 +431,11 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // consuming another item or replacing a live turret's state.
             if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
             turretScene.UpdatePowerup(turretPowerup.GetPowerup(), 16);
-            if (player.weapon->brother.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
+            if (player.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
             if (!turretPowerup.UseSelected()) { ++checkFailures; }
             vitals.dead = true;
             turretScene.UpdatePowerup(turretPowerup.GetPowerup(), 16);
-            if (player.weapon->brother.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
+            if (player.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
             std::printf("[turret-play-check] active=%d stopped=%d peak=%u shots=%zu hits=%d stock=%u failures=%u\n",
                 firstActiveMs, stoppedMs, peakTurrets, turretScene.GetShotCount(),
                 target->model.enemy.combat.hitCount, turretPowerup.GetCount(), checkFailures);
@@ -449,33 +449,33 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             consumable.localIndex = static_cast<std::uint8_t>(boosts[type]);
             consumableProbe.AddPowerup(consumable, 2);
             powerupProbe.Select(boosts[type]);
-            if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.weapon->brother.IsFrenzyType(type)) { ++checkFailures; }
+            if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.IsFrenzyType(type)) { ++checkFailures; }
             float expected = 332 / 256.0f;
             if (type == 2) { expected = 1.5f; }
             if (std::abs(scene.GetProjectilePowerupMultiplier(kPlayerCombatId) - expected) > 0.001f) { ++checkFailures; }
         }
         const float beforeDefense = vitals.health;
-        player.weapon->brother.ReceiveDamage(1);
+        player.ReceiveDamage(1);
         if (std::abs(vitals.health - (beforeDefense - 256.0f / 332)) > 0.001f) { ++checkFailures; }
-        AdvancePlayer(player, 15000);
+        player.Update(15000);
         scene.UpdatePowerup(powerupProbe.GetPowerup(), 15000); // Advance the DM cooldown with the actor timers.
-        if (scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1 || player.weapon->brother.IsFrenzyType(2)) { ++checkFailures; }
+        if (scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1 || player.IsFrenzyType(2)) { ++checkFailures; }
         powerupProbe.SetDeathmatch(nullptr);
         consumable.localIndex = 6;
         consumableProbe.AddPowerup(consumable, 2);
         powerupProbe.Select(6);
-        if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.weapon->brother.IsFrenzy() ||
+        if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.IsFrenzy() ||
             player.powerups.legacyFrenzyMs != 21000 || scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1) { ++checkFailures; }
         if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) ||
             player.powerups.legacyFrenzyMs != 21000) { ++checkFailures; }
-        AdvancePlayer(player, 20000);
+        player.Update(20000);
         // Isolate the legacy stop-all callback across explicit mode contexts.
         powerupProbe.SetDeathmatch(&boostMatch);
         powerupProbe.Select(18);
-        if (!powerupProbe.UseSelected() || !player.weapon->brother.IsFrenzyType(0)) { ++checkFailures; }
+        if (!powerupProbe.UseSelected() || !player.IsFrenzyType(0)) { ++checkFailures; }
         powerupProbe.SetDeathmatch(nullptr);
-        AdvancePlayer(player, 1000);
-        if (player.weapon->brother.IsFrenzy() || player.weapon->brother.IsFrenzyType(0) ||
+        player.Update(1000);
+        if (player.IsFrenzy() || player.IsFrenzyType(0) ||
             player.powerups.legacyFrenzyMultiplier[0] != 1) { ++checkFailures; }
         std::printf("[tantrum-check] duration=21000 duplicate-blocked=1 equipment-preserved=1 stop-all-boosts=1 failures=%u\n", checkFailures);
         GameObjectRef equippedLeft = consumable;
@@ -513,7 +513,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // Isolate impact contracts from steering: a stationary original
             // enemy receives real CBullet -> CombatScene -> script splash hits.
             CLevel blastScene(toc, tables, program);
-    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             const unsigned grenadeBullets[] = {90, 93, 94};
             for (unsigned bulletIndex : grenadeBullets) {
                 blastScene.Reset();
@@ -545,7 +545,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 }
                 float expectedDamage = 100;
                 if (bulletIndex == 93) { expectedDamage = 30; }
-                expectedDamage *= PlayerArmorMultiplier(player, 1);
+                expectedDamage *= player.GetArmorMultiplier(1);
                 if (std::abs(enemy.combat.totalDamage - expectedDamage) > 0.01f) { ++checkFailures; }
                 int expectedStunMs = 0;
                 if (bulletIndex == 93) { expectedStunMs = 750; }
@@ -640,10 +640,10 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             percentage.x = scene.GetPlayer().x;
             percentage.y = scene.GetPlayer().y;
             scene.Splash(percentage, 200, 360, 0, 0);
-            const float expected = std::max(0.0f, maximum * 0.1f * (2 - PlayerArmorMultiplier(player, 0)));
+            const float expected = std::max(0.0f, maximum * 0.1f * (2 - player.GetArmorMultiplier(0)));
             if (std::abs(vitals.health - (maximum - expected)) > 0.001f) { ++checkFailures; }
             if (withBrother) {
-                const float brotherExpected = std::max(0.0f, maximum * 0.1f * (2 - PlayerArmorMultiplier(brotherModel, 0)));
+                const float brotherExpected = std::max(0.0f, maximum * 0.1f * (2 - brotherModel.GetArmorMultiplier(0)));
                 if (std::abs(brother.vitals.health - (maximum - brotherExpected)) > 0.001f) { ++checkFailures; }
             }
             std::printf("[splash-check] maximum=%.0f percent=10 damage=%.3f brother=%d failures=%u\n",
@@ -671,13 +671,13 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             scene.SetPlayerProgress(&progress);
             vitals.Reset();
         }
-        const ZPlayerModel *stablePlayer = &player;
-        const float armorBefore = PlayerArmorMultiplier(player, 0);
+        const CBrother *stablePlayer = &player;
+        const float armorBefore = player.GetArmorMultiplier(0);
         const std::size_t alternateWeapon = (weaponSlot + 1) % weapons.size();
         if (!EquipControlledPlayer(tables, loaded, program, weapons[alternateWeapon]) ||
             !EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
-        if (loaded.players[0].model.get() != stablePlayer || player.vitals != &vitals ||
-            PlayerArmorMultiplier(player, 0) != armorBefore) { ++checkFailures; }
+        if (loaded.players[0].model.get() != stablePlayer || player.GetVitals() != &vitals ||
+            player.GetArmorMultiplier(0) != armorBefore) { ++checkFailures; }
         // Kill through the actual shared hit path, then exercise the same R action.
         ZCombatHit fatal;
         fatal.ownerType = 1;
@@ -691,21 +691,21 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         session.Restart(startX, startY, startFacing);
         if (vitals.dead || vitals.health != vitals.maximum || session.GetLevel().GetWave() != static_cast<int>(startWave) ||
             scene.AliveCount() != initialActors || scene.GetBulletCount() != 0 ||
-            PlayerArmorMultiplier(player, 0) != armorBefore || scene.GetPlayer().x != startX || scene.GetPlayer().y != startY) { ++checkFailures; }
+            player.GetArmorMultiplier(0) != armorBefore || scene.GetPlayer().x != startX || scene.GetPlayer().y != startY) { ++checkFailures; }
         std::printf("[survival-check] equipment/death/restart failures=%u\n", checkFailures);
         if (withBrother) {
             // A fatal shared hit must not kill the human. Run the original
             // death animation to its hold state, then the actual wave export.
             scene.ApplyHit(kBrotherCombatId, fatal);
             if (!brother.vitals.dead || vitals.dead) { ++checkFailures; }
-            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
-            const int deadState = brotherModel.weapon->brother.GetStateId();
-            brotherModel.weapon->brother.OnWaveCleared();
-            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { brotherModel.Update(16); }
+            const int deadState = brotherModel.GetStateId();
+            brotherModel.OnWaveCleared();
+            for (int elapsed = 0; elapsed < 8000; elapsed += 16) { brotherModel.Update(16); }
             if (brother.vitals.dead || brother.vitals.health != brother.vitals.maximum ||
-                !brotherModel.weapon->brother.CanMove() || !brotherModel.weapon->brother.CanShoot()) { ++checkFailures; }
+                !brotherModel.CanMove() || !brotherModel.CanShoot()) { ++checkFailures; }
             std::printf("[brother-check] death-state=%d revived-state=%d health=%.1f failures=%u\n",
-                deadState, brotherModel.weapon->brother.GetStateId(), brother.vitals.health, checkFailures);
+                deadState, brotherModel.GetStateId(), brother.vitals.health, checkFailures);
             session.Restart(startX, startY, startFacing);
             brother.vitals.invincible = true;
         }
@@ -771,7 +771,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         // are what a spread-out kill streak turns into.
         std::printf("[survival-check] shots=%zu sounds=%zu player=%.1f,%.1f stun=%d brother=%d\n",
             scene.GetShotCount(), scene.GetSoundCueCount(), scene.GetPlayer().x, scene.GetPlayer().y,
-            vitals.stunMs, player.weapon->brother.GetStateId());
+            vitals.stunMs, player.GetStateId());
         for (const auto &actor : scene.GetEnemies()) {
             const CEnemy::CombatState &enemy = actor->model.enemy.combat;
             if (!enemy.dead) {

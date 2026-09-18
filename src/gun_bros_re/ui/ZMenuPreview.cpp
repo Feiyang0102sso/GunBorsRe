@@ -24,43 +24,43 @@ namespace MenuDetail {
             if (!SameObject(previewConfiguration.armor[index], configuration.armor[index])) { changed = true; }
         }
         if (changed) {
-            ZPlayerTemplateData playerTemplate;
-            if (!FindPlayerTemplate(toc, tables, playerTemplate)) { return false; }
-            auto candidate = std::make_unique<ZPlayerModel>();
+            CBrother::Template playerTemplate;
+            if (!playerTemplate.Load(toc, tables)) { return false; }
+            auto candidate = std::make_unique<CBrother>();
             candidate->brotherIndex = profile.playerBrother;
-            if (!BuildPlayerBody(tables, playerTemplate.moveSet, *candidate)) { return false; }
+            if (!candidate->BuildBody(tables, playerTemplate.GetMoveSet())) { return false; }
             const ZWeaponEntry *gun = nullptr;
             for (const ZWeaponEntry &entry : weapons) {
                 const auto &ref = configuration.guns[gunSlot];
                 if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) { gun = &entry; break; }
             }
-            if (gun == nullptr || !EquipPlayerWeapon(tables, playerTemplate.script, gun->data, gun->owner, *candidate)) { return false; }
+            if (gun == nullptr || !candidate->EquipWeapon(tables, playerTemplate.GetScript(), gun->data, gun->owner)) { return false; }
             const GameObjectRef &otherRef = configuration.guns[1 - gunSlot];
             if (!otherRef.IsNull()) {
                 const ZWeaponEntry *otherGun = nullptr;
                 for (const ZWeaponEntry &entry : weapons) {
                     if (entry.packHash == otherRef.packHash && entry.ordinal == otherRef.localIndex) { otherGun = &entry; break; }
                 }
-                if (otherGun == nullptr || !PreparePlayerUIWeapon(tables, otherGun->data, otherGun->owner, *candidate)) { return false; }
+                if (otherGun == nullptr || !candidate->PrepareSecondaryWeapon(tables, otherGun->data, otherGun->owner)) { return false; }
             }
-            if (!candidate->weapon->brother.SpawnForUI()) { return false; }
-            const auto &uiTorso = candidate->weapon->brother.GetTorso();
+            if (!candidate->SpawnForUI()) { return false; }
+            const auto &uiTorso = candidate->GetTorso();
             std::printf("[player-ui] gun=%s state=%d weapon-torso=%d move=%d config=%d time=%d range=%d..%d override9=%d\n",
-                gun->owner.c_str(), candidate->weapon->brother.GetStateId(), candidate->weapon->brother.TorsoUsesWeapon(),
+                gun->owner.c_str(), candidate->GetStateId(), candidate->TorsoUsesWeapon(),
                 uiTorso.GetMoveIndex(), uiTorso.GetMeshConfigIndex(), uiTorso.GetAnimation().GetTimeMs(),
                 uiTorso.GetAnimation().GetRangeStartMs(), uiTorso.GetAnimation().GetRangeStartMs() + uiTorso.GetAnimation().GetRangeDurationMs(),
-                candidate->weapon->gun.GetOverrides()[9]);
+                candidate->weapon->GetOverrides()[9]);
             for (unsigned index = 0; index < kArmorSlotCount; ++index) {
                 const auto &ref = configuration.armor[index];
                 if (ref.IsNull()) { continue; }
                 for (const ZArmorEntry &entry : armors) {
                     if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) {
-                        if (!EquipPlayerArmor(tables, entry.data, imageProgram, *candidate)) { return false; }
+                        if (!candidate->EquipArmor(tables, entry.data, imageProgram)) { return false; }
                         break;
                     }
                 }
             }
-            if (!CreatePlayerBuffers(*candidate, imageProgram)) { return false; }
+            if (!candidate->CreateBuffers(imageProgram)) { return false; }
             equippedPreview = std::move(candidate);
             previewConfiguration = configuration;
             previewGunSlot = gunSlot;
@@ -72,14 +72,13 @@ namespace MenuDetail {
             // script, which owns the swap animation.
         }
         if (previewGunSlot != gunSlot && !previewSwapPending && equippedPreview->uiOtherWeapon) {
-            previewSwapPending = equippedPreview->weapon->brother.OnSwapGun();
+            previewSwapPending = equippedPreview->OnSwapGun();
         }
         if (storePanel == nullptr) { return false; }
         const std::uint64_t now = clock;
         unsigned previewDelta = 0;
         if (now >= previewTicks) { previewDelta = static_cast<unsigned>(std::min<std::uint64_t>(now - previewTicks, 100)); }
         AdvancePlayerPreview(previewDelta);
-        PosePlayer(*equippedPreview);
         previewTicks = now;
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
@@ -88,7 +87,7 @@ namespace MenuDetail {
             // CMenuStore::Bind :180082 supplies region 2 as mesh bounds.
             // CMenuMeshPlayer::Draw :169591 calls DrawUI in the full page;
             // that region is not a viewport or a scissor rectangle.
-            if (!BuildPlayerUIMatrix(*equippedPreview, storePanel->x + static_cast<int>(storePanel->width) / 2,
+            if (!equippedPreview->BuildUIMatrix(storePanel->x + static_cast<int>(storePanel->width) / 2,
                 storePanel->y, storePanel->height, spin, kMenuWidth, kMenuHeight, model)) { return false; }
             glViewport(0, 0, width, height);
             glDisable(GL_SCISSOR_TEST);
@@ -98,7 +97,7 @@ namespace MenuDetail {
         if (verifyPlayerProjection && storePanel != nullptr) {
             // Independent oracle from CBrother::DrawUI :136337-136357.
             // Compare the actual GL viewport + MVP, not just a helper's return.
-            const auto &brother = equippedPreview->weapon->brother;
+            const auto &brother = (*equippedPreview);
             const ZMeshBounds &torso = brother.GetTorso().GetAnimation().GetMesh()->GetBounds();
             const float expectedScale = storePanel->height / std::abs(torso.maxZ - torso.minZ);
             const float expectedX = storePanel->x + static_cast<int>(storePanel->width) / 2;
@@ -115,7 +114,7 @@ namespace MenuDetail {
                 actualX, actualY, expectedX, expectedY, actualScale, expectedScale, glIsEnabled(GL_SCISSOR_TEST), matches);
             if (!matches) { return false; }
         }
-        DrawPlayer(*equippedPreview, imageProgram, model);
+        equippedPreview->Draw(imageProgram, model);
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_SCISSOR_TEST);
         glViewport(0, 0, width, height);
@@ -124,14 +123,14 @@ namespace MenuDetail {
 
     /** CMenuMeshPlayer::Update observes configuration only after native 3. */
     void ZGameMenu::AdvancePlayerPreview(int deltaMs) {
-        CBrother &brother = equippedPreview->weapon->brother;
+        CBrother &brother = (*equippedPreview);
         brother.UpdateUI(deltaMs);
         previewAudio.Update();
         PlayPreviewSounds(brother.GetTorso().TakeSounds());
         PlayPreviewSounds(brother.GetLegs().TakeSounds());
         if (brother.TakeWeaponSwap() && previewSwapPending) {
             previewGunSlot = 1 - previewGunSlot;
-            SelectPlayerUIWeapon(*equippedPreview, previewGunSlot == previewPrimarySlot);
+            equippedPreview->SelectWeapon(previewGunSlot == previewPrimarySlot);
             previewSwapPending = false;
             previewSlotChanged = true;
             std::printf("[player-ui] native-swap slot=%u state=%d torso-preserved=1\n", previewGunSlot, brother.GetStateId());

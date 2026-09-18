@@ -123,7 +123,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // has no hit handler. A dormant original turret must not swallow a
             // penetrating round before it reaches the ordinary enemy behind it.
             CLevel probe(toc, tables, program);
-    probe.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    probe.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             probe.Reset();
             ZCombatEnemy *front = nullptr, *back = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
@@ -158,7 +158,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // is still heading towards it. Same real BULLET template, same
             // update path; only the camera rectangle is supplied here.
             CLevel cullScene(toc, tables, program);
-    cullScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    cullScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             cullScene.Reset();
             cullScene.SetViewCenter(600, 450);
             cullScene.SetViewBounds(600, 450, 200, 200);  // y in [350, 550]
@@ -207,7 +207,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // centre. Check the final screen rectangle, not just its dimensions.
         {
             CLevel anchorScene(toc, tables, program);
-    anchorScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    anchorScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             ZCombatEnemy *target = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 0) {
@@ -255,7 +255,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         for (unsigned kinds = 1; kinds <= 2; ++kinds) {
             std::vector<GameObjectRef> batchDeathSounds;
             CLevel deathScene(toc, tables, program);
-    deathScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    deathScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             deathScene.Reset();
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal >= kinds) { continue; }
@@ -316,7 +316,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // ... and is audible again once that copy has finished. Its own
             // scene has no actors, so nothing else can cue a sound meanwhile.
             CLevel windowScene(toc, tables, program);
-    windowScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->gameScale);
+    windowScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             windowScene.Reset();
             const GameObjectRef &repeated = batchDeathSounds.front();
             windowScene.PlayMoveSound(repeated);

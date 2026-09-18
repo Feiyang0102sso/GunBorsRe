@@ -3,6 +3,7 @@
  * active cover, which the original static navigation mesh does not include.
  */
 #define NOMINMAX
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include <queue>
@@ -10,18 +11,22 @@
 #include <cmath>
 #include "gun_bros_re/debug/PerformanceProbe.h"
 
-bool CLevel::FindMatchRoute(float x, float y, float goalX, float goalY, std::vector<ZCollisionPoint> &route) const {
+bool ZLocalPVPBot::FindRoute(const CLevel &scene, float x, float y, float goalX, float goalY,
+    std::vector<ZCollisionPoint> &route) {
+    const auto bounds = scene.GetPlayerMovementBounds();
+    const float playerRadius = scene.GetPlayerRadius();
+    const CCollisionData *collision = scene.GetCollisionData();
     PerformanceProbe::Scope timing(PerformanceProbe::counters.pathSearchMs);
     route.clear();
-    if (CanBrotherWalk(x, y, goalX, goalY)) { route.emplace_back(goalX, goalY); return true; }
-    const float step = std::max(24.0f, m_playerRadius * 2);
-    const int columns = static_cast<int>((m_right - m_left) / step) + 1;
-    const int rows = static_cast<int>((m_bottom - m_top) / step) + 1;
+    if (scene.CanBrotherWalk(x, y, goalX, goalY)) { route.emplace_back(goalX, goalY); return true; }
+    const float step = std::max(24.0f, playerRadius * 2);
+    const int columns = static_cast<int>((bounds.right - bounds.left) / step) + 1;
+    const int rows = static_cast<int>((bounds.bottom - bounds.top) / step) + 1;
     if (columns < 1 || rows < 1) { return false; }
-    const auto point = [&](int index) { return ZCollisionPoint(m_left + index % columns * step, m_top + index / columns * step); };
+    const auto point = [&](int index) { return ZCollisionPoint(bounds.left + index % columns * step, bounds.top + index / columns * step); };
     const auto attach = [&](float px, float py) {
-        const int column = static_cast<int>(std::lround((px - m_left) / step));
-        const int row = static_cast<int>(std::lround((py - m_top) / step));
+        const int column = static_cast<int>(std::lround((px - bounds.left) / step));
+        const int row = static_cast<int>(std::lround((py - bounds.top) / step));
         int chosen = -1;
         float nearest = std::numeric_limits<float>::max();
         for (int dy = -2; dy <= 2; ++dy) {
@@ -31,7 +36,7 @@ bool CLevel::FindMatchRoute(float x, float y, float goalX, float goalY, std::vec
                 const int index = cy * columns + cx;
                 const auto node = point(index);
                 const float distance = std::hypot(node.x - px, node.y - py);
-                if (distance < nearest && CanBrotherWalk(px, py, node.x, node.y)) { chosen = index; nearest = distance; }
+                if (distance < nearest && scene.CanBrotherWalk(px, py, node.x, node.y)) { chosen = index; nearest = distance; }
             }
         }
         return chosen;
@@ -42,18 +47,18 @@ bool CLevel::FindMatchRoute(float x, float y, float goalX, float goalY, std::vec
     // edge for every A* neighbour caused 500 ms stalls on the larger arenas.
     // Rebuilding this small index per route also respects destroyed cover.
     std::vector<std::vector<unsigned>> nearbyEdges(columns * rows);
-    if (m_collision != nullptr) {
-        const auto &vertices = m_collision->GetVertices();
-        const auto &edges = m_collision->GetEdges();
-        const float margin = step + m_playerRadius;
+    if (collision != nullptr) {
+        const auto &vertices = collision->GetVertices();
+        const auto &edges = collision->GetEdges();
+        const float margin = step + playerRadius;
         for (unsigned index = 0; index < edges.size(); ++index) {
             const auto &edge = edges[index];
             if (!edge.enabled) { continue; }
             const auto &a = vertices[edge.firstVertex], &b = vertices[edge.secondVertex];
-            const int left = std::clamp(static_cast<int>(std::floor((std::min(a.x, b.x) - margin - m_left) / step)), 0, columns - 1);
-            const int right = std::clamp(static_cast<int>(std::ceil((std::max(a.x, b.x) + margin - m_left) / step)), 0, columns - 1);
-            const int top = std::clamp(static_cast<int>(std::floor((std::min(a.y, b.y) - margin - m_top) / step)), 0, rows - 1);
-            const int bottom = std::clamp(static_cast<int>(std::ceil((std::max(a.y, b.y) + margin - m_top) / step)), 0, rows - 1);
+            const int left = std::clamp(static_cast<int>(std::floor((std::min(a.x, b.x) - margin - bounds.left) / step)), 0, columns - 1);
+            const int right = std::clamp(static_cast<int>(std::ceil((std::max(a.x, b.x) + margin - bounds.left) / step)), 0, columns - 1);
+            const int top = std::clamp(static_cast<int>(std::floor((std::min(a.y, b.y) - margin - bounds.top) / step)), 0, rows - 1);
+            const int bottom = std::clamp(static_cast<int>(std::ceil((std::max(a.y, b.y) + margin - bounds.top) / step)), 0, rows - 1);
             for (int row = top; row <= bottom; ++row) {
                 for (int column = left; column <= right; ++column) { nearbyEdges[row * columns + column].push_back(index); }
             }
@@ -61,10 +66,10 @@ bool CLevel::FindMatchRoute(float x, float y, float goalX, float goalY, std::vec
     }
     const auto clearEdge = [&](int current, const ZCollisionPoint &origin, const ZCollisionPoint &target) {
         for (unsigned index : nearbyEdges[current]) {
-            const auto &edge = m_collision->GetEdges()[index];
-            const auto &vertices = m_collision->GetVertices();
+            const auto &edge = collision->GetEdges()[index];
+            const auto &vertices = collision->GetVertices();
             if (CombatGeometry::EdgeFraction(origin.x, origin.y, target.x - origin.x, target.y - origin.y,
-                vertices[edge.firstVertex], vertices[edge.secondVertex], m_playerRadius) < 1) { return false; }
+                vertices[edge.firstVertex], vertices[edge.secondVertex], playerRadius) < 1) { return false; }
         }
         return true;
     };
@@ -107,4 +112,41 @@ bool CLevel::FindMatchRoute(float x, float y, float goalX, float goalY, std::vec
     route.push_back(point(first));
     std::reverse(route.begin(), route.end());
     return true;
+}
+
+bool ZLocalPVPBot::FindDestination(const CLevel &scene, float x, float y, bool cover,
+    float targetX, float targetY, float &goalX, float &goalY, unsigned choice) {
+    const ILayerPath *path = scene.GetNavigationPath();
+    if (path == nullptr) { return false; }
+    const int from = path->FindNode(x, y);
+    float best = std::numeric_limits<float>::max();
+    bool found = false;
+    std::vector<const ILayerPath::Node *> patrolNodes;
+    // Destination selection only needs reachability. Running FindNext for
+    // every candidate repeated a full shortest-path search hundreds of times.
+    const auto &nodes = path->GetNodes();
+    std::vector<bool> reachable(nodes.size(), false);
+    std::vector<unsigned> pending;
+    if (from >= 0) { reachable[from] = true; pending.push_back(static_cast<unsigned>(from)); }
+    for (unsigned cursor = 0; cursor < pending.size(); ++cursor) {
+        for (unsigned neighbour : nodes[pending[cursor]].neighbours) {
+            if (reachable[neighbour] || nodes[neighbour].locked) { continue; }
+            reachable[neighbour] = true;
+            pending.push_back(neighbour);
+        }
+    }
+    for (unsigned index = 0; index < path->GetNodes().size(); ++index) {
+        const auto &node = path->GetNodes()[index];
+        const float distance = std::hypot(node.x - x, node.y - y);
+        if (node.locked || distance < 40 || !scene.CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
+        if (from >= 0 && !reachable[index]) { continue; }
+        if (cover && scene.HasLineOfFire(targetX, targetY, node.x, node.y)) { continue; }
+        if (!cover) { patrolNodes.push_back(&node); continue; }
+        if (distance < best) { best = distance; goalX = node.x; goalY = node.y; found = true; }
+    }
+    if (!cover && !patrolNodes.empty()) {
+        const auto &node = *patrolNodes[choice % patrolNodes.size()];
+        goalX = node.x; goalY = node.y; return true;
+    }
+    return found;
 }

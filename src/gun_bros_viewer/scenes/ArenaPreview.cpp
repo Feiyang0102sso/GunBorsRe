@@ -9,10 +9,10 @@ namespace ArenaDetail {
 constexpr float kRadians = 3.14159265f / 180;
 const char *const kShaders = Paths::Shaders().c_str();
 
-bool Equip(ZPackTables &tables, const ZPlayerTemplateData &data, const ZWeaponEntry &entry,
-    ZPlayerModel &player, const ZShaderProgram &program) {
-    return EquipPlayerWeapon(tables, data.script, entry.data, entry.owner, player) &&
-        CreatePlayerBuffers(player, program);
+bool Equip(ZPackTables &tables, const CBrother::Template &data, const ZWeaponEntry &entry,
+    CBrother &player, const ZShaderProgram &program) {
+    return player.EquipWeapon(tables, data.GetScript(), entry.data, entry.owner) &&
+        player.CreateBuffers(program);
 }
 
 }
@@ -27,10 +27,10 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     ZPackTables tables(toc);
     std::vector<ZEnemyTemplateData> catalog;
     std::vector<ZWeaponEntry> weapons;
-    ZPlayerTemplateData playerData;
+    CBrother::Template playerData;
     ZPlayerVitals vitals;
     if (!LoadEnemyCatalog(toc, tables, catalog) || catalog.empty() ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerData) ||
+        !LoadWeaponCatalog(toc, tables, weapons) || !playerData.Load(toc, tables) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     if (weapons.empty() || weaponIndex >= weapons.size() || enemyIndex >= catalog.size()) {
         std::printf("[arena] equipment or enemy index out of range\n"); return 1;
@@ -45,15 +45,15 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         !markerProgram.Load(kShaders, "ogles_vs_mvp_constcolor", "ogles_ps_constcolor")) { return 1; }
     ZMarkerBatch markers;
     if (!markers.Create(markerProgram)) { return 1; }
-    ZPlayerModel player;
-    player.vitals = &vitals;
+    CBrother player;
+    player.SetVitals(&vitals);
     std::size_t weapon = weaponIndex % weapons.size();
     std::size_t entry = enemyIndex % catalog.size();
-    if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
+    if (!player.BuildBody(tables, playerData.GetMoveSet()) ||
         !Equip(tables, playerData, weapons[weapon], player, program)) { return 1; }
     CLevel scene(toc, tables, program);
-    scene.BindCombat(catalog, player, vitals, playerData.gameScale);
-    
+    scene.BindCombat(catalog, player, vitals, playerData.GetGameScale());
+
     if (onSceneReady != nullptr) {
         ArenaScene ready{window, toc, tables, program, catalog, weapons, playerData, player, vitals, scene};
         return onSceneReady(ready);
@@ -73,7 +73,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     if (armorIndex >= 0) {
         std::vector<ZArmorEntry> armor;
         if (!LoadArmorCatalog(toc, tables, armor) || armorIndex >= static_cast<int>(armor.size()) ||
-            !EquipPlayerArmor(tables, armor[armorIndex].data, program, player)) {
+            !player.EquipArmor(tables, armor[armorIndex].data, program)) {
             return 1;
         }
     }
@@ -102,9 +102,9 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
                 if (scene.SpawnNearby(entry) == nullptr) { noticeUntil = window.GetTicksMs() + 2500; }
             }
             else if (controls.IsPressed(key, ViewerAction::ResetBattle)) { reset = true; }
-            else if (controls.IsPressed(key, ViewerAction::Grenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[0]); }
-            else if (controls.IsPressed(key, ViewerAction::FreezeGrenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[1]); }
-            else if (controls.IsPressed(key, ViewerAction::ShockGrenade)) { ThrowArenaGrenade(player.weapon->brother, grenades[2]); }
+            else if (controls.IsPressed(key, ViewerAction::Grenade)) { ThrowArenaGrenade(player, grenades[0]); }
+            else if (controls.IsPressed(key, ViewerAction::FreezeGrenade)) { ThrowArenaGrenade(player, grenades[1]); }
+            else if (controls.IsPressed(key, ViewerAction::ShockGrenade)) { ThrowArenaGrenade(player, grenades[2]); }
             else if (controls.IsPressed(key, ViewerAction::ResetView)) { camera.zoom = kDefaultZoom; }
             else if (controls.IsPressed(key, ViewerAction::Pause)) { paused = !paused; accumulator = 0; scene.SetPaused(paused); }
             else if (controls.IsPressed(key, ViewerAction::Step)) { paused = true; step = true; scene.SetPaused(true); }
@@ -187,7 +187,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
             DrawEnemyModel(actor->model, program, mvp);
         }
         Matrix4dMultiply(projection, playerMatrix, mvp);
-        DrawPlayer(player, program, mvp);
+        player.Draw(program, mvp);
         scene.Draw(projection, nullptr, 1, ZWeaponDrawPass::InFrontOfPlayer);
         glDisable(GL_DEPTH_TEST);
         // Every bar uses the same predicate as projectile damage filtering.

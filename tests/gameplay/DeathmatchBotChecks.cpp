@@ -1,14 +1,15 @@
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 /** Hard DM uses real PvP rules and Flow with virtual inventory; Easy stays limited. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "engine/core/CStringToKey.h"
 
 int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
     CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile) {
+    std::uint32_t powerupChoice = 0;
     auto &session = fixture.session;
     auto &scene = fixture.scene;
-    auto &bot = static_cast<ZDeathmatchBot &>(fixture.brother);
+    auto &bot = static_cast<ZLocalPVPBot &>(fixture.brother);
     const auto previousInventory = profile.powerups;
     profile.powerups.clear();
     // Run the same real inventory/cooldown checks for both unlimited difficulties.
@@ -67,7 +68,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             bool requested = false;
             const auto previousUses = match.GetLife(1).grenades;
             for (unsigned elapsed = 0; elapsed < 6000 && match.GetLife(1).grenades == previousUses; elapsed += 16) {
-                if (!requested) { requested = ZDeathmatchBot::UseMatchConsumable(powerups, true); }
+                if (!requested) { requested = ZLocalPVPBot::UseMatchConsumable(powerups, true); }
                 session.Update(16, 0, 0, false);
             }
             if (!requested || match.GetLife(1).grenades != previousUses + 1 ||
@@ -79,7 +80,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         // The shared automatic path must select and execute a PvP item beyond Easy's set.
         bool usedOther = false;
         for (unsigned attempt = 0; attempt < 30 && !usedOther; ++attempt) {
-            if (ZLocalCoopBot::UseAnyPowerup(powerups)) {
+            if (ZLocalCoopBot::UseAnyPowerup(powerups, powerupChoice)) {
                 const auto id = powerups.GetSelected()->resource.localIndex;
                 usedOther = id != 1 && id != 8 && id != 9 && id != 13;
             }
@@ -111,8 +112,8 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
                     if (!match.Kill(peer, 1 - peer) || !match.Respawn(peer, true)) { return 1; }
                 }
             }
-            if (!fixture.player.weapon->brother.StartDeath()) { return 1; }
-            if (scenario == 1 && !fixture.brotherModel.weapon->brother.StartDeath()) { return 1; }
+            if (!fixture.player.StartDeath()) { return 1; }
+            if (scenario == 1 && !fixture.brotherModel.StartDeath()) { return 1; }
             session.Update(16, 0, 0, false);
         }
         if (!session.IsFinished() || session.IsReadyForResults()) { return 1; }

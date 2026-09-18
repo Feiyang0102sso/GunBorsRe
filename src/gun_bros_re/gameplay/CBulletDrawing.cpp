@@ -1,3 +1,4 @@
+#include "engine/graphics/CMeshCamera.h"
 /** Original CBullet::Draw :62998, using shared Windows sprite/mesh adapters. */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/CBullet.h"
@@ -147,11 +148,11 @@ void CBullet::DrawProjectile(ZSpriteRenderer &sprites, ZEffectColors &colors, co
     }
     DrawLightning(sprites, colors, projection, lightningQuads);
     if (visual->mesh) {
-        ZPlayerPart &part = *visual->mesh;
+        ZBulletVisual::Mesh &part = *visual->mesh;
         float base[kMatrix4dElements];
         const float apparentScale = visual->data.GetMeshScale() + 25 * GetTrajectoryHeight();
         const float meshScale = apparentScale * part.mesh.GetBounds().inverseExtent * projection.scale * meshCameraScale;
-        BuildPlayerGameMatrix(sceneMvp, x, y, meshScale, direction + 90, base);
+        MeshCameraBuildGameMatrix(sceneMvp, x, y, meshScale, direction + 90, base);
         part.buffer.Draw(program, base, part.texture);
     }
     if (beam) { beamQuads += sprites.Batch().GetQuadCount() - beforeQuads; }

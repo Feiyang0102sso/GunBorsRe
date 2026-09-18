@@ -1,5 +1,5 @@
 #include "gun_bros_re/gameplay/ZMapWorldInternal.h"
-#include "gun_bros_re/data/ZLocalBotFriend.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
 using namespace MapDetail;
 bool SaveSurvivalProgress(ZSurvivalGameContext *context, const CPlayerProgress &progress,
     const CLevel &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded ) {

@@ -8,14 +8,14 @@
 #define NOMINMAX
 #include "gun_bros_re/ui/ZGameFrontEnd.h"
 #include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZLocalBotFriend.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/ui/ZLoadingScreen.h"
 #include "gun_bros_re/ui/ZMenuData.h"
@@ -617,7 +617,7 @@ public:
     std::size_t PreviewSoundCount() const { return previewSoundCount; }
     void EnableSilentPreviewAudio() { previewAudio.EnableSilentValidation(); }
     ZAudioPlaybackState PreviewAudioState() const { return previewAudio.GetPlaybackState(); }
-    ZPlayerModel *GetPlayerPreview() const { return equippedPreview.get(); }
+    CBrother *GetPlayerPreview() const { return equippedPreview.get(); }
     unsigned GetPlayerPreviewSlot() const { return previewGunSlot; }
     bool TakePlayerPreviewSlotChange() {
         const bool changed = previewSlotChanged;
@@ -657,7 +657,7 @@ private:
     std::vector<std::vector<ZSpriteQuad>> planetQuads, planetThumbs;
     std::map<int, std::unique_ptr<CSpriteGlu>> spritePacks;
     std::map<std::uint64_t, std::unique_ptr<ZTexture>> icons;
-    std::unique_ptr<ZPlayerModel> equippedPreview;
+    std::unique_ptr<CBrother> equippedPreview;
     CPlayerConfiguration previewConfiguration;
     unsigned previewGunSlot = 0;
     unsigned previewPrimarySlot = 0;

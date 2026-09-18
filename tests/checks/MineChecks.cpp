@@ -1,3 +1,4 @@
+#include "engine/graphics/CMeshCamera.h"
 /** Real BIG mine scripts, animated firing, and original map boundary regression. */
 #define NOMINMAX
 #include "engine/core/ZPaths.h"
@@ -33,8 +34,8 @@ int RunMineCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
     ZPackTables tables(toc);
     std::vector<ZWeaponEntry> weapons;
-    ZPlayerTemplateData playerTemplate;
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !FindPlayerTemplate(toc, tables, playerTemplate)) { return 1; }
+    CBrother::Template playerTemplate;
+    if (!LoadWeaponCatalog(toc, tables, weapons) || !playerTemplate.Load(toc, tables)) { return 1; }
     ZWindow window;
     if (!window.Open("Mine diagnostic", 800, 600)) { return 1; }
     ZShaderProgram program;
@@ -53,16 +54,16 @@ int RunMineCheck(const std::string &bigDirectory) {
         if (entry.name != "Load Dropper" && entry.name != "Deuce Dropper X90" && entry.name != "Eggsecutioner" && !ordinaryBullet) { continue; }
         effects.Clear();
         const std::size_t startingShots = effects.GetShotCount();
-        ZPlayerModel player;
-        if (!BuildPlayerBody(tables, playerTemplate.moveSet, player) ||
-            !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-            !CreatePlayerBuffers(player, program)) { return 1; }
-        BuildPlayerGameMatrix(identity, 400, 540,
-            PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, model);
-        SetPlayerInput(player, false, true);
+        CBrother player;
+        if (!player.BuildBody(tables, playerTemplate.GetMoveSet()) ||
+            !player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+            !player.CreateBuffers(program)) { return 1; }
+        MeshCameraBuildGameMatrix(identity, 400, 540,
+            player.GetWorldScale(playerTemplate.GetGameScale(), 1), 0, model);
+        player.SetInput(false, true);
         std::size_t halfwayShots = 0;
         for (int frame = 0; frame < 1250; ++frame) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, model, 0, 16);
             if (frame == 624) { halfwayShots = effects.GetShotCount(); }
         }
@@ -70,7 +71,7 @@ int RunMineCheck(const std::string &bigDirectory) {
         if (stalled) { ++failures; }
         std::printf("[mine-check] %s shots10s=%zu shots20s=%zu live=%zu canFire=%d result=%s\n",
             entry.name.c_str(), halfwayShots - startingShots, effects.GetShotCount() - startingShots, effects.GetBulletCount(),
-            player.weapon->gun.CanFire(), stalled ? "FAIL-stalled" : "PASS-continuing");
+            player.weapon->CanFire(), stalled ? "FAIL-stalled" : "PASS-continuing");
         // These expectations are fixtures decoded from the original gun scripts.
         if (entry.name == "Load Dropper" && effects.GetBulletCount() != 6) { ++failures; }
         if (entry.name == "Deuce Dropper X90" && effects.GetBulletCount() != 5) { ++failures; }
@@ -90,15 +91,15 @@ int RunMineCheck(const std::string &bigDirectory) {
                 effects.Clear();
                 world.explosions = 0;
                 world.damage = 0;
-                if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-                    !CreatePlayerBuffers(player, program)) { return 1; }
-                BuildPlayerGameMatrix(identity, midpointX - nx * setback, midpointY - ny * setback,
-                    PlayerModelWorldScale(player, playerTemplate.gameScale, 1), facing, model);
-                SetPlayerInput(player, false, true);
+                if (!player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+                    !player.CreateBuffers(program)) { return 1; }
+                MeshCameraBuildGameMatrix(identity, midpointX - nx * setback, midpointY - ny * setback,
+                    player.GetWorldScale(playerTemplate.GetGameScale(), 1), facing, model);
+                player.SetInput(false, true);
                 unsigned outside = 0;
                 unsigned particles = 0;
                 for (int frame = 0; frame < 60; ++frame) {
-                    AdvancePlayer(player, 16);
+                    player.Update(16);
                     effects.Update(player, model, facing, 16, &map.weaponCollision);
                     particles += static_cast<unsigned>(effects.GetParticleCount());
                     for (const auto &shot : effects.GetProjectileStates()) {
@@ -124,50 +125,50 @@ int RunMineCheck(const std::string &bigDirectory) {
         // Fire once through production, then leave it alone until the BIG timer fires.
         effects.Clear();
         world.explosions = 0;
-        if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-            !CreatePlayerBuffers(player, program)) { return 1; }
-        BuildPlayerGameMatrix(identity, 400, 540,
-            PlayerModelWorldScale(player, playerTemplate.gameScale, 1), 0, model);
-        SetPlayerInput(player, false, true);
+        if (!player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+            !player.CreateBuffers(program)) { return 1; }
+        MeshCameraBuildGameMatrix(identity, 400, 540,
+            player.GetWorldScale(playerTemplate.GetGameScale(), 1), 0, model);
+        player.SetInput(false, true);
         for (int frame = 0; frame < 100 && effects.GetBulletCount() == 0; ++frame) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, model, 0, 16);
         }
-        SetPlayerInput(player, false, false);
+        player.SetInput(false, false);
         if (effects.GetBulletCount() != 1) { ++failures; }
         for (int frame = 0; frame < 1812; ++frame) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, model, 0, 16);
         }
         const auto beforeExpiry = effects.GetBulletCount();
         if (beforeExpiry != 1 || world.explosions != 0) { ++failures; }
         for (int frame = 0; frame < 125; ++frame) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, model, 0, 16);
         }
         if (effects.GetBulletCount() != 0 || world.explosions != 1) { ++failures; }
-        if (player.weapon->gun.FunctionResolver(13, nullptr, 0) != 0) { ++failures; }
+        if (player.weapon->FunctionResolver(13, nullptr, 0) != 0) { ++failures; }
         std::printf("[mine-check] %s live29s=%zu live31s=%zu explosions=%u\n",
             entry.name.c_str(), beforeExpiry, effects.GetBulletCount(), world.explosions);
         if (entry.name != "Load Dropper") { continue; }
         // Two instances of the SAME gun and SAME owner ID must stay isolated.
         // This catches both the old owner-only search and resource-ID substitutes.
         effects.Clear();
-        if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, player) ||
-            !CreatePlayerBuffers(player, program)) { return 1; }
+        if (!player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+            !player.CreateBuffers(program)) { return 1; }
         {
-            ZPlayerModel other;
-            if (!BuildPlayerBody(tables, playerTemplate.moveSet, other) ||
-                !EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, other) ||
-                !CreatePlayerBuffers(other, program)) { return 1; }
+            CBrother other;
+            if (!other.BuildBody(tables, playerTemplate.GetMoveSet()) ||
+                !other.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+                !other.CreateBuffers(program)) { return 1; }
             float otherModel[16];
-            BuildPlayerGameMatrix(identity, 900, 540,
-                PlayerModelWorldScale(other, playerTemplate.gameScale, 1), 0, otherModel);
-            other.weapon->gun.Fire();
+            MeshCameraBuildGameMatrix(identity, 900, 540,
+                other.GetWorldScale(playerTemplate.GetGameScale(), 1), 0, otherModel);
+            other.weapon->Fire();
             effects.EmitBrother(other, otherModel, 0, kPlayerCombatId);
-            SetPlayerInput(player, false, true);
+            player.SetInput(false, true);
             for (int frame = 0; frame < 1250; ++frame) {
-                AdvancePlayer(player, 16);
+                player.Update(16);
                 effects.Update(player, model, 0, 16);
             }
             unsigned otherMines = 0;
@@ -177,11 +178,11 @@ int RunMineCheck(const std::string &bigDirectory) {
             if (otherMines != 1 || effects.GetBulletCount() != 7) { ++failures; }
             const unsigned explosionsBefore = world.explosions;
             unsigned removed = 0;
-            while (player.weapon->gun.FunctionResolver(13, nullptr, 0) != 0) {
+            while (player.weapon->FunctionResolver(13, nullptr, 0) != 0) {
                 ++removed;
                 if (removed > 6) { ++failures; break; }
             }
-            SetPlayerInput(player, false, false);
+            player.SetInput(false, false);
             effects.Update(player, model, 0, 16);
             if (removed != 6 || effects.GetBulletCount() != 1 || world.explosions - explosionsBefore != 6) {
                 ++failures;
@@ -189,17 +190,17 @@ int RunMineCheck(const std::string &bigDirectory) {
             std::printf("[mine-check] source-isolation other=%u ownRemoved=%u blasts=%u\n",
                 otherMines, removed, world.explosions - explosionsBefore);
             // Re-equipping invalidates the old source, not the still-living bullet.
-            if (!EquipPlayerWeapon(tables, playerTemplate.script, entry.data, entry.owner, other) ||
-                !CreatePlayerBuffers(other, program)) { return 1; }
-            if (other.weapon->gun.FunctionResolver(13, nullptr, 0) != 0) { ++failures; }
+            if (!other.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
+                !other.CreateBuffers(program)) { return 1; }
+            if (other.weapon->FunctionResolver(13, nullptr, 0) != 0) { ++failures; }
         }
         // Destroy the source before the old bullet, then clear twice. Neither may
         // dereference the old gun or send its decrement to the current gun.
         effects.Clear();
         effects.Clear();
-        SetPlayerInput(player, false, true);
+        player.SetInput(false, true);
         for (int frame = 0; frame < 1250; ++frame) {
-            AdvancePlayer(player, 16);
+            player.Update(16);
             effects.Update(player, model, 0, 16);
         }
         if (effects.GetBulletCount() != 6) { ++failures; }

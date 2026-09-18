@@ -14,10 +14,10 @@
 // different (CPlayer::UpdateMovement :101384). Preserve it during this refactor.
 constexpr float kDesktopPlayerSpeed = 220;
 
-CPlayer::CPlayer(ZPlayerModel &model, ZPlayerVitals &vitals)
+CPlayer::CPlayer(CBrother &model, ZPlayerVitals &vitals)
     : m_model(&model), m_vitals(&vitals) {}
 
-void CPlayer::BindActor(ZPlayerModel &model, ZPlayerVitals &vitals) {
+void CPlayer::BindActor(CBrother &model, ZPlayerVitals &vitals) {
     m_model = &model;
     m_vitals = &vitals;
 }
@@ -77,12 +77,12 @@ void CPlayer::BeginMovement() {
 bool CPlayer::UpdateMovement(int deltaMs, float moveX, float moveY) {
     if (m_model == nullptr || m_vitals == nullptr || m_vitals->dead || m_vitals->stunMs != 0) { return false; }
     const float length = std::hypot(moveX, moveY);
-    if (length > 0 && m_model->weapon->brother.CanMove()) {
+    if (length > 0 && m_model->CanMove()) {
         // Native modifier order: CPlayer::UpdateMovement :101384; PLAYER BT
         // supplies the brother template, equipment supplies armor/gun values.
-        const float speed = kDesktopPlayerSpeed * PlayerArmorMultiplier(*m_model, 2) *
-            CFriendPowerManager::Multiplier(m_model->friendCount, 2) * m_model->weapon->brother.GetFrenzyMultiplier(2) *
-            m_model->ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f;
+        const float speed = kDesktopPlayerSpeed * m_model->GetArmorMultiplier(2) *
+            CFriendPowerManager::Multiplier(m_model->friendCount, 2) * m_model->GetFrenzyMultiplier(2) *
+            m_model->ActiveWeapon().GetMasterySpeedMod() * 0.01f;
         x += moveX / length * speed * deltaMs * 0.001f;
         y += moveY / length * speed * deltaMs * 0.001f;
     }
@@ -93,11 +93,11 @@ void CPlayer::UpdateShooting(int deltaMs, bool moving, bool shoot, ZBrotherAIWor
     if (m_model == nullptr || m_vitals == nullptr || m_vitals->dead || m_vitals->stunMs != 0) { return; }
     // CPlayer::UpdateShooting :101312 only targets while the fire stick is
     // active. Desktop mouse-held fire supplies that intent; idle never fires.
-    if (m_model->weapon->brother.IsAutoFire()) {
+    if (m_model->IsAutoFire()) {
         if (shoot) { shoot = m_autoAim.Update(deltaMs, x, y, facing, world); }
         else { m_autoAim.ClearTarget(facing); }
     } else if (m_autoAim.GetTarget() != 0) { m_autoAim.ClearTarget(facing); }
-    SetPlayerInput(*m_model, moving, shoot);
+    m_model->SetInput(moving, shoot);
 }
 
 void CPlayer::ApplyKnockback(int deltaMs, float seconds) {
@@ -117,7 +117,7 @@ void CPlayer::Move() {
     y = std::clamp(y, bounds.y + m_collisionRadius,
         bounds.y + bounds.height - m_collisionRadius);
     if (m_model == nullptr) { return; }
-    const CBrother &player = m_model->weapon->brother;
+    const CBrother &player = (*m_model);
     if (!player.CanPassEnemies()) {
         for (const auto &actor : m_objects->GetEnemies()) {
             const CEnemy &enemy = actor->model.enemy;
@@ -151,8 +151,8 @@ void CPlayer::Update(int deltaMs, float moveX, float moveY, bool shoot,
     BeginMovement();
     const bool moving = UpdateMovement(deltaMs, moveX, moveY);
     UpdateShooting(deltaMs, moving, shoot, world);
-    const float forceSeconds = m_model->weapon->brother.GetKnockbackStepSeconds(deltaMs);
-    AdvancePlayer(*m_model, deltaMs);
+    const float forceSeconds = m_model->GetKnockbackStepSeconds(deltaMs);
+    m_model->Update(deltaMs);
     ApplyKnockback(deltaMs, forceSeconds);
     if (moveActor) { Move(); }
 }

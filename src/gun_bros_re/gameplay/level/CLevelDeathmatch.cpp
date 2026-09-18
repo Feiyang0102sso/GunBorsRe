@@ -25,8 +25,8 @@ const ILayerPath::Node *FarthestSpawn(const ILayerPath &path, float x, float y) 
 
 bool CLevel::IsMatchSpawnPending(unsigned peer) const {
     if (!IsDeathmatch()) { return false; }
-    if (peer == 0) { return !m_playerModel->weapon->brother.HasSpawned(); }
-    return !m_brotherModel->weapon->brother.HasSpawned();
+    if (peer == 0) { return !m_playerModel->HasSpawned(); }
+    return !m_brotherModel->HasSpawned();
 }
 
 void CLevel::SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons) {
@@ -48,7 +48,7 @@ bool CLevel::SelectMatchGun(unsigned peer, unsigned slot, const GameObjectRef &g
     return EquipMatchGun(peer, m_gunConfigurations[peer][m_matchSlots[peer]]);
 }
 bool CLevel::EquipMatchGun(unsigned peer, const GameObjectRef &ref, bool resetActor) {
-    ZPlayerModel *model = m_playerModel;
+    CBrother *model = m_playerModel;
     if (peer == 1) { model = m_brotherModel; }
     for (const auto &weapon : *m_matchWeapons) {
         if (weapon.packHash != ref.packHash || weapon.ordinal != ref.localIndex) { continue; }
@@ -56,25 +56,14 @@ bool CLevel::EquipMatchGun(unsigned peer, const GameObjectRef &ref, bool resetAc
         const std::uint64_t key = (static_cast<std::uint64_t>(ref.packHash) << 8) | ref.localIndex;
         model->masteryExperience = model->masteryByWeapon[key];
         if (resetActor) {
-            if (!EquipPlayerWeapon(*m_tables, model->weapon->playerScript, weapon.data, weapon.name, *model) ||
-                !CreatePlayerBuffers(*model, *m_program)) { return false; }
+            if (!model->EquipWeapon(*m_tables, model->GetScript(), weapon.data, weapon.name) ||
+                !model->CreateBuffers(*m_program)) { return false; }
         } else {
-            auto &bank = model->matchWeapons[key];
-            if (bank == nullptr) {
-                if (!PreparePlayerUIWeapon(*m_tables, weapon.data, weapon.name, *model) ||
-                    !CreatePlayerBuffers(*model, *m_program)) { return false; }
-                bank = std::move(model->uiOtherWeapon);
-            }
-            std::vector<const CMesh *> meshes;
-            for (const auto &part : bank->configs) { meshes.push_back(&part->mesh); }
-            bank->gun.SetDeathmatch(true);
-            bank->gun.SetLevelContext(GetScriptLevel());
-            bank->gun.SetMasteryExperience(model->masteryExperience);
-            model->weapon->brother.SetUIGun(bank->gun, meshes);
-            model->uiActiveWeapon = bank.get();
+            model->SetLevelContext(GetScriptLevel());
+            if (!model->SelectCachedWeapon(*m_tables, weapon.data, weapon.name, key, *m_program)) { return false; }
         }
-        model->weapon->brother.SetLevelContext(GetScriptLevel());
-        model->weapon->gun.SetLevelContext(GetScriptLevel());
+        model->SetLevelContext(GetScriptLevel());
+        model->weapon->SetLevelContext(GetScriptLevel());
         model->gunSlot = m_matchSlots[peer];
         if (peer == 1) { m_brotherWeaponSlot = m_matchSlots[peer]; }
         return true;
@@ -96,8 +85,8 @@ bool CLevel::StartDeathmatch() {
     // Keep the MAP placement and loading camera while equipment is pending.
     // Resolve the spawn endpoints when a participant confirms entry.
     m_matchMapSpawn = {m_actor.x, m_actor.y};
-    m_playerModel->weapon->brother.WaitForSpawn();
-    m_brotherModel->weapon->brother.WaitForSpawn();
+    m_playerModel->WaitForSpawn();
+    m_brotherModel->WaitForSpawn();
     std::printf("[deathmatch] waiting for initial equipment\n");
     return true;
 }
@@ -146,7 +135,7 @@ bool CLevel::RespawnDeathmatch(unsigned peer, bool initial, bool resumeFromShop)
     RetireOwner(actor);
     m_auxiliaryMs[peer] = 0;
     m_matchSwap[peer] = false;
-    ZPlayerModel *model = m_playerModel;
+    CBrother *model = m_playerModel;
     if (peer == 0) {
         m_vitals->Reset(); m_actor.forceMs = 0;
         m_actor.x = x; m_actor.y = y; m_actor.facing = angle;
@@ -154,7 +143,7 @@ bool CLevel::RespawnDeathmatch(unsigned peer, bool initial, bool resumeFromShop)
     } else { m_brother->Reset(x, y, angle); model = m_brotherModel; }
     model->powerups = {};
     if (!EquipMatchGun(peer, m_gunConfigurations[peer][m_matchSlots[peer]], true)) { return false; }
-    if (!model->weapon->brother.Respawn()) { return false; }
+    if (!model->Respawn()) { return false; }
     // RespawnPlayerForDeathMatch :115122 restores the local camera after Spawn.
     // A remote/Bot entry must never move the waiting player's camera.
     if (peer == 0) { m_map->GetCamera().SetCameraMode(0); }
@@ -175,8 +164,8 @@ void CLevel::RecordMatchDeath(unsigned peer, int killer) {
     const unsigned experience = static_cast<unsigned>(std::max(0.0f, GetEnemyMultiplier(-1, 3)));
     if (killer == 0) {
         AddExperience(experience);
-        const float armorRatio = PlayerArmorMultiplier(*m_brotherModel, 0) /
-            PlayerArmorMultiplier(*m_playerModel, 0);
+        const float armorRatio = m_brotherModel->GetArmorMultiplier(0) /
+            m_playerModel->GetArmorMultiplier(0);
         const unsigned points = std::max(1u,
             static_cast<unsigned>(experience * m_matchStreaks[0] * armorRatio));
         AddMatchScore(points, m_matchStreaks[0]);
@@ -187,17 +176,17 @@ bool CLevel::AdvanceDeathmatchEnding(int deltaMs) {
     // PLAYER export 2 emits the burst before state 7's move reaches native 1.
     // Continue both dead actors, including simultaneous final kills, without AI or combat.
     BeginAudioFrame();
-    ZPlayerModel *models[] = {m_playerModel, m_brotherModel};
+    CBrother *models[] = {m_playerModel, m_brotherModel};
     ZPlayerVitals *vitals[] = {m_vitals, &m_brother->vitals};
     const ZCombatId actors[] = {kPlayerCombatId, kBrotherCombatId};
     bool complete = true;
     for (unsigned peer = 0; peer < 2; ++peer) {
         if (!vitals[peer]->dead) { continue; }
         auto &model = *models[peer];
-        AdvancePlayer(model, deltaMs);
+        model.Update(deltaMs);
         float x = m_actor.x, y = m_actor.y, direction = m_actor.facing;
         if (peer == 1) { x = m_brother->x; y = m_brother->y; direction = m_brother->facing; }
-        for (const auto &cue : model.weapon->brother.TakeCues()) {
+        for (const auto &cue : model.TakeCues()) {
             if (cue.kind == ZGunCue::Kind::Grenade || cue.kind == ZGunCue::Kind::Splash) { continue; }
             Emit(cue, x, y, 0, direction - 90, actors[peer], cue.hand, -1, -1);
         }
@@ -249,10 +238,10 @@ bool CLevel::CollectMatchWeapon(unsigned peer, unsigned index) {
 }
 bool CLevel::RequestMatchWeaponSwap(unsigned peer) {
     if (m_match == nullptr || IsMatchSpawnPending(peer) || m_match->GetLife(peer).dead || m_matchSwap[peer]) { return false; }
-    ZPlayerModel *model = m_playerModel;
+    CBrother *model = m_playerModel;
     if (peer == 1) { model = m_brotherModel; }
-    if (model->weapon->brother.HasGrenadeRequest(0)) { return false; }
-    if (!model->weapon->brother.OnSwapGun()) { return false; }
+    if (model->HasGrenadeRequest(0)) { return false; }
+    if (!model->OnSwapGun()) { return false; }
     m_matchSwap[peer] = true;
     return true;
 }
@@ -291,43 +280,4 @@ bool CLevel::HasLineOfFire(float x, float y, float targetX, float targetY) const
             geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex], 0) <= 1) { return false; }
     }
     return true;
-}
-bool CLevel::FindMatchDestination(float x, float y, bool cover, float targetX, float targetY, float &goalX, float &goalY, unsigned choice) const {
-    if (m_map == nullptr) { return false; }
-    const ILayerPath *path = m_map->GetPathLayer(m_pathLayer);
-    if (path == nullptr) { return false; }
-    const int from = path->FindNode(x, y);
-    float best = std::numeric_limits<float>::max();
-    bool found = false;
-    std::vector<const ILayerPath::Node *> patrolNodes;
-    // Destination selection only needs reachability. Running FindNext for
-    // every candidate repeated a full shortest-path search hundreds of times.
-    const auto &nodes = path->GetNodes();
-    std::vector<bool> reachable(nodes.size(), false);
-    std::vector<unsigned> pending;
-    if (from >= 0) { reachable[from] = true; pending.push_back(static_cast<unsigned>(from)); }
-    for (unsigned cursor = 0; cursor < pending.size(); ++cursor) {
-        for (unsigned neighbour : nodes[pending[cursor]].neighbours) {
-            if (reachable[neighbour] || nodes[neighbour].locked) { continue; }
-            reachable[neighbour] = true;
-            pending.push_back(neighbour);
-        }
-    }
-    for (unsigned index = 0; index < path->GetNodes().size(); ++index) {
-        const auto &node = path->GetNodes()[index];
-        const float distance = std::hypot(node.x - x, node.y - y);
-        if (node.locked || distance < 40 || !CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
-        if (from >= 0 && !reachable[index]) { continue; }
-        if (cover && HasLineOfFire(targetX, targetY, node.x, node.y)) { continue; }
-        if (!cover) { patrolNodes.push_back(&node); continue; }
-        if (distance < best) { best = distance; goalX = node.x; goalY = node.y; found = true; }
-    }
-    if (!cover && !patrolNodes.empty()) {
-        const auto &node = *patrolNodes[choice % patrolNodes.size()];
-        goalX = node.x; goalY = node.y; return true;
-    }
-    return found;
-}
-bool CLevel::FindMatchSupply(float x, float y, float &goalX, float &goalY) const {
-    return FindNearestPickup(x, y, goalX, goalY);
 }

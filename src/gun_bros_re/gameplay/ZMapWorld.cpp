@@ -1,3 +1,4 @@
+#include "engine/graphics/CMeshCamera.h"
 #include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 using namespace MapDetail;
 
@@ -556,18 +557,17 @@ void BuildCollisionScene(ZLoadedMap &loaded) {
 bool EquipControlledPlayer(ZPackTables &tables, ZLoadedMap &loaded,
     const ZShaderProgram &program, const ZWeaponEntry &weapon) {
     if (loaded.players.empty()) { return true; }
-    // CombatScene retains this model's address. EquipPlayerWeapon stages the
+    // CombatScene retains this actor's address. CBrother::EquipWeapon stages the
     // weapon atomically and preserves the body, vitals pointer and armour.
-    ZPlayerModel &player = *loaded.players[0].model;
+    CBrother &player = *loaded.players[0].model;
     player.gunResource.packHash = weapon.packHash;
     player.gunResource.localIndex = static_cast<std::uint8_t>(weapon.ordinal);
     const std::uint64_t key = (static_cast<std::uint64_t>(weapon.packHash) << 8) | weapon.ordinal;
     player.masteryExperience = 0;
     const auto mastery = player.masteryByWeapon.find(key);
     if (mastery != player.masteryByWeapon.end()) { player.masteryExperience = mastery->second; }
-    if (!EquipPlayerWeapon(tables, loaded.playerTemplate->script, weapon.data, weapon.owner, player) ||
-        !CreatePlayerBuffers(player, program)) { return false; }
-    PosePlayer(player);
+    if (!player.EquipWeapon(tables, loaded.playerTemplate->GetScript(), weapon.data, weapon.owner) ||
+        !player.CreateBuffers(program)) { return false; }
     return true;
 }
 
@@ -576,112 +576,6 @@ void AppendSurvivalShortcut(std::vector<ZKeyCode> &inputs, ZKeyCode key) {
     // and NextItem actions are dispatched separately and remain available.
     if (key == ZKeyCode::F || key == ZKeyCode::R) { return; }
     inputs.push_back(key);
-}
-
-bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
-                            std::uint64_t elapsedMs) {
-    if (loaded.players.empty()) {
-        return false;
-    }
-
-    float directionX = 0.0f;
-    float directionY = 0.0f;
-    if (window.IsKeyDown(ZKeyCode::A)) {
-        directionX -= 1.0f;
-    }
-    if (window.IsKeyDown(ZKeyCode::D)) {
-        directionX += 1.0f;
-    }
-    if (window.IsKeyDown(ZKeyCode::W)) {
-        directionY -= 1.0f;
-    }
-    if (window.IsKeyDown(ZKeyCode::S)) {
-        directionY += 1.0f;
-    }
-
-    const bool moving = directionX != 0.0f || directionY != 0.0f;
-    ZPlacedPlayer &player = loaded.players[0];
-    if (moving != player.moving) {
-        // The player data interleaves torso and leg moves. Slot zero is the
-        // spawn/idle pair and slot one is the first locomotion pair.
-        const std::size_t moveSlot = moving ? 1 : 0;
-        SelectPlayerMoveSlot(*player.model, moveSlot, false);
-        player.moving = moving;
-    }
-
-    if (!moving || elapsedMs == 0) {
-        return moving;
-    }
-
-    const float directionLength = std::sqrt(directionX * directionX +
-                                            directionY * directionY);
-    directionX /= directionLength;
-    directionY /= directionLength;
-    player.facingDegrees = std::atan2(directionY, directionX) * kRadiansToDegrees + 90.0f;
-
-    const float elapsedSeconds = static_cast<float>(elapsedMs) * 0.001f;
-    ZCollisionPoint movement(directionX * kPlayerMovementUnitsPerSecond *
-                                elapsedSeconds,
-                            directionY * kPlayerMovementUnitsPerSecond *
-                                elapsedSeconds);
-    ZCollisionPoint resolved = loaded.collisionScene.ResolveCircleMovement(
-        ZCollisionPoint(player.x, player.y), movement, kPlayerCollisionRadius);
-
-    // CPlayer::Move clamps the body to the active camera bounds before it
-    // resolves collision. Keep the whole circle inside the same rectangle.
-    const ZMapRectangle bounds = loaded.map.GetVisibleBounds();
-    if (!bounds.IsEmpty()) {
-        const float minimumX = static_cast<float>(bounds.x) +
-                               kPlayerCollisionRadius;
-        const float maximumX = static_cast<float>(bounds.x + bounds.width) -
-                               kPlayerCollisionRadius;
-        const float minimumY = static_cast<float>(bounds.y) +
-                               kPlayerCollisionRadius;
-        const float maximumY = static_cast<float>(bounds.y + bounds.height) -
-                               kPlayerCollisionRadius;
-        if (resolved.x < minimumX) {
-            resolved.x = minimumX;
-        }
-        if (resolved.x > maximumX) {
-            resolved.x = maximumX;
-        }
-        if (resolved.y < minimumY) {
-            resolved.y = minimumY;
-        }
-        if (resolved.y > maximumY) {
-            resolved.y = maximumY;
-        }
-    }
-
-    player.x = resolved.x;
-    player.y = resolved.y;
-    return true;
-}
-
-/**
- * Run the animation clock forward, in the bites playback would use.
- *
- * What makes a still screenshot able to prove anything about animation: shoot
- * the same map at two different times and diff them. Deterministic, because
- * the bite size is fixed rather than taken from the wall clock.
- */
-void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
-            CLevel *effects , bool firing ) {
-    if (effects && !loaded.players.empty()) { SetPlayerInput(*loaded.players[0].model, false, firing); }
-    for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
-        AdvanceProps(loaded.props, kWarmUpFrameMs);
-        AdvanceTileLayers(loaded.map, kWarmUpFrameMs);
-        AdvanceEnemies(loaded, kWarmUpFrameMs);
-        AdvancePlayers(loaded, kWarmUpFrameMs);
-        if (effects && !loaded.players.empty()) {
-            ZPlacedPlayer &player = loaded.players[0];
-            float identity[kMatrix4dElements], modelToWorld[kMatrix4dElements];
-            Matrix4dIdentity(identity);
-            const float scale = PlayerModelWorldScale(*player.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
-            BuildPlayerGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
-            effects->Update(*player.model, modelToWorld, player.facingDegrees, kWarmUpFrameMs, &loaded.weaponCollision);
-        }
-    }
 }
 
 /** Slot of the first map of the pack `slot` belongs to. */

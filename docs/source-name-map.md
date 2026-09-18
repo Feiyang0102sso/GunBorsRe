@@ -34,6 +34,10 @@
 
 ## 既有迁移记录
 
+2026-09-17 Bot 归并：本地策略统一为 `gameplay/brother/bot/ZLocalCoopBot.*`、`ZLocalPVPBot.*`；原 `level/ZDeathmatchNavigation.cpp` 改为同目录的 `ZLocalPVPBotNavigation.cpp`，寻路与巡逻／掩体选择现由 Bot 自己实现。原 `data/ZLocalBotFriend.*`、`ZLocalBotRoster.cpp` 同时迁入。`CBrotherAI` 仍是原版伙伴策略，留在 `brother/`。后续历史段落中的旧名按此映射，详见 [Bot 归并记录](bot-directory-migration.md)。
+
+2026-09-17 角色所有权归并：所有过渡 `ZPlayer*` 模块已删除。`CBrother` 直接持有脚本、强化状态与装备槽，`CBrotherBody.cpp`、`CBrotherEquipment.cpp`、`CBrotherResources.cpp`、`CBrotherDrawing.cpp` 分别实现身体装配、装备操作、模板加载与绘制；`CGunDrawing.cpp`／`CArmorDrawing.cpp` 加载各自资源。`ZBrotherRenderer.h/.cpp` 随后也已拆除，根目录无 Z 文件，绘制直接归 `CBrother`；通用模型加载归 `data/ZMeshAssets.*`，裸模型浏览归 Viewer 的 `BrotherPreview.*`。详见 [Brother 所有权归并](brother-ownership-migration.md)。下述 13 文件是此前目录归并时的数量。
+
 Brother 核心目录：`CBrother.h/.cpp`、`CBrotherPowerups.cpp`、`CPlayer.h/.cpp`、`ZPlayerModel.h/.cpp`、`CBrotherAI.h/.cpp`、`ZLocalCoopBot.h/.cpp`、`ZDeathmatchBot.h/.cpp` 共 13 个文件统一位于 `gun_bros_re/gameplay/brother/`。保留 `CBrotherPowerups.cpp` 的独立文件；数据、关卡与共享战斗模块不随之移动。
 
 Powerup 本体目录：`CPowerup.h/.cpp`、`CPowerupActions.cpp`、`CPowerupPresentation.cpp` 统一位于 `gun_bros_re/gameplay/powerup/`。角色入口保留在 `gameplay/brother/CBrotherPowerups.cpp`，关卡调度保留在 `gameplay/level/CLevelPowerups.cpp`；选择器、Catalog 与测试仍在各自职责目录。
@@ -54,7 +58,7 @@ Movie 完成通知：`engine/glu/movie/CMovie.*` 内的嵌套 `Playback` 保存�
 | `gun_bros_re/gameplay/ZEnemyCombat.h` | 已并入 `gun_bros_re/gameplay/CEnemy.h` |
 | `gun_bros_re/gameplay/ZLiveCombat.cpp` | `gun_bros_re/gameplay/level/CLevelCoop.cpp` |
 | `gun_bros_re/gameplay/ZDeathmatchCombat.cpp` | `gun_bros_re/gameplay/level/CLevelDeathmatch.cpp` |
-| `gun_bros_re/gameplay/ZDeathmatchNavigation.cpp` | `gun_bros_re/gameplay/level/ZDeathmatchNavigation.cpp`，仍属桌面 Bot 寻路 |
+| `gun_bros_re/gameplay/ZDeathmatchNavigation.cpp` | `gun_bros_re/gameplay/brother/bot/ZLocalPVPBotNavigation.cpp`，桌面 Bot 寻路与战术目标选择 |
 | `gun_bros_re/gameplay/CLevel*.h/.cpp` | 同名文件统一放在 `gun_bros_re/gameplay/level/` |
 
 第四批：`ZPowerupMoviePlayer.h/.cpp` 已删除，脚本、Movie、屏幕粒子及完成事件归同一个 `CPowerup`；私有图形数据与方法实现放在 `CPowerupPresentation.cpp`。旧 `GetMoviePlayer` 调用改为 `GetPresentedPowerup`，不保留兼容播放器对象。
@@ -120,9 +124,9 @@ Movie 完成通知：`engine/glu/movie/CMovie.*` 内的嵌套 `Playback` 保存�
 | `gun_bros_re/data/ArmorCatalog.cpp` | `gun_bros_re/data/ZArmorCatalog.cpp` |
 | `gun_bros_re/data/ArmorCatalog.h` | `gun_bros_re/data/ZArmorCatalog.h` |
 | `gun_bros_re/data/BigVersions.h` | `gun_bros_re/data/ZBigVersions.h` |
-| `gun_bros_re/data/LocalBotFriend.cpp` | `gun_bros_re/data/ZLocalBotFriend.cpp` |
-| `gun_bros_re/data/LocalBotFriend.h` | `gun_bros_re/data/ZLocalBotFriend.h` |
-| `gun_bros_re/data/LocalBotRoster.cpp` | `gun_bros_re/data/ZLocalBotRoster.cpp` |
+| `gun_bros_re/data/LocalBotFriend.cpp` | `gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.cpp` |
+| `gun_bros_re/data/LocalBotFriend.h` | `gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h` |
+| `gun_bros_re/data/LocalBotRoster.cpp` | `gun_bros_re/gameplay/brother/bot/ZLocalBotRoster.cpp` |
 | `gun_bros_re/data/MissionCatalog.cpp` | `gun_bros_re/data/ZMissionCatalog.cpp` |
 | `gun_bros_re/data/MissionCatalog.h` | `gun_bros_re/data/ZMissionCatalog.h` |
 | `gun_bros_re/data/MissionCatalogInternal.h` | `gun_bros_re/data/ZMissionCatalogInternal.h` |
@@ -142,16 +146,16 @@ Movie 完成通知：`engine/glu/movie/CMovie.*` 内的嵌套 `Playback` 保存�
 | `gun_bros_re/data/StoreCatalog.h` | `gun_bros_re/data/ZStoreCatalog.h` |
 | `gun_bros_re/data/WeaponCatalog.cpp` | `gun_bros_re/data/ZWeaponCatalog.cpp` |
 | `gun_bros_re/data/WeaponCatalog.h` | `gun_bros_re/data/ZWeaponCatalog.h` |
-| `gun_bros_re/gameplay/BroAIDeathmatch.cpp` | `gun_bros_re/gameplay/brother/ZLocalCoopBot.cpp` |
-| `gun_bros_re/gameplay/BroAIDeathmatch.h` | `gun_bros_re/gameplay/brother/ZLocalCoopBot.h` |
+| `gun_bros_re/gameplay/BroAIDeathmatch.cpp` | `gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.cpp` |
+| `gun_bros_re/gameplay/BroAIDeathmatch.h` | `gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h` |
 | `gun_bros_re/gameplay/CombatGeometry.h` | `gun_bros_re/gameplay/ZCombatGeometry.h` |
 | `gun_bros_re/gameplay/CombatScene.cpp` | 已按职责并入 `CLevelRuntime.cpp`、`CLevelWorld.cpp`、`CLevelActors.cpp`、`CLevelProjectiles.cpp`、`CLevelCombat.cpp` |
 | `gun_bros_re/gameplay/CombatScene.h` | 已并入 `gun_bros_re/gameplay/level/CLevel.h`，不保留兼容门面 |
 | `gun_bros_re/gameplay/CombatTypes.h` | `gun_bros_re/gameplay/ZCombatTypes.h` |
-| `gun_bros_re/gameplay/DeathmatchBot.cpp` | `gun_bros_re/gameplay/brother/ZDeathmatchBot.cpp` |
-| `gun_bros_re/gameplay/DeathmatchBot.h` | `gun_bros_re/gameplay/brother/ZDeathmatchBot.h` |
+| `gun_bros_re/gameplay/DeathmatchBot.cpp` | `gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.cpp` |
+| `gun_bros_re/gameplay/DeathmatchBot.h` | `gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h` |
 | `gun_bros_re/gameplay/DeathmatchCombat.cpp` | `gun_bros_re/gameplay/ZDeathmatchCombat.cpp` |
-| `gun_bros_re/gameplay/DeathmatchNavigation.cpp` | `gun_bros_re/gameplay/ZDeathmatchNavigation.cpp` |
+| `gun_bros_re/gameplay/DeathmatchNavigation.cpp` | `gun_bros_re/gameplay/brother/bot/ZLocalPVPBotNavigation.cpp` |
 | `gun_bros_re/gameplay/EnemyCombat.cpp` | `gun_bros_re/gameplay/CEnemyCombat.cpp` |
 | `gun_bros_re/gameplay/EnemyCombat.h` | 已并入 `gun_bros_re/gameplay/CEnemy.h` |
 | `gun_bros_re/gameplay/EnemyModel.cpp` | `gun_bros_re/gameplay/ZEnemyModel.cpp` |
@@ -171,8 +175,8 @@ Movie 完成通知：`engine/glu/movie/CMovie.*` 内的嵌套 `Playback` 保存�
 | `gun_bros_re/gameplay/MultiplayerStatistics.h` | `gun_bros_re/gameplay/ZMultiplayerStatistics.h` |
 | `gun_bros_re/gameplay/PickupScene.cpp` | `gun_bros_re/gameplay/ZPickupScene.cpp` |
 | `gun_bros_re/gameplay/PickupScene.h` | `gun_bros_re/gameplay/ZPickupScene.h` |
-| `gun_bros_re/gameplay/PlayerModel.cpp` | `gun_bros_re/gameplay/brother/ZPlayerModel.cpp` |
-| `gun_bros_re/gameplay/PlayerModel.h` | `gun_bros_re/gameplay/brother/ZPlayerModel.h` |
+| `gun_bros_re/gameplay/PlayerModel.cpp` | `CBrotherBody.cpp`、`CBrotherEquipment.cpp`、`CBrotherResources.cpp`、`CBrotherDrawing.cpp`；枪械与盔甲加载归 `CGunDrawing.cpp`、`CArmorDrawing.cpp` |
+| `gun_bros_re/gameplay/PlayerModel.h` | 游戏入口为 `gameplay/brother/CBrother.h`，绘制接口也在 `CBrother.h`，同目录 `CBrotherDrawing.h` 仅定义私有数据；不存在旧模型类型或转发头 |
 | `gun_bros_re/gameplay/PowerupMoviePlayer.cpp` | `gun_bros_re/gameplay/powerup/CPowerupPresentation.cpp` |
 | `gun_bros_re/gameplay/PowerupMoviePlayer.h` | 已并入 `gun_bros_re/gameplay/powerup/CPowerup.h` |
 | `gun_bros_re/gameplay/PowerupScene.cpp` | 组合层已删除，分归 `CPowerUpSelectorInventory.cpp`、`CBrotherPowerups.cpp`、`level/CLevelPowerups.cpp` 与现有 Bot 策略 |

@@ -1,11 +1,17 @@
 #pragma once
 /** BIG template and Windows mesh cache; it does not own live bullets. */
 #include "gun_bros_re/gameplay/CBullet.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/data/ZMeshAssets.h"
+#include "engine/graphics/ZMeshBuffer.h"
 #include <map>
 struct ZBulletVisual {
+    struct Mesh {
+        CMesh mesh;
+        ZTexture texture;
+        ZMeshBuffer buffer;
+    };
     CBullet::Template data;
-    std::unique_ptr<ZPlayerPart> mesh;
+    std::unique_ptr<Mesh> mesh;
 };
 
 class ZBulletResources {

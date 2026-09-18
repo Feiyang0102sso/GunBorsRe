@@ -83,13 +83,12 @@ int CheckSurvivalBrotherPose(SurvivalBrotherPoseFixture fixture) {
         if (!separated) { ++checkFailures; }
         // The first visible frame must already use the selected idle pose,
         // even while the level intro postpones the first simulation tick.
-        auto &torso = brotherModel.weapon->brother.GetTorso();
-        const int torsoIndex = torso.GetMeshConfigIndex();
-        ZPlayerPart *part = brotherModel.parts[torsoIndex].get();
-        if (brotherModel.weapon->brother.TorsoUsesWeapon()) { part = brotherModel.weapon->configs[torsoIndex].get(); }
+        auto &torso = brotherModel.GetTorso();
+        const auto *pose = brotherModel.GetTorsoPose();
         std::vector<float> expectedPose;
-        const bool ready = torso.GetAnimation().Evaluate(expectedPose) && !expectedPose.empty() && expectedPose == part->pose;
-        std::printf("[brother-pose-check] evaluated=%zu uploaded=%zu ready=%d\n", expectedPose.size(), part->pose.size(), ready);
+        const bool ready = torso.GetAnimation().Evaluate(expectedPose) && !expectedPose.empty() && pose != nullptr && expectedPose == *pose;
+        if (pose == nullptr) { return 1; }
+        std::printf("[brother-pose-check] evaluated=%zu uploaded=%zu ready=%d\n", expectedPose.size(), pose->size(), ready);
         if (!ready) { ++checkFailures; }
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
@@ -118,7 +117,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
     auto & accountedXplodium = fixture.accountedXplodium;
 
     if (check && tutorial) {
-        const CScript &script = loaded.playerTemplate->script;
+        const CScript &script = loaded.playerTemplate->GetScript();
         for (unsigned index = 0; index < script.GetFunctions().size(); ++index) {
             std::printf("[tutorial-script] function=%u ", index);
             const CScriptCode &code = script.GetFunctions()[index];
@@ -157,8 +156,8 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
             }
             if (step == -1) { break; }
             if (step == 2) {
-                SetPlayerInput(player, false, false);
-                player.weapon->brother.OnSwapGun();
+                player.SetInput(false, false);
+                player.OnSwapGun();
             }
             float moveX = 0, moveY = 0;
             pilot->Update(16, moveX, moveY);
@@ -244,7 +243,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                     break;
                 }
             }
-            if (player.weapon->brother.TakeWeaponSwap()) {
+            if (player.TakeWeaponSwap()) {
                 const GameObjectRef &rifle = pickupProfile->configuration.guns[1];
                 for (std::size_t index = 0; index < weapons.size(); ++index) {
                     if (weapons[index].packHash != rifle.packHash || weapons[index].ordinal != rifle.localIndex) { continue; }

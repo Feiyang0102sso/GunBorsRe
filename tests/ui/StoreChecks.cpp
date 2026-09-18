@@ -103,7 +103,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
                 if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, slot, nullptr, &playerRegion)) { return 1; }
                 const auto image = TestOutput::Path("ui-original-2026-09-09/native-model-") + std::to_string(slot) + "-" + std::to_string(phase) + ".png";
                 if (!Capture::SaveFrame(probe.window, image)) { return 1; }
-                const auto &brother = probe.GetPlayerPreview()->weapon->brother;
+                const auto &brother = *probe.GetPlayerPreview();
                 std::printf("[store-player-check] native slot=%u phase=%u state=%d torso-move=%d time=%d\n", slot, phase,
                     brother.GetStateId(), brother.GetTorso().GetMoveIndex(), brother.GetTorso().GetAnimation().GetTimeMs());
             }
@@ -111,16 +111,16 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         // Original PLAYER flow fixture: 17 -> 18 -> 19/native 3 -> 17.
         // A switch must preserve the actor and the outgoing torso until the
         // next sequence consumes the incoming gun's move overrides.
-        CBrother *originalActor = &probe.GetPlayerPreview()->weapon->brother;
+        CBrother *originalActor = probe.GetPlayerPreview();
         for (unsigned exchange = 0; exchange < 3; ++exchange) {
             const unsigned oldSlot = probe.GetPlayerPreviewSlot();
             const unsigned targetSlot = 1 - oldSlot;
-            ZPlayerModel &model = *probe.GetPlayerPreview();
-            ZPlayerWeaponState *oldWeapon = model.uiActiveWeapon;
+            CBrother &model = *probe.GetPlayerPreview();
+            CGun *oldWeapon = model.uiActiveWeapon;
             if (oldWeapon == nullptr) { oldWeapon = model.weapon.get(); }
             probe.TakePlayerPreviewSlotChange();
             if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
-            if (&model.weapon->brother != originalActor || probe.GetPlayerPreviewSlot() != oldSlot) { return 1; }
+            if (&model != originalActor || probe.GetPlayerPreviewSlot() != oldSlot) { return 1; }
             unsigned elapsed = 0;
             while (probe.GetPlayerPreviewSlot() == oldSlot && elapsed < 10000) {
                 probe.AdvancePlayerPreview(16);
@@ -130,15 +130,15 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
                 model.uiActiveWeapon == oldWeapon || !probe.TakePlayerPreviewSlotChange() || probe.TakePlayerPreviewSlotChange()) { return 1; }
             const CMesh *switchTorso = originalActor->GetTorso().GetAnimation().GetMesh();
             bool outgoingTorso = !originalActor->TorsoUsesWeapon();
-            for (const auto &part : oldWeapon->configs) { if (&part->mesh == switchTorso) { outgoingTorso = true; } }
+            for (const CMesh *mesh : oldWeapon->GetBodyMeshes()) { if (mesh == switchTorso) { outgoingTorso = true; } }
             if (!outgoingTorso) { return 1; }
             while (originalActor->GetStateId() != 17 && elapsed < 10000) {
                 probe.AdvancePlayerPreview(16);
                 elapsed += 16;
             }
             bool incomingTorso = !originalActor->TorsoUsesWeapon();
-            for (const auto &part : model.uiActiveWeapon->configs) {
-                if (&part->mesh == originalActor->GetTorso().GetAnimation().GetMesh()) { incomingTorso = true; }
+            for (const CMesh *mesh : model.uiActiveWeapon->GetBodyMeshes()) {
+                if (mesh == originalActor->GetTorso().GetAnimation().GetMesh()) { incomingTorso = true; }
             }
             if (originalActor->GetStateId() != 17 || !incomingTorso) { return 1; }
             savedProfile.activeWeaponSlot = targetSlot;

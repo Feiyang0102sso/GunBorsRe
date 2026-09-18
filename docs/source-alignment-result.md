@@ -20,6 +20,10 @@
 
 ## 结果
 
+Bot 归并增补（2026-09-17）：本地合作、PvP、寻路及本地好友／名单配置集中在 `brother/bot/`，策略名统一为 `ZLocalCoopBot`、`ZLocalPVPBot`。寻路及巡逻／掩体选择从 `CLevel` 归回 PvP Bot，原默认伙伴 `CBrotherAI` 留在 `brother/`。详见 [Bot 归并记录](bot-directory-migration.md)。
+
+角色所有权增补（2026-09-17）：过渡 `ZPlayerModel`、`ZPlayerActor`、`ZPlayerEquipment`、`ZPlayerPart` 与资源／绘制拆分文件已全部删除。游戏、菜单和测试直接使用 `CBrother`；角色持有 PLAYER 脚本、强化状态和枪槽，`CGun`／`CArmor` 持有自身模板与资源。`ZBrotherRenderer.h/.cpp` 随后也已删除，角色绘制归 `CBrother`，枪械、盔甲和弹体各自持有绘制资源；`brother/` 根目录已无 Z 文件。变更与验证见 [Brother 所有权归并](brother-ownership-migration.md) 和 [绘制职责归并](brother-renderer-removal.md)。
+
 拾取物目录归并：`CPickup.h/.cpp`、`CPickupPresentation.cpp` 和 `CLevelPickups.cpp` 集中在 `gameplay/pickup/`。逐文件核对仅头文件引用路径变化，原有实现和注释保留；测试独立放在 `tests/`，仍只使用一个工程。
 
 拾取物目录层增补：`data/ZPickupCatalog.*` 与 `ZPickupEntry` 已删除。模板读取归 `CPickup::Template::Load`，关卡直接持有模板，展示标签留在测试；运行时不再依赖目录条目包装。

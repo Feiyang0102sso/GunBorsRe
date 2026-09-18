@@ -1,3 +1,4 @@
+#include "engine/graphics/CMeshCamera.h"
 #include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 using namespace MapDetail;
 
@@ -74,7 +75,7 @@ bool MapItemDrawsBefore(const ZMapRenderItem &left, const ZMapRenderItem &right)
  */
 void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram &program,
                 const float *mapMvp, bool showProps , CLevel *scene ,
-                ZPlayerModel *brotherModel , float brotherY , int viewportWidth ) {
+                CBrother *brotherModel , float brotherY , int viewportWidth ) {
     std::vector<ZMapRenderItem> items;
     items.reserve(loaded.props.size() + loaded.enemies.size() + loaded.players.size());
     if (showProps) {
@@ -109,13 +110,12 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
 
     for (std::size_t i = 0; i < loaded.players.size(); ++i) {
         ZPlacedPlayer &placed = loaded.players[i];
-        const float scale = PlayerModelWorldScale(
-            *placed.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
+        const float scale = placed.model->GetWorldScale(loaded.playerTemplate->GetGameScale(), kLevelCameraScale);
 
         ZMapRenderItem item;
         item.y = static_cast<int>(placed.y);
         item.player = placed.model.get();
-        BuildPlayerGameMatrix(mapMvp, placed.x, placed.y, scale,
+        MeshCameraBuildGameMatrix(mapMvp, placed.x, placed.y, scale,
                               placed.facingDegrees, item.matrix);
         items.push_back(item);
     }
@@ -174,7 +174,7 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
         glClear(GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        if (item.player != nullptr) { DrawPlayer(*item.player, program, item.matrix); }
+        if (item.player != nullptr) { item.player->Draw(program, item.matrix); }
         if (item.enemy != nullptr) { DrawEnemyModel(*item.enemy, program, item.matrix); }
         glDisable(GL_DEPTH_TEST);
     }

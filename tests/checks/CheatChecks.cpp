@@ -90,7 +90,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     }
 
     ZShaderProgram program;
-    ZPlayerModel player;
+    CBrother player;
     ZPlayerVitals vitals;
     vitals.maximum = progress.GetHealth();
     vitals.health = vitals.maximum / 2;

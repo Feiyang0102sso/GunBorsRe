@@ -108,7 +108,7 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
             const unsigned coreHash = state.toc.GetPack(state.toc.GetCorePackIndex())->GetPackHash();
             bool defaultEquipment = gun.packHash == coreHash && gun.localIndex == 0;
             for (unsigned slot = 0; slot < 3; ++slot) {
-                if (state.brotherModel.armor[slot] == nullptr || PlayerArmorMultiplier(state.brotherModel, slot) != 1.0f) {
+                if (state.brotherModel.armor[slot] == nullptr || state.brotherModel.GetArmorMultiplier(slot) != 1.0f) {
                     defaultEquipment = false;
                 }
             }

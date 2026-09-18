@@ -173,13 +173,13 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
         break;
     }
     case ZSurvivalFramePhase::BeforeWeaponSwap: {
-        const auto &torso = player.weapon->brother.GetTorso().GetAnimation();
+        const auto &torso = player.GetTorso().GetAnimation();
         outgoingMesh = torso.GetMesh();
         outgoingTime = torso.GetTimeMs();
         break;
     }
     case ZSurvivalFramePhase::AfterWeaponSwap: {
-        const auto &torso = player.weapon->brother.GetTorso().GetAnimation();
+        const auto &torso = player.GetTorso().GetAnimation();
         if (torso.GetMesh() != outgoingMesh || torso.GetTimeMs() != outgoingTime) { ++checkFailures; }
         ++combatSwapEvents;
         break;

@@ -1,13 +1,13 @@
 #pragma once
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CCollisionData.h"
 #include <cmath>
 namespace ProjectileGeometry {
 /** Project the same animated muzzle transform used to draw the weapon. */
-inline bool ProjectMuzzle(ZPlayerModel &player, const float *matrix, int hand, int node,
+inline bool ProjectMuzzle(CBrother &player, const float *matrix, int hand, int node,
                    float &x, float &y, float &z) {
     ZMeshBoneTransform muzzle{};
-    if (!GetPlayerMuzzle(player, hand, node, muzzle)) { return false; }
+    if (!player.GetMuzzle(hand, node, muzzle)) { return false; }
     x = matrix[0] * muzzle.posX + matrix[1] * muzzle.posY + matrix[2] * muzzle.posZ + matrix[3];
     y = matrix[4] * muzzle.posX + matrix[5] * muzzle.posY + matrix[6] * muzzle.posZ + matrix[7];
     z = matrix[8] * muzzle.posX + matrix[9] * muzzle.posY + matrix[10] * muzzle.posZ + matrix[11];

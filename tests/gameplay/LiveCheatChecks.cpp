@@ -39,7 +39,7 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {
             session.GetLevel().GetStateId(), session.GetLevel().TransformWorldElapseMS(16));
         std::printf("[live-cheat-progress] wait=%u transition=%d local-live=%d player-coop=%d peer-coop=%d\n",
             hud.LiveWaveRemaining(), session.IsTransitioning(), scene.IsLocalLive(),
-            fixture.player.weapon->brother.IsCooperative(), fixture.brotherModel.weapon->brother.IsCooperative());
+            fixture.player.IsCooperative(), fixture.brotherModel.IsCooperative());
         if (!killed || scene.GetClearedWaves() < 2) { ++failures; }
         std::printf("[live-cheat-progress] down-peer=%u peak-update-us=%lld\n", downPeer, peakUpdateUs);
     }

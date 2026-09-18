@@ -39,7 +39,7 @@
 
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
 #include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/gameplay/CGame.h"
@@ -72,7 +72,6 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/gameplay/CLayerObject.h"
 #include "gun_bros_re/gameplay/CLayerTile.h"
-#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/CProp.h"
@@ -421,31 +420,9 @@ void AdvanceEnemies(ZLoadedMap &loaded, std::int32_t deltaMs);
 void LoadPlacedPlayers(CResTOCManager &tocManager, const ZShaderProgram &program,
                        ZLoadedMap &loaded);
 
-/** Move every placed player's animation on. */
-void AdvancePlayers(ZLoadedMap &loaded, std::int32_t deltaMs);
-
-/**
- * Drive the first player with WASD and resolve the requested movement.
- *
- * Maps contain one real player spawn. A few abandoned campaign maps contain
- * none; those remain valid viewers and simply ignore movement input.
- */
 /** Swap equipment only after every referenced asset has loaded. */
 bool EquipControlledPlayer(ZPackTables &tables, ZLoadedMap &loaded,
     const ZShaderProgram &program, const ZWeaponEntry &weapon);
-
-bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
-                            std::uint64_t elapsedMs);
-
-/**
- * Run the animation clock forward, in the bites playback would use.
- *
- * What makes a still screenshot able to prove anything about animation: shoot
- * the same map at two different times and diff them. Deterministic, because
- * the bite size is fixed rather than taken from the wall clock.
- */
-void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
-            CLevel *effects = nullptr, bool firing = false);
 
 /**
  * Draw every model the object layer places -- enemies and players alike.
@@ -458,7 +435,7 @@ struct ZMapRenderItem {
     int group = kZGroupNormal;
     int y = 0;
     const ZPlacedProp *prop = nullptr;
-    ZPlayerModel *player = nullptr;
+    CBrother *player = nullptr;
     ZEnemyModel *enemy = nullptr;
     CParticleSystem::RenderItem particle;
     float matrix[kMatrix4dElements] = {};
@@ -473,7 +450,7 @@ bool MapItemDrawsBefore(const ZMapRenderItem &left, const ZMapRenderItem &right)
  */
 void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram &program,
                 const float *mapMvp, bool showProps = true, CLevel *scene = nullptr,
-                ZPlayerModel *brotherModel = nullptr, float brotherY = 0, int viewportWidth = 1);
+                CBrother *brotherModel = nullptr, float brotherY = 0, int viewportWidth = 1);
 
 /** How many objects of one type a map places. */
 unsigned CountObjects(const ZLoadedMap &loaded, ZPlacedObjectType wanted);

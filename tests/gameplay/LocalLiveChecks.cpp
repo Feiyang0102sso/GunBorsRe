@@ -4,7 +4,7 @@
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -137,16 +137,16 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
         const bool originalPolicy = dynamic_cast<ZLocalCoopBot *>(&bot) == nullptr;
         std::printf("[live-regression] solo-original-policy=%d\n", originalPolicy);
         if (!originalPolicy) { return 1; }
-        if (player.weapon->brother.IsCooperative() || session.GetLevel().IsCooperative() || !scene.Suicide()) { return 1; }
+        if (player.IsCooperative() || session.GetLevel().IsCooperative() || !scene.Suicide()) { return 1; }
         for (unsigned elapsed = 0; elapsed < 8000 && !session.IsFinished(); elapsed += 16) { scene.Update(16, 0, 0, false); }
         if (!session.IsFinished() || bot.vitals.dead) { return 1; }
         std::printf("[local-live-check] selected-bot-solo=1 single-player-death=1\n");
         return 0;
     }
     if (dynamic_cast<ZLocalCoopBot *>(&bot) == nullptr) { return 1; }
-    if (!CheckSteadyPeer(fixture.brotherModel.weapon->brother)) { return 1; }
+    if (!CheckSteadyPeer(fixture.brotherModel)) { return 1; }
     if (
-        !player.weapon->brother.IsCooperative() || !session.GetLevel().IsCooperative()) { return 1; }
+        !player.IsCooperative() || !session.GetLevel().IsCooperative()) { return 1; }
     vitals.invincible = true;
     bot.vitals.invincible = true;
     // Actual wave Flow must spawn enemies, acquire targets and emit gun shots.
@@ -292,7 +292,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     }
     if (!placed) { return 1; }
     std::printf("[local-live-check] rescue input move=%d walk=%d origin=%.1f,%.1f destination=%.1f,%.1f\n",
-        fixture.brotherModel.weapon->brother.CanMove(), scene.CanBrotherWalk(bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y),
+        fixture.brotherModel.CanMove(), scene.CanBrotherWalk(bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y),
         bot.x, bot.y, scene.GetPlayer().x, scene.GetPlayer().y);
     scene.Update(16, 0, 0, false);
     if (scene.GetReviveEffectState() != 1) { return 1; }
@@ -307,7 +307,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     }
     for (unsigned elapsed = 0; elapsed < 7000; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (scene.GetReviveEffectState() != 0) { return 1; }
-    if (!player.weapon->brother.CanMove() || !player.weapon->brother.CanShoot()) { return 1; }
+    if (!player.CanMove() || !player.CanShoot()) { return 1; }
     // A distant rescue must cross authored navigation portals, not only an
     // unobstructed 200-unit line. This catches a bot stopping before a corner.
     auto *rescuePath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetPathLayer());
@@ -334,10 +334,10 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     for (unsigned elapsed = 0; elapsed < 7000; elapsed += 16) { scene.Update(16, 0, 0, false); }
     bot.x = scene.GetPlayer().x + 50;
     bot.y = scene.GetPlayer().y;
-    if (!fixture.brotherModel.weapon->brother.StartDeath()) { return 1; }
+    if (!fixture.brotherModel.StartDeath()) { return 1; }
     for (unsigned elapsed = 0; elapsed < 20000 && bot.vitals.dead; elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (bot.vitals.dead || scene.GetReviveCount() != 3) { return 1; }
-    if (!scene.Suicide() || !fixture.brotherModel.weapon->brother.StartDeath()) { return 1; }
+    if (!scene.Suicide() || !fixture.brotherModel.StartDeath()) { return 1; }
     for (unsigned elapsed = 0; elapsed < 8000 && !session.IsDeathComplete(); elapsed += 16) { scene.Update(16, 0, 0, false); }
     if (!session.IsFinished()) { return 1; }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);

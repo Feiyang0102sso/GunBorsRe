@@ -33,9 +33,9 @@ void CLevel::Actions(ZCombatEnemy &actor) {
             if (m_map != nullptr) { m_map->GetCamera().Shake(action.durationMs); }
         } else if (action.kind == CEnemy::Action::Kind::TurretActive) {
             // CEnemy native 71 :72744 selects the local player when offline.
-            ZPlayerModel *owner = m_playerModel;
+            CBrother *owner = m_playerModel;
             if (state.summoner == kBrotherCombatId && m_brotherModel != nullptr) { owner = m_brotherModel; }
-            owner->weapon->brother.SetTurretIsActive(action.slot != 0);
+            owner->SetTurretIsActive(action.slot != 0);
             std::printf("[turret] actor=%llu active=%d\n", static_cast<unsigned long long>(state.id), action.slot != 0);
         } else if (action.kind == CEnemy::Action::Kind::SpawnPickup) {
             QueuePickupSpawn(action.resource, x, y);
@@ -45,10 +45,10 @@ void CLevel::Actions(ZCombatEnemy &actor) {
                 action.speed, state.id, ownerType, action.part, action.node);
         } else if (action.kind == CEnemy::Action::Kind::Stun) {
             if (ownerType == 1 && std::hypot(m_actor.x - x, m_actor.y - y) < action.radius) {
-                m_playerModel->weapon->brother.Stun(action.durationMs);
+                m_playerModel->Stun(action.durationMs);
             }
             if (ownerType == 1 && m_brother != nullptr && std::hypot(m_brother->x - x, m_brother->y - y) < action.radius) {
-                m_brotherModel->weapon->brother.Stun(action.durationMs);
+                m_brotherModel->Stun(action.durationMs);
             }
         } else if (action.kind == CEnemy::Action::Kind::CollisionResolved) {
             // Record assistance only after the enemy Flow accepts the collision.
@@ -95,32 +95,32 @@ void CLevel::Actions(ZCombatEnemy &actor) {
 
 void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // Equipment changes create a new script host; reconnect before input.
-    m_playerModel->weapon->brother.SetLevelContext(GetScriptLevel());
+    m_playerModel->SetLevelContext(GetScriptLevel());
     if (deltaMs <= 0) { return; }
     if (IsDeathmatch() && (m_matchShopping[0] || IsMatchSpawnPending(0))) { moveX = 0; moveY = 0; shoot = false; }
     BeginAudioFrame();
     UpdateExperienceTexts(deltaMs);
     BeginCombatFrame();
     m_actor.Update(deltaMs, moveX, moveY, shoot, *this, !IsMatchSpawnPending(0));
-    if (IsDeathmatch() && m_playerModel->weapon->brother.TakeWeaponSwap() &&
+    if (IsDeathmatch() && m_playerModel->TakeWeaponSwap() &&
         !FinishMatchWeaponSwap(0)) {
         m_objects.RecordInvalidSpawn();
     }
     if (m_brotherModel != nullptr) {
-        m_brotherModel->weapon->brother.SetLevelContext(GetScriptLevel());
+        m_brotherModel->SetLevelContext(GetScriptLevel());
         PerformanceProbe::Scope timing(PerformanceProbe::counters.brotherMs);
         m_brother->SetShootingAllowed(CanBrotherShoot());
         // Retail DM disables the cooperative AI. This peer supplies player input.
         if (IsDeathmatch()) { m_brother->SetShootingAllowed(CanPlayerShoot()); }
-        float speedMultiplier = PlayerArmorMultiplier(*m_brotherModel, 2) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 2) * m_brotherModel->weapon->brother.GetFrenzyMultiplier(2);
+        float speedMultiplier = m_brotherModel->GetArmorMultiplier(2) * CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 2) * m_brotherModel->GetFrenzyMultiplier(2);
         // Live substitutes player input, so CPlayer::UpdateMovement :101437
         // also applies the equipped gun's native mastery movement modifier.
-        if (m_localLive || IsDeathmatch()) { speedMultiplier *= m_brotherModel->ActiveWeapon().gun.GetMasterySpeedMod() * 0.01f; }
-        if (IsDeathmatch() && (m_matchShopping[1] || IsMatchSpawnPending(1))) { m_brotherModel->weapon->brother.SetInput(false, false); }
-        else { m_brother->Update(deltaMs, m_brotherModel->weapon->brother, *this, m_actor.x, m_actor.y, speedMultiplier); }
+        if (m_localLive || IsDeathmatch()) { speedMultiplier *= m_brotherModel->ActiveWeapon().GetMasterySpeedMod() * 0.01f; }
+        if (IsDeathmatch() && (m_matchShopping[1] || IsMatchSpawnPending(1))) { m_brotherModel->SetInput(false, false); }
+        else { m_brother->Update(deltaMs, (*m_brotherModel), *this, m_actor.x, m_actor.y, speedMultiplier); }
         if (m_brother->TakeWeaponSwapRequest()) { RequestBrotherWeaponSwap(); }
-        AdvancePlayer(*m_brotherModel, deltaMs);
-        if (m_brotherModel->weapon->brother.TakeWeaponSwap() && !SwapBrotherWeapon()) {
+        m_brotherModel->Update(deltaMs);
+        if (m_brotherModel->TakeWeaponSwap() && !SwapBrotherWeapon()) {
             m_objects.RecordInvalidSpawn();
         }
     }
@@ -172,7 +172,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
             state.variables[16] != 1 && state.targetType != 2 && state.variables[12] > 0 &&
             state.variables[13] > 0 && actor->brotherContactTimer == 0 &&
             CombatGeometry::CircleCircle({m_brother->previousX, m_brother->previousY},
-                {m_brother->x, m_brother->y}, m_brotherModel->weapon->brother.GetRadius(),
+                {m_brother->x, m_brother->y}, m_brotherModel->GetRadius(),
                 {state.previousX, state.previousY}, {state.x, state.y}, enemy.GetPart(0).radius, contactFraction)) {
             ZCombatHit contact;
             contact.owner = state.id;
@@ -188,7 +188,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         if (!state.dead && state.variables[16] != 1 && state.targetType != 2 && !m_vitals->dead &&
             state.variables[12] > 0 && state.variables[13] > 0 &&
             actor->contactTimer == 0 && CombatGeometry::CircleCircle({m_actor.previousX, m_actor.previousY},
-                {m_actor.x, m_actor.y}, m_playerModel->weapon->brother.GetRadius(),
+                {m_actor.x, m_actor.y}, m_playerModel->GetRadius(),
                 {state.previousX, state.previousY}, {state.x, state.y}, enemy.GetPart(0).radius, contactFraction)) {
             if (state.variables[17] > 0) {
                 ZCombatHit contact;
@@ -268,15 +268,15 @@ void CLevel::FinishDeathChoice(unsigned peer) {
 }
 
 bool CLevel::ReviveActor(ZCombatId actor, unsigned reason) {
-    if (actor == kPlayerCombatId) { return m_playerModel->weapon->brother.OnRevive(reason); }
-    if (actor == kBrotherCombatId && m_brotherModel != nullptr) { return m_brotherModel->weapon->brother.OnRevive(reason); }
+    if (actor == kPlayerCombatId) { return m_playerModel->OnRevive(reason); }
+    if (actor == kBrotherCombatId && m_brotherModel != nullptr) { return m_brotherModel->OnRevive(reason); }
     return false;
 }
 
 bool CLevel::KillTestBot() {
     if (!HasLocalBot()) { return false; }
     m_localBotReviveRequested = false;
-    return m_brotherModel->weapon->brother.StartDeath();
+    return m_brotherModel->StartDeath();
 }
 
 bool CLevel::ReviveTestBot() {
@@ -314,17 +314,17 @@ void CLevel::UpdateLocalRevive(int deltaMs) {
         }
     }
     if (m_localBotReviveRequested && HasLocalBot() && m_brother->vitals.deathAnimationComplete) {
-        if (m_brotherModel->weapon->brother.OnRevive()) { m_localBotReviveRequested = false; }
+        if (m_brotherModel->OnRevive()) { m_localBotReviveRequested = false; }
     }
     if (!m_localLive || m_brother == nullptr || m_brotherModel == nullptr) { return; }
     ZCombatId target = 0;
     CBrother *actor = nullptr;
     if (m_vitals->dead && m_vitals->deathAnimationComplete && !m_brother->vitals.dead) {
         target = kPlayerCombatId;
-        actor = &m_playerModel->weapon->brother;
+        actor = &(*m_playerModel);
     } else if (m_brother->vitals.dead && m_brother->vitals.deathAnimationComplete && !m_vitals->dead) {
         target = kBrotherCombatId;
-        actor = &m_brotherModel->weapon->brother;
+        actor = &(*m_brotherModel);
     }
     if (target != m_reviveTarget) { m_reviveTarget = target; m_reviveProgress = 0; }
     // CPlayer::Update :100377 chooses PLAYER script resource 2 outside

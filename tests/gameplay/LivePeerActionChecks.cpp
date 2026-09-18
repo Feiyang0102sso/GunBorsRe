@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 /** Test-peer commands must not affect a real remote peer or the local account. */
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/cheats/CheatActions.h"
@@ -7,6 +7,7 @@
 
 int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
     CPowerUpSelector &playerPowerups, CPowerUpSelector &peerPowerups, CProfileManager &peerProfile) {
+    std::uint32_t powerupChoice = 0;
     auto &scene = fixture.scene;
     auto &session = fixture.session;
     auto &bot = fixture.brother;
@@ -38,7 +39,7 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPac
     }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     const unsigned playerConsumed = playerPowerups.consumed;
-    if (!ZLocalCoopBot::UseAnyPowerup(peerPowerups, true)) { return 1; }
+    if (!ZLocalCoopBot::UseAnyPowerup(peerPowerups, powerupChoice, true)) { return 1; }
     for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.GetPowerup().IsPresentationActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
     if (peerPowerups.GetPowerup().IsPresentationActive() || playerPowerups.consumed != playerConsumed || peerPowerups.failures != 0) { return 1; }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);

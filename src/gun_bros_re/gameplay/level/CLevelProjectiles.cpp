@@ -111,10 +111,10 @@ std::vector<CLevel::HealthBar> CLevel::EnemyHealthBars(float viewportScale) cons
     const float border = int(viewportScale * waveScale);
     std::vector<HealthBar> bars;
     if (IsDeathmatch() && m_brother != nullptr && !m_brother->vitals.dead && m_brother->vitals.health > 0 &&
-        m_brotherModel->weapon->brother.IsVisible()) {
+        m_brotherModel->IsVisible()) {
         // CLevel::DrawBrotherHealthBar :120249 uses the original native 30x4.
-        const auto bounds = PlayerBounds(*m_brotherModel);
-        const float scale = PlayerModelWorldScale(*m_brotherModel, m_playerGameScale, m_cameraScale);
+        const auto bounds = m_brotherModel->GetBounds();
+        const float scale = m_brotherModel->GetWorldScale(m_playerGameScale, m_cameraScale);
         bars.push_back({m_brother->x, m_brother->y - bounds.maxZ * scale,
             float(int(30 * viewportScale)), float(int(4 * viewportScale)), float(int(viewportScale)),
             std::min(1.0f, m_brother->vitals.health / m_brother->vitals.maximum), 0, 199 / 255.0f, 8 / 255.0f});
@@ -155,19 +155,19 @@ std::vector<CLevel::HealthBar> CLevel::EnemyHealthBars(float viewportScale) cons
 }
 
 bool CLevel::Suicide() {
-    m_playerModel->weapon->brother.SetLevelContext(GetScriptLevel());
-    return m_playerModel->weapon->brother.StartDeath();
+    m_playerModel->SetLevelContext(GetScriptLevel());
+    return m_playerModel->StartDeath();
 }
 
 ZHitResult CLevel::ApplyHit(ZCombatId target, const ZCombatHit &hit) {
     if (target == kBrotherCombatId && m_brotherModel != nullptr) {
         if (!CanHitBrother(hit, target)) { return ZHitResult::Ignored; }
-        m_brotherModel->weapon->brother.SetLevelContext(GetScriptLevel());
-        const float reduction = PlayerArmorMultiplier(*m_brotherModel, 0) - 1;
+        m_brotherModel->SetLevelContext(GetScriptLevel());
+        const float reduction = m_brotherModel->GetArmorMultiplier(0) - 1;
         float damage = hit.damage;
-        if (IsDeathmatch() && hit.applyArmorAttack && hit.owner == kPlayerCombatId) { damage *= PlayerArmorMultiplier(*m_playerModel, 1); }
+        if (IsDeathmatch() && hit.applyArmorAttack && hit.owner == kPlayerCombatId) { damage *= m_playerModel->GetArmorMultiplier(1); }
         if (hit.splash && hit.percentDamage) { damage *= m_brother->vitals.maximum * 0.01f; }
-        const ZHitResult result = m_brotherModel->weapon->brother.ReceiveDamage(std::max(0.0f, damage * (1 - reduction)) /
+        const ZHitResult result = m_brotherModel->ReceiveDamage(std::max(0.0f, damage * (1 - reduction)) /
             CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 1));
         if (IsDeathmatch() && result != ZHitResult::Ignored) { m_matchStreaks[1] = 0; }
         if (result == ZHitResult::Killed) { RecordMatchDeath(1, hit.owner == kPlayerCombatId ? 0 : -1); }
@@ -175,18 +175,18 @@ ZHitResult CLevel::ApplyHit(ZCombatId target, const ZCombatHit &hit) {
     }
     if (target == kPlayerCombatId) {
         if (!CanHitBrother(hit, target) || m_playerModel->weapon == nullptr) { return ZHitResult::Ignored; }
-        m_playerModel->weapon->brother.SetLevelContext(GetScriptLevel());
+        m_playerModel->SetLevelContext(GetScriptLevel());
         // CBrother::Damage (:136667): add slot percentages, then reduce the
         // incoming amount. Defence does not increase the player's max health.
-        const float reduction = PlayerArmorMultiplier(*m_playerModel, 0) - 1.0f;
+        const float reduction = m_playerModel->GetArmorMultiplier(0) - 1.0f;
         // CBrother::OnSplashDamage :135359 interprets native 23 as a percent
         // of maximum health before the ordinary armor / frenzy reductions.
         float damage = hit.damage;
-        if (IsDeathmatch() && hit.applyArmorAttack && hit.owner == kBrotherCombatId) { damage *= PlayerArmorMultiplier(*m_brotherModel, 1); }
+        if (IsDeathmatch() && hit.applyArmorAttack && hit.owner == kBrotherCombatId) { damage *= m_brotherModel->GetArmorMultiplier(1); }
         if (hit.splash && hit.percentDamage) { damage *= m_vitals->maximum * 0.01f; }
         damage = std::max(0.0f, damage * (1.0f - reduction)) / CFriendPowerManager::Multiplier(m_playerModel->friendCount, 1);
         const unsigned hitsBefore = m_vitals->hits;
-        const ZHitResult result = m_playerModel->weapon->brother.ReceiveDamage(damage);
+        const ZHitResult result = m_playerModel->ReceiveDamage(damage);
         if (IsDeathmatch() && result != ZHitResult::Ignored) { m_matchStreaks[0] = 0; }
         if (result == ZHitResult::Killed) { RecordMatchDeath(0, hit.owner == kBrotherCombatId ? 1 : -1); }
         // OnPlayerDamaged :115914 resets the streak on accepted damage only.
@@ -198,10 +198,10 @@ ZHitResult CLevel::ApplyHit(ZCombatId target, const ZCombatHit &hit) {
     if (hit.owner == kPlayerCombatId) { adjusted.damage *= CFriendPowerManager::Multiplier(m_playerModel->friendCount, 0); }
     if (hit.owner == kBrotherCombatId && m_brotherModel != nullptr) { adjusted.damage *= CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 0); }
     if (hit.applyArmorAttack && hit.owner == kPlayerCombatId) {
-        adjusted.damage *= PlayerArmorMultiplier(*m_playerModel, 1);
+        adjusted.damage *= m_playerModel->GetArmorMultiplier(1);
     }
     if (hit.applyArmorAttack && hit.owner == kBrotherCombatId && m_brotherModel != nullptr) {
-        adjusted.damage *= PlayerArmorMultiplier(*m_brotherModel, 1);
+        adjusted.damage *= m_brotherModel->GetArmorMultiplier(1);
     }
     ZCombatEnemy *actor = Find(target);
     if (actor == nullptr) {
@@ -222,9 +222,9 @@ float CLevel::GetDamageMultiplier(ZCombatId owner, float fallback) const {
 }
 
 float CLevel::GetProjectilePowerupMultiplier(ZCombatId owner) const {
-    if (owner == kPlayerCombatId && m_playerModel->weapon) { return m_playerModel->weapon->brother.GetProjectilePowerupMultiplier(); }
+    if (owner == kPlayerCombatId && m_playerModel->weapon) { return m_playerModel->GetProjectilePowerupMultiplier(); }
     if (owner == kBrotherCombatId && m_brotherModel != nullptr && m_brotherModel->weapon) {
-        return m_brotherModel->weapon->brother.GetProjectilePowerupMultiplier();
+        return m_brotherModel->GetProjectilePowerupMultiplier();
     }
     return 1;
 }
@@ -315,11 +315,11 @@ void CLevel::SplashBrothers(float x, float y, float radius, float damage, float 
 
 void CLevel::ApplyBrotherForce(ZCombatId target, float x, float y, int durationMs) {
     if (target == kBrotherCombatId && m_brotherModel != nullptr) {
-        if (m_brotherModel->weapon->brother.BeginKnockback(durationMs)) {
+        if (m_brotherModel->BeginKnockback(durationMs)) {
             m_brother->SetForce(x, y, durationMs);
         }
     } else if (target == kPlayerCombatId) {
-        if (m_playerModel->weapon != nullptr && m_playerModel->weapon->brother.BeginKnockback(durationMs)) {
+        if (m_playerModel->weapon != nullptr && m_playerModel->BeginKnockback(durationMs)) {
             m_actor.forceX = x;
             m_actor.forceY = y;
             m_actor.forceMs = durationMs;

@@ -15,7 +15,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     auto &bot = fixture.brother;
     auto &session = fixture.session;
     // CLevel::OnStart does not spawn either DM actor before the selector.
-    if (player.weapon->brother.IsVisible() || fixture.brotherModel.weapon->brother.IsVisible()) {
+    if (player.IsVisible() || fixture.brotherModel.IsVisible()) {
         std::printf("[dm-entry] actor spawned before equipment confirmation\n");
         return 1;
     }
@@ -50,11 +50,11 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     }
     if (fixture.vitals.hits != 0 || !scene.IsMatchSpawnPending(0) || bot.GetTargetCount() != 0) { return 1; }
     const auto selectedGun = scene.MatchGun(0, 1);
-    if (!scene.SelectMatchGun(0, 0, selectedGun) || player.weapon->brother.IsVisible()) { return 1; }
+    if (!scene.SelectMatchGun(0, 0, selectedGun) || player.IsVisible()) { return 1; }
     if (!scene.RespawnDeathmatch(0, true) || scene.RespawnDeathmatch(0, true) ||
-        !player.weapon->brother.IsVisible() || match.GetLife(0).serial != 0 ||
+        !player.IsVisible() || match.GetLife(0).serial != 0 ||
         scene.ActiveMatchGun(0).packHash != selectedGun.packHash || scene.ActiveMatchGun(0).localIndex != selectedGun.localIndex ||
-        *player.weapon->brother.VariableResolver(3) != 3000) { return 1; }
+        *player.VariableResolver(3) != 3000) { return 1; }
     std::printf("[dm-entry] no-body-no-hit-no-target-before-confirm=1 selected-gun-and-respawn-export=1\n");
     const float entryDistance = std::hypot(scene.GetPlayer().x - waitingX, scene.GetPlayer().y - waitingY);
     const auto *entryPath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetRespawnPathLayer());
@@ -120,8 +120,8 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
         for (unsigned time = 0; time < 1000; time += 16) { session.Update(16, 0, 0, false); }
         const float receivedPlayer = fixture.vitals.incomingDamage - beforePlayer;
         const float receivedBot = bot.vitals.incomingDamage - beforeBot;
-        const float expectedPlayer = playerDamage * (2 - PlayerArmorMultiplier(player, 0)) / CFriendPowerManager::Multiplier(player.friendCount, 1);
-        const float expectedBot = playerDamage * (2 - PlayerArmorMultiplier(fixture.brotherModel, 0)) / CFriendPowerManager::Multiplier(fixture.brotherModel.friendCount, 1);
+        const float expectedPlayer = playerDamage * (2 - player.GetArmorMultiplier(0)) / CFriendPowerManager::Multiplier(player.friendCount, 1);
+        const float expectedBot = playerDamage * (2 - fixture.brotherModel.GetArmorMultiplier(0)) / CFriendPowerManager::Multiplier(fixture.brotherModel.friendCount, 1);
         if (std::abs(receivedPlayer - expectedPlayer) > 0.01f || std::abs(receivedBot - expectedBot) > 0.01f) { ++failures; }
         std::printf("[dm-barrel] received=%.2f,%.2f expected=%.2f,%.2f failures=%u\n", receivedPlayer, receivedBot, expectedPlayer, expectedBot, failures);
         scene.GetPlayer().x = originalX; scene.GetPlayer().y = originalY;
@@ -144,7 +144,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
                     timing.brotherMs, timing.pathSearchMs, timing.effectsMs, timing.enemyMs);
             }
             maximumStepMs = std::max(maximumStepMs, stepMs);
-            if (FindPlayerTorsoPart(player) == nullptr || FindPlayerTorsoPart(fixture.brotherModel) == nullptr) {
+            if (player.GetTorsoPose() == nullptr || fixture.brotherModel.GetTorsoPose() == nullptr) {
                 std::printf("[dm-feedback] missing torso slot=%u time=%u\n", slot, elapsed);
                 ++failures;
                 break;
@@ -157,7 +157,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
         if (!scene.CollectMatchWeapon(0, item)) { ++failures; }
         for (unsigned elapsed = 0; elapsed < 400; elapsed += 16) {
             session.Update(16, 0, 0, false);
-            if (FindPlayerTorsoPart(player) == nullptr) { ++failures; break; }
+            if (player.GetTorsoPose() == nullptr) { ++failures; break; }
         }
     }
     // Successful health use and the grenade release event must each notify the HUD.
@@ -209,14 +209,14 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     scene.Suicide();
     for (unsigned elapsed = 0; elapsed < 1500; elapsed += 16) { session.Update(16, 0, 0, false); }
     // Retail PLAYER DM death completes the burst without retaining body meshes.
-    if (player.weapon->brother.IsVisible()) {
-        std::printf("[dm-feedback] corpse remains torso=%d legs=%d\n", player.weapon->brother.GetTorso().GetMoveIndex(), player.weapon->brother.GetLegs().GetMoveIndex());
+    if (player.IsVisible()) {
+        std::printf("[dm-feedback] corpse remains torso=%d legs=%d\n", player.GetTorso().GetMoveIndex(), player.GetLegs().GetMoveIndex());
         ++failures;
     }
     // Resume uses the same native respawn export before the full timer expires.
     const float opponentX = bot.x, opponentY = bot.y;
-    if (!scene.RespawnDeathmatch(0, false, true) || !player.weapon->brother.IsVisible() || fixture.vitals.dead ||
-        *player.weapon->brother.VariableResolver(3) != 3000 || match.GetLife(0).serial != 1) { ++failures; }
+    if (!scene.RespawnDeathmatch(0, false, true) || !player.IsVisible() || fixture.vitals.dead ||
+        *player.VariableResolver(3) != 3000 || match.GetLife(0).serial != 1) { ++failures; }
     const auto *respawnPath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetRespawnPathLayer());
     if (respawnPath == nullptr) { return 1; }
     const float respawnDistance = std::hypot(scene.GetPlayer().x - opponentX, scene.GetPlayer().y - opponentY);
@@ -229,12 +229,12 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     if (!atUnlockedNode) { ++failures; }
     std::printf("[dm-spawn] initial-saved-node-and-respawn-farthest-node failures=%u\n", failures);
     bool respawnEffect = false;
-    for (const auto &cue : player.weapon->brother.TakeCues()) {
+    for (const auto &cue : player.TakeCues()) {
         if (cue.resource.packHash == CStringToKey("pack0_core") && cue.resource.localIndex == 8) { respawnEffect = true; }
     }
     if (!respawnEffect) { std::printf("[dm-feedback] missing respawn effect\n"); ++failures; }
-    if (player.weapon->brother.ReceiveDamage(10) != ZHitResult::Ignored) { ++failures; }
-    fixture.brotherModel.weapon->brother.StartDeath();
+    if (player.ReceiveDamage(10) != ZHitResult::Ignored) { ++failures; }
+    fixture.brotherModel.StartDeath();
     for (unsigned elapsed = 0; elapsed < 1500; elapsed += 16) { session.Update(16, 0, 0, false); }
     scene.UpdatePeerIndicator(16, bot.x + 1000, bot.y + 1000, 100, 100);
     const auto *indicator = scene.PeerIndicator();
@@ -248,7 +248,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     }
     // Keep the final burst in the captured camera, independent of respawn distance.
     scene.GetPlayer().x = bot.x + 80; scene.GetPlayer().y = bot.y;
-    fixture.brotherModel.weapon->brother.StartDeath();
+    fixture.brotherModel.StartDeath();
     session.Update(16, 0, 0, false);
     if (!session.IsFinished() || session.IsReadyForResults()) { ++failures; }
     const float frozenX = scene.GetPlayer().x, frozenY = scene.GetPlayer().y;
@@ -277,9 +277,9 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     if (!session.IsReadyForResults() || wrapUpMs <= 16 || powerups.UseSelected()) { ++failures; }
     if (!capturedBurst || fadeStartedMs == 0) { ++failures; }
     std::printf("[dm-final-kill] burst-complete=%u fade-start=%u result=%u\n", burstCompleteMs, fadeStartedMs, wrapUpMs);
-    if (!bot.vitals.deathAnimationComplete || fixture.brotherModel.weapon->brother.IsVisible()) {
+    if (!bot.vitals.deathAnimationComplete || fixture.brotherModel.IsVisible()) {
         std::printf("[dm-final-kill] results cut off death animation complete=%d visible=%d\n",
-            bot.vitals.deathAnimationComplete, fixture.brotherModel.weapon->brother.IsVisible());
+            bot.vitals.deathAnimationComplete, fixture.brotherModel.IsVisible());
         ++failures;
     }
     std::printf("[dm-presentation] frozen-wrap-up=%u ms failures=%u\n", wrapUpMs, failures);

@@ -14,7 +14,7 @@
 #include "gun_bros_re/gameplay/CProp.h"
 #include "gun_bros_re/gameplay/TileSet.h"
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include <array>
@@ -261,7 +261,7 @@ struct ZPlacedPlayer {
     // By pointer for the same reason a PlacedEnemy's model is: it owns GL
     // buffers and its controllers point back into it, so it cannot be moved
     // once built.
-    std::unique_ptr<ZPlayerModel> model;
+    std::unique_ptr<CBrother> model;
 
     ZPlacedPlayer()
         : x(0.0f), y(0.0f), facingDegrees(0.0f), moving(false) {}
@@ -284,7 +284,7 @@ struct ZLoadedMap {
 
     // The player template, owned here because every PlacedPlayer's controllers
     // hold the ADDRESS of its move set -- the same trap PlacedEnemy documents.
-    std::unique_ptr<ZPlayerTemplateData> playerTemplate;
+    std::unique_ptr<CBrother::Template> playerTemplate;
     std::vector<ZPlacedPlayer> players;
 
     // Props, and everything they hang off. The caches own the atlas pages, so

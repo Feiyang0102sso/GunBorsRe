@@ -2,8 +2,8 @@
 class CResTOCManager;
 class ZPackTables;
 class CLevel;
-struct ZPlayerModel;
+class CBrother;
 struct ZPlayerVitals;
 
 unsigned CheckPowerupRuntime(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
-    ZPlayerModel &player, ZPlayerVitals &vitals);
+    CBrother &player, ZPlayerVitals &vitals);

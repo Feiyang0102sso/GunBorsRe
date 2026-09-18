@@ -79,13 +79,13 @@
 
 - 原位置：已删除 `ZPowerupScene` 的匹配、预算和选号，以及选择器远端商店过滤。
 - 初始发现：多处分别写 `pack5` 和 `1/8/9/13`；购买顺序另写 `9/8/1/13`。选择器过滤只检查 localIndex，其他路径还检查包，表达方式不一致。
-- 当前归属：[ZDeathmatchBot.cpp](../src/gun_bros_re/gameplay/brother/ZDeathmatchBot.cpp) 集中允许集合、预算分类、选号和购买偏好；UI 与运行时共用 `IsHealthPowerup/IsGrenadePowerup`，同时核对包与编号。购买顺序继续作为本地策略保留。
+- 当前归属：[ZLocalPVPBot.cpp](../src/gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.cpp) 集中允许集合、预算分类、选号和购买偏好；UI 与运行时共用 `IsHealthPowerup/IsGrenadePowerup`，同时核对包与编号。购买顺序继续作为本地策略保留。
 - **保留并归位**：用户明确要求 Easy/Normal 限定标准手雷与血包，Normal 无限供应，Hard 扩展可用范围。依据见 [DM 难度文档](deathmatch-ending-and-difficulty.md)。这不是已经删除的通用 `IsPlayablePowerup` 白名单，不应擅自扩大机器人允许集合。
 - 目标：把允许集合、预算分类和购买偏好集中在本地机器人策略，由 UI 与运行时消费同一结果；原 STORE 模式限制、Flow CanUse、冷却和玩家库存规则仍独立生效。
 
 ### R07：把 Movie 依赖等同于空袭的机器人分类
 
-- 原位置：已删除 `ZPowerupScene::Init` 的 `BotUseRules`；当前在 [ZLocalCoopBot.cpp](../src/gun_bros_re/gameplay/brother/ZLocalCoopBot.cpp) 的 `CanUseSelectedPowerup`。
+- 原位置：已删除 `ZPowerupScene::Init` 的 `BotUseRules`；当前在 [ZLocalCoopBot.cpp](../src/gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.cpp) 的 `CanUseSelectedPowerup`。
 - 已确认：存在 `sectionOrType == 253` 的 Movie 依赖且 `field112 == 0` 就分类为空袭，影响 `CanBotUseSelected` 的敌人数阈值。
 - 待核对：这是本地战术启发式，不是原资源中的空袭类型标志。阈值本身有用户策略背景，见 [Live 机器人策略](live-cheats-and-bot-policy.md)；不能误当作原道具可用性。
 - 目标：将策略推断移出通用道具生命周期；记录适用资源及分类依据，不以依赖存在证明效果一定发生。

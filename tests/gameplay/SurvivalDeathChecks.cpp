@@ -70,12 +70,12 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
             if (!vitals.dead || vitals.deaths != 1 || session.IsDeathComplete() || !vitals.inputHidden ||
                 std::abs(session.GetLevel().GetWorldTimeScale() - 76 / 256.0f) > 0.0001f) { ++checkFailures; }
             if (scene.Suicide() || vitals.deaths != 1) { ++checkFailures; }
-            auto &torso = player.weapon->brother.GetTorso();
+            auto &torso = player.GetTorso();
             const int startTime = torso.GetAnimation().GetTimeMs();
             const int duration = torso.GetAnimation().GetRangeDurationMs();
             const auto &move = torso.GetMoveSet()->GetMoves()[torso.GetMoveIndex()];
             const float deathX = scene.GetPlayer().x, deathY = scene.GetPlayer().y;
-            if (duration <= 0 || player.weapon->brother.TorsoUsesWeapon()) { ++checkFailures; }
+            if (duration <= 0 || player.TorsoUsesWeapon()) { ++checkFailures; }
             if (scenario == 1) {
                 // Native perturbation proves there is no fixed host death delay.
                 const std::int16_t scale = 128;
@@ -126,15 +126,15 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
         fatal.damage = 10000;
         scene.ApplyHit(kBrotherCombatId, fatal);
         if (brother.vitals.flash != 1) { ++checkFailures; }
-        AdvancePlayer(brotherModel, 250);
+        brotherModel.Update(250);
         if (std::abs(brother.vitals.flash - 0.5f) > 0.0001f) { ++checkFailures; }
-        for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+        for (int elapsed = 0; elapsed < 8000; elapsed += 16) { brotherModel.Update(16); }
         if (!brother.vitals.deathAnimationComplete || session.IsDeathComplete() || session.GetLevel().GetWorldTimeScale() != 1) { ++checkFailures; }
         std::printf("[death-check] %s brother-corpse-flash=%.3f\n",
             packShortName.c_str(), brother.vitals.flash);
         if (brother.vitals.flash != 0) { ++checkFailures; }
-        brotherModel.weapon->brother.OnWaveCleared();
-        for (int elapsed = 0; elapsed < 8000; elapsed += 16) { AdvancePlayer(brotherModel, 16); }
+        brotherModel.OnWaveCleared();
+        for (int elapsed = 0; elapsed < 8000; elapsed += 16) { brotherModel.Update(16); }
         if (brother.vitals.dead || brother.vitals.deathAnimationComplete) { ++checkFailures; }
         std::printf("[death-check] %s restart/brother failures=%u\n", packShortName.c_str(), checkFailures);
         if (checkFailures != 0) { return 1; }

@@ -4,7 +4,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/ui/ZMenuData.h"
 #include "gun_bros_re/ui/ZTextLayout.h"
 #include "engine/platform/ZWindow.h"
@@ -144,7 +144,7 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
             if (m_resources.m_store[storeIndex].data.IsExcludedFromGameType(gameType)) { continue; }
             const auto &ref = m_resources.m_store[storeIndex].data.objects.front().object;
             if (state.deathmatch && state.remoteShop &&
-                !ZDeathmatchBot::IsGrenadePowerup(ref) && !ZDeathmatchBot::IsHealthPowerup(ref)) { continue; }
+                !ZLocalPVPBot::IsGrenadePowerup(ref) && !ZLocalPVPBot::IsHealthPowerup(ref)) { continue; }
             for (const auto &powerup : m_resources.m_powerups) {
                 if (powerup.resource.packHash == ref.packHash && powerup.resource.localIndex == ref.localIndex &&
                     (powerup.data.field112 != 0) == state.afterDeathShop) { m_selectorEntries.push_back(storeIndex); }

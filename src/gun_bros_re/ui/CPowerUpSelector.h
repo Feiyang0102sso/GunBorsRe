@@ -12,11 +12,11 @@ class CInputPad;
 class CPowerUpSelector {
 public:
     CPowerUpSelector();
-    CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
+    CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
         ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile,
         ZCombatId owner = kPlayerCombatId);
     /** Bind the selector's actor and inventory; UI and equipment share one catalog. */
-    void BindPowerups(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
+    void BindPowerups(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
         ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile,
         ZCombatId owner = kPlayerCombatId);
     bool InitPowerups();
@@ -84,7 +84,7 @@ public:
 private:
     friend class CBrother;
     friend class CLevel;
-    friend class ZDeathmatchBot;
+    friend class ZLocalPVPBot;
     friend class ZLocalCoopBot;
     bool IsSupported(const ZPowerupEntry &entry) const;
     const CStoreItem *FindStoreItem(const ZPowerupEntry &entry) const;
@@ -92,7 +92,7 @@ private:
     // Peer/research selectors load UI resources only for requested presentation.
     std::unique_ptr<ZHudResources> m_ownedResources;
     std::unique_ptr<CPowerup> m_powerup = std::make_unique<CPowerup>();
-    ZPlayerModel *m_player = nullptr;
+    CBrother *m_player = nullptr;
     ZPlayerVitals *m_vitals = nullptr;
     CLevel *m_level = nullptr;
     CProfileManager *m_profile = nullptr;

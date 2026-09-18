@@ -19,7 +19,7 @@
 
 namespace ArenaDetail {
 constexpr int kStepMs = 16;
-bool Equip(ZPackTables &tables, const ZPlayerTemplateData &data, const ZWeaponEntry &entry, ZPlayerModel &player, const ZShaderProgram &program);
+bool Equip(ZPackTables &tables, const CBrother::Template &data, const ZWeaponEntry &entry, CBrother &player, const ZShaderProgram &program);
 }
 
 /** Borrowed scene state, valid only during RunArena's scene-ready callback. */
@@ -30,8 +30,8 @@ struct ArenaScene {
     const ZShaderProgram &program;
     const std::vector<ZEnemyTemplateData> &catalog;
     const std::vector<ZWeaponEntry> &weapons;
-    const ZPlayerTemplateData &playerData;
-    ZPlayerModel &player;
+    const CBrother::Template &playerData;
+    CBrother &player;
     ZPlayerVitals &vitals;
     CLevel &scene;
 };

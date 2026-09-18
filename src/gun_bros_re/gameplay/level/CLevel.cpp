@@ -692,7 +692,7 @@ void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
     // Multiplier attribute 2 is Xplodium; attribute 3 is XP. Both round up.
     const GameObjectRef &ref = actor.model.enemy.combat.templateRef;
     const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-        GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_playerModel, 3) *
+        GetEnemyMultiplier(ref, 3) * m_playerModel->GetArmorMultiplier(3) *
         CFriendPowerManager::Multiplier(m_playerModel->friendCount, 5)));
     const bool playerKill = actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId;
     if (m_localLive) {
@@ -709,7 +709,7 @@ void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
             unsigned assistExperience = experience;
             if (other == 1 && m_brotherModel != nullptr) {
                 assistExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-                    GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_brotherModel, 3) *
+                    GetEnemyMultiplier(ref, 3) * m_brotherModel->GetArmorMultiplier(3) *
                     CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
             }
             unsigned assisted = 0;
@@ -728,10 +728,10 @@ void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
             }
             if (killer == 1 && m_brotherModel != nullptr) {
                 const unsigned peerExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-                    GetEnemyMultiplier(ref, 3) * PlayerArmorMultiplier(*m_brotherModel, 3) *
+                    GetEnemyMultiplier(ref, 3) * m_brotherModel->GetArmorMultiplier(3) *
                     CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
                 const unsigned peerXplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
-                    GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(*m_brotherModel, 4) *
+                    GetEnemyMultiplier(ref, 2) * m_brotherModel->GetArmorMultiplier(4) *
                     CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 6)));
                 AddPeerExperience(peerExperience);
                 AddPeerXplodium(peerXplodium);
@@ -811,7 +811,7 @@ void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
     }
     if (hit.owner == kPlayerCombatId) {
         const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
-            GetEnemyMultiplier(ref, 2) * PlayerArmorMultiplier(*m_playerModel, 4) *
+            GetEnemyMultiplier(ref, 2) * m_playerModel->GetArmorMultiplier(4) *
             CFriendPowerManager::Multiplier(m_playerModel->friendCount, 6)));
         AddXplodium(xplodium);
     }
@@ -819,9 +819,9 @@ void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
 
 void CLevel::ResolveWaveReward(unsigned perfectRewardPercent) {
     if (m_playerModel != nullptr && m_playerModel->weapon != nullptr) {
-        m_playerModel->weapon->brother.OnWaveCleared();
+        m_playerModel->OnWaveCleared();
     }
-    if (m_brotherModel != nullptr) { m_brotherModel->weapon->brother.OnWaveCleared(); }
+    if (m_brotherModel != nullptr) { m_brotherModel->OnWaveCleared(); }
     m_lastWaveBonus = 0;
     m_wavePerfectResults.push_back(m_vitals->hits == m_waveHits);
     // CLevel::OnWaveCleared :116980 uses integer percentage and grants at least one.

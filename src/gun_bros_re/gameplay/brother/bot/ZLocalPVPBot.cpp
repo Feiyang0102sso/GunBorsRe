@@ -1,7 +1,7 @@
-#include "gun_bros_re/gameplay/brother/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 /** Explicit tactical states. Constants tune host decisions, never gun damage. */
 #define NOMINMAX
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include <algorithm>
@@ -21,7 +21,7 @@ float PreferredRange(const ZWeaponEntry &weapon) {
     return 230;
 }
 }
-const ZStoreEntry *ZDeathmatchBot::ChoosePurchase(const std::vector<ZStoreEntry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life) {
+const ZStoreEntry *ZLocalPVPBot::ChoosePurchase(const std::vector<ZStoreEntry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life) {
     if (life.dead) { return nullptr; }
     GameObjectRef ref; ref.packHash = CStringToKey("pack5");
     unsigned healthCount = life.healthPacks;
@@ -47,11 +47,11 @@ const ZStoreEntry *ZDeathmatchBot::ChoosePurchase(const std::vector<ZStoreEntry>
     }
     return nullptr;
 }
-void ZDeathmatchBot::PrintNavigation() const {
+void ZLocalPVPBot::PrintNavigation() const {
     std::printf("[deathmatch-bot] tactic=%u goal=%.1f,%.1f route=%zu movement=%.2f,%.2f\n", static_cast<unsigned>(m_tactic), m_goalX, m_goalY, m_route.size(), m_moveX, m_moveY);
     if (!m_route.empty()) { std::printf("[deathmatch-bot] next=%.1f,%.1f\n", m_route.front().x, m_route.front().y); }
 }
-std::array<unsigned, 2> ZDeathmatchBot::ChooseLoadout(const CMPMatch::Entry &match, const std::vector<ZWeaponEntry> &weapons, unsigned seed) {
+std::array<unsigned, 2> ZLocalPVPBot::ChooseLoadout(const CMPMatch::Entry &match, const std::vector<ZWeaponEntry> &weapons, unsigned seed) {
     std::mt19937 random(seed);
     const unsigned first = std::uniform_int_distribution<unsigned>(0, static_cast<unsigned>(match.guns.size() - 1))(random);
     int firstCategory = -1;
@@ -67,31 +67,31 @@ std::array<unsigned, 2> ZDeathmatchBot::ChooseLoadout(const CMPMatch::Entry &mat
     }
     return {first, second};
 }
-void ZDeathmatchBot::Configure(unsigned seed, const ZWeaponEntry &first, const ZWeaponEntry &second, CMPMatch::BotLevel level) {
+void ZLocalPVPBot::Configure(unsigned seed, const ZWeaponEntry &first, const ZWeaponEntry &second, CMPMatch::BotLevel level) {
     m_level = level;
     m_random.seed(seed);
     m_ranges[0] = PreferredRange(first); m_ranges[1] = PreferredRange(second);
 }
-bool ZDeathmatchBot::TakePowerupRequest() {
+bool ZLocalPVPBot::TakePowerupRequest() {
     if (m_level == CMPMatch::BotLevel::Easy || vitals.dead || m_powerupDecisionMs > 0 || (!m_visible && !WantsHealth())) { return false; }
     m_powerupDecisionMs = PowerupDecisionMs;
     return true;
 }
 
-void ZDeathmatchBot::UsePowerups(CPowerUpSelector &powerups) {
+void ZLocalPVPBot::UsePowerups(CPowerUpSelector &powerups) {
     if (m_level != CMPMatch::BotLevel::Easy) {
         if (!TakePowerupRequest()) { return; }
-        if (WantsHealth() && ZDeathmatchBot::UseMatchConsumable(powerups, false)) { return; }
-        if (m_level == CMPMatch::BotLevel::Hard) { ZLocalCoopBot::UseAnyPowerup(powerups); }
+        if (WantsHealth() && ZLocalPVPBot::UseMatchConsumable(powerups, false)) { return; }
+        if (m_level == CMPMatch::BotLevel::Hard) { ZLocalCoopBot::UseAnyPowerup(powerups, m_powerupChoice); }
         // Normal retains Easy's standard grenade selection and tactical range.
-        else if (WantsGrenade()) { ZDeathmatchBot::UseMatchConsumable(powerups, true); }
+        else if (WantsGrenade()) { ZLocalPVPBot::UseMatchConsumable(powerups, true); }
         return;
     }
-    if (WantsHealth()) { ZDeathmatchBot::UseMatchConsumable(powerups, false); }
-    if (WantsGrenade()) { ZDeathmatchBot::UseMatchConsumable(powerups, true); }
+    if (WantsHealth()) { ZLocalPVPBot::UseMatchConsumable(powerups, false); }
+    if (WantsGrenade()) { ZLocalPVPBot::UseMatchConsumable(powerups, true); }
 }
 
-void ZDeathmatchBot::Reset(float startX, float startY, float startFacing) {
+void ZLocalPVPBot::Reset(float startX, float startY, float startFacing) {
     CBrotherAI::Reset(startX, startY, startFacing);
     m_target = 0; m_visible = false; m_moving = false;
     m_ageMs = 0; m_decisionMs = 0; m_memoryMs = 0; m_shopDelayMs = 0; m_swapMs = 0;
@@ -100,7 +100,7 @@ void ZDeathmatchBot::Reset(float startX, float startY, float startFacing) {
     m_powerupDecisionMs = 0;
     m_route.clear(); m_routeMs = 0;
 }
-void ZDeathmatchBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world, float, float, float speedMultiplier) {
+void ZLocalPVPBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world, float, float, float speedMultiplier) {
     auto &scene = static_cast<CLevel &>(world);
     if (deltaMs <= 0) { return; }
     UpdateForce(deltaMs, brother, world);
@@ -133,13 +133,13 @@ void ZDeathmatchBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &wor
         if (visible) { m_tactic = Tactic::Fight; m_goalX = m_lastX; m_goalY = m_lastY; }
         else if (m_memoryMs > 0) { m_goalX = m_lastX; m_goalY = m_lastY; }
         else if (std::hypot(m_goalX - x, m_goalY - y) < 60 || (m_moveX == 0 && m_moveY == 0)) {
-            scene.FindMatchDestination(x, y, false, 0, 0, m_goalX, m_goalY, m_random());
+            FindDestination(scene, x, y, false, 0, 0, m_goalX, m_goalY, m_random());
         }
         float supplyX = 0, supplyY = 0;
-        if (scene.FindMatchSupply(x, y, supplyX, supplyY) && (m_memoryMs <= 0 || std::hypot(supplyX - x, supplyY - y) < m_distance * 0.65f)) {
+        if (scene.FindNearestPickup(x, y, supplyX, supplyY) && (m_memoryMs <= 0 || std::hypot(supplyX - x, supplyY - y) < m_distance * 0.65f)) {
             m_tactic = Tactic::Supply; m_goalX = supplyX; m_goalY = supplyY;
         }
-        if (visible && WantsHealth() && scene.FindMatchDestination(x, y, true, m_lastX, m_lastY, supplyX, supplyY)) {
+        if (visible && WantsHealth() && FindDestination(scene, x, y, true, m_lastX, m_lastY, supplyX, supplyY)) {
             m_tactic = Tactic::Cover; m_goalX = supplyX; m_goalY = supplyY;
         }
         const unsigned slot = scene.GetBrotherWeaponSlot();
@@ -152,7 +152,7 @@ void ZDeathmatchBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &wor
         if (navigating) {
             m_decisionMs = 50;
             if (m_routeMs <= 0 || std::hypot(m_goalX - m_routeGoalX, m_goalY - m_routeGoalY) > 80) {
-                scene.FindMatchRoute(x, y, m_goalX, m_goalY, m_route);
+                FindRoute(scene, x, y, m_goalX, m_goalY, m_route);
                 m_routeGoalX = m_goalX; m_routeGoalY = m_goalY; m_routeMs = 5000;
             }
             while (m_route.size() > 1 && world.CanBrotherWalk(x, y, m_route[1].x, m_route[1].y)) { m_route.erase(m_route.begin()); }
@@ -201,7 +201,7 @@ void ZDeathmatchBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &wor
     else if (m_moving) { facing = std::atan2(m_moveY, m_moveX) / Radians + 90; }
     brother.SetInput(m_moving, fire);
 }
-bool ZDeathmatchBot::AllowsPowerup(const CPowerUpSelector &selector, const ZPowerupEntry &entry) {
+bool ZLocalPVPBot::AllowsPowerup(const CPowerUpSelector &selector, const ZPowerupEntry &entry) {
     if (selector.m_match == nullptr || selector.m_owner != kBrotherCombatId) { return true; }
     // Hard removes the host's item/life budget, never retail STORE mode rules.
     if (selector.m_match->HasHardBot()) { return selector.m_match->CanUse(1, false) && entry.data.field112 == 0; }
@@ -210,20 +210,20 @@ bool ZDeathmatchBot::AllowsPowerup(const CPowerUpSelector &selector, const ZPowe
     return selector.m_match->CanUse(1, IsGrenadePowerup(entry.resource));
 }
 
-bool ZDeathmatchBot::IsHealthPowerup(const GameObjectRef &resource) {
+bool ZLocalPVPBot::IsHealthPowerup(const GameObjectRef &resource) {
     if (resource.packHash != CStringToKey("pack5")) { return false; }
     return resource.localIndex == 1 || resource.localIndex == 8 || resource.localIndex == 9;
 }
 
-bool ZDeathmatchBot::IsGrenadePowerup(const GameObjectRef &resource) {
+bool ZLocalPVPBot::IsGrenadePowerup(const GameObjectRef &resource) {
     return resource.packHash == CStringToKey("pack5") && resource.localIndex == 13;
 }
 
-bool ZDeathmatchBot::HasUnlimitedInventory(const CPowerUpSelector &selector) {
+bool ZLocalPVPBot::HasUnlimitedInventory(const CPowerUpSelector &selector) {
     return selector.m_match != nullptr && selector.m_match->HasUnlimitedBotPowerups() && selector.m_owner == kBrotherCombatId;
 }
 
-void ZDeathmatchBot::CommitPowerupBudget(CPowerUpSelector &selector, const GameObjectRef &resource) {
+void ZLocalPVPBot::CommitPowerupBudget(CPowerUpSelector &selector, const GameObjectRef &resource) {
     if (selector.m_match == nullptr) { return; }
     if (selector.m_owner == kBrotherCombatId) {
         // Only Easy's two budget categories belong in these counters.
@@ -232,7 +232,7 @@ void ZDeathmatchBot::CommitPowerupBudget(CPowerUpSelector &selector, const GameO
     }
 }
 
-bool ZDeathmatchBot::UseMatchConsumable(CPowerUpSelector &selector, bool grenade) {
+bool ZLocalPVPBot::UseMatchConsumable(CPowerUpSelector &selector, bool grenade) {
     // Prefer the largest available health pack; the script rejects full health.
     for (auto entry = selector.m_resources.m_powerups.rbegin(); entry != selector.m_resources.m_powerups.rend(); ++entry) {
         if (grenade && !IsGrenadePowerup(entry->resource)) { continue; }

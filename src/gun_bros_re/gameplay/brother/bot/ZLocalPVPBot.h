@@ -8,8 +8,9 @@
 #include "gun_bros_re/data/CProfileManager.h"
 
 class CPowerUpSelector;
+class CLevel;
 struct ZPowerupEntry;
-class ZDeathmatchBot final : public CBrotherAI {
+class ZLocalPVPBot final : public CBrotherAI {
 public:
     enum class Tactic { Search, Fight, Supply, Cover, Dead };
     void Configure(unsigned seed, const ZWeaponEntry &first, const ZWeaponEntry &second,
@@ -35,7 +36,13 @@ public:
     static bool UseMatchConsumable(CPowerUpSelector &selector, bool grenade);
     void OnShopAttempt() { m_shopDelayMs = 15000; }
 private:
+    /** Desktop route and tactical selection; the level supplies current geometry. */
+    static bool FindRoute(const CLevel &scene, float x, float y, float goalX, float goalY,
+        std::vector<ZCollisionPoint> &route);
+    static bool FindDestination(const CLevel &scene, float x, float y, bool cover,
+        float targetX, float targetY, float &goalX, float &goalY, unsigned choice = 0);
     bool TakePowerupRequest();
+    std::uint32_t m_powerupChoice = 0;
     Tactic m_tactic = Tactic::Search;
     CMPMatch::BotLevel m_level = CMPMatch::BotLevel::Easy;
     int m_powerupDecisionMs = 0;

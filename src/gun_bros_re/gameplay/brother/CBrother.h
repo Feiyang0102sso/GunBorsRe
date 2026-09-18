@@ -35,6 +35,10 @@
 #include "engine/graphics/CMoveSetMeshController.h"
 #include "gun_bros_re/effects/CParticleEffectPlayer.h"
 #include <array>
+#include <map>
+#include "gun_bros_re/gameplay/CArmor.h"
+#include "gun_bros_re/data/ZPackTables.h"
+class ZShaderProgram;
 // CGameSpriteGluRef lives here, next to its first user
 // Historical location above; now declared in original gameAssetRef module.
 
@@ -71,6 +75,15 @@ public:
     class Template {
     public:
         Template();
+        /**
+         * Find the player template, whichever pack it lives in.
+         *
+         * There is exactly one in the whole library, so the first hit is the answer.
+         *
+         * @return false when no pack carries a readable one.
+         */
+        bool Load(CResTOCManager &toc, ZPackTables &tables);
+        const std::string &GetOwner() const { return m_owner; }
 
         bool Init(CArrayInputStream &stream);
 
@@ -92,6 +105,7 @@ public:
         float GetGameScale() const { return m_gameScale; }
 
     private:
+        std::string m_owner;
         CScript m_script;
         CMoveSetMesh m_moveSet;
 
@@ -105,25 +119,125 @@ public:
         CGameSpriteGluRef m_shadowSprite;
     };
 
+    /**
+     * A player and his parts.
+     *
+     * Held by pointer per part because a CMeshBuffer owns a GL name and cannot be
+     * copied or moved, and because controller mesh arrays point back at each owned `mesh`.
+     * Actor state and equipment have independent ownership and lifetimes.
+     */
     CBrother();
+    ~CBrother();
+    CBrother(const CBrother &) = delete;
+    CBrother &operator=(const CBrother &) = delete;
+    // Owned here so the controllers can point at it.
+    CMoveSetMesh moveSet;
+    unsigned brotherIndex = 0;
+    unsigned friendCount = 0;
+    PowerupState powerups;
+    std::unique_ptr<CGun> weapon;
+    // CBrother owns two guns in the original. UI keeps both mesh banks alive
+    // while the old torso finishes raising after native 3 switches the gun.
+    std::unique_ptr<CGun> uiOtherWeapon;
+    CGun *uiActiveWeapon = nullptr;
+    std::unique_ptr<CArmor> armor[kArmorSlotCount];
+    GameObjectRef gunResource;
+    unsigned gunSlot = 0; // Retained on projectiles after the player switches guns.
+    unsigned masteryExperience = 0;
+    std::map<std::uint64_t, unsigned> masteryByWeapon;
+    /** Both menu and combat retain the outgoing torso until its move ends. */
+    CGun &ActiveWeapon() const {
+        if (uiActiveWeapon != nullptr) { return *uiActiveWeapon; }
+        return *weapon;
+    }
+
+    /**
+     * Build the torso and the legs. No weapon: that is a separate call.
+     *
+     * @return false when the set has fewer than the two configs a player needs.
+     */
+    bool BuildBody(ZPackTables &tables, const CMoveSetMesh &moveSet);
+
+    /** Compose a muzzle in the same raw coordinate space as Draw. */
+    bool GetMuzzle(int hand, int node, ZMeshBoneTransform &out);
+
+    /** Create the GL buffers for every part. */
+    bool CreateBuffers(const ZShaderProgram &program);
+
+    /**
+     * The box the whole player occupies.
+     *
+     * Only the parts that hang off nothing count: an attached part sits inside the
+     * body anyway, and letting a long rifle drive the framing would make the
+     * character shrink every time the gun changed.
+     */
+    ZMeshBounds GetBounds() const;
+
+    /**
+     * Draw every part against one base matrix.
+     *
+     * @param base Row-major, and it must already carry the scale: the vertices go
+     *        in raw.
+     */
+    void Draw(const ZShaderProgram &program, const float *base);
+    /** CBrother::DrawUI + CMeshCamera::OrientForUI, in full-menu pixel coordinates.
+     * The region height scales the active torso's raw Z extent; weapons do not
+     * change framing. Returns false when the active torso cannot be resolved. */
+    bool BuildUIMatrix(float centerX, float top, float height,
+        float facingRadians, float screenWidth, float screenHeight, float *out) const;
+
+    /**
+     * How much to scale a player's RAW vertices by to put him in the world.
+     *
+     * `torso.inverseExtent * runtimeScale * gameScale * cameraScale`, read off
+     * CBrother::Draw (:134960): the inverse extent comes from the mesh at
+     * this[454] -- the TORSO, not the combined body -- and the runtime factor
+     * this[494] is 1 from CBrother::Bind onwards. Same shape as an enemy's, and
+     * the same trap: the product applies to raw vertices, because the inverse
+     * extent in it is what normalises them.
+     *
+     * @return 0 when there is no torso to measure.
+     */
+    float GetWorldScale(float gameScale, float cameraScale) const;
+
+    /** Last uploaded torso vertices; null when its resource is unresolved. */
+    const std::vector<float> *GetTorsoPose() const;
+
+    /** Equip the actual template, including its player move overrides and scripts. */
+    bool EquipWeapon(ZPackTables &tables, const CScript &playerScript,
+        const CGun::Template &weapon, const std::string &owner);
+    /** Load the second UI gun from BIG; the primary brother remains the sole host. */
+    bool PrepareSecondaryWeapon(ZPackTables &tables, const CGun::Template &weapon,
+        const std::string &owner);
+    void SelectWeapon(bool primary);
+    bool SelectCachedWeapon(ZPackTables &tables, const CGun::Template &data,
+        const std::string &owner, std::uint64_t key, const ZShaderProgram &program);
+    /** Replace only the template's own armour slot; other equipment stays equipped. */
+    bool EquipArmor(ZPackTables &tables, const CArmor::Template &data,
+        const ZShaderProgram &program);
+    void ClearArmor();
+    float GetArmorMultiplier(std::uint32_t attribute) const;
+    const CScript &GetScript() const { return m_script; }
+    ZPlayerVitals *GetVitals() const { return m_vitals; }
+    void ClearScript();
+
     bool UsePowerup(CPowerUpSelector &selector, bool fromSelector = false);
     void SetVitals(ZPlayerVitals *vitals) { m_vitals = vitals; }
-    void SetPowerupState(PowerupState *powerups);
     std::shared_ptr<PowerupParticles> GetPowerupParticles() const { return m_powerupParticles; }
     void StartShield(const GameObjectRef &effect, int durationMs);
     void StartAutoFire(const GameObjectRef &effect, int durationSeconds);
-    bool IsAutoFire() const { return m_powerups != nullptr && m_powerups->autoFireMs > 0; }
-    bool IsTurretActive() const { return m_powerups != nullptr && m_powerups->turretActive; }
-    void SetTurretIsActive(bool active) { if (m_powerups != nullptr) { m_powerups->turretActive = active; } }
+    bool IsAutoFire() const { return powerups.autoFireMs > 0; }
+    bool IsTurretActive() const { return powerups.turretActive; }
+    void SetTurretIsActive(bool active) { powerups.turretActive = active; }
     void StartFrenzyType(const GameObjectRef &effect, int durationMs, float multiplier, unsigned type);
     void StartFrenzy(const GameObjectRef &effect, int durationMs, float attack, float defense, float speed);
     void StopFrenzy();
-    bool IsFrenzy() const { return m_powerups != nullptr && m_powerups->legacyFrenzyMs > 0; }
-    bool IsShield() const { return m_powerups != nullptr && m_powerups->shieldMs > 0; }
-    bool IsFrenzyType(unsigned type) const { return type < 3 && m_powerups != nullptr && m_powerups->frenzyMs[type] > 0; }
+    bool IsFrenzy() const { return powerups.legacyFrenzyMs > 0; }
+    bool IsShield() const { return powerups.shieldMs > 0; }
+    bool IsFrenzyType(unsigned type) const { return type < 3 && powerups.frenzyMs[type] > 0; }
     float GetFrenzyMultiplier(unsigned type) const;
     float GetProjectilePowerupMultiplier() const;
-    void SetHuman(bool human) { m_variables[2] = human; }
+    void SetHuman(bool human) { m_human = human; m_variables[2] = human; }
     bool CanMove() const { return m_spawned && m_variables[1] != 0; }
     /** CPlayer::Move :100724 skips enemy bodies only for this Flow timer. */
     bool CanPassEnemies() const { return m_variables[3] != 0; }
@@ -188,6 +302,16 @@ public:
     int GetStateId() const { return m_interpreter.GetStateId(); }
 
 private:
+    struct Drawing;
+    struct TorsoDrawing;
+    std::unique_ptr<Drawing> m_drawing;
+    TorsoDrawing ResolveTorsoDrawing() const;
+    /** Put every part's current pose in its buffer. Still parts show frame 0. */
+    void UploadPose();
+    // Stable gun/mesh banks keep torso sequences valid across PvP swaps.
+    std::map<std::uint64_t, std::unique_ptr<CGun>> m_cachedWeapons;
+    CScript m_script;
+    bool m_human = true;
     bool m_visible = true;
     bool m_spawned = true;
     bool m_immunityHidden = false;
@@ -195,7 +319,7 @@ private:
     int m_knockbackMs = 0;
     int m_knockbackDurationMs = 0;
     ZPlayerVitals *m_vitals = nullptr;
-    PowerupState *m_powerups = nullptr;
+    void RestorePowerupEffects();
     std::shared_ptr<PowerupParticles> m_powerupParticles;
     void PowerupEffect(const GameObjectRef &effect, int slot, bool active);
     GameObjectRef m_grenades[2];

@@ -477,9 +477,8 @@ void LoadPlacedPlayers(CResTOCManager &tocManager, const ZShaderProgram &program
             // Looked up on the first spawn point rather than up front, so a
             // map with none never pays for the walk over every pack.
             if (loaded.playerTemplate == nullptr) {
-                loaded.playerTemplate.reset(new ZPlayerTemplateData());
-                if (!FindPlayerTemplate(tocManager, tables,
-                                        *loaded.playerTemplate)) {
+                loaded.playerTemplate.reset(new CBrother::Template());
+                if (!loaded.playerTemplate->Load(tocManager, tables)) {
                     std::printf("[m3] no player template in the archives\n");
                     loaded.playerTemplate.reset();
                     return;
@@ -493,30 +492,22 @@ void LoadPlacedPlayers(CResTOCManager &tocManager, const ZShaderProgram &program
             // the angle member +1984. Maps without that field leave the original
             // reading uninitialised memory; this port keeps 0.
             placed.facingDegrees = static_cast<float>(objects[i].playerSpawnFacing);
-            placed.model.reset(new ZPlayerModel());
-            if (!BuildPlayerBody(tables, loaded.playerTemplate->moveSet,
-                                 *placed.model) ||
-                !CreatePlayerBuffers(*placed.model, program)) {
+            placed.model.reset(new CBrother());
+            if (!placed.model->BuildBody(tables, loaded.playerTemplate->GetMoveSet()) ||
+                !placed.model->CreateBuffers(program)) {
                 std::printf("[m3] player at %d %d could not be built\n",
                             objects[i].x, objects[i].y);
                 continue;
             }
 
-            SelectPlayerMoveSlot(*placed.model, 0, false);
-            PosePlayer(*placed.model);
+            // BuildBody already selects the first authored move for each part.
             std::printf("[m3] %s at %d %d -- scale %.0f facing %.0f authored=%d\n",
-                        loaded.playerTemplate->owner.c_str(), objects[i].x,
-                        objects[i].y, loaded.playerTemplate->gameScale,
+                        loaded.playerTemplate->GetOwner().c_str(), objects[i].x,
+                        objects[i].y, loaded.playerTemplate->GetGameScale(),
                         placed.facingDegrees, objects[i].hasPlayerSpawnFacing);
             loaded.players.push_back(std::move(placed));
         }
     }
 }
 
-/** Move every placed player's animation on. */
-void AdvancePlayers(ZLoadedMap &loaded, std::int32_t deltaMs) {
-    for (std::size_t i = 0; i < loaded.players.size(); ++i) {
-        AdvancePlayer(*loaded.players[i].model, deltaMs);
-    }
-}
 }

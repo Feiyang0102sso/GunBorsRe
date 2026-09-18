@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/brother/ZPlayerModel.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CTargetingController.h"
 #include "gun_bros_re/data/CPlayerProgress.h"
 
@@ -9,14 +9,14 @@ class CMap;
 class CProfileManager;
 
 /** Player state and native input/progression responsibilities from player.cpp.
- * Equipment/render storage remains in the desktop model; the level owns peers,
+ * Equipment/render storage remains in CBrother; the level owns peers,
  * collisions and match policy. This is not a claim of a complete CPlayer port.
  */
 class CPlayer {
 public:
     CPlayer() = default;
-    CPlayer(ZPlayerModel &model, ZPlayerVitals &vitals);
-    void BindActor(ZPlayerModel &model, ZPlayerVitals &vitals);
+    CPlayer(CBrother &model, ZPlayerVitals &vitals);
+    void BindActor(CBrother &model, ZPlayerVitals &vitals);
     void BindProgress(CPlayerProgress *progress);
     CPlayerProgress *GetProgress() const { return m_progress; }
     bool AddExperience(unsigned amount, bool updateHealth);
@@ -47,7 +47,7 @@ public:
     float forceX = 0, forceY = 0;
     int forceMs = 0;
 private:
-    ZPlayerModel *m_model = nullptr;
+    CBrother *m_model = nullptr;
     ZPlayerVitals *m_vitals = nullptr;
     CPlayerProgress *m_progress = nullptr;
     CTargetingController m_autoAim;

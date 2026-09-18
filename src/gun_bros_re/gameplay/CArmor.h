@@ -39,6 +39,7 @@
 #include "gun_bros_re/data/CGameAssetRef.h"
 
 #include <cstdint>
+#include <memory>
 
 // One model per brother.
 constexpr std::uint32_t kArmorVariantCount = 2;
@@ -49,6 +50,9 @@ constexpr std::uint32_t kArmorVariantCount = 2;
 // offsets 224/225 are node indices, not flags. Keep the old note for provenance.
 constexpr std::uint32_t kArmorSlotCount = 4;
 constexpr std::uint32_t kArmorAttributeCount = 5;
+
+class ZPackTables;
+class ZShaderProgram;
 
 class CArmor : public ZGameScriptObject {
 public:
@@ -97,6 +101,14 @@ public:
         CScript m_script;
     };
 
+    CArmor();
+    ~CArmor();
+    CArmor(const CArmor &) = delete;
+    CArmor &operator=(const CArmor &) = delete;
+    const Template &GetTemplate() const { return m_templateData; }
+    /** Load the original BIG mesh/atlas references, then bind the owned template. */
+    bool Load(ZPackTables &tables, const Template &data, const ZShaderProgram &program);
+
     /** Bind stable template data, then run original OnEquip (export 0). */
     void Bind(const Template &data);
     void Equip();
@@ -104,6 +116,10 @@ public:
     std::int16_t GetAttribute(std::uint32_t index) const;
 
 private:
+    friend class CBrother;
+    struct Drawing;
+    std::unique_ptr<Drawing> m_drawing;
+    Template m_templateData;
     CScriptInterpreter m_interpreter;
     std::int16_t m_attributes[kArmorAttributeCount] = {};
 };

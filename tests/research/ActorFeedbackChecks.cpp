@@ -1,3 +1,4 @@
+#include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Exercise knockback sound and AI weapon swaps through production scene updates. */
 #include "gun_bros_re/gameplay/ZMapWorldInternal.h"
 #include "tests/Checks.h"
@@ -6,9 +7,10 @@ using namespace MapDetail;
 
 namespace {
 /** Reproduce player input entering an actual BIG enemy's body circle. */
-unsigned CheckEnemyMovement(CLevel &scene, ZPlayerModel &player, ZPlayerVitals &vitals) {
+unsigned CheckEnemyMovement(CLevel &scene, const CCollisionData &collision,
+    CBrother &player, ZPlayerVitals &vitals) {
     scene.Reset();
-    ZCombatEnemy *actor = scene.Spawn(0, 650, 550);
+    ZCombatEnemy *actor = scene.Spawn(0, 450, 550);
     if (actor == nullptr) { return 1; }
     CEnemy &enemy = actor->model.enemy;
     // Freeze AI to isolate movement resolution, without disabling collision.
@@ -19,6 +21,16 @@ unsigned CheckEnemyMovement(CLevel &scene, ZPlayerModel &player, ZPlayerVitals &
     scene.GetPlayer().x = centerX - (22 + enemy.GetPart(0).radius * 0.8f - 1);
     scene.GetPlayer().y = centerY;
     const float startX = scene.GetPlayer().x;
+    // Assert that only the enemy can obstruct these short input steps.
+    for (float distance : {-8.0f, 8.0f}) {
+        const auto resolved = collision.ResolveCircleMovement({startX, centerY},
+            {distance, 0}, kPlayerCollisionRadius);
+        if (std::abs(resolved.x - startX - distance) > 0.001f ||
+            std::abs(resolved.y - centerY) > 0.001f) {
+            std::printf("[actor-body-check] fixture overlaps map geometry\n");
+            return 1;
+        }
+    }
     scene.Update(16, 1, 0, false);
     const float inward = scene.GetPlayer().x - startX;
     scene.Update(16, -1, 0, false);
@@ -36,7 +48,7 @@ unsigned CheckEnemyMovement(CLevel &scene, ZPlayerModel &player, ZPlayerVitals &
     ranged.damage = 1;
     scene.ApplyHit(kPlayerCombatId, ranged);
     scene.Update(16, 1, 0, false);
-    if (std::abs(scene.GetPlayer().x - startX) > 0.001f || player.weapon->brother.CanPassEnemies()) { ++failures; }
+    if (std::abs(scene.GetPlayer().x - startX) > 0.001f || player.CanPassEnemies()) { ++failures; }
     // CollisionMode and live membership, not targeting or the debug HP switch.
     enemy.combat.variables[16] = 1;
     scene.Update(16, 1, 0, false);
@@ -47,9 +59,9 @@ unsigned CheckEnemyMovement(CLevel &scene, ZPlayerModel &player, ZPlayerVitals &
     scene.Update(16, 1, 0, false);
     if (std::abs(scene.GetPlayer().x - startX) > 0.001f) { ++failures; }
     vitals.invincible = false;
-    player.weapon->brother.StartShield({}, 1000);
+    player.StartShield({}, 1000);
     scene.Update(16, 1, 0, false);
-    if (std::abs(scene.GetPlayer().x - startX) > 0.001f || player.weapon->brother.CanPassEnemies()) { ++failures; }
+    if (std::abs(scene.GetPlayer().x - startX) > 0.001f || player.CanPassEnemies()) { ++failures; }
     enemy.combat.health = 0;
     scene.Update(16, 1, 0, false);
     if (scene.GetPlayer().x <= startX + 1) { ++failures; }
@@ -58,9 +70,9 @@ unsigned CheckEnemyMovement(CLevel &scene, ZPlayerModel &player, ZPlayerVitals &
 }
 
 /** Traverse several frozen BIG enemies using the immunity from a real melee hit. */
-unsigned CheckMeleeEscape(CLevel &scene, ZPlayerModel &player, std::size_t entry) {
+unsigned CheckMeleeEscape(CLevel &scene, CBrother &player, std::size_t entry) {
     unsigned failures = 0;
-    CBrother &brother = player.weapon->brother;
+    CBrother &brother = player;
     // Keep the original PLAYER script/timer; only isolate the enemy AI motion.
     scene.GetEnemies().clear();
     const float startX = 400, startY = 550;
@@ -118,10 +130,10 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
     ZPackTables tables(toc);
-    ZPlayerTemplateData playerData;
+    CBrother::Template playerData;
     std::vector<ZWeaponEntry> weapons;
     std::vector<ZEnemyTemplateData> enemies;
-    if (!FindPlayerTemplate(toc, tables, playerData) || !LoadWeaponCatalog(toc, tables, weapons) ||
+    if (!playerData.Load(toc, tables) || !LoadWeaponCatalog(toc, tables, weapons) ||
         !LoadEnemyCatalog(toc, tables, enemies)) { return 1; }
     const ZWeaponEntry *pistol = nullptr;
     const ZWeaponEntry *rifle = nullptr;
@@ -130,20 +142,48 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         if (weapon.packHash == CStringToKey("pack5") && weapon.ordinal == 4) { rifle = &weapon; }
     }
     if (!pistol || !rifle) { return 1; }
+    // Raw catalogue previews must still animate and attach a gun without a script.
+    {
+        ZBrotherPreview preview;
+        const auto &mesh = pistol->data.GetMeshRef();
+        const auto &image = pistol->data.GetImageRef();
+        if (!preview.body.BuildBody(tables, playerData.GetMoveSet()) ||
+            !preview.AttachGun(tables, "raw preview", mesh.packHash, mesh.assetId,
+                image.packHash, image.assetId) || !preview.CreateBuffers(program)) { return 1; }
+        SelectPlayerMoveSlot(preview.body, 1, false);
+        const auto *uploaded = preview.body.GetTorsoPose();
+        if (uploaded == nullptr) { return 1; }
+        const auto initialPose = *uploaded;
+        preview.Update(160);
+        if (*uploaded != initialPose) { return 1; }
+        std::vector<float> expectedPose;
+        if (!preview.body.GetTorso().GetAnimation().Evaluate(expectedPose)) { return 1; }
+        float identity[16];
+        Matrix4dIdentity(identity);
+        preview.Draw(program, identity);
+        if (expectedPose.empty() || *uploaded != expectedPose || !GLCheckErrors("raw brother preview")) { return 1; }
+        std::printf("[brother-preview-check] raw-body=1 attachment=1 pose-upload=1\n");
+    }
     ZPlayerVitals vitals;
     vitals.maximum = 100;
     vitals.invincible = false;
     vitals.Reset();
-    ZPlayerModel player;
-    player.vitals = &vitals;
-    if (!BuildPlayerBody(tables, playerData.moveSet, player) ||
-        !EquipPlayerWeapon(tables, playerData.script, pistol->data, "feedback player", player) ||
-        !CreatePlayerBuffers(player, program)) { return 1; }
+    CBrother player;
+    player.SetVitals(&vitals);
+    if (!player.BuildBody(tables, playerData.GetMoveSet()) ||
+        !player.EquipWeapon(tables, playerData.GetScript(), pistol->data, "feedback player") ||
+        !player.CreateBuffers(program)) { return 1; }
+    // CPlayer::Move requires the level's map, object pool and collision layer.
+    // Use the same BIG map for body blocking and the wall-immunity check below.
+    ZLoadedMap wallMap;
+    if (!LoadMap(toc, toc.GetPackIndexFromName("pack2"), 7, wallMap)) { return 1; }
+    BuildCollisionScene(wallMap);
     CLevel scene(toc, tables, program);
-    scene.BindCombat(enemies, player, vitals, playerData.gameScale);
+    scene.BindCombat(enemies, player, vitals, playerData.GetGameScale());
+    scene.SetMap(wallMap.map, wallMap.collisionScene, wallMap.weaponCollision, 1, kPlayerCollisionRadius);
     unsigned failures = 0;
     failures += CheckOriginalCircleCircle();
-    failures += CheckEnemyMovement(scene, player, vitals);
+    failures += CheckEnemyMovement(scene, wallMap.collisionScene, player, vitals);
     // A barrel's native 10 can apply zero damage and still knock the player back.
     ZCombatHit blast;
     blast.ownerType = 1;
@@ -151,7 +191,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     blast.y = scene.GetPlayer().y;
     const auto beforeBlast = scene.GetSoundCueCount();
     scene.Splash(blast, 100, 360, 300, 100);
-    const unsigned knockbackState = player.weapon->brother.GetStateId();
+    const unsigned knockbackState = player.GetStateId();
     for (int elapsed = 0; elapsed < 768; elapsed += 16) { scene.Update(16, 0, 0, false); }
     const auto blastSounds = scene.GetSoundCueCount() - beforeBlast;
     if (knockbackState != 10 || blastSounds == 0 || vitals.health != 100) { ++failures; }
@@ -175,14 +215,14 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     brother.vitals.maximum = 100;
     brother.vitals.invincible = false;
     brother.Reset(scene.GetPlayer().x, scene.GetPlayer().y, 0);
-    ZPlayerModel partner;
-    partner.human = false;
-    partner.vitals = &brother.vitals;
-    if (!BuildPlayerBody(tables, playerData.moveSet, partner) ||
-        !EquipPlayerWeapon(tables, playerData.script, pistol->data, "feedback brother", partner) ||
-        !CreatePlayerBuffers(partner, program)) { return 1; }
+    CBrother partner;
+    partner.SetHuman(false);
+    partner.SetVitals(&brother.vitals);
+    if (!partner.BuildBody(tables, playerData.GetMoveSet()) ||
+        !partner.EquipWeapon(tables, playerData.GetScript(), pistol->data, "feedback brother") ||
+        !partner.CreateBuffers(program)) { return 1; }
     scene.SetBrother(&partner, &brother);
-    scene.SetBrotherWeapons(playerData.script, pistol->data, rifle->data);
+    scene.SetBrotherWeapons(playerData.GetScript(), pistol->data, rifle->data);
     // Every real pickup must ignore the AI partner, then remain collectable by the player.
     CProfileManager pickupProfile;
     const auto pickupReferences = GetPickupCheckReferences(toc, tables);
@@ -210,30 +250,39 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     std::printf("[actor-feedback-check] pickups=%zu brother-collected=%u player-collected=%u\n",
         pickupReferences.size(), brotherCollections, playerCollections);
     scene.Reset();
-    CBrother *originalHost = &partner.weapon->brother;
+    CBrother *originalHost = &partner;
+    const CScript *originalScript = &partner.GetScript();
     bool swapAnimation = false;
     bool swapped = false;
     const auto beforeSwap = scene.GetSoundCueCount();
     for (int elapsed = 0; elapsed < 240000; elapsed += 16) {
         scene.Update(16, 0, 0, false);
         // BIG states 4/5 lower the old gun and raise the new one.
-        const unsigned state = partner.weapon->brother.GetStateId();
+        const unsigned state = partner.GetStateId();
         if (state == 4 || state == 5) { swapAnimation = true; }
         if (scene.GetBrotherWeaponSlot() == 1) { swapped = true; }
         if (swapped && state != 4 && state != 5) { break; }
     }
     const auto swapSounds = scene.GetSoundCueCount() - beforeSwap;
-    if (!swapAnimation || !swapped || swapSounds == 0 || originalHost != &partner.weapon->brother) { ++failures; }
+    if (!swapAnimation || !swapped || swapSounds == 0 || originalHost != &partner) { ++failures; }
     std::printf("[actor-feedback-check] AI swap animation=%d swapped=%d sounds=%zu host-preserved=%d\n",
-        swapAnimation, swapped, swapSounds, originalHost == &partner.weapon->brother);
+        swapAnimation, swapped, swapSounds, originalHost == &partner);
     bool swappedBack = false;
     for (int elapsed = 0; elapsed < 240000; elapsed += 16) {
         scene.Update(16, 0, 0, false);
         if (scene.GetBrotherWeaponSlot() == 0) { swappedBack = true; break; }
     }
-    if (!swappedBack || originalHost != &partner.weapon->brother) { ++failures; }
+    if (!swappedBack || originalHost != &partner ||
+        originalScript != &partner.GetScript()) { ++failures; }
+    // Seed observable life state before reset, rather than testing pointer replacement.
+    if (!partner.BeginKnockback(1000)) { ++failures; }
+    partner.StartShield({}, 1000);
+    partner.WaitForSpawn();
     scene.Reset();
     if (scene.GetBrotherWeaponSlot() != 0 || partner.uiOtherWeapon != nullptr) { ++failures; }
+    if (originalHost != &partner || partner.GetKnockbackStepSeconds(16) != 0 ||
+        partner.HasGrenadeRequest(0) || partner.HasGrenadeRequest(1) || !partner.IsVisible() ||
+        !partner.HasSpawned() || partner.IsShield()) { ++failures; }
     std::printf("[actor-feedback-check] AI swap-back=%d reset-slot=%u\n", swappedBack, scene.GetBrotherWeaponSlot());
 
     // The same pulse must follow the same curve in both movement hosts.
@@ -267,11 +316,11 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         for (int elapsed = 0; elapsed < 2048; elapsed += 16) {
             scene.Update(16, 0, 0, false);
             if (enemy->contactTimer > 0) { hadContact = true; }
-            if (player.weapon->brother.GetStateId() == 10) { knockedBack = true; }
+            if (player.GetStateId() == 10) { knockedBack = true; }
             if (knockedBack) { break; }
         }
         if (!hadContact) { continue; }
-        if (*player.weapon->brother.VariableResolver(3) != 1400) { ++failures; }
+        if (*player.VariableResolver(3) != 1400) { ++failures; }
         // Isolate one real contact so another attack cannot extend the measured travel.
         const int forceMs = enemy->contactTimer;
         enemy->model.enemy.combat.enabled = false;
@@ -283,7 +332,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
             const float previousX = scene.GetPlayer().x;
             const float previousY = scene.GetPlayer().y;
             scene.Update(16, 0, 0, false);
-            if (elapsed < forceMs && *player.weapon->brother.VariableResolver(3) != 1400) { ++failures; }
+            if (elapsed < forceMs && *player.VariableResolver(3) != 1400) { ++failures; }
             const float step = std::hypot(scene.GetPlayer().x - previousX, scene.GetPlayer().y - previousY);
             if (elapsed == 16) { firstStep = step; }
             if (elapsed <= forceMs * 3 / 4) { lateStep = step; }
@@ -306,10 +355,6 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     // Check the immunity branch against a real map edge, with the production
     // wall radius. Geometry remains sourced from BIG, not an injected shape.
     scene.Reset();
-    ZLoadedMap wallMap;
-    if (!LoadMap(toc, toc.GetPackIndexFromName("pack2"), 7, wallMap)) { return 1; }
-    BuildCollisionScene(wallMap);
-    scene.SetMap(wallMap.map, wallMap.collisionScene, wallMap.weaponCollision, 1, kPlayerCollisionRadius);
     const ZMapRectangle bounds = wallMap.map.GetCameraExtent();
     bool wallChecked = false;
     const auto &vertices = wallMap.collisionScene.GetVertices();
@@ -324,18 +369,18 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         const float startY = centerY + ny * (kPlayerCollisionRadius + 1);
         if (startX < bounds.x + 30 || startX > bounds.x + bounds.width - 30 ||
             startY < bounds.y + 30 || startY > bounds.y + bounds.height - 30) { continue; }
-        if (!player.weapon->brother.BeginKnockback(1)) { ++failures; break; }
+        if (!player.BeginKnockback(1)) { ++failures; break; }
         scene.Update(1, 0, 0, false);
         // Let the authored recovery animation return control without consuming the window.
-        for (int frame = 0; frame < 30 && !player.weapon->brother.CanMove(); ++frame) { scene.Update(16, 0, 0, false); }
+        for (int frame = 0; frame < 30 && !player.CanMove(); ++frame) { scene.Update(16, 0, 0, false); }
         scene.GetPlayer().x = startX;
         scene.GetPlayer().y = startY;
         for (int frame = 0; frame < 10; ++frame) { scene.Update(16, -nx, -ny, false); }
         const float separation = (scene.GetPlayer().x - centerX) * nx + (scene.GetPlayer().y - centerY) * ny;
         if (separation < kPlayerCollisionRadius - 0.01f ||
-            separation > kPlayerCollisionRadius + 0.1f || !player.weapon->brother.CanPassEnemies()) { ++failures; }
+            separation > kPlayerCollisionRadius + 0.1f || !player.CanPassEnemies()) { ++failures; }
         std::printf("[actor-body-check] immune-wall separation=%.3f immune=%d\n",
-            separation, player.weapon->brother.CanPassEnemies());
+            separation, player.CanPassEnemies());
         wallChecked = true;
         break;
     }

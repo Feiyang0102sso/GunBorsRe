@@ -7,7 +7,10 @@ class CPowerUpSelector;
 class ZLocalCoopBot final : public CBrotherAI {
 public:
     /** Host bot policy only; ordinary player and cheat input use actor eligibility. */
-    static bool UseAnyPowerup(CPowerUpSelector &selector, bool grantTestCharge = false);
+    static bool UseAnyPowerup(CPowerUpSelector &selector, std::uint32_t &choice, bool grantTestCharge = false);
+    bool UsePowerup(CPowerUpSelector &selector, bool grantTestCharge = false) {
+        return UseAnyPowerup(selector, m_powerupChoice, grantTestCharge);
+    }
     static bool CanUseSelectedPowerup(const CPowerUpSelector &selector);
     static constexpr float BotGrenadeRadius = 250.0f;
     void Reset(float startX, float startY, float startFacing) override;
@@ -23,6 +26,7 @@ public:
     unsigned ShopSelection(unsigned elapsedMs) const;
     bool ShouldBuyShopItem(unsigned elapsedMs, unsigned ownedCount);
 private:
+    std::uint32_t m_powerupChoice = 0; // Desktop input stream, independent of Flow.
     ZCombatId m_target = 0;
     int m_reactionMs = 0;
     bool m_moving = false;

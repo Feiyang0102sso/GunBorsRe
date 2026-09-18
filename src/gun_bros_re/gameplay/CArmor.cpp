@@ -6,6 +6,7 @@
 #include "gun_bros_re/gameplay/CArmor.h"
 
 #include <cstdio>
+#include "gun_bros_re/gameplay/CArmorDrawing.h"
 
 CArmor::Template::Template() : m_slot(0), m_attachmentNode{} {}
 
@@ -33,11 +34,15 @@ bool CArmor::Template::Init(CArrayInputStream &stream) {
     return true;
 }
 
+CArmor::CArmor() = default;
+CArmor::~CArmor() = default;
+
 void CArmor::Bind(const Template &data) {
     for (std::int16_t &attribute : m_attributes) {
         attribute = 0;
     }
-    m_interpreter.SetScript(data.GetScript(), *this);
+    m_templateData = data;
+    m_interpreter.SetScript(m_templateData.GetScript(), *this);
 }
 
 void CArmor::Equip() {

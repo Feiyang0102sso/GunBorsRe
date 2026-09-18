@@ -32,10 +32,9 @@
  *   arrive with the armour system; only the two above are needed to stand a
  *   character up.
  *
- * What is NOT here yet is the base matrix. OrientForUI and OrientForGame both
- * work in screen pixels, on top of SetWidthAndHeightMappedOrthoProjection, so
- * they need the game's camera to mean anything -- that is M4b. Until then the
- * viewer builds its own base and only the part transform below is a port.
+ * OrientForUI and OrientForGame work in screen pixels, on top of
+ * SetWidthAndHeightMappedOrthoProjection. Their base matrices now live here
+ * with the part transform; callers supply the game camera or viewer framing.
  */
 
 #ifndef GUN_BROS_RE_GUN_BROS_CMESHCAMERA_H
@@ -86,5 +85,22 @@ struct ZMeshPart {
  */
 void MeshCameraBuildPartMatrix(const ZMeshPart &part, const float *base,
                                float *out);
+
+/**
+ * The matrix CBrother::Draw stands a player up with, via OrientForGame.
+ *
+ * The same term-for-term chain as an enemy's, except for the pivot:
+ * CEnemy::Draw passes its own mesh centre, CBrother::Draw passes null and lets
+ * the camera's default stand in. Null is taken here to mean the origin.
+ *
+ * @param out Row-major, 16 floats. Must not alias `base`.
+ */
+void MeshCameraBuildGameMatrix(const float *base, float x, float y, float scale,
+                           float facingDegrees, float *out);
+
+
+/** Original OrientForUI projection after the caller selects framing and scale. */
+void MeshCameraBuildUIMatrix(float centerX, float originY, float scale, float facingRadians,
+    float screenWidth, float screenHeight, float *out);
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMESHCAMERA_H

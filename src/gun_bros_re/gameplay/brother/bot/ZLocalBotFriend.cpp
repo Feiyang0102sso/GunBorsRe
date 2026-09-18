@@ -1,4 +1,4 @@
-#include "gun_bros_re/data/ZLocalBotFriend.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
 #include <fstream>
 
 bool ZLocalBotFriend::Load(CResTOCManager &toc, ZPackTables &tables, const std::filesystem::path &playerPath, const CProfileManager *seed) {

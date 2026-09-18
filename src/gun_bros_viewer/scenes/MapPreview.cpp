@@ -1,3 +1,5 @@
+#include "gun_bros_viewer/scenes/BrotherPreview.h"
+#include "engine/graphics/CMeshCamera.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
@@ -410,7 +412,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                         player.facingDegrees = std::atan2(aimY, aimX) * kRadiansToDegrees + 90.0f;
                     }
                 }
-                SetPlayerInput(*player.model, player.moving, firePreview || window.IsLeftMouseDown());
+                player.model->SetInput(player.moving, firePreview || window.IsLeftMouseDown());
                 weaponEffects->SetPaused(elapsedMs == 0);
             }
         }
@@ -423,8 +425,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
             ZPlacedPlayer &player = loaded.players[0];
             float identity[kMatrix4dElements], modelToWorld[kMatrix4dElements];
             Matrix4dIdentity(identity);
-            const float scale = PlayerModelWorldScale(*player.model, loaded.playerTemplate->gameScale, kLevelCameraScale);
-            BuildPlayerGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
+            const float scale = player.model->GetWorldScale(loaded.playerTemplate->GetGameScale(), kLevelCameraScale);
+            MeshCameraBuildGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
             weaponEffects->Update(*player.model, modelToWorld, player.facingDegrees,
                 static_cast<int>(elapsedMs), &loaded.weaponCollision);
         }

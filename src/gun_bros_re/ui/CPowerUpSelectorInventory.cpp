@@ -4,20 +4,20 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
+#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "engine/core/CStringToKey.h"
 #include <cstdio>
 
 CPowerUpSelector::CPowerUpSelector()
     : m_ownedResources(std::make_unique<ZHudResources>()), m_resources(*m_ownedResources) {}
 
-CPowerUpSelector::CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
+CPowerUpSelector::CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
     ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile, ZCombatId owner)
     : CPowerUpSelector() {
     BindPowerups(toc, tables, player, vitals, level, profile, owner);
 }
 
-void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, ZPlayerModel &player,
+void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
     ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile, ZCombatId owner) {
     m_resources.m_toc = &toc;
     m_resources.m_tables = &tables;
@@ -131,7 +131,7 @@ bool CPowerUpSelector::Equip(unsigned slot, const GameObjectRef &resource) {
 
 bool CPowerUpSelector::IsSupported(const ZPowerupEntry &entry) const {
     if (!ModeAllows(entry)) { return false; }
-    if (!ZDeathmatchBot::AllowsPowerup(*this, entry)) { return false; }
+    if (!ZLocalPVPBot::AllowsPowerup(*this, entry)) { return false; }
     return true;
 }
 
@@ -144,14 +144,14 @@ unsigned CPowerUpSelector::GetCount() const {
     const ZPowerupEntry *entry = GetSelected();
     if (entry == nullptr) { return 0; }
     // A virtual charge avoids granting or persisting fake account inventory.
-    if (ZDeathmatchBot::HasUnlimitedInventory(*this) && IsSupported(*entry)) { return 1; }
+    if (ZLocalPVPBot::HasUnlimitedInventory(*this) && IsSupported(*entry)) { return 1; }
     return m_profile->GetPowerupCount(entry->resource);
 }
 
 unsigned CPowerUpSelector::GetCount(unsigned localIndex) const {
     for (const ZPowerupEntry &entry : m_resources.m_powerups) {
         if (entry.resource.localIndex != localIndex) { continue; }
-        if (ZDeathmatchBot::HasUnlimitedInventory(*this) && IsSupported(entry)) { return 1; }
+        if (ZLocalPVPBot::HasUnlimitedInventory(*this) && IsSupported(entry)) { return 1; }
         return m_profile->GetPowerupCount(entry.resource);
     }
     return 0;
@@ -200,5 +200,5 @@ bool CPowerUpSelector::UseAfterDeathPowerup() {
 
 bool CPowerUpSelector::UseSelected(bool fromSelector) {
     if (m_player == nullptr || !m_player->weapon) { return false; }
-    return m_player->weapon->brother.UsePowerup(*this, fromSelector);
+    return m_player->UsePowerup(*this, fromSelector);
 }

@@ -18,7 +18,7 @@ struct ZSurvivalFrame {
     CInputPad &hud;
     CGame &session;
     CLevel &scene;
-    ZPlayerModel &player;
+    CBrother &player;
     ZPlayerVitals &vitals;
     ZWindow &window;
     CBGM &music;
