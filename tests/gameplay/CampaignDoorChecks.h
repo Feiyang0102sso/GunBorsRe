@@ -2,7 +2,6 @@
 namespace MapDetail { struct ZLoadedMap; }
 class CLevel;
 class CGame;
-class ZPickupScene;
 int RunCampaignDoorCheck();
 int RunCampaignTargetCheck();
 int RunCampaignProgressionCheck();
@@ -10,7 +9,7 @@ int RunCampaignRescueCheck();
 int RunCampaignPortalCheck();
 int RunCampaignCacheCheck();
 int RunCampaignLava2Check();
-int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session, ZPickupScene &pickups);
+int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
 int CheckCampaignPortal(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
 int CheckCampaignRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
 int CheckCampaignProgression(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session, unsigned mapIndex);

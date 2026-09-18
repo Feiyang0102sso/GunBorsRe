@@ -115,7 +115,6 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
     auto & brother = fixture.brother;
     auto & brotherModel = fixture.brotherModel;
     auto & session = fixture.session;
-    auto & pickups = fixture.pickups;
     auto & props = fixture.props;
     auto & tutorial = fixture.tutorial;
     auto & startX = fixture.startX;
@@ -740,9 +739,9 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         const unsigned unsupportedSpawner = session.GetLevel().GetSpawner().GetUnsupportedCount();
         checkFailures += unsupportedLevel + unsupportedSpawner;
         std::printf("[survival-script-check] level=%u spawner=%u\n", unsupportedLevel, unsupportedSpawner);
-        checkFailures += pickups.failures;
+        checkFailures += scene.GetPickupFailureCount();
         std::printf("[pickup-check] spawned=%u collected=%u remaining=%zu failures=%u\n",
-            pickups.spawned, pickups.collected, pickups.GetCount(), pickups.failures);
+            scene.GetPickupSpawnCount(), scene.GetPickupCollectedCount(), scene.GetPickupCount(), scene.GetPickupFailureCount());
         if (withBrother) {
             // AI-only research must acquire targets. In a profile run the
             // human's long-range gun may kill everything before the 200px AI scan.

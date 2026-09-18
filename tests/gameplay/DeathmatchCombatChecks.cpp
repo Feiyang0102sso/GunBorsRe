@@ -5,7 +5,6 @@
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
-#include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
@@ -62,7 +61,7 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
     return 0;
 }
 
-int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickupScene &pickups, CPowerUpSelector &powerups, CProfileManager &profile, ZSurvivalGameContext &context) {
+int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile, ZSurvivalGameContext &context) {
     auto &scene = fixture.scene; auto &session = fixture.session; auto &bot = fixture.brother;
     auto &player = fixture.player; auto &opponent = fixture.brotherModel; auto &vitals = fixture.vitals;
     if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
@@ -71,17 +70,17 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
     vitals.invincible = true; bot.vitals.invincible = true;
     const float startX = scene.GetPlayer().x, startY = scene.GetPlayer().y;
     for (unsigned time = 0; time < 35000; time += 16) { session.Update(16, 0, 0, false); }
-    std::printf("[deathmatch-check] initial supply=%u collected=%u invalid=%u sightings=%u\n", pickups.spawned, pickups.collected, scene.GetInvalidSpawnCount(), bot.GetTargetCount());
-    if (pickups.spawned == 0 || scene.GetInvalidSpawnCount() != 0) { return 1; }
+    std::printf("[deathmatch-check] initial supply=%u collected=%u invalid=%u sightings=%u\n", scene.GetPickupSpawnCount(), scene.GetPickupCollectedCount(), scene.GetInvalidSpawnCount(), bot.GetTargetCount());
+    if (scene.GetPickupSpawnCount() == 0 || scene.GetInvalidSpawnCount() != 0) { return 1; }
     float supplyX = 0, supplyY = 0;
-    if (pickups.FindNearest(scene.GetPlayer().x, scene.GetPlayer().y, supplyX, supplyY)) {
+    if (scene.FindNearestPickup(scene.GetPlayer().x, scene.GetPlayer().y, supplyX, supplyY)) {
         scene.GetPlayer().x = supplyX; scene.GetPlayer().y = supplyY;
         for (unsigned time = 0; time < 1000; time += 16) { session.Update(16, 0, 0, false); }
     }
-    if (pickups.collected == 0) { std::printf("[deathmatch-check] pickup not collected\n"); return 1; }
-    const unsigned spawned = pickups.spawned;
+    if (scene.GetPickupCollectedCount() == 0) { std::printf("[deathmatch-check] pickup not collected\n"); return 1; }
+    const unsigned spawned = scene.GetPickupSpawnCount();
     for (unsigned time = 0; time < 35000; time += 16) { session.Update(16, 0, 0, false); }
-    if (pickups.spawned <= spawned) { std::printf("[deathmatch-check] pickup did not respawn\n"); return 1; }
+    if (scene.GetPickupSpawnCount() <= spawned) { std::printf("[deathmatch-check] pickup did not respawn\n"); return 1; }
     scene.GetPlayer().x = startX; scene.GetPlayer().y = startY;
 
     // Both projectile and beam tracing must identify the opposing participant.
@@ -121,18 +120,18 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, ZPickup
         bot.x = startX + 5; bot.y = startY;
         float x = scene.GetPlayer().x;
         if (winner == 1) { x = bot.x; }
-        if (!pickups.Spawn(crate, x, startY, -900)) { return 1; }
-        pickups.Update(16, scene);
+        if (!scene.SpawnPickupAt(crate, x, startY, -900)) { return 1; }
+        scene.UpdatePickups(16);
         unsigned awards = 0;
-        for (const auto &collection : pickups.collections) {
+        for (const auto &collection : scene.GetPickupCollections()) {
             if (collection.objectId == -900) {
                 ++awards;
                 if (collection.peer != winner) { return 1; }
             }
         }
         if (awards != 1) { return 1; }
-        pickups.Update(16, scene);
-        for (const auto &collection : pickups.collections) { if (collection.objectId == -900) { return 1; } }
+        scene.UpdatePickups(16);
+        for (const auto &collection : scene.GetPickupCollections()) { if (collection.objectId == -900) { return 1; } }
     }
     bot.x = botX; bot.y = botY;
 

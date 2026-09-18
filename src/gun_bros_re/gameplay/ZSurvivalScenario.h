@@ -45,7 +45,6 @@ struct ZSurvivalState {
     std::size_t & weaponSlot;
     unsigned & equippedWeaponSlot;
     CPowerUpSelector & powerups;
-    ZPickupScene & pickups;
     CProfileManager * pickupProfile;
     bool tutorial;
     std::uint64_t & accountedXplodium;

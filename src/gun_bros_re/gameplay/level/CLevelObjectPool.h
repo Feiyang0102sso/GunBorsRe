@@ -10,6 +10,7 @@
 #define GUN_BROS_RE_CLEVELOBJECTPOOL_H
 
 #include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/pickup/CPickup.h"
 
 #include <map>
 #include <memory>
@@ -31,6 +32,7 @@ struct ZCombatEnemy {
 };
 
 /** Owns the level's enemy instances and their allocation bookkeeping. */
+// Pickups use a separate twenty-object limit, independent of particle effects.
 class CLevelObjectPool {
 public:
     CLevelObjectPool() = default;
@@ -42,6 +44,11 @@ public:
     void SetLevel(CLevel *level) { m_level = level; }
     void SetUsesMapCoordinates(bool enabled) { m_usesMapCoordinates = enabled; }
     void Clear();
+    /** GetPickup :145625 reserves one of twenty independent pickup slots. */
+    CPickup *GetPickup();
+    void ReleasePickup(std::size_t index);
+    void ClearPickups();
+    const std::vector<std::unique_ptr<CPickup>> &GetPickups() const { return m_pickups; }
     bool PreloadEnemies(const RequirementList &requirements, const CScript &levelScript);
     ZCombatEnemy *SpawnEnemy(std::size_t entry, float x, float y, bool forcePool = false);
     ZCombatEnemy *GetNearbyEnemy(std::size_t entry, float centerX, float centerY);
@@ -78,6 +85,7 @@ private:
     bool m_usesMapCoordinates = false;
     ZEnemyModelCache m_enemyModelCache;
     std::vector<std::unique_ptr<ZCombatEnemy>> m_enemies;
+    std::vector<std::unique_ptr<CPickup>> m_pickups;
     std::vector<PendingEnemy> m_pendingEnemies;
     std::map<ZCombatId, ZCombatId> m_summoners;
     ZCombatId m_nextId = 2;

@@ -135,6 +135,7 @@ void CLevel::Reset() {
     m_actor.ResetXplodiumRemainder();
     m_hasViewCenter = false;
     Clear();
+    ResetPickups();
     m_objects.Clear();
     m_vitals->Reset();
     m_playerModel->powerups = {};

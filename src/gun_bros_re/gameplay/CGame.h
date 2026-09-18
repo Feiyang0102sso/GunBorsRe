@@ -6,7 +6,6 @@
 
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
-#include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
 #include <chrono>
@@ -54,9 +53,6 @@ public:
     bool IsBossSkipActive() const { return m_bossSkipActive; }
 
     void SetProps(ZPropWorld *props) { m_level.SetProps(props); }
-    void SetPickups(ZPickupScene *pickups) {
-        m_level.SetPickups(pickups);
-    }
     CLevel &GetLevel() { return m_level; }
     const CLevel &GetLevel() const { return m_level; }
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const {

@@ -185,31 +185,30 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     scene.SetBrotherWeapons(playerData.script, pistol->data, rifle->data);
     // Every real pickup must ignore the AI partner, then remain collectable by the player.
     CProfileManager pickupProfile;
-    ZPickupScene pickupScene(toc, tables, program, &pickupProfile);
-    std::vector<ZPickupEntry> pickupCatalog;
-    if (!pickupScene.Init() || !LoadPickupCatalog(toc, tables, pickupCatalog)) { return 1; }
+    const auto pickupReferences = GetPickupCheckReferences(toc, tables);
+    if (pickupReferences.empty() || !scene.InitPickups(toc, tables, program, &pickupProfile)) { return 1; }
     unsigned brotherCollections = 0;
     unsigned playerCollections = 0;
-    for (const ZPickupEntry &entry : pickupCatalog) {
+    for (const GameObjectRef &resource : pickupReferences) {
         scene.GetPlayer().x = 600;
         scene.GetPlayer().y = 650;
         scene.Update(16, 0, 0, false);
         brother.Reset(200, 200, 0);
-        pickupScene.Reset();
-        if (!pickupScene.Spawn(entry.ref, brother.x, brother.y)) { return 1; }
-        pickupScene.Update(16, scene);
-        brotherCollections += pickupScene.collected;
-        if (pickupScene.GetCount() != 1 || pickupScene.collected != 0) { ++failures; }
+        scene.ResetPickups();
+        if (!scene.SpawnPickupAt(resource, brother.x, brother.y)) { return 1; }
+        scene.UpdatePickups(16);
+        brotherCollections += scene.GetPickupCollectedCount();
+        if (scene.GetPickupCount() != 1 || scene.GetPickupCollectedCount() != 0) { ++failures; }
         scene.GetPlayer().x = brother.x;
         scene.GetPlayer().y = brother.y;
         scene.Update(16, 0, 0, false);
-        const unsigned collectedBefore = pickupScene.collected;
-        pickupScene.Update(16, scene);
-        playerCollections += pickupScene.collected - collectedBefore;
-        if (pickupScene.GetCount() != 0 || pickupScene.collected - collectedBefore != 1) { ++failures; }
+        const unsigned collectedBefore = scene.GetPickupCollectedCount();
+        scene.UpdatePickups(16);
+        playerCollections += scene.GetPickupCollectedCount() - collectedBefore;
+        if (scene.GetPickupCount() != 0 || scene.GetPickupCollectedCount() - collectedBefore != 1) { ++failures; }
     }
     std::printf("[actor-feedback-check] pickups=%zu brother-collected=%u player-collected=%u\n",
-        pickupCatalog.size(), brotherCollections, playerCollections);
+        pickupReferences.size(), brotherCollections, playerCollections);
     scene.Reset();
     CBrother *originalHost = &partner.weapon->brother;
     bool swapAnimation = false;

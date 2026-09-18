@@ -9,7 +9,6 @@
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
-#include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/ZPropWorld.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -115,7 +114,6 @@ void CLevel::ResetWorld(float x, float y, float facingDegrees) {
     Reset();
     if (m_powerups != nullptr) { ResetPowerup(*m_powerups); }
     if (m_peerPowerups != nullptr) { ResetPowerup(*m_peerPowerups); }
-    if (m_pickups != nullptr) { m_pickups->Reset(); }
     if (m_props != nullptr) { m_props->Reset(); }
     GetPlayer().x = x;
     GetPlayer().y = y;
@@ -481,18 +479,11 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool fire, bool advan
     if (m_powerups != nullptr) { UpdatePowerup(*m_powerups, deltaMs); }
     if (m_peerPowerups != nullptr) { UpdatePowerup(*m_peerPowerups, deltaMs); }
     if (m_props != nullptr) { m_props->Update(worldDeltaMs); }
-    if (m_pickups != nullptr && m_effectSprites != nullptr) {
+    if (m_pickupBatch != nullptr && m_effectSprites != nullptr) {
         for (const PendingPickup &spawn : m_pendingPickups) {
             SpawnPickupAt(spawn.resource, spawn.x, spawn.y, 0);
         }
-        m_pickups->Update(worldDeltaMs, *this);
-        for (const ZPickupCollection &pickup : m_pickups->collections) {
-            if (m_match != nullptr && pickup.objectId >= CMPMatch::PickupIdBase &&
-                !CollectMatchWeapon(pickup.peer, pickup.objectId - CMPMatch::PickupIdBase)) {
-                RecordInvalidSpawn();
-            }
-            OnPickupCollected(pickup.objectId, pickup.resource);
-        }
+        UpdatePickups(worldDeltaMs);
     }
     for (std::uint8_t event : m_pendingLevelEvents) { HandleEvent(event); }
     if (m_match != nullptr) { UpdateDeathmatch(deltaMs); }
@@ -1168,7 +1159,7 @@ void CLevel::OnWaveCleared(unsigned perfectRewardPercent) {
 }
 
 bool CLevel::SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) {
-    if (m_playerModel == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
+    if (m_playerModel == nullptr || m_map == nullptr || m_pickupBatch == nullptr) { return false; }
     if (layer < 0) { layer = m_pathLayer; }
     ILayerPath *path = m_map->GetPathLayer(layer);
     if (path == nullptr || path->GetNodes().empty()) { return false; }
@@ -1188,14 +1179,8 @@ bool CLevel::SpawnPickup(const GameObjectRef &pickup, int layer, int node, int o
     return SpawnPickupAt(pickup, nodes[node].x, nodes[node].y, objectId);
 }
 
-bool CLevel::SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) {
-    if (m_pickups == nullptr || !m_pickups->Spawn(pickup, x, y, objectId)) { return false; }
-    SetIndicator(objectId, 1, (1ULL << 32) | m_pickups->spawned);
-    return true;
-}
-
 bool CLevel::SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) {
-    if (m_match == nullptr || m_playerModel == nullptr || m_map == nullptr || m_pickups == nullptr) { return false; }
+    if (m_match == nullptr || m_playerModel == nullptr || m_map == nullptr || m_pickupBatch == nullptr) { return false; }
     ILayerPath *path = m_map->GetPathLayer(layer);
     if (path == nullptr || path->GetNodes().empty()) { return false; }
     const auto &nodes = path->GetNodes();
@@ -1205,7 +1190,7 @@ bool CLevel::SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) {
         if (node.locked || !CanBrotherWalk(node.x, node.y, node.x, node.y)) { continue; }
         float nearestX = 0;
         float nearestY = 0;
-        if (m_pickups->FindNearest(node.x, node.y, nearestX, nearestY) &&
+        if (FindNearestPickup(node.x, node.y, nearestX, nearestY) &&
             std::hypot(nearestX - node.x, nearestY - node.y) < GetPlayerRadius() * 2) {
             continue;
         }
@@ -1236,7 +1221,7 @@ bool CLevel::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
         return m_props != nullptr && m_props->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
     if ((key >> 32) == 1) {
-        return m_pickups != nullptr && m_pickups->GetIndicatorTarget(static_cast<unsigned>(key), x, y);
+        return GetPickupIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
     const ZCombatEnemy *actor = Find(static_cast<ZCombatId>(key));
     if (actor == nullptr || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { return false; }
@@ -1253,7 +1238,7 @@ bool CLevel::GetObjectPosition(int objectId, float &x, float &y) const {
         y = actor->model.enemy.combat.y;
         return true;
     }
-    if (m_pickups != nullptr && m_pickups->GetObjectPosition(objectId, x, y)) { return true; }
+    if (GetPickupPosition(objectId, x, y)) { return true; }
     return m_props != nullptr && m_props->GetObjectPosition(objectId, x, y);
 }
 

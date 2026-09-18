@@ -4,7 +4,6 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
-#include "gun_bros_re/gameplay/ZPickupScene.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include <cmath>
@@ -30,8 +29,8 @@ bool CLevel::IsMatchSpawnPending(unsigned peer) const {
     return !m_brotherModel->weapon->brother.HasSpawned();
 }
 
-void CLevel::SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons, ZPickupScene *pickups) {
-    m_match = match; m_matchWeapons = weapons; m_matchPickups = pickups;
+void CLevel::SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons) {
+    m_match = match; m_matchWeapons = weapons;
 }
 GameObjectRef CLevel::ActiveMatchGun(unsigned peer) const {
     if (peer == 0) { return m_playerModel->gunResource; }
@@ -330,6 +329,5 @@ bool CLevel::FindMatchDestination(float x, float y, bool cover, float targetX, f
     return found;
 }
 bool CLevel::FindMatchSupply(float x, float y, float &goalX, float &goalY) const {
-    if (m_matchPickups == nullptr) { return false; }
-    return m_matchPickups->FindNearest(x, y, goalX, goalY);
+    return FindNearestPickup(x, y, goalX, goalY);
 }

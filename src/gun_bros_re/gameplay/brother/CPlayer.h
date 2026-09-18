@@ -6,6 +6,7 @@
 class CCollisionData;
 class CLevelObjectPool;
 class CMap;
+class CProfileManager;
 
 /** Player state and native input/progression responsibilities from player.cpp.
  * Equipment/render storage remains in the desktop model; the level owns peers,
@@ -24,6 +25,8 @@ public:
     std::uint64_t GetXplodium() const { return m_xplodium; }
     void ResetXplodiumRemainder() { m_xplodiumRemainder = 0; }
     void AddHealth(unsigned amount);
+    /** CollectItem :101094. The profile argument selects the desktop local peer. */
+    unsigned CollectItem(ZPackTables &tables, const GameObjectRef &ref, CProfileManager *profile);
     /** Bind the map and original level-object collection used by Move. */
     void BindLevel(CMap &map, const CCollisionData &collision,
         CLevelObjectPool &objects, float collisionRadius);

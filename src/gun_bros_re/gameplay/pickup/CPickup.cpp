@@ -1,7 +1,8 @@
 /** @file CPickup.cpp
  * @brief Collection natives :99742. Rewards always address the human player.
  */
-#include "gun_bros_re/gameplay/CPickup.h"
+#include "gun_bros_re/gameplay/pickup/CPickup.h"
+#include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 
 bool CPickup::Template::Init(CArrayInputStream &stream) {
@@ -15,7 +16,29 @@ bool CPickup::Template::Init(CArrayInputStream &stream) {
     return !stream.Overran();
 }
 
+bool CPickup::Template::Load(ZPackTables &tables, const GameObjectRef &resource) {
+    // Original pickup resources and collection-script verification.
+    // Disk layout remains CPickup::Template::Init :99591 / pickup_template.bt.
+    std::vector<std::uint8_t> payload;
+    if (!tables.ReadSectionResource(resource.packHash, ZGameSection::Pickup, resource.localIndex, payload)) {
+        std::printf("[pickup] missing template %08x:%u\n", resource.packHash, resource.localIndex);
+        return false;
+    }
+    CArrayInputStream stream(payload);
+    if (!Init(stream) || stream.Available() != 0) {
+        std::printf("[pickup] invalid %08x:%u remaining=%zu overran=%d\n",
+            resource.packHash, resource.localIndex, stream.Available(), stream.Overran());
+        return false;
+    }
+    return true;
+}
+
 void CPickup::Bind(const Template &data) {
+    OnRemove();
+    m_resource = {};
+    m_animation.SetAnimation(nullptr);
+    m_particles.reset();
+    m_effect = nullptr;
     m_template = &data;
     m_collected = false;
     m_unsupported = 0;
@@ -27,6 +50,7 @@ bool CPickup::Collect() {
     if (m_collected || m_template == nullptr) { return false; }
     m_collected = true;
     m_interpreter.CallExportFunction(0);
+    OnRemove();
     return true;
 }
 

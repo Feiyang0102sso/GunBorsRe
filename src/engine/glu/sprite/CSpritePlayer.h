@@ -6,6 +6,7 @@
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:58838 (Update), :58766 (AdvanceFrame),
  *            :58665 (SetFrame), :58861 (SetAnimation), :58340 (constructor)
  *
+ * Historical clock-only design (the Init/Draw path below now restores ownership):
  * The original player owns the whole draw path -- it holds the archetype, walks
  * to the frame, and blits it. This one is only the clock. Everything downstream
  * of "which step are we on" is already done by CSpriteIterator, and callers
@@ -26,7 +27,11 @@
 #define GUN_BROS_RE_SPRITE_GLU_CSPRITEPLAYER_H
 
 #include <cstdint>
+#include <memory>
 #include <vector>
+
+class CSpriteGlu;
+class ZQuadBatch;
 
 /**
  * A playhead over one animation's steps.
@@ -39,6 +44,11 @@
 class CSpritePlayer {
 public:
     CSpritePlayer();
+
+    /** Expand one BIG animation for playback/drawing. The SpriteGlu must outlive this player. */
+    bool Init(CSpriteGlu &glu, std::uint8_t archetype, std::uint8_t animation);
+    /** CSpritePlayer::Draw :59035; desktop quad submission preserves iterator order. */
+    void Draw(ZQuadBatch &batch, float x, float y, float scale) const;
 
     /**
      * Point the player at an animation and rewind it.
@@ -70,6 +80,9 @@ public:
     void SetReversed(bool reversed) { m_reversed = reversed; }
 
 private:
+    struct DrawData;
+    // Immutable frames keep the duration pointer valid when a player is copied.
+    std::shared_ptr<const DrawData> m_drawData;
     /** Move to the next step in the play direction, looping or stopping. */
     void AdvanceStep();
 

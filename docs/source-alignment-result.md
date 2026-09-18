@@ -20,6 +20,12 @@
 
 ## 结果
 
+拾取物目录归并：`CPickup.h/.cpp`、`CPickupPresentation.cpp` 和 `CLevelPickups.cpp` 集中在 `gameplay/pickup/`。逐文件核对仅头文件引用路径变化，原有实现和注释保留；测试独立放在 `tests/`，仍只使用一个工程。
+
+拾取物目录层增补：`data/ZPickupCatalog.*` 与 `ZPickupEntry` 已删除。模板读取归 `CPickup::Template::Load`，关卡直接持有模板，展示标签留在测试；运行时不再依赖目录条目包装。
+
+2026-09-17 增补：`ZPickupScene` 及过渡缓存 `ZPickupResources` / `ZPickupVisual` 已拆分并删除。职责回到 `CPickup`、`CSpritePlayer`、`CLevelObjectPool`、`CLevel` 和 `CPlayer::CollectItem`。`CLevelObjectPool` 现同时持有敌人和拾取物，后文仅持有敌人的描述属于此前阶段。详见 [拾取物组合层拆分](pickup-responsibility-migration.md)。
+
 2026-09-17 目录归并：UI 与战斗共享的 28 个特效源码文件已从 `gameplay/` 移到 `effects/`。仅更新路径与引用，逐文件内容核对保留原实现和注释；各原对象仍负责自己的实例与生命周期，工程继续通配收集到三种产物。详见 [归并与验证记录](effects-directory-migration.md)。
 
 以原职责拆分玩家、刷怪、输入面板、选择器、菜单绑定和 Movie 读取；把桌面适配及自建表示统一为 Z 命名。保留一个工程、三种产物和既有研究入口。没有修改 BIG、存档协议或原生脚本编号。

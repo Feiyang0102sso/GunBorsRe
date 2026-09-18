@@ -362,11 +362,8 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     }
 
     scene.SetPowerup(&powerups.GetPowerup());
-    ZPickupScene pickups(toc, tables, program, pickupProfile);
-    if (launch.localLive || launch.deathmatch) { pickups.SetPeerProfile(peerProfile); }
-    if (!pickups.Init()) { return 1; }
-    session.SetPickups(&pickups);
-    if (launch.deathmatch) { scene.SetDeathmatch(&match, &weapons, &pickups); }
+    if (!scene.InitPickups(toc, tables, program, pickupProfile)) { return 1; }
+    if (launch.deathmatch) { scene.SetDeathmatch(&match, &weapons); }
     const GameObjectRef *archiveLevel = nullptr;
     if (archiveMission != nullptr) { archiveLevel = &archiveMission->data.level; }
     else if (gameContext != nullptr && gameContext->profile.nativeArchive && !gameContext->tutorial && gameContext->planet < 4) {
@@ -416,7 +413,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     session.Restart(startX, startY, startFacing);
     if (!session.SubmitChallenges(false)) { return 1; }
     loading.Finish();
-    ZSurvivalState state{launch, vitals, window, program, batch, loaded, player, scene, brother, brotherModel, session, startX, startY, startFacing, toc, tables, enemies, capturePath, weapons, survivalHud, props, withBrother, progress, weaponSlot, equippedWeaponSlot, powerups, pickups, pickupProfile, tutorial, accountedXplodium, packIndex, archiveLevel, horde, match, peerPowerups, peerProfile, brotherConfiguration};
+    ZSurvivalState state{launch, vitals, window, program, batch, loaded, player, scene, brother, brotherModel, session, startX, startY, startFacing, toc, tables, enemies, capturePath, weapons, survivalHud, props, withBrother, progress, weaponSlot, equippedWeaponSlot, powerups, pickupProfile, tutorial, accountedXplodium, packIndex, archiveLevel, horde, match, peerPowerups, peerProfile, brotherConfiguration};
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnStage(ZSurvivalPhase::Bound, state);
         if (result >= 0) { return result; }
@@ -1162,7 +1159,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         Matrix4dOrthoTopLeft(width / camera.zoom, height / camera.zoom, kMapDepthRange, mvp);
         Matrix4dTranslate(mvp, -camera.x, -camera.y);
         batch.Draw(program, mvp);
-        pickups.Draw(mvp, kLevelCameraScale);
+        scene.DrawPickups(mvp, kLevelCameraScale);
         scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
         // Historical explanation of the old separate model pass:
         // The AI brother is a 3D model like the player and the enemies: with no

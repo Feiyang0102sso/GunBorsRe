@@ -1,6 +1,11 @@
 #pragma once
 #include "gameplay/SurvivalStudy.h"
+#include "gun_bros_re/data/CGameAssetRef.h"
 #include <string>
+#include <vector>
+
+class CResTOCManager;
+class ZPackTables;
 
 int RunArmorCheck(const std::string &bigDirectory);
 
@@ -18,6 +23,8 @@ int RunOriginalProfileCheck(const std::string &bigDirectory);
 
 int RunOriginalProfilePlayCheck(const std::string &bigDirectory);
 
+/** Enumerate original pickup references for research checks; no runtime catalog. */
+std::vector<GameObjectRef> GetPickupCheckReferences(CResTOCManager &toc, ZPackTables &tables);
 int RunPickupCheck(const std::string &bigDirectory);
 
 int RunPickupRenderCheck(const std::string &bigDirectory);

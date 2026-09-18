@@ -3,7 +3,7 @@
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/gameplay/brother/ZDeathmatchBot.h"
 #include <cstdio>
-#include "gun_bros_re/gameplay/CPickup.h"
+#include "gun_bros_re/gameplay/pickup/CPickup.h"
 #include "engine/core/CStringToKey.h"
 
 int RunDeathmatchDataCheck(const std::string &bigDirectory) {

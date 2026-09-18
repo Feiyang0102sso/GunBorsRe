@@ -50,7 +50,6 @@ class CMap;
 class CMPMatch;
 class CProfileManager;
 struct ZEnemyTemplateData;
-class ZPickupScene;
 class CPowerup;
 class CPowerUpSelector;
 struct ZPowerupEntry;
@@ -174,7 +173,26 @@ public:
 
     /** Bind the original session owner after the level runtime is constructed. */
     void AttachRuntime(CGame &game, const std::vector<ZEnemyTemplateData> &catalog);
-    void SetPickups(ZPickupScene *pickups) { m_pickups = pickups; }
+    struct PickupCollection {
+        GameObjectRef resource;
+        int objectId = 0;
+        unsigned peer = 0;
+    };
+    bool InitPickups(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+        CProfileManager *profile = nullptr);
+    void ResetPickups();
+    bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId = 0) override;
+    void UpdatePickupAnimations(int deltaMs);
+    void UpdatePickups(int deltaMs);
+    void DrawPickups(const float *matrix, float scale);
+    bool GetPickupPosition(int objectId, float &x, float &y) const;
+    bool GetPickupIndicatorTarget(unsigned serial, float &x, float &y) const;
+    bool FindNearestPickup(float x, float y, float &goalX, float &goalY) const;
+    std::size_t GetPickupCount() const { return m_objects.GetPickups().size(); }
+    unsigned GetPickupSpawnCount() const { return m_pickupSpawned; }
+    unsigned GetPickupCollectedCount() const { return m_pickupCollected; }
+    unsigned GetPickupFailureCount() const { return m_pickupFailures; }
+    const std::vector<PickupCollection> &GetPickupCollections() const { return m_pickupCollections; }
     void SetPowerup(CPowerup *powerup, ZCombatId owner = kPlayerCombatId) {
         if (owner == kBrotherCombatId) { m_peerPowerups = powerup; }
         else { m_powerups = powerup; }
@@ -204,7 +222,7 @@ public:
     void SetLocalLive(bool enabled) { m_localLive = enabled; }
     bool IsLocalLive() const { return m_localLive; }
     bool IsDeathmatch() const { return m_match != nullptr; }
-    void SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons, ZPickupScene *pickups);
+    void SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons);
     bool StartDeathmatch();
     bool IsMatchSpawnPending(unsigned peer) const;
     void UpdateDeathmatch(unsigned deltaMs);
@@ -519,6 +537,7 @@ public:
     std::int16_t *VariableResolver(std::uint8_t variable);
 
 private:
+    void ApplyPickupActions(CPickup &pickup, unsigned peer);
     void UpdateLocalRevive(int deltaMs);
     void CreditAssistMastery(unsigned peer, unsigned slot, unsigned experience);
     void Actions(ZCombatEnemy &actor);
@@ -531,7 +550,6 @@ private:
 
     CPlayer m_actor;
     const std::vector<ZWeaponEntry> *m_matchWeapons = nullptr;
-    ZPickupScene *m_matchPickups = nullptr;
     unsigned m_auxiliaryMs[2]{};
     unsigned m_matchSlots[2]{};
     bool m_matchShopping[2]{};
@@ -602,7 +620,6 @@ private:
     void PlayLevelSound(const GameObjectRef &sound) override;
     void OnWaveCleared(unsigned perfectRewardPercent) override;
     bool SpawnPickup(const GameObjectRef &pickup, int layer, int node, int objectId, bool nearby) override;
-    bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId) override;
     bool SpawnMPMatchPickup(const GameObjectRef &pickup, int layer) override;
     std::uint64_t ResolveIndicatorTarget(int objectId) const override;
     unsigned m_kills = 0;
@@ -674,7 +691,14 @@ private:
     CGame *m_game = nullptr;
     const std::vector<ZEnemyTemplateData> *m_catalog = nullptr;
     CMPMatch *m_match = nullptr;
-    ZPickupScene *m_pickups = nullptr;
+    // BIG pickup templates and expanded Sprite frames; no live object ownership.
+    // Templates/packs belong to the level; expanded frames belong to CSpritePlayer.
+    std::map<std::uint32_t, std::vector<CPickup::Template>> m_pickupTemplates;
+    std::map<std::uint32_t, std::unique_ptr<CSpriteGlu>> m_pickupSpritePacks;
+    std::unique_ptr<ZQuadBatch> m_pickupBatch;
+    CProfileManager *m_pickupProfile = nullptr;
+    unsigned m_pickupSpawned = 0, m_pickupCollected = 0, m_pickupFailures = 0;
+    std::vector<PickupCollection> m_pickupCollections;
     // CLevel owns live bullets; each bullet owns its four attached effects.
     // CMap's system and the transient layer retain independent pools/lifetimes.
     ZProjectileWorld *m_projectileWorld = nullptr;

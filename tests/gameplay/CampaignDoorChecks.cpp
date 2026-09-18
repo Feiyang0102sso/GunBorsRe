@@ -75,13 +75,13 @@ int RunCampaignTargetCheck() {
     return RunCampaignCheck(0, CampaignCheck::Targets);
 }
 
-static void RecordCacheCollections(const ZPickupScene &pickups, bool (&collected)[3]) {
-    for (const auto &pickup : pickups.collections) {
+static void RecordCacheCollections(const CLevel &scene, bool (&collected)[3]) {
+    for (const auto &pickup : scene.GetPickupCollections()) {
         if (pickup.objectId >= 84 && pickup.objectId <= 86) { collected[pickup.objectId - 84] = true; }
     }
 }
 
-int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session, ZPickupScene &pickups) {
+int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session) {
     scene.GetPlayerVitals().invincible = true;
     bool cacheCollected[3]{};
     for (const auto &prop : map.props) {
@@ -131,7 +131,7 @@ int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session
         scene.GetPlayer().y = prop.y + passageY / passagePoints + normalY * 100;
         for (int elapsed = 0; elapsed < 12000 && scene.GetPlayer().x >= centerX - 80; elapsed += 16) {
             session.Update(16, -normalX, -normalY, false);
-            RecordCacheCollections(pickups, cacheCollected);
+            RecordCacheCollections(scene, cacheCollected);
         }
         std::printf("[campaign-cache-check] passage xy=%.0f,%.0f wall-x=%.0f target-y=%.0f state=%u\n",
             scene.GetPlayer().x, scene.GetPlayer().y, centerX, prop.y + passageY / passagePoints, prop.runtime->GetStateId());
@@ -159,7 +159,7 @@ int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session
                 const float distance = std::hypot(dx, dy);
                 if (distance < 1) { session.Update(16, 0, 0, false); }
                 else { session.Update(16, dx / distance, dy / distance, false); }
-                RecordCacheCollections(pickups, cacheCollected);
+                RecordCacheCollections(scene, cacheCollected);
             }
             if (!cacheCollected[objectId - 84]) { return 1; }
         }

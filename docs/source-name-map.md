@@ -4,6 +4,14 @@
 
 共享特效现统一位于 `gun_bros_re/effects/`，共 28 个源码文件，供 UI 与战斗共同使用。原 `gameplay/` 下同名文件不保留转发头；类名、池与持有关系保持不变。范围与验证见 [目录归并记录](effects-directory-migration.md)。下方历史批次中的旧路径按此迁移定位。
 
+## 拾取物组合层拆分
+
+目录归并：四个拾取物专属源码统一位于 `gun_bros_re/gameplay/pickup/`：`CPickup.h`、`CPickup.cpp`、`CPickupPresentation.cpp`、`CLevelPickups.cpp`。旧路径不保留转发头；下方历史记录按此定位。
+
+目录层亦已清除：`data/ZPickupCatalog.h/.cpp`、`ZPickupEntry` 和 `LoadPickupCatalog` 不再存在。`CPickup::Template::Load` 读取并校验单条 BIG 模板，`CLevel` 按包 hash/局部序号持有模板，实例绑定模板和资源引用；目录标签及报告只在测试侧生成。
+
+2026-09-17：拾取物组合类 `ZPickupScene` 及后续过渡缓存 `ZPickupResources` / `ZPickupVisual` 均已删除。活动实例归 `CPickup`，分配/回收归 `CLevelObjectPool`，调度/通知、模板/Sprite 包/批次归 `CLevel`，帧展开和绘制归 `CSpritePlayer`，商品奖励入口归 `CPlayer::CollectItem`。依据与验证见 [拾取物组合层拆分](pickup-responsibility-migration.md)。
+
 ## 夜间特效组合层迁移
 
 `gun_bros_re/gameplay/ZWeaponEffects.h/.cpp` 已删除。下表按职责给出当前文件，不是旧类到一个新类的改名映射；原版依据与验证见 [夜间交接](weapon-effects-night-migration.md)。

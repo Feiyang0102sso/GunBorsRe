@@ -70,27 +70,26 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         if (!LoadRefinementTemplate(toc, tables, pickupRefinement)) { return 1; }
         CProfileManager pickupProfile;
         pickupProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), pickupRefinement);
-        ZPickupScene pickupProbe(toc, tables, program, &pickupProfile);
-        if (!pickupProbe.Init()) { return 1; }
+        if (!rewardProbe.InitPickups(toc, tables, program, &pickupProfile)) { return 1; }
         GameObjectRef pickupRef;
         pickupRef.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
         pickupRef.localIndex = 2;
         vitals.health = 1;
-        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
-        pickupProbe.Update(16, rewardProbe);
+        rewardProbe.SpawnPickupAt(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
+        rewardProbe.UpdatePickups(16);
         if (vitals.health != vitals.maximum) { ++checkFailures; }
         pickupRef.localIndex = 0;
-        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
+        rewardProbe.SpawnPickupAt(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupRef.localIndex = 1;
-        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
+        rewardProbe.SpawnPickupAt(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
         pickupRef.localIndex = 7;
-        pickupProbe.Spawn(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
-        pickupProbe.Update(16, rewardProbe);
-        pickupProbe.Update(16, rewardProbe);
+        rewardProbe.SpawnPickupAt(pickupRef, rewardProbe.GetPlayer().x, rewardProbe.GetPlayer().y);
+        rewardProbe.UpdatePickups(16);
+        rewardProbe.UpdatePickups(16);
         GameObjectRef grenade = pickupRef;
         grenade.localIndex = 13;
         if (pickupProgress.GetExperience() != 500 || rewardProbe.GetXplodium() != 153 ||
-            pickupProbe.collected != 4 || pickupProbe.GetCount() != 0 || pickupProbe.failures != 0 ||
+            rewardProbe.GetPickupCollectedCount() != 4 || rewardProbe.GetPickupCount() != 0 || rewardProbe.GetPickupFailureCount() != 0 ||
             pickupProfile.GetPowerupCount(grenade) != 1) { ++checkFailures; }
         CProfileManager restoredPickupProfile;
         restoredPickupProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), pickupRefinement);

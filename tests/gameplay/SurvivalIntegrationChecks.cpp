@@ -113,7 +113,6 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
     auto & brother = fixture.brother;
     auto & session = fixture.session;
     auto & powerups = fixture.powerups;
-    auto & pickups = fixture.pickups;
     auto & pickupProfile = fixture.pickupProfile;
     auto & tutorial = fixture.tutorial;
     auto & accountedXplodium = fixture.accountedXplodium;
@@ -165,7 +164,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
             pilot->Update(16, moveX, moveY);
             if (step == 0) { moveX = 1; moveY = 0; }
             float pickupX = 0, pickupY = 0;
-            if (pickups.GetObjectPosition(501, pickupX, pickupY)) {
+            if (scene.GetPickupPosition(501, pickupX, pickupY)) {
                 moveX = pickupX - scene.GetPlayer().x;
                 moveY = pickupY - scene.GetPlayer().y;
             }
@@ -315,7 +314,6 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
     auto & loaded = fixture.loaded;
     auto & scene = fixture.scene;
     auto & session = fixture.session;
-    auto & pickups = fixture.pickups;
     auto & horde = fixture.horde;
 
     if (check && archiveMission != nullptr && !horde) {
@@ -373,7 +371,7 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
         }
         if (scene.GetSpawnCount() == 0 || session.GetKills() == 0 || scene.GetInvalidSpawnCount() != 0) { ++checkFailures; }
         std::printf("[campaign-check] goals=%u/%zu spawned=%u kills=%u pickups=%u cleared=%d failures=%u\n",
-            reached, goals.size(), scene.GetSpawnCount(), session.GetKills(), pickups.collected, session.GetLevel().IsCleared(), checkFailures);
+            reached, goals.size(), scene.GetSpawnCount(), session.GetKills(), scene.GetPickupCollectedCount(), session.GetLevel().IsCleared(), checkFailures);
         capturePath = TestOutput::Path("campaign-check-") + packShortName + "-" + std::to_string(mapIndex) + ".png";
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.

@@ -35,7 +35,6 @@
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/ui/ZGameFrontEnd.h"
-#include "gun_bros_re/data/ZPickupCatalog.h"
 #include "tests/checks/PropCatalog.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"

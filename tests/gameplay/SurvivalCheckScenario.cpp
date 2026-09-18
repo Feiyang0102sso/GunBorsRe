@@ -12,7 +12,7 @@
 #include "TestOutput.h"
 
 // Declared where they are defined, in the deathmatch check translation units.
-int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, ZPickupScene &, CPowerUpSelector &,
+int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, CPowerUpSelector &,
     CProfileManager &, ZSurvivalGameContext &);
 int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, CPowerUpSelector &, CProfileManager &);
 int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, ZPackTables &,
@@ -43,7 +43,7 @@ int SurvivalCheckScenario::OnSceneReady(SurvivalSceneFixture scene) {
             return CheckDeathmatchBotDifficulty(fixture, scene.toc, scene.tables, scene.match,
                 scene.peerPowerups, *scene.peerProfile);
         }
-        return CheckDeathmatchCombat(fixture, scene.match, scene.pickups, scene.peerPowerups,
+        return CheckDeathmatchCombat(fixture, scene.match, scene.peerPowerups,
             *scene.peerProfile, *scene.gameContext);
     }
     if (m_development.debugMapProfileCheck) {
@@ -56,7 +56,7 @@ int SurvivalCheckScenario::OnSceneReady(SurvivalSceneFixture scene) {
     if (m_development.campaignProgressionCheck) { return CheckCampaignProgression(scene.loaded, scene.scene, scene.session, scene.mapIndex); }
     if (m_development.campaignRescueCheck) { return CheckCampaignRescue(scene.loaded, scene.scene, scene.session); }
     if (m_development.campaignPortalCheck) { return CheckCampaignPortal(scene.loaded, scene.scene, scene.session); }
-    if (m_development.campaignCacheCheck) { return CheckCampaignCache(scene.loaded, scene.scene, scene.session, scene.pickups); }
+    if (m_development.campaignCacheCheck) { return CheckCampaignCache(scene.loaded, scene.scene, scene.session); }
     if (m_development.localLiveCheck) {
         if (scene.localLive && CheckLiveCheatProgress(fixture, scene.survivalHud) != 0) { return 1; }
         if (scene.localLive && CheckLivePolicies(fixture, scene.peerPowerups, *scene.peerProfile) != 0) { return 1; }
@@ -118,7 +118,7 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
                 !state.scene.SwapBrotherWeapon() || state.scene.GetBrotherWeaponSlot() != 0) { return 1; }
             std::printf("[brother-equipment-check] pistol-rifle-pistol=1 player-unchanged=1\n");
         }
-        return OnSceneReady({m_failures, state.launch.packShortName, state.launch.mapIndex, state.launch.localLive, m_development.deathStudy, state.toc, state.tables, state.vitals, state.window, state.program, state.batch, state.loaded, state.player, state.scene, state.brother, state.brotherModel, state.session, state.survivalHud, state.progress, state.match, state.pickups, state.powerups, state.peerPowerups, state.peerProfile, state.launch.gameContext, state.startX, state.startY, state.startFacing});
+        return OnSceneReady({m_failures, state.launch.packShortName, state.launch.mapIndex, state.launch.localLive, m_development.deathStudy, state.toc, state.tables, state.vitals, state.window, state.program, state.batch, state.loaded, state.player, state.scene, state.brother, state.brotherModel, state.session, state.survivalHud, state.progress, state.match, state.powerups, state.peerPowerups, state.peerProfile, state.launch.gameContext, state.startX, state.startY, state.startFacing});
     }
     if (phase == ZSurvivalPhase::Ready) {
         int result = -1;
@@ -136,13 +136,13 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
         if (result >= 0) { return result; }
         result = OnBrotherPose({m_failures, m_development.check, state.withBrother, state.scene, state.brother, state.brotherModel});
         if (result >= 0) { return result; }
-        result = OnTutorial({m_failures, state.capturePath, m_development.check, state.launch.gameContext, state.tables, state.weapons, state.vitals, state.progress, state.program, state.loaded, state.player, state.weaponSlot, state.equippedWeaponSlot, state.scene, state.brother, state.session, state.powerups, state.pickups, state.pickupProfile, state.tutorial, state.accountedXplodium});
+        result = OnTutorial({m_failures, state.capturePath, m_development.check, state.launch.gameContext, state.tables, state.weapons, state.vitals, state.progress, state.program, state.loaded, state.player, state.weaponSlot, state.equippedWeaponSlot, state.scene, state.brother, state.session, state.powerups, state.pickupProfile, state.tutorial, state.accountedXplodium});
         if (result >= 0) { return result; }
-        result = OnWaves({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, m_development.checkWaves, state.launch.startWave, state.launch.gameContext, state.withBrother, m_development.powerupStudy, state.launch.archiveMission, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.progress, state.window, state.program, state.loaded, state.player, state.weaponSlot, state.scene, state.brother, state.brotherModel, state.session, state.pickups, state.props, state.tutorial, state.startX, state.startY, state.startFacing, state.packIndex, state.archiveLevel});
+        result = OnWaves({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, m_development.checkWaves, state.launch.startWave, state.launch.gameContext, state.withBrother, m_development.powerupStudy, state.launch.archiveMission, state.toc, state.tables, state.weapons, state.enemies, state.vitals, state.progress, state.window, state.program, state.loaded, state.player, state.weaponSlot, state.scene, state.brother, state.brotherModel, state.session, state.props, state.tutorial, state.startX, state.startY, state.startFacing, state.packIndex, state.archiveLevel});
         if (result >= 0) { return result; }
         result = OnHorde({m_failures, state.capturePath, m_development.check, state.launch.startWave, state.vitals, state.loaded, state.scene, state.session, state.horde});
         if (result >= 0) { return result; }
-        result = OnCampaign({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, state.launch.archiveMission, state.vitals, state.loaded, state.scene, state.session, state.pickups, state.horde});
+        result = OnCampaign({m_failures, state.capturePath, state.launch.packShortName, state.launch.mapIndex, m_development.check, state.launch.archiveMission, state.vitals, state.loaded, state.scene, state.session, state.horde});
         if (result >= 0) { return result; }
         state.finalizeProgress = m_development.check && state.horde;
     }

@@ -140,7 +140,6 @@ struct SurvivalTutorialFixture {
     CBrotherAI & brother;
     CGame & session;
     CPowerUpSelector & powerups;
-    ZPickupScene & pickups;
     CProfileManager * pickupProfile;
     bool tutorial;
     std::uint64_t & accountedXplodium;
@@ -173,7 +172,6 @@ struct SurvivalWavesFixture {
     CBrotherAI & brother;
     ZPlayerModel & brotherModel;
     CGame & session;
-    ZPickupScene & pickups;
     MapDetail::ZMapPropWorld & props;
     bool tutorial;
     float startX;
@@ -206,7 +204,6 @@ struct SurvivalCampaignFixture {
     MapDetail::ZLoadedMap & loaded;
     CLevel & scene;
     CGame & session;
-    ZPickupScene & pickups;
     bool horde;
 };
 
@@ -240,7 +237,6 @@ struct SurvivalSceneFixture {
     CInputPad & survivalHud;
     CPlayerProgress & progress;
     CMPMatch & match;
-    ZPickupScene & pickups;
     CPowerUpSelector & powerups;
     CPowerUpSelector & peerPowerups;
     CProfileManager * peerProfile;

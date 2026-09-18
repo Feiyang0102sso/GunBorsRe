@@ -17,6 +17,7 @@ constexpr float kPoolArenaHeight = 900;
 constexpr float kSpawnDistance = 280;
 constexpr float kRadians = 3.14159265f / 180;
 constexpr std::size_t kEnemyPoolCapacity = 100;
+constexpr std::size_t kPickupPoolCapacity = 20; // GetPickup :145637 compares the free index to 19.
 }
 
 CLevelObjectPool::CLevelObjectPool(ZPackTables &tables, const ZShaderProgram &program,
@@ -32,6 +33,7 @@ void CLevelObjectPool::BindRuntime(ZPackTables &tables, const ZShaderProgram &pr
 
 void CLevelObjectPool::Clear() {
     m_enemies.clear();
+    ClearPickups();
     m_pendingEnemies.clear();
     m_summoners.clear();
     m_spawnCount = 0;
@@ -211,3 +213,17 @@ void CLevelObjectPool::ReleaseEnemy(std::size_t index) {
     m_summoners.erase(id);
     m_enemies.erase(m_enemies.begin() + index);
 }
+
+CPickup *CLevelObjectPool::GetPickup() {
+    if (m_pickups.size() >= kPickupPoolCapacity) { return nullptr; }
+    auto pickup = std::make_unique<CPickup>();
+    auto *result = pickup.get();
+    m_pickups.push_back(std::move(pickup));
+    return result;
+}
+
+void CLevelObjectPool::ReleasePickup(std::size_t index) {
+    m_pickups.erase(m_pickups.begin() + index);
+}
+
+void CLevelObjectPool::ClearPickups() { m_pickups.clear(); }

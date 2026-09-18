@@ -120,6 +120,7 @@ CLevel::CLevel(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &p
     m_effectLayer.SetPool(m_effectLayerPool);
 }
 CLevel::~CLevel() {
+    ResetPickups();
     // Map storage may outlive this level. Remove callbacks into its actor world
     // before actor/resource members are destroyed.
     if (m_mapParticles) { Clear(); }

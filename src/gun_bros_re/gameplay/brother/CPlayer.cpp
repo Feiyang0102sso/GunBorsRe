@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/brother/CPlayer.h"
+#include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/CCollisionData.h"
 #include "gun_bros_re/gameplay/level/CLevelObjectPool.h"
 #include "gun_bros_re/gameplay/CMap.h"
@@ -154,4 +155,22 @@ void CPlayer::Update(int deltaMs, float moveX, float moveY, bool shoot,
     AdvancePlayer(*m_model, deltaMs);
     ApplyKnockback(deltaMs, forceSeconds);
     if (moveActor) { Move(); }
+}
+
+unsigned CPlayer::CollectItem(ZPackTables &tables, const GameObjectRef &ref, CProfileManager *profile) {
+    if (profile == nullptr) { return 0; }
+    unsigned failures = 0;
+    std::vector<std::uint8_t> payload;
+    if (!tables.ReadSectionResource(ref.packHash, ZGameSection::StoreItem, ref.localIndex, payload)) { return 1; }
+    CStoreItem item;
+    CArrayInputStream stream(payload);
+    if (!item.Init(stream)) { return 1; }
+    // CollectItem uses AcquireItem(..., free=true). No currency is deducted.
+    // Preserve desktop Grant/AddPowerup rules; full store award policy is not restored here.
+    for (const GameObjectTypeRef &object : item.objects) {
+        if (object.type == 17) { profile->AddPowerup(object.object, 1); }
+        else if (object.type == 2 || object.type == 6) { profile->Grant(object.type, object.object); }
+        else { ++failures; std::printf("[pickup] unsupported store object type=%u\n", object.type); }
+    }
+    return failures;
 }

@@ -21,6 +21,7 @@ std::uint32_t CSpritePlayer::StepCount() const {
 }
 
 void CSpritePlayer::SetAnimation(const std::vector<std::uint16_t> *stepDurationsMs) {
+    m_drawData.reset();
     m_stepDurationsMs = stepDurationsMs;
     m_stepIndex = 0;
     m_finished = false;
