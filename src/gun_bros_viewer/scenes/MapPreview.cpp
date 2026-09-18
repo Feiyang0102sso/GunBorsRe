@@ -1,11 +1,12 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 #include "engine/graphics/CMeshCamera.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "gun_bros_viewer/scenes/MapPreview.h"
-#include "gun_bros_viewer/scenes/MapTurretPreview.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include <algorithm>
 #include <charconv>
 using namespace MapDetail;
@@ -156,7 +157,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         return 1;
     }
     ZAudioPlayer audio;
-    ZLoadedMap loaded;
+    CMap loaded;
     ZPackTables weaponTables(tocManager);
     std::vector<ZWeaponEntry> weapons;
     std::size_t weaponSlot = weaponIndex;
@@ -164,7 +165,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     if (gameView) {
         if (!LoadWeaponCatalog(tocManager, weaponTables, weapons)) { return 1; }
         if (weaponSlot >= weapons.size()) { weaponSlot = 0; }
-        weaponEffects.reset(new CLevel(tocManager, weaponTables, program, loaded.particlePool));
+        weaponEffects.reset(new CLevel(tocManager, weaponTables, program, loaded.GetResources().particlePool));
     }
 
     int drawableWidth = 0;
@@ -175,20 +176,19 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 catalog[slot].packName.c_str(), catalog[slot].mapIndex, slot + 1,
                 catalog.size());
 
-    if (!LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
-                 loaded)) {
+    if (!LoadPreviewMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex, loaded)) {
         return 1;
     }
-    LoadProps(tocManager, loaded);
-    BuildCollisionScene(loaded);
+    loaded.LoadProps(tocManager);
+    loaded.BuildCollisionScene();
     LoadPlacedEnemies(tocManager, program, loaded);
     LoadPlacedPlayers(tocManager, program, loaded);
-    MapTurretPreview turrets;
+    ZMapTurretPreview turrets;
     if (!gameView) { turrets.Bind(loaded); }
     if (gameView && !EquipControlledPlayer(weaponTables, loaded, program, weapons[weaponSlot])) { return 1; }
     ReportSpawns(loaded);
     WarmUp(loaded, advanceMs, weaponEffects.get(), firePreview);
-    turrets.Update(static_cast<int>(advanceMs));
+    turrets.Update(0);
 
     // Either layer can be hidden, which is how "is that rock in the right\n// place or is the ground wrong?" gets answered without a debugger.
     bool showTiles = true;
@@ -202,8 +202,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     // The props animate, so the geometry is rebuilt every frame from here on.
     // This flag only decides whether a rebuild says anything about itself.
     bool reportGeometry = true;
-    ZMapCamera camera = FitCamera(loaded, drawableWidth, drawableHeight);
-    bool followPlayer = gameView && !loaded.players.empty();
+    CCamera::Viewport camera = FitCamera(loaded, drawableWidth, drawableHeight);
+    bool followPlayer = gameView && !loaded.GetResources().players.empty();
     if (followPlayer) {
         camera.zoom = GameViewCameraZoom(drawableWidth, drawableHeight);
         FollowPlayerCamera(loaded, drawableWidth, drawableHeight, camera);
@@ -251,13 +251,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
             } else if (controls.IsPressed(key, ViewerAction::Cover)) {
                 coverState = NextCoverState(coverState);
                 const std::uint32_t changed = SetCoverState(loaded, coverState);
-                StartTransitionParticles(
-                    tocManager, loaded, ZInteractivePropKind::Cover,
-                    static_cast<std::uint8_t>(coverState));
-                PlayTransitionSound(tocManager, loaded, audio,
-                                    ZInteractivePropKind::Cover,
-                                    static_cast<std::uint8_t>(coverState));
-                BuildCollisionScene(loaded);
+                DispatchPreviewActions(tocManager, loaded, &audio);
+                loaded.BuildCollisionScene();
                 reportGeometry = true;
                 std::printf("[m4] %u covers: %s\n", changed,
                             CoverStateName(coverState));
@@ -265,12 +260,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 barrelState = static_cast<std::uint8_t>((barrelState + 1) % 4);
                 const std::uint32_t changed = SetInteractiveState(
                     loaded, ZInteractivePropKind::Barrel, barrelState);
-                StartTransitionParticles(tocManager, loaded,
-                                         ZInteractivePropKind::Barrel,
-                                         barrelState);
-                PlayTransitionSound(tocManager, loaded, audio,
-                                    ZInteractivePropKind::Barrel, barrelState);
-                BuildCollisionScene(loaded);
+                DispatchPreviewActions(tocManager, loaded, &audio);
+                loaded.BuildCollisionScene();
                 reportGeometry = true;
                 std::printf("[m4] %u barrels: %s\n", changed,
                             InteractiveStateName(ZInteractivePropKind::Barrel,
@@ -282,11 +273,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 spireState = static_cast<std::uint8_t>((spireState + 1) % 3);
                 const std::uint32_t changed = SetInteractiveState(
                     loaded, ZInteractivePropKind::Spire, spireState);
-                StartTransitionParticles(tocManager, loaded,
-                                         ZInteractivePropKind::Spire,
-                                         spireState);
-                PlayTransitionSound(tocManager, loaded, audio,
-                                    ZInteractivePropKind::Spire, spireState);
+                DispatchPreviewActions(tocManager, loaded, &audio);
                 reportGeometry = true;
                 std::printf("[m4] %u spires: %s\n", changed,
                             InteractiveStateName(ZInteractivePropKind::Spire,
@@ -335,27 +322,26 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
 
             // Replace wholesale: the old textures, including every atlas page
             // the props point at, go with the old LoadedMap.
-            ZLoadedMap replacement;
-            if (LoadMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex,
-                        replacement)) {
-                LoadProps(tocManager, replacement);
+            CMap replacement;
+            if (LoadPreviewMap(tocManager, catalog[slot].packIndex, catalog[slot].mapIndex, replacement)) {
+                replacement.LoadProps(tocManager);
                 coverState = ZCoverState::Intact;
                 barrelState = 0;
                 spireState = 0;
-                BuildCollisionScene(replacement);
+                replacement.BuildCollisionScene();
                 LoadPlacedEnemies(tocManager, program, replacement);
                 LoadPlacedPlayers(tocManager, program, replacement);
                 if (gameView) {
                     if (!EquipControlledPlayer(weaponTables, replacement, program, weapons[weaponSlot])) { return 1; }
-                    weaponEffects = std::make_unique<CLevel>(tocManager, weaponTables, program, replacement.particlePool, replacement.particleSystem);
+                    weaponEffects = std::make_unique<CLevel>(tocManager, weaponTables, program, replacement.GetResources().particlePool, replacement.GetResources().particleSystem);
                 }
                 ReportSpawns(replacement);
                 if (!gameView) { turrets.Bind(replacement); }
                 WarmUp(replacement, advanceMs, weaponEffects.get(), firePreview);
-                turrets.Update(static_cast<int>(advanceMs));
+                turrets.Update(0);
                 loaded = std::move(replacement);
                 reportGeometry = true;
-                followPlayer = gameView && !loaded.players.empty();
+                followPlayer = gameView && !loaded.GetResources().players.empty();
                 if (followPlayer) {
                     camera.zoom = GameViewCameraZoom(
                         drawableWidth, drawableHeight);
@@ -402,8 +388,8 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
 
         if (gameView) {
             UpdateControlledPlayer(loaded, window, elapsedMs);
-            if (!loaded.players.empty()) {
-                ZPlacedPlayer &player = loaded.players[0];
+            if (!loaded.GetResources().players.empty()) {
+                CMap::Resources::Player &player = loaded.GetResources().players[0];
                 float mouseX = 0, mouseY = 0;
                 if (elapsedMs > 0 && window.GetMousePosition(mouseX, mouseY) && screenshotPath.empty()) {
                     const float aimX = camera.x + mouseX / camera.zoom - player.x;
@@ -416,23 +402,24 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
                 weaponEffects->SetPaused(elapsedMs == 0);
             }
         }
-        AdvanceProps(loaded.props, static_cast<std::uint16_t>(elapsedMs));
+        AdvanceProps(loaded.GetResources().props, static_cast<std::uint16_t>(elapsedMs));
+        DispatchPreviewActions(tocManager, loaded, &audio);
         AdvanceParticleEffects(loaded, static_cast<std::uint16_t>(elapsedMs));
         AdvanceEnemies(loaded, static_cast<std::int32_t>(elapsedMs));
-        turrets.Update(static_cast<int>(elapsedMs));
+        turrets.Update(0);
         AdvancePlayers(loaded, static_cast<std::int32_t>(elapsedMs));
-        if (gameView && !loaded.players.empty()) {
-            ZPlacedPlayer &player = loaded.players[0];
+        if (gameView && !loaded.GetResources().players.empty()) {
+            CMap::Resources::Player &player = loaded.GetResources().players[0];
             float identity[kMatrix4dElements], modelToWorld[kMatrix4dElements];
             Matrix4dIdentity(identity);
-            const float scale = player.model->GetWorldScale(loaded.playerTemplate->GetGameScale(), kLevelCameraScale);
+            const float scale = player.model->GetWorldScale(loaded.GetResources().playerTemplate->GetGameScale(), kLevelCameraScale);
             MeshCameraBuildGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
             weaponEffects->Update(*player.model, modelToWorld, player.facingDegrees,
-                static_cast<int>(elapsedMs), &loaded.weaponCollision);
+                static_cast<int>(elapsedMs), &loaded.GetResources().weaponCollision);
         }
-        AdvanceTileLayers(loaded.map, static_cast<std::uint16_t>(elapsedMs));
+        loaded.UpdateLayers(static_cast<std::uint16_t>(elapsedMs));
         audio.Update();
-        BuildGeometry(loaded, batch, showTiles, showProps, reportGeometry);
+        loaded.DrawBackground(batch, showTiles, showProps, reportGeometry);
         reportGeometry = false;
 
         if (gameView) {
@@ -508,7 +495,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         if (weaponEffects) {
             weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
         }
-        DrawMapObjects(loaded, batch, program, mvp, showProps, weaponEffects.get());
+        CRenderQueue::Draw(loaded, batch, program, mvp, showProps, weaponEffects.get());
         if (weaponEffects) {
             weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
         }
@@ -516,10 +503,10 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         if (showSpawns) {
             // On top of the terrain, and outside the prop batch, because a
             // marker is not part of the scene -- it is a note about it.
-            BuildMarkers(loaded, markers, ZPlacedObjectType::Player);
+            BuildMarkers(loaded, markers, CLayerObject::ObjectType::Player);
             markers.Draw(markerProgram, mvp, 0.2f, 1.0f, 0.3f, 1.0f);
 
-            BuildMarkers(loaded, markers, ZPlacedObjectType::Enemy);
+            BuildMarkers(loaded, markers, CLayerObject::ObjectType::Enemy);
             markers.Draw(markerProgram, mvp, 1.0f, 0.25f, 0.2f, 1.0f);
         }
 

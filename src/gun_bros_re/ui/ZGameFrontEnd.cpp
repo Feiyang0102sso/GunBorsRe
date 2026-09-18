@@ -12,7 +12,7 @@ ZLocalBotFriend *MatchBot(ZMenuState &state) {
     state.rematchingBot = false;
     return state.matchedBot;
 }
-int RunFrontEndSurvival(ZSurvivalLaunch launch, ZMenuState &state) {
+int RunFrontEndSurvival(CGame::Launch launch, ZMenuState &state) {
     launch.debugSelection = &state.debugMap;
     launch.localBot = state.online.IsConnected() && state.social.selectedLocalFriend != 0;
     launch.botFriend = nullptr;
@@ -109,7 +109,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
             ZSurvivalGameContext context{debugProfile, {}};
             context.music = &music;
-            ZSurvivalLaunch launch;
+            CGame::Launch launch;
             launch.bigDirectory = bigDirectory;
             launch.window = &window;
             if (!PrepareDebugTutorial(toc, tables, context, launch) || RunSurvival(launch) != 0) { return 1; }
@@ -142,7 +142,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             ZSurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
             context.music = &music;
             context.mission = mission.resource; context.missionLevel = mission.data.level;
-            ZSurvivalLaunch launch;
+            CGame::Launch launch;
             launch.bigDirectory = bigDirectory;
             launch.packShortName = tables.GetPackName(level.mapRef.packHash);
             launch.mapIndex = level.mapRef.localIndex;
@@ -166,7 +166,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             CArrayInputStream input(bytes);
             CLevel::Template data;
             if (!data.Init(input) || input.Available() != 0) { return 1; }
-            ZSurvivalLaunch launch;
+            CGame::Launch launch;
             launch.bigDirectory = bigDirectory;
             launch.packShortName = tables.GetPackName(data.mapRef.packHash);
             launch.mapIndex = data.mapRef.localIndex;
@@ -200,7 +200,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 tutorialPack = tables.GetPackName(data.mapRef.packHash);
                 tutorialMap = data.mapRef.localIndex;
             }
-            const int result = RunFrontEndSurvival(ZSurvivalLaunch{bigDirectory, tutorialPack, tutorialMap, 0, -1, 0, &context, true, nullptr, &window}, state);
+            const int result = RunFrontEndSurvival(CGame::Launch{bigDirectory, tutorialPack, tutorialMap, 0, -1, 0, &context, true, nullptr, &window}, state);
             if (result == kDebugMapSessionChoice) { continue; }
             if (result != 0) { return 1; }
             if (profile.tutorialCompleted) { BeginPostGame(state, context, weapons); }
@@ -223,7 +223,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 ZSurvivalGameContext context{profile, savePath};
                 context.music = &music;
                 context.hordeStart = static_cast<int>(state.hordeStart);
-                const int result = RunFrontEndSurvival(ZSurvivalLaunch{bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, selected.data.value64, &context, profile.brotherEnabled, &selected, &window}, state);
+                const int result = RunFrontEndSurvival(CGame::Launch{bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, selected.data.value64, &context, profile.brotherEnabled, &selected, &window}, state);
                 if (result == kDebugMapSessionChoice) { continue; }
                 if (result != 0) { return 1; }
                 BeginPostGame(state, context, weapons);
@@ -241,7 +241,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             ZSurvivalGameContext context{profile, savePath};
             context.music = &music;
             context.hordeStart = static_cast<int>(state.hordeStart);
-            const int result = RunFrontEndSurvival(ZSurvivalLaunch{bigDirectory, "pack11", 0, 0, -1, selected->data.value64, &context, profile.brotherEnabled, selected, &window}, state);
+            const int result = RunFrontEndSurvival(CGame::Launch{bigDirectory, "pack11", 0, 0, -1, selected->data.value64, &context, profile.brotherEnabled, selected, &window}, state);
             if (result == kDebugMapSessionChoice) { continue; }
             if (result != 0) { return 1; }
             BeginPostGame(state, context, weapons);
@@ -268,7 +268,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             mapPack = kPlanetPacks[choice];
             mapIndex = kPlanetMaps[choice];
         }
-        const int result = RunFrontEndSurvival(ZSurvivalLaunch{bigDirectory, mapPack, mapIndex, 0, -1, wave, &context, profile.brotherEnabled, nullptr, &window}, state);
+        const int result = RunFrontEndSurvival(CGame::Launch{bigDirectory, mapPack, mapIndex, 0, -1, wave, &context, profile.brotherEnabled, nullptr, &window}, state);
         if (result == kDebugMapSessionChoice) { continue; }
         if (result != 0) { return 1; }
         BeginPostGame(state, context, weapons);

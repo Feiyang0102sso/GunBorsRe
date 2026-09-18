@@ -15,11 +15,11 @@
 #include "gun_bros_re/debug/SurvivalDevelopment.h"
 #include "gun_bros_re/debug/FlockMetrics.h"
 #include "gun_bros_re/gameplay/ZSurvivalScenario.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include <ctime>
 using namespace MapDetail;
 
-int RunSurvivalSession(const ZSurvivalLaunch &launch) {
+int RunSurvivalSession(const CGame::Launch &launch) {
 
     const auto &bigDirectory = launch.bigDirectory;
     const auto &packShortName = launch.packShortName;
@@ -128,13 +128,13 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     ZQuadBatch batch;
     ZMarkerBatch markers;
     if (!batch.Create(program) || !markers.Create(markerProgram)) { return 1; }
-    ZLoadedMap loaded;
-    if (!LoadMap(toc, packIndex, mapIndex, loaded)) { return 1; }
+    CMap loaded;
+    if (!loaded.Load(toc, packIndex, mapIndex)) { return 1; }
     LoadPlacedPlayers(toc, program, loaded);
-    if (loaded.players.empty()) { return 1; }
+    if (loaded.GetResources().players.empty()) { return 1; }
     // The second brother will be driven by the partner system, not a stationary clone.
-    loaded.players.resize(1);
-    CBrother &player = *loaded.players[0].model;
+    loaded.GetResources().players.resize(1);
+    CBrother &player = *loaded.GetResources().players[0].model;
     player.SetCooperative(launch.localLive);
     player.SetDeathmatch(launch.deathmatch);
     player.SetVitals(&vitals);
@@ -192,14 +192,14 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             if (!found) { return 1; }
         }
     }
-    CLevel scene(toc, tables, program, loaded.particlePool, loaded.particleSystem);
+    CLevel scene(toc, tables, program, loaded.GetResources().particlePool, loaded.GetResources().particleSystem);
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnResources({
             toc, tables, enemies, vitals, progressData, window, survivalHud, program, loaded, player, scene
         });
         if (result >= 0) { return result; }
     }
-    scene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    scene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
     if (gameContext != nullptr) {
         music.SetEnabled(gameContext->profile.musicEnabled);
         ZAudioPlayer::SetEffectsEnabled(gameContext->profile.soundEnabled);
@@ -271,7 +271,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
         }
         if (!brotherModel.BuildBody(tables, player.moveSet) ||
-            !brotherModel.EquipWeapon(tables, loaded.playerTemplate->GetScript(), weapons[brotherWeaponSlot].data, "AI brother") || !brotherModel.CreateBuffers(program)) { return 1; }
+            !brotherModel.EquipWeapon(tables, loaded.GetResources().playerTemplate->GetScript(), weapons[brotherWeaponSlot].data, "AI brother") || !brotherModel.CreateBuffers(program)) { return 1; }
         for (const GameObjectRef &ref : brotherConfiguration.armor) {
             if (ref.IsNull()) { continue; }
             std::vector<std::uint8_t> payload;
@@ -289,12 +289,12 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
         }
         if (rifle == nullptr) { return 1; }
-        scene.SetBrotherWeapons(loaded.playerTemplate->GetScript(), weapons[brotherWeaponSlot].data, rifle->data);
+        scene.SetBrotherWeapons(loaded.GetResources().playerTemplate->GetScript(), weapons[brotherWeaponSlot].data, rifle->data);
 
     }
     scene.SetPlayerProgress(&progress);
     scene.SetLocalLive(launch.localLive);
-    if (launch.localLive && !scene.SetReviveResources(loaded.playerTemplate->GetScript())) { return 1; }
+    if (launch.localLive && !scene.SetReviveResources(loaded.GetResources().playerTemplate->GetScript())) { return 1; }
     scene.SetLocalBot(launch.localLive || launch.localBot || launch.deathmatch);
     survivalHud.SetLiveBrotherIndex(player.brotherIndex);
     survivalHud.SetLivePeerIndex(brotherModel.brotherIndex);
@@ -306,7 +306,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (launch.botFriend != nullptr) { peerProgress.SetExperience(launch.botFriend->profile.experience); }
     scene.SetPeerProgress(&peerProgress);
     if (gameContext != nullptr) { gameContext->botFriend = launch.botFriend; }
-    CGame session(scene, loaded.map, enemies);
+    CGame session(scene, loaded, enemies);
     if (launch.deathmatch) { session.SetDeathmatch(&match); }
     session.GetLevel().SetCooperative(launch.localLive);
     CChallengeManager challenges;
@@ -378,11 +378,11 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     }
     if (horde) { session.SetHorde(true); }
     session.SetHud(&survivalHud);
-    const float startX = loaded.players[0].x;
-    const float startY = loaded.players[0].y;
+    const float startX = loaded.GetResources().players[0].x;
+    const float startY = loaded.GetResources().players[0].y;
     // The map PLAYER object's spawn angle; CBrother::Spawn :135887 writes the
     // same value to both brothers.
-    const float startFacing = loaded.players[0].facingDegrees;
+    const float startFacing = loaded.GetResources().players[0].facingDegrees;
     session.SetStartWave(static_cast<int>(startWave));
     // The original seeds its one CRandGen from the clock (:370383), so a level
     // script's rolls differ every session. Real play does the same; research
@@ -395,7 +395,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (development->deathmatchCheck) { session.SetScriptRandomSeed(matchSeed); }
     const bool tutorial = gameContext != nullptr && gameContext->tutorial;
     session.GetLevel().EnableTutorial(tutorial);
-    scene.SetMap(loaded.map, loaded.collisionScene, loaded.weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
+    scene.SetMap(loaded, loaded.GetResources().collisionScene, loaded.GetResources().weaponCollision, kLevelCameraScale, kPlayerCollisionRadius);
     session.Restart(startX, startY, startFacing);
     std::uint64_t accountedXplodium = 0;
     int lastSavedWave = session.GetLevel().GetWave();
@@ -404,9 +404,9 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     // layers, but survival must not inherit deathmatch/campaign obstacles.
     // Correction: preload all layers, then OnStart activates only authored
     // layers in script order; previously spawned props survive layer switches.
-    LoadProps(toc, loaded);
-    BuildCollisionScene(loaded);
-    ZMapPropWorld props(loaded, scene, session.GetLevel());
+    loaded.LoadProps(toc);
+    loaded.BuildCollisionScene();
+    CLevel::Props props(loaded, scene, session.GetLevel());
     session.SetProps(&props);
     scene.SetProps(&props);
     session.Restart(startX, startY, startFacing);
@@ -431,8 +431,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
 
     for (unsigned elapsed = 0; elapsed < advanceMs; elapsed += 16) {
         session.Update(16, 0, 0, firePreview);
-        AdvanceProps(loaded.props, 16);
-        AdvanceTileLayers(loaded.map, 16);
+        loaded.UpdateLayers(16);
     }
     if (launch.scenario != nullptr) {
         const int result = launch.scenario->OnStage(ZSurvivalPhase::Advanced, state);
@@ -584,7 +583,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         return state;
     };
     std::uint64_t previous = window.GetTicksMs();
-    ZMapCamera camera;
+    CCamera::Viewport camera;
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     std::printf("[survival] WASD move, mouse aim/fire, Q/E powerups, 1 shop, 2 swap weapon, Esc/space pause\n");
@@ -614,7 +613,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
                 scene.GetPlayer().y = 284.1f;
             }
         } else {
-            performancePilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
+            performancePilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
             if (!performancePilot) { return 1; }
         }
         PerformanceProbe::enabled = true;
@@ -991,10 +990,10 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
 
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
-        loaded.players[0].x = scene.GetPlayer().x;
-        loaded.players[0].y = scene.GetPlayer().y;
+        loaded.GetResources().players[0].x = scene.GetPlayer().x;
+        loaded.GetResources().players[0].y = scene.GetPlayer().y;
         const float baselineZoom = GameViewCameraZoom(width, height);
-        camera.zoom = baselineZoom * loaded.map.GetCamera().GetScale() / kLevelCameraScale;
+        camera.zoom = baselineZoom * loaded.GetCamera().GetScale() / kLevelCameraScale;
         session.SetViewSize(width / baselineZoom, height / baselineZoom);
         FollowPlayerCamera(loaded, width, height, camera);
         scene.SetViewCenter(camera.x + width / camera.zoom * 0.5f, camera.y + height / camera.zoom * 0.5f);
@@ -1115,8 +1114,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             }
             const int worldDeltaMs = session.GetLevel().TransformWorldElapseMS(16);
             if (!launch.deathmatch || !session.IsFinished()) {
-                AdvanceProps(loaded.props, worldDeltaMs);
-                AdvanceTileLayers(loaded.map, worldDeltaMs);
+                loaded.UpdateLayers(worldDeltaMs);
             }
             accumulator -= 16;
         }
@@ -1143,13 +1141,13 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
             return 0;
         }
         if (session.IsReadyForResults() && gameContext != nullptr && !check && capturePath.empty()) { break; }
-        loaded.players[0].x = scene.GetPlayer().x;
-        loaded.players[0].y = scene.GetPlayer().y;
-        loaded.players[0].facingDegrees = scene.GetPlayer().facing;
-        camera.zoom = baselineZoom * loaded.map.GetCamera().GetScale() / kLevelCameraScale;
+        loaded.GetResources().players[0].x = scene.GetPlayer().x;
+        loaded.GetResources().players[0].y = scene.GetPlayer().y;
+        loaded.GetResources().players[0].facingDegrees = scene.GetPlayer().facing;
+        camera.zoom = baselineZoom * loaded.GetCamera().GetScale() / kLevelCameraScale;
         FollowPlayerCamera(loaded, width, height, camera);
         const auto performanceUpdated = std::chrono::steady_clock::now();
-        BuildGeometry(loaded, batch, true, true, false);
+        loaded.DrawBackground(batch, true, true, false);
         const auto performanceGeometry = std::chrono::steady_clock::now();
         glViewport(0, 0, width, height);
         glClearColor(0.04f, 0.05f, 0.07f, 1);
@@ -1172,7 +1170,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
         if (withBrother) {
             drawBrother = &brotherModel;
         }
-        DrawMapObjects(loaded, batch, program, mvp, true, &scene, drawBrother, brother.y, width);
+        CRenderQueue::Draw(loaded, batch, program, mvp, true, &scene, drawBrother, brother.y, width);
         scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
 
         if (launch.scenario != nullptr) {
@@ -1352,6 +1350,6 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
     return 0;
 }
-int RunSurvival(const ZSurvivalLaunch &launch) {
+int RunSurvival(const CGame::Launch &launch) {
     return RunSurvivalSession(launch);
 }

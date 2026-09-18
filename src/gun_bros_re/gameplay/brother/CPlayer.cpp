@@ -3,7 +3,7 @@
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/CCollisionData.h"
 #include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
-#include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
@@ -110,7 +110,7 @@ void CPlayer::ApplyKnockback(int deltaMs, float seconds) {
 
 void CPlayer::Move() {
     if (m_map == nullptr || m_collision == nullptr || m_objects == nullptr) { return; }
-    const ZMapRectangle bounds = m_map->GetCameraExtent();
+    const CLayerCamera::Rectangle bounds = m_map->GetCameraExtent();
     // CPlayer::Move :100691-100862: bounds, enemy bodies, then map/prop edges.
     x = std::clamp(x, bounds.x + m_collisionRadius,
         bounds.x + bounds.width - m_collisionRadius);

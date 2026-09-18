@@ -1,3 +1,4 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "engine/graphics/CMeshCamera.h"
 /** Real BIG mine scripts, animated firing, and original map boundary regression. */
 #define NOMINMAX
@@ -7,7 +8,7 @@
 #include "engine/platform/ZGLLoader.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "gun_bros_re/gameplay/CBullet.h"
 #include <cstdio>
 #include <cmath>
@@ -45,9 +46,9 @@ int RunMineCheck(const std::string &bigDirectory) {
     effects.SetCombatWorld(&world);
     float identity[16], model[16];
     Matrix4dIdentity(identity);
-    MapDetail::ZLoadedMap map;
-    if (!MapDetail::LoadMap(toc, toc.GetPackIndexFromName("pack2"), 7, map)) { return 1; }
-    MapDetail::BuildCollisionScene(map);
+    CMap map;
+    if (!MapDetail::LoadPreviewMap(toc, toc.GetPackIndexFromName("pack2"), 7, map)) { return 1; }
+    map.BuildCollisionScene();
     unsigned failures = 0;
     for (const auto &entry : weapons) {
         const bool ordinaryBullet = entry.name == "ER97E Elite";
@@ -76,8 +77,8 @@ int RunMineCheck(const std::string &bigDirectory) {
         if (entry.name == "Load Dropper" && effects.GetBulletCount() != 6) { ++failures; }
         if (entry.name == "Deuce Dropper X90" && effects.GetBulletCount() != 5) { ++failures; }
         // Use an actual original map edge; only shooter placement is synthetic.
-        const auto &vertices = map.weaponCollision.terrain.GetVertices();
-        for (const auto &edge : map.weaponCollision.terrain.GetEdges()) {
+        const auto &vertices = map.GetResources().weaponCollision.terrain.GetVertices();
+        for (const auto &edge : map.GetResources().weaponCollision.terrain.GetEdges()) {
             const auto &a = vertices[edge.firstVertex];
             const auto &b = vertices[edge.secondVertex];
             const float length = std::hypot(b.x - a.x, b.y - a.y);
@@ -100,7 +101,7 @@ int RunMineCheck(const std::string &bigDirectory) {
                 unsigned particles = 0;
                 for (int frame = 0; frame < 60; ++frame) {
                     player.Update(16);
-                    effects.Update(player, model, facing, 16, &map.weaponCollision);
+                    effects.Update(player, model, facing, 16, &map.GetResources().weaponCollision);
                     particles += static_cast<unsigned>(effects.GetParticleCount());
                     for (const auto &shot : effects.GetProjectileStates()) {
                         const float side = (shot.x - midpointX) * nx + (shot.y - midpointY) * ny;

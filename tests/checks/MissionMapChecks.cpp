@@ -43,7 +43,7 @@ unsigned CheckMissionMap(const CLevel::Template &data, CMap &map, std::ofstream 
         const CLayerObject &layer = map.GetObjectLayer(index);
         if (static_cast<int>(layer.GetLayerIndex()) != level.GetObjectLayer()) { continue; }
         unsigned objectId = 0;
-        for (const ZPlacedObject &object : layer.GetObjects()) {
+        for (const CLayerObject::Object &object : layer.GetObjects()) {
             report << " object=" << objectId++ << " type=" << unsigned(object.objectType)
                 << " tag=" << unsigned(object.spawnTag) << " xy=" << object.x << ',' << object.y
                 << " path=" << unsigned(object.pathLayer) << '\n';

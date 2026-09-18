@@ -77,6 +77,8 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'fontbitmap' @('--fontbitmap')
         Add-Check 'viewer-controls' @('--viewer-controls-check')
         Add-Check 'map-turret' @('--map-turret-check')
+        Add-Check 'map-resources' @('--map-resources-check')
+        Add-Check 'cover-scale' @('--cover-scale-study')
         Add-Check 'big-version' @('--big-version-check')
         Add-Check 'asset-sample' @('--asset-sample-check')
         Add-Check 'resources' @('--m1')

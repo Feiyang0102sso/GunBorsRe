@@ -1,3 +1,4 @@
+#include "gun_bros_re/gameplay/map/CLevelProps.h"
 /** @file CLevelProjectiles.cpp
  * @brief CLevel projectile tracing, damage and splash dispatch.
  */

@@ -7,10 +7,10 @@
 
 #include "gun_bros_re/gameplay/CGame.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
-#include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/ZPropWorld.h"
+#include "gun_bros_re/gameplay/map/CLevelProps.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
@@ -558,9 +558,9 @@ void CLevel::UpdateProximitySpawns(float left, float top, float width, float hei
         const auto &objects = layer.GetObjects();
         m_spawnedObjects.resize(objects.size(), false);
         for (unsigned index = 0; index < objects.size(); ++index) {
-            const ZPlacedObject &object = objects[index];
+            const CLayerObject::Object &object = objects[index];
             if (m_spawnedObjects[index] || m_manualSpawnTags[object.spawnTag]) { continue; }
-            if (object.objectType != static_cast<unsigned>(ZPlacedObjectType::Prop) &&
+            if (object.objectType != static_cast<unsigned>(CLayerObject::ObjectType::Prop) &&
                 (object.x < left - 200 || object.x > left + width + 200 ||
                  object.y < top - 200 || object.y > top + height + 200)) { continue; }
             if (m_world->SpawnMapObject(object, index)) { m_spawnedObjects[index] = true; }
@@ -728,7 +728,7 @@ void CLevel::SetWave(int wave) {
     m_variables[0] = static_cast<std::int16_t>(wave);
 }
 
-static bool ContainsCameraPoint(const ZMapRectangle &bounds, int x, int y) {
+static bool ContainsCameraPoint(const CLayerCamera::Rectangle &bounds, int x, int y) {
     return bounds.width != 0 && bounds.height != 0 && x >= bounds.x && y >= bounds.y &&
         x <= bounds.x + bounds.width && y <= bounds.y + bounds.height;
 }
@@ -866,19 +866,19 @@ void CLevel::StartObjectLayer(int layer) {
     if (m_props != nullptr) { m_props->StartLayer(layer); }
 }
 
-bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
+bool CLevel::SpawnMapObject(const CLayerObject::Object &object, int objectId) {
     if (m_playerModel == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
-    if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Prop)) {
+    if (object.objectType == static_cast<unsigned>(CLayerObject::ObjectType::Prop)) {
         if (m_props == nullptr) { return false; }
         return m_props->Spawn(m_objectLayer, objectId);
     }
-    if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Pickup)) {
+    if (object.objectType == static_cast<unsigned>(CLayerObject::ObjectType::Pickup)) {
         GameObjectRef pickup;
         pickup.packHash = object.packHash;
         pickup.localIndex = object.localIndex;
         return SpawnPickupAt(pickup, object.x, object.y, objectId);
     }
-    if (object.objectType != static_cast<unsigned>(ZPlacedObjectType::Enemy)) { return true; }
+    if (object.objectType != static_cast<unsigned>(CLayerObject::ObjectType::Enemy)) { return true; }
     for (unsigned index = 0; index < m_catalog->size(); ++index) {
         const CEnemy::Template &entry = (*m_catalog)[index];
         if (entry.packHash != object.packHash || entry.ordinal != object.localIndex) { continue; }
@@ -1012,7 +1012,7 @@ void CLevel::UpdateMapInteractions(float previousX, float previousY) {
         const float viewHeight = m_viewHeight * scaleRatio;
         float left = GetPlayer().x - viewWidth * 0.5f;
         float top = GetPlayer().y - viewHeight * 0.5f;
-        const ZMapRectangle bounds = m_map->GetVisibleBounds();
+        const CLayerCamera::Rectangle bounds = m_map->GetVisibleBounds();
         if (!bounds.IsEmpty()) {
             if (bounds.width <= viewWidth) { left = bounds.x + (bounds.width - viewWidth) * 0.5f; }
             else { left = std::clamp(left, static_cast<float>(bounds.x), bounds.x + bounds.width - viewWidth); }
@@ -1051,7 +1051,7 @@ unsigned CLevel::GetPowerupCount(unsigned localIndex) const {
 
 void CLevel::UpdateCamera(int deltaMs) {
     if (m_playerModel == nullptr || m_map == nullptr) { return; }
-    const ZMapRectangle bounds = m_map->GetVisibleBounds();
+    const CLayerCamera::Rectangle bounds = m_map->GetVisibleBounds();
     const float scale = 0.8f / m_map->GetCamera().GetScale();
     if (!IsMatchSpawnPending(0) || !m_map->GetCamera().HasPosition()) {
         m_map->GetCamera().UpdatePosition(GetPlayer().x, GetPlayer().y,

@@ -17,7 +17,7 @@ constexpr float kAttackDistance = 240;
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
 }
 
-SurvivalPilot::SurvivalPilot(CLevel &scene, const ZMapRectangle &bounds) : m_scene(scene) {
+SurvivalPilot::SurvivalPilot(CLevel &scene, const CLayerCamera::Rectangle &bounds) : m_scene(scene) {
     const float margin = scene.GetPlayerRadius() + 2;
     const int columns = static_cast<int>((bounds.width - margin * 2) / kGridSpacing) + 1;
     const int rows = static_cast<int>((bounds.height - margin * 2) / kGridSpacing) + 1;

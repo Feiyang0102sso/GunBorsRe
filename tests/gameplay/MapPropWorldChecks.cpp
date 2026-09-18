@@ -2,11 +2,11 @@
 
 namespace MapDetail {
 
-    unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const CLevel &scene) {
+    unsigned CheckPropEntryRoutes(const CMap &map, const CLevel &scene) {
         unsigned tested = 0, failures = 0;
-        for (const ZPlacedProp &prop : map.props) {
-            if (!prop.active || prop.runtime == nullptr || !prop.runtime->ChecksEntry()) { continue; }
-            const auto &vertices = prop.runtime->GetEntryCollision().GetVertices();
+        for (const CProp &prop : map.GetResources().props) {
+            if (!prop.active || !prop.HasScript() || !prop.ChecksEntry()) { continue; }
+            const auto &vertices = prop.GetEntryCollision().GetVertices();
             if (vertices.empty()) { ++failures; continue; }
             float x = 0, y = 0;
             for (const auto &point : vertices) { x += point.x; y += point.y; }
@@ -18,7 +18,7 @@ namespace MapDetail {
                 if (scene.CanWalkTo(x + dx * 2, y + dy * 2, x, y)) { ++routes; }
             }
             std::printf("[map-entry-check] prop=%08x:%u id=%d centre=%.1f,%.1f vertices=%zu routes=%u\n",
-                prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, x, y, vertices.size(), routes);
+                prop.resources->resource.packHash, prop.resources->resource.localIndex, prop.objectId, x, y, vertices.size(), routes);
             if (routes == 0) { ++failures; }
             ++tested;
         }
@@ -26,14 +26,14 @@ namespace MapDetail {
         return failures;
     }
 
-    unsigned CheckPropDamageContracts(const ZLoadedMap &map) {
+    unsigned CheckPropDamageContracts(const CMap &map) {
         unsigned tested = 0, failures = 0;
-        for (const ZPlacedProp &prop : map.props) {
-            if (!prop.active || prop.runtime == nullptr || prop.runtime->GetHealth() <= 0) { continue; }
+        for (const CProp &prop : map.GetResources().props) {
+            if (!prop.active || !prop.HasScript() || prop.GetHealth() <= 0) { continue; }
             // Independent instance: checking a barrel must not damage the
             // account or change its real level-script progress.
             CProp probe;
-            probe.Bind(prop.sprite->data, &prop.sprite->durations);
+            probe.Bind(prop.resources->data, &prop.resources->durations);
             const unsigned initialState = probe.GetStateId();
             const float initialHealth = probe.GetHealth();
             probe.Damage(10000, 0xffffffffu);

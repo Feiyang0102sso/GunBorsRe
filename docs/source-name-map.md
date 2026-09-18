@@ -2,6 +2,26 @@
 
 日期：2026-09-18。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
 
+## 地图组合层拆分（2026-09-18）
+
+地图本体、图层、相机、TileSet、CProp、渲染队列及其资源实现集中在 `gun_bros_re/gameplay/map/`。旧路径不保留转发头。完整证据和验证见 [地图职责归位](map-responsibility-migration.md)。
+
+| 旧组合／文件 | 当前归属 | 原版依据 |
+|---|---|---|
+| `ZMapResources.h`、`ZLoadedMap` | `CMap` 直接持有嵌套 `Resources`；`CMapResources.h/.cpp` 管理 BIG 缓存与寿命 | `map.cpp` 的地图所有权；跨包读取遵循 `CGunBros::GetGameObject` |
+| `ZMapLoading.cpp` | `CMapLoading.cpp`、`CPropResources.cpp`、`CLayerObjectPlayers.cpp` | `CMap::Load/Bind`、`CProp::Bind`、对象层的玩家生成 |
+| `ZPlacedProp`、重复播放器和手写交互状态表 | `CProp`、`CPropDrawing.cpp`、嵌套 `CProp::Resources` | `prop.cpp`；三播放器、Flow 状态和资源引用只有一份 |
+| `ZMapPropWorld.*`、`ZPropWorld.h` | `CLevelProps.h/.cpp`，定义 `CLevel::Props` 内部实现 | `CLevel` 的道具调度、`CLayerObject::OnStart`；保留宿主战斗连接边界 |
+| `ZMapRendering.cpp` | `CMapDrawing.cpp`、`CLayerTileDrawing.cpp`、`CPropDrawing.cpp`、`CRenderQueue.*` | `map.cpp`、`layerTile.cpp`、`prop.cpp`、`renderQueue.cpp` |
+| `ZMapParticles.cpp` | `CMapEffects.h/.cpp`；使用已有 `CParticleEffectPlayer` 和地图粒子池 | `map.cpp`／`particleEffectPlayer.cpp`；帧展开与 GL 批次为桌面适配 |
+| `ZMapWorld.cpp`、`ZMapWorldInternal.h` | 按资源、碰撞、相机、绘制及 Viewer 职责拆分；`CMapInternal.h` 只为会话调用方聚合头文件 | 各原对象；地图实现不再包含该聚合头 |
+| 根目录 `CCamera`、`CLayer*`、`CMap`、`CProp`、`ILayerPath`、`TileSet` | 同名文件移入 `map/`；补充保留数据的 `CLayerMovie` | 原 `camera.cpp`、七类 `layer*.cpp`、`map.cpp`、`prop.cpp`、`gameObjectPack.cpp` |
+| `enemy/CLayerPathMeshNavigation.cpp` | `map/CLayerPathMeshNavigation.cpp` | 原 `layerPathMesh.cpp` |
+| `CEnemyMap.cpp`、`MapTurretPreview.*`、地图浏览／研究状态选择 | 唯一保留的 `map/ZMapViewer.h` | Viewer 专用适配；交互执行真实 Flow，不维护动画／粒子资源替代表 |
+| `ZMapScene.h` 的生存启动参数 | `gameplay/CGameSession.h`，嵌套 `CGame::Launch` | 游戏会话入口配置；不属于地图资源 |
+
+`CMap::Resources`、`CLevel::Props` 及各嵌套记录是实现分组，未宣称恢复原内存布局。共享碰撞、通用特效和引擎图形组件保留各自目录；`MapPreview` 保留 Viewer 场景入口职责。下文旧地图路径按本节定位。
+
 ## 敌人组合层拆分（2026-09-18）
 
 敌人专属生产源码统一位于 `gun_bros_re/gameplay/enemy/`。按本轮用户要求，文件统一 C 前缀，原 I 前缀保留；宿主适配也采用 C 文件名，但文件头明确适配边界，不将自建契约声称为原版类。后文历史路径以本段为准。实施证据与验证见 [敌人职责归位](enemy-responsibility-migration.md)。

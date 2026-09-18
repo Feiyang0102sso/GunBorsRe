@@ -130,7 +130,7 @@ int SurvivalCheckScenario::OnStage(ZSurvivalPhase phase, ZSurvivalState &state) 
         if (result >= 0) { return result; }
         result = OnPropRoutes({m_failures, m_development.check, state.loaded, state.scene});
         if (result >= 0) { return result; }
-        result = OnTriggerRoutes({m_failures, m_development.check, state.session, state.loaded.map, state.scene, state.startX, state.startY, state.startFacing});
+        result = OnTriggerRoutes({m_failures, m_development.check, state.session, state.loaded, state.scene, state.startX, state.startY, state.startFacing});
         if (result >= 0) { return result; }
         result = OnPlacedProps({m_development.check, state.loaded});
         if (result >= 0) { return result; }

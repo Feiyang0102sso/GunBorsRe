@@ -1,3 +1,4 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -55,13 +56,13 @@ int CheckSurvivalPlacedProps(SurvivalPlacedPropsFixture fixture) {
 
     if (check) {
         // Inspect the actual placed resources, after LEVEL messages and Bind.
-        for (const ZPlacedProp &prop : loaded.props) {
-            if (!prop.active || prop.runtime == nullptr) { continue; }
+        for (const CProp &prop : loaded.GetResources().props) {
+            if (!prop.active || !prop.HasScript()) { continue; }
             std::printf("[map-interaction] prop=%08x:%u id=%d pos=%.1f,%.1f state=%u removed=%d health=%.1f animations=%d,%d,%d body=%zu bullet=%zu\n",
-                prop.sprite->resource.packHash, prop.sprite->resource.localIndex, prop.objectId, prop.x, prop.y,
-                prop.runtime->GetStateId(), prop.runtime->IsRemoved(), prop.runtime->GetHealth(),
-                prop.runtime->GetAnimation(0), prop.runtime->GetAnimation(1), prop.runtime->GetAnimation(2),
-                prop.runtime->GetCollision().GetEdges().size(), prop.runtime->GetCollision(true).GetEdges().size());
+                prop.resources->resource.packHash, prop.resources->resource.localIndex, prop.objectId, prop.x, prop.y,
+                prop.GetStateId(), prop.IsRemoved(), prop.GetHealth(),
+                prop.GetAnimation(0), prop.GetAnimation(1), prop.GetAnimation(2),
+                prop.GetCollision().GetEdges().size(), prop.GetCollision(true).GetEdges().size());
         }
     }
     return -1; // Continue the same session; 0/1 retain the original check exit semantics.
@@ -117,7 +118,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
     auto & accountedXplodium = fixture.accountedXplodium;
 
     if (check && tutorial) {
-        const CScript &script = loaded.playerTemplate->GetScript();
+        const CScript &script = loaded.GetResources().playerTemplate->GetScript();
         for (unsigned index = 0; index < script.GetFunctions().size(); ++index) {
             std::printf("[tutorial-script] function=%u ", index);
             const CScriptCode &code = script.GetFunctions()[index];
@@ -138,7 +139,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                 std::printf("\n");
             }
         }
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
+        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         int previousStep = -2;
         int grenadeWaitMs = 0;
@@ -187,13 +188,13 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                             const float healthBefore = enemy.combat.health;
                             const ZCombatId enemyId = enemy.combat.id;
                             unsigned barrels = 0;
-                            for (ZPlacedProp &prop : loaded.props) {
-                                if (!prop.active || !prop.runtime || prop.runtime->GetHealth() <= 0 ||
-                                    prop.sprite->interactiveKind != ZInteractivePropKind::Barrel) { continue; }
+                            for (CProp &prop : loaded.GetResources().props) {
+                                if (!prop.active || !prop.HasScript() || prop.GetHealth() <= 0 ||
+                                    ResearchPropKind(prop) != ZInteractivePropKind::Barrel) { continue; }
                                 // Trigger the real barrel Flow and its scene damage dispatch.
                                 enemy.combat.x = prop.x + 30;
                                 enemy.combat.y = prop.y;
-                                prop.runtime->Damage(prop.runtime->GetHealth(), 0);
+                                prop.Damage(prop.GetHealth(), 0);
                                 for (unsigned tick = 0; tick < 8; ++tick) {
                                     session.Update(16, 0, 0, false);
                                     // A regression may kill and retire the actor during Update.
@@ -275,7 +276,7 @@ int CheckSurvivalHorde(SurvivalHordeFixture fixture) {
 
     if (check && horde) {
         vitals.invincible = true;
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
+        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         const int initialWave = session.GetLevel().GetWave();
         int targetWave = initialWave + 1;
@@ -284,8 +285,8 @@ int CheckSurvivalHorde(SurvivalHordeFixture fixture) {
             float moveX = 0, moveY = 0;
             pilot->Update(16, moveX, moveY);
             session.Update(16, moveX, moveY, true);
-            AdvanceProps(loaded.props, 16);
-            AdvanceTileLayers(loaded.map, 16);
+            AdvanceProps(loaded.GetResources().props, 16);
+            loaded.UpdateLayers(16);
         }
         // Finish the real HUD transition callback; it restores BOKOR time scale
         // and releases its next state. A first-wave-only check misses this seam.
@@ -320,15 +321,15 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
         // teleporting actors or directly invoking trigger/death callbacks.
         vitals.invincible = true;
         std::vector<ZCollisionPoint> goals;
-        for (unsigned index = 0; index < loaded.map.GetObjectLayerCount(); ++index) {
-            const CLayerObject &layer = loaded.map.GetObjectLayer(index);
+        for (unsigned index = 0; index < loaded.GetObjectLayerCount(); ++index) {
+            const CLayerObject &layer = loaded.GetObjectLayer(index);
             if (static_cast<int>(layer.GetLayerIndex()) != session.GetLevel().GetObjectLayer()) { continue; }
-            for (const ZPlacedObject &object : layer.GetObjects()) {
-                if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Pickup)) { goals.emplace_back(object.x, object.y); }
+            for (const CLayerObject::Object &object : layer.GetObjects()) {
+                if (object.objectType == static_cast<unsigned>(CLayerObject::ObjectType::Pickup)) { goals.emplace_back(object.x, object.y); }
             }
         }
-        for (unsigned index = 0; index < loaded.map.GetCollisionLayerCount(); ++index) {
-            const CLayerCollision &layer = loaded.map.GetCollisionLayer(index);
+        for (unsigned index = 0; index < loaded.GetCollisionLayerCount(); ++index) {
+            const CLayerCollision &layer = loaded.GetCollisionLayer(index);
             if (static_cast<int>(layer.GetLayerIndex()) != session.GetLevel().GetTriggerLayer()) { continue; }
             for (const ZCollisionEdge &edge : layer.GetCollision().GetEdges()) {
                 const auto &a = layer.GetCollision().GetVertices()[edge.firstVertex];
@@ -341,7 +342,7 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
                 goals.emplace_back((a.x + b.x) * 0.5f - normalX, (a.y + b.y) * 0.5f - normalY);
             }
         }
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
+        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         unsigned goal = 0, reached = 0;
         int goalElapsed = 0;
@@ -365,8 +366,8 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
                 }
             }
             session.Update(16, moveX, moveY, true);
-            AdvanceProps(loaded.props, 16);
-            AdvanceTileLayers(loaded.map, 16);
+            AdvanceProps(loaded.GetResources().props, 16);
+            loaded.UpdateLayers(16);
         }
         if (scene.GetSpawnCount() == 0 || session.GetKills() == 0 || scene.GetInvalidSpawnCount() != 0) { ++checkFailures; }
         std::printf("[campaign-check] goals=%u/%zu spawned=%u kills=%u pickups=%u cleared=%d failures=%u\n",

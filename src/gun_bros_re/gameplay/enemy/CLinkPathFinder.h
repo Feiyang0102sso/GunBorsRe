@@ -6,7 +6,7 @@
  * @brief Follow authored links, with the original patrol/once modes.
  * Reference: CLinkPathFinder::Init/SetMode/Update, iOS :168567-168752.
  */
-#include "gun_bros_re/gameplay/ILayerPath.h"
+#include "gun_bros_re/gameplay/map/ILayerPath.h"
 
 class CLinkPathFinder {
 public:

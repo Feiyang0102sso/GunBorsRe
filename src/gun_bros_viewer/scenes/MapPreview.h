@@ -8,7 +8,9 @@
 
 #include <cstdint>
 #include <string>
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
+
+enum class ZMapViewMode { Preview, GameView };
 
 /** The two intentionally different ways a map can be opened. */
 // MapViewMode now belongs to runtime/MapScene.h, shared by game and tools.

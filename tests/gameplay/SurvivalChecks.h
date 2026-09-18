@@ -43,6 +43,6 @@ namespace MapDetail {
 // Exercise the real SDL event queue and CWindow recognizer, including held S.
 bool PushBossCheckKey(ZWindow &window, char letter, bool repeat = false, bool checkMovement = false);
 
-unsigned CheckPropEntryRoutes(const ZLoadedMap &map, const CLevel &scene);
-unsigned CheckPropDamageContracts(const ZLoadedMap &map);
+unsigned CheckPropEntryRoutes(const CMap &map, const CLevel &scene);
+unsigned CheckPropDamageContracts(const CMap &map);
 }

@@ -54,7 +54,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     CProfileManager debugProfile;
     debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     ZSurvivalGameContext debugContext{debugProfile, {}};
-    ZSurvivalLaunch debugLaunch;
+    CGame::Launch debugLaunch;
     debugLaunch.bigDirectory = bigDirectory;
     if (!PrepareDebugTutorial(toc, tables, debugContext, debugLaunch) ||
         !debugContext.tutorial || !debugContext.debugTutorial || debugContext.persistProgress ||

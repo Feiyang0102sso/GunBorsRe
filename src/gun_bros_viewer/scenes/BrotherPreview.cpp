@@ -1,10 +1,11 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Bare mesh exploration belongs to the viewer, outside the actor lifecycle. */
 #include "gun_bros_re/data/ZMeshAssets.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 #include <cstdio>
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 
 bool ZBrotherPreview::AttachGun(ZPackTables &tables, const std::string &owner,
                      std::uint32_t meshPackHash, std::uint32_t meshOrdinal,
@@ -107,9 +108,9 @@ void ZBrotherPreview::Draw(const ZShaderProgram &program, const float *base) {
 
 namespace MapDetail {
 /** Move every placed player's animation on. */
-void AdvancePlayers(ZLoadedMap &loaded, std::int32_t deltaMs) {
-    for (std::size_t i = 0; i < loaded.players.size(); ++i) {
-        AdvanceBrotherPreview(*loaded.players[i].model, deltaMs);
+void AdvancePlayers(CMap &loaded, std::int32_t deltaMs) {
+    for (std::size_t i = 0; i < loaded.GetResources().players.size(); ++i) {
+        AdvanceBrotherPreview(*loaded.GetResources().players[i].model, deltaMs);
     }
 }
 /**
@@ -119,29 +120,29 @@ void AdvancePlayers(ZLoadedMap &loaded, std::int32_t deltaMs) {
  * the same map at two different times and diff them. Deterministic, because
  * the bite size is fixed rather than taken from the wall clock.
  */
-void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
+void WarmUp(CMap &loaded, std::uint32_t totalMs,
             CLevel *effects , bool firing ) {
-    if (effects && !loaded.players.empty()) { loaded.players[0].model->SetInput(false, firing); }
+    if (effects && !loaded.GetResources().players.empty()) { loaded.GetResources().players[0].model->SetInput(false, firing); }
     for (std::uint32_t elapsed = 0; elapsed < totalMs; elapsed += kWarmUpFrameMs) {
-        AdvanceProps(loaded.props, kWarmUpFrameMs);
-        AdvanceTileLayers(loaded.map, kWarmUpFrameMs);
+        AdvanceProps(loaded.GetResources().props, kWarmUpFrameMs);
+        loaded.UpdateLayers(kWarmUpFrameMs);
         AdvanceEnemies(loaded, kWarmUpFrameMs);
         AdvancePlayers(loaded, kWarmUpFrameMs);
-        if (effects && !loaded.players.empty()) {
-            ZPlacedPlayer &player = loaded.players[0];
+        if (effects && !loaded.GetResources().players.empty()) {
+            CMap::Resources::Player &player = loaded.GetResources().players[0];
             float identity[kMatrix4dElements], modelToWorld[kMatrix4dElements];
             Matrix4dIdentity(identity);
-            const float scale = player.model->GetWorldScale(loaded.playerTemplate->GetGameScale(), kLevelCameraScale);
+            const float scale = player.model->GetWorldScale(loaded.GetResources().playerTemplate->GetGameScale(), kLevelCameraScale);
             MeshCameraBuildGameMatrix(identity, player.x, player.y, scale, player.facingDegrees, modelToWorld);
-            effects->Update(*player.model, modelToWorld, player.facingDegrees, kWarmUpFrameMs, &loaded.weaponCollision);
+            effects->Update(*player.model, modelToWorld, player.facingDegrees, kWarmUpFrameMs, &loaded.GetResources().weaponCollision);
         }
     }
 }
 
 
-bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
+bool UpdateControlledPlayer(CMap &loaded, const ZWindow &window,
                             std::uint64_t elapsedMs) {
-    if (loaded.players.empty()) {
+    if (loaded.GetResources().players.empty()) {
         return false;
     }
 
@@ -161,7 +162,7 @@ bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
     }
 
     const bool moving = directionX != 0.0f || directionY != 0.0f;
-    ZPlacedPlayer &player = loaded.players[0];
+    CMap::Resources::Player &player = loaded.GetResources().players[0];
     if (moving != player.moving) {
         // The player data interleaves torso and leg moves. Slot zero is the
         // spawn/idle pair and slot one is the first locomotion pair.
@@ -185,12 +186,12 @@ bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
                                 elapsedSeconds,
                             directionY * kPlayerMovementUnitsPerSecond *
                                 elapsedSeconds);
-    ZCollisionPoint resolved = loaded.collisionScene.ResolveCircleMovement(
+    ZCollisionPoint resolved = loaded.GetResources().collisionScene.ResolveCircleMovement(
         ZCollisionPoint(player.x, player.y), movement, kPlayerCollisionRadius);
 
     // CPlayer::Move clamps the body to the active camera bounds before it
     // resolves collision. Keep the whole circle inside the same rectangle.
-    const ZMapRectangle bounds = loaded.map.GetVisibleBounds();
+    const CLayerCamera::Rectangle bounds = loaded.GetVisibleBounds();
     if (!bounds.IsEmpty()) {
         const float minimumX = static_cast<float>(bounds.x) +
                                kPlayerCollisionRadius;

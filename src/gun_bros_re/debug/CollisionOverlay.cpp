@@ -1,6 +1,6 @@
 /** Shared diagnostic drawing of the geometry consumed by movement and projectile tests. */
 #include "gun_bros_re/debug/CollisionOverlay.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "gun_bros_re/debug/DebugConfig.h"
 
 namespace {
@@ -57,19 +57,19 @@ void Enemy(ZMarkerBatch &markers, const CEnemy &enemy, float gameScale,
 }
 
 void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
-    const float *projection, float pixelSize, const MapDetail::ZLoadedMap *map,
+    const float *projection, float pixelSize, const CMap *map,
     const CLevel *combat, const CBrotherAI *brother, const CLevel *effects) {
     if (map != nullptr) {
         /** Collect the exact collision scene used by player movement. */
         // Nested widths keep coincident movement / bullet / terrain edges visible.
         markers.Begin();
-        Edges(markers, map->collisionScene, true, DebugConfig::Body.width * pixelSize);
+        Edges(markers, map->GetResources().collisionScene, true, DebugConfig::Body.width * pixelSize);
         DrawLines(markers, program, projection, DebugConfig::Body);
         markers.Begin();
-        Edges(markers, map->weaponCollision.walls, true, DebugConfig::BulletWall.width * pixelSize);
+        Edges(markers, map->GetResources().weaponCollision.walls, true, DebugConfig::BulletWall.width * pixelSize);
         DrawLines(markers, program, projection, DebugConfig::BulletWall);
         markers.Begin();
-        Edges(markers, map->weaponCollision.terrain, true, DebugConfig::Terrain.width * pixelSize);
+        Edges(markers, map->GetResources().weaponCollision.terrain, true, DebugConfig::Terrain.width * pixelSize);
         DrawLines(markers, program, projection, DebugConfig::Terrain);
     }
     for (bool enabled : {false, true}) {
@@ -77,9 +77,9 @@ void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
         if (!enabled) { style = &DebugConfig::Disabled; }
         markers.Begin();
         if (!enabled && map != nullptr) {
-            Edges(markers, map->collisionScene, false, style->width * pixelSize);
-            Edges(markers, map->weaponCollision.walls, false, style->width * pixelSize);
-            Edges(markers, map->weaponCollision.terrain, false, style->width * pixelSize);
+            Edges(markers, map->GetResources().collisionScene, false, style->width * pixelSize);
+            Edges(markers, map->GetResources().weaponCollision.walls, false, style->width * pixelSize);
+            Edges(markers, map->GetResources().weaponCollision.terrain, false, style->width * pixelSize);
         }
         if (combat != nullptr) {
             for (const auto &actor : combat->GetEnemies()) {
@@ -88,7 +88,7 @@ void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
                     state.x, state.y, style->width * pixelSize, enabled);
             }
         } else if (map != nullptr) {
-            for (const auto &actor : map->enemies) {
+            for (const auto &actor : map->GetResources().enemies) {
                 Enemy(markers, *actor, actor->data->gameScale, actor->combat.x, actor->combat.y, style->width * pixelSize, enabled);
             }
         }
@@ -101,7 +101,7 @@ void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
             Circle(markers, brother->x, brother->y, combat->GetPlayerRadius(), DebugConfig::Brother.width * pixelSize);
         }
     } else if (map != nullptr) {
-        for (const auto &player : map->players) {
+        for (const auto &player : map->GetResources().players) {
             Circle(markers, player.x, player.y, MapDetail::kPlayerCollisionRadius, DebugConfig::Brother.width * pixelSize);
         }
     }

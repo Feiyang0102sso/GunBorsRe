@@ -1,5 +1,5 @@
 /** Regression for original mesh pursuit, shared maps and lock/reload invalidation. */
-#include "gun_bros_re/gameplay/CLayerPathMesh.h"
+#include "gun_bros_re/gameplay/map/CLayerPathMesh.h"
 #include "gun_bros_re/gameplay/enemy/CMeshPathFinder.h"
 #include "gun_bros_re/gameplay/enemy/CFlock.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -75,10 +75,10 @@ unsigned CheckEnemyMoveAngle() {
     std::vector<std::uint8_t> bytes(4, 0);
     bytes.push_back(0);
     bytes.push_back(2);
-    bytes.push_back(static_cast<std::uint8_t>(ZMapLayerType::PathMesh));
+    bytes.push_back(static_cast<std::uint8_t>(CMap::LayerType::PathMesh));
     const auto corridor = Corridor(200);
     bytes.insert(bytes.end(), corridor.begin(), corridor.end());
-    bytes.push_back(static_cast<std::uint8_t>(ZMapLayerType::Object));
+    bytes.push_back(static_cast<std::uint8_t>(CMap::LayerType::Object));
     Word(bytes, 0);
     bytes.push_back(0);
     CArrayInputStream input(bytes);

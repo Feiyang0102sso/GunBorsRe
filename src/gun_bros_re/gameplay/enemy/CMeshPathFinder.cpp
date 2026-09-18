@@ -3,7 +3,7 @@
  * ARM 0xe7754-0xe7978 verifies the signed epsilon checks and one-unit offset.
  */
 #include "gun_bros_re/gameplay/enemy/CMeshPathFinder.h"
-#include "gun_bros_re/gameplay/CLayerPathMesh.h"
+#include "gun_bros_re/gameplay/map/CLayerPathMesh.h"
 #include <algorithm>
 #include <cmath>
 

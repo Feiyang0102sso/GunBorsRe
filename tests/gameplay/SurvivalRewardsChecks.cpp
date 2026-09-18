@@ -22,7 +22,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         // A separate world exercises empty-wave minimums and damage rejection
         // without putting fixture currency into the actual survival/profile run.
         CLevel rewardProbe(toc, tables, program);
-        rewardProbe.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+        rewardProbe.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
         CLevel::Template percentageTemplate;
         CMap percentageMap;
         rewardProbe.Bind(percentageTemplate, percentageMap);

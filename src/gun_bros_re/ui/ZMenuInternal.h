@@ -38,7 +38,7 @@
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "gun_bros_re/effects/CParticlePool.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 #include "gun_bros_re/ZStartupSequence.h"
 #include "gun_bros_re/gameplay/enemy/CMenuMeshEnemy.h"
 #include "engine/graphics/ZQuadBatch.h"

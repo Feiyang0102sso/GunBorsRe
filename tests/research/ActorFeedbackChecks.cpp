@@ -1,6 +1,7 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Exercise knockback sound and AI weapon swaps through production scene updates. */
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "tests/Checks.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 using namespace MapDetail;
@@ -175,15 +176,15 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         !player.CreateBuffers(program)) { return 1; }
     // CPlayer::Move requires the level's map, object pool and collision layer.
     // Use the same BIG map for body blocking and the wall-immunity check below.
-    ZLoadedMap wallMap;
-    if (!LoadMap(toc, toc.GetPackIndexFromName("pack2"), 7, wallMap)) { return 1; }
-    BuildCollisionScene(wallMap);
+    CMap wallMap;
+    if (!MapDetail::LoadPreviewMap(toc, toc.GetPackIndexFromName("pack2"), 7, wallMap)) { return 1; }
+    wallMap.BuildCollisionScene();
     CLevel scene(toc, tables, program);
     scene.BindCombat(enemies, player, vitals, playerData.GetGameScale());
-    scene.SetMap(wallMap.map, wallMap.collisionScene, wallMap.weaponCollision, 1, kPlayerCollisionRadius);
+    scene.SetMap(wallMap, wallMap.GetResources().collisionScene, wallMap.GetResources().weaponCollision, 1, kPlayerCollisionRadius);
     unsigned failures = 0;
     failures += CheckOriginalCircleCircle();
-    failures += CheckEnemyMovement(scene, wallMap.collisionScene, player, vitals);
+    failures += CheckEnemyMovement(scene, wallMap.GetResources().collisionScene, player, vitals);
     // A barrel's native 10 can apply zero damage and still knock the player back.
     ZCombatHit blast;
     blast.ownerType = 1;
@@ -355,10 +356,10 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     // Check the immunity branch against a real map edge, with the production
     // wall radius. Geometry remains sourced from BIG, not an injected shape.
     scene.Reset();
-    const ZMapRectangle bounds = wallMap.map.GetCameraExtent();
+    const CLayerCamera::Rectangle bounds = wallMap.GetCameraExtent();
     bool wallChecked = false;
-    const auto &vertices = wallMap.collisionScene.GetVertices();
-    for (const ZCollisionEdge &edge : wallMap.collisionScene.GetEdges()) {
+    const auto &vertices = wallMap.GetResources().collisionScene.GetVertices();
+    for (const ZCollisionEdge &edge : wallMap.GetResources().collisionScene.GetEdges()) {
         if (!edge.enabled) { continue; }
         const ZCollisionPoint &a = vertices[edge.firstVertex], &b = vertices[edge.secondVertex];
         const float length = std::hypot(b.x - a.x, b.y - a.y);

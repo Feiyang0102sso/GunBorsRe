@@ -52,14 +52,14 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             return 1;
         }
         const ZCombatId bossId = boss->combat.id;
-        CCamera &camera = loaded.map.GetCamera();
+        CCamera &camera = loaded.GetCamera();
         // Compare the real camera with the original target operation at the
         // same authored bounds. This also permits legitimate edge clamping.
         CCamera expected = camera;
         expected.SetTarget(boss->combat.x, boss->combat.y);
         expected.SetCameraMode(2);
         CCamera actual = camera;
-        const ZMapRectangle bounds = loaded.map.GetVisibleBounds();
+        const CLayerCamera::Rectangle bounds = loaded.GetVisibleBounds();
         actual.Update(1000);
         expected.Update(1000);
         actual.UpdatePosition(scene.GetPlayer().x, scene.GetPlayer().y, bounds.x, bounds.y, bounds.width, bounds.height, 480, 320);
@@ -109,7 +109,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         const CEnemy::Template *bossData = boss->data;
         std::size_t bossEntry = static_cast<std::size_t>(bossData - enemies.data());
         CLevel blastScene(toc, tables, program);
-    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    blastScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
         for (unsigned kind = 0; kind < 3; ++kind) {
             blastScene.Reset();
             vitals.invincible = true;

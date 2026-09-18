@@ -3,7 +3,7 @@
  */
 #include "tests/checks/M5LevelFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
@@ -18,6 +18,21 @@ namespace M5LevelFlowDetail {
 unsigned CheckCameraScale() {
     CCamera camera;
     unsigned failures = 0;
+    // Synthetic wire fixture for a source-confirmed branch absent from retail maps.
+    const std::vector<std::uint8_t> movieBytes = {
+        0x82, 0x75, 0x26, 0, 7, 0, 0, 0, 0x85, 0xff, 0xc8, 1
+    };
+    CArrayInputStream movieInput(movieBytes);
+    CLayerMovie movieLayer;
+    if (!movieLayer.Init(movieInput) || movieInput.Available() != 0 ||
+        movieLayer.GetMovieRef().packHash != 0x267582 || movieLayer.GetMovieRef().assetId != 7 ||
+        movieLayer.GetX() != -123 || movieLayer.GetY() != 456) { ++failures; }
+    auto truncatedMovie = movieBytes;
+    truncatedMovie.pop_back();
+    CArrayInputStream truncatedInput(truncatedMovie);
+    CLayerMovie incompleteMovie;
+    if (incompleteMovie.Init(truncatedInput)) { ++failures; }
+    std::printf("[map-movie-check] reference/signed-position/truncation failures=%u\n", failures);
     camera.SnapScale(0.8f);
     camera.SetScale(0.4f);
     if (std::fabs(camera.GetScale() - 0.8f) > 0.00001f) { ++failures; }

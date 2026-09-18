@@ -6,8 +6,8 @@
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "engine/platform/ZGLLoader.h"
@@ -75,7 +75,7 @@ bool LoadRows(CResTOCManager &toc, ZPackTables &tables, std::vector<MapRow> &row
             if (valid) {
                 for (unsigned layer = 0; layer < map.GetObjectLayerCount(); ++layer) {
                     for (const auto &object : map.GetObjectLayer(layer).GetObjects()) {
-                        if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Player)) { hasPlayer = true; }
+                        if (object.objectType == static_cast<unsigned>(CLayerObject::ObjectType::Player)) { hasPlayer = true; }
                     }
                 }
             }
@@ -218,10 +218,10 @@ bool ShowDebugMapPicker(CResTOCManager &toc, ZPackTables &tables, ZWindow &windo
     return false;
 }
 
-ZSurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
+CGame::Launch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
     ZSurvivalGameContext &context) {
     context.persistProgress = false;
-    ZSurvivalLaunch launch;
+    CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = selection.pack;
     launch.mapIndex = selection.map;
@@ -244,7 +244,7 @@ void RunDebugMaps(const std::string &bigDirectory, ZWindow &window, DebugMapSele
         // armor and both gun slots. Purchases and pickups affect only this copy.
         CProfileManager previewProfile = profile;
         ZSurvivalGameContext context{previewProfile, {}};
-        ZSurvivalLaunch launch = MakeDebugMapLaunch(bigDirectory, current, context);
+        CGame::Launch launch = MakeDebugMapLaunch(bigDirectory, current, context);
         launch.window = &window;
         launch.debugSelection = &selection;
         std::printf("[debug-maps] launch %s map=%u level=%u:%u\n", current.pack.c_str(), current.map, current.level.packHash, current.level.localIndex);

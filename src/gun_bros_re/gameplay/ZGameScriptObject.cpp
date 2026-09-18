@@ -12,7 +12,7 @@
 #include "gun_bros_re/gameplay/CBullet.h"
 #include "gun_bros_re/gameplay/CArmor.h"
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
-#include "gun_bros_re/gameplay/CProp.h"
+#include "gun_bros_re/gameplay/map/CProp.h"
 #include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/gameplay/CMissionScriptContext.h"
 

@@ -9,7 +9,7 @@
 
 class SurvivalPilot : public ZSurvivalInputDriver {
 public:
-    SurvivalPilot(CLevel &scene, const ZMapRectangle &bounds);
+    SurvivalPilot(CLevel &scene, const CLayerCamera::Rectangle &bounds);
     void Update(int deltaMs, float &moveX, float &moveY) override;
     void Report() const override;
 private:

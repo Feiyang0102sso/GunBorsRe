@@ -42,19 +42,19 @@ bool CaptureRescueEffect(SurvivalDeathFixture &fixture, const char *name) {
     int width = 0, height = 0;
     fixture.window.GetDrawableSize(width, height);
     auto &scene = fixture.scene;
-    fixture.loaded.players[0].x = scene.GetPlayer().x;
-    fixture.loaded.players[0].y = scene.GetPlayer().y;
-    fixture.loaded.players[0].facingDegrees = scene.GetPlayer().facing;
+    fixture.loaded.GetResources().players[0].x = scene.GetPlayer().x;
+    fixture.loaded.GetResources().players[0].y = scene.GetPlayer().y;
+    fixture.loaded.GetResources().players[0].facingDegrees = scene.GetPlayer().facing;
     const float zoom = GameViewCameraZoom(width, height);
     float mvp[kMatrix4dElements];
     Matrix4dOrthoTopLeft(width / zoom, height / zoom, kMapDepthRange, mvp);
     Matrix4dTranslate(mvp, -scene.GetPlayer().x + width / zoom / 2, -scene.GetPlayer().y + height / zoom / 2);
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    BuildGeometry(fixture.loaded, fixture.batch, true, true, false);
+    fixture.loaded.DrawBackground(fixture.batch, true, true, false);
     fixture.batch.Draw(fixture.program, mvp);
     fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
-    DrawMapObjects(fixture.loaded, fixture.batch, fixture.program, mvp, true, &scene,
+    CRenderQueue::Draw(fixture.loaded, fixture.batch, fixture.program, mvp, true, &scene,
         &fixture.brotherModel, fixture.brother.y, width);
     fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
     return Capture::SaveFrame(fixture.window, TestOutput::Path(name));
@@ -79,7 +79,7 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     CArrayInputStream input(bytes);
     CLevel::Template data;
     if (!data.Init(input) || input.Available() != 0) { return 1; }
-    ZSurvivalLaunch launch;
+    CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = tables.GetPackName(data.mapRef.packHash);
     launch.mapIndex = data.mapRef.localIndex;
@@ -310,7 +310,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     if (!player.CanMove() || !player.CanShoot()) { return 1; }
     // A distant rescue must cross authored navigation portals, not only an
     // unobstructed 200-unit line. This catches a bot stopping before a corner.
-    auto *rescuePath = fixture.loaded.map.GetPathLayer(session.GetLevel().GetPathLayer());
+    auto *rescuePath = fixture.loaded.GetPathLayer(session.GetLevel().GetPathLayer());
     bool distantRescue = false;
     if (rescuePath != nullptr) {
         const int destination = rescuePath->FindNode(scene.GetPlayer().x, scene.GetPlayer().y);

@@ -1,8 +1,8 @@
 /** Regression for repeated route requests and live graph changes. */
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
-#include "gun_bros_re/gameplay/CLayerPathLink.h"
-#include "gun_bros_re/gameplay/CLayerPathMesh.h"
+#include "gun_bros_re/gameplay/map/CLayerPathLink.h"
+#include "gun_bros_re/gameplay/map/CLayerPathMesh.h"
 #include <cstdio>
 int CheckEnemyNavigation();
 

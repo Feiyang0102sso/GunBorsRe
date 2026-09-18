@@ -6,8 +6,8 @@
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/MissionObjective.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>

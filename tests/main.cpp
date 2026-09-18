@@ -11,6 +11,7 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory);
 int CheckViewerControls();
 int RunCoverScaleStudy(const std::string &bigDirectory);
 int RunMapTurretChecks(const std::string &bigDirectory);
+int RunMapResourceChecks(const std::string &bigDirectory);
 int RunBigVersionCheck();
 int RunOriginalAssetSampleCheck(const std::string &bigDirectory);
 int wmain(int argc, wchar_t **argv) {
@@ -29,6 +30,10 @@ int wmain(int argc, wchar_t **argv) {
             int RunDeathmatchCombatCheck(const std::string &, bool);
             ZAudioPlayer::SetMuted(true);
             return RunDeathmatchCombatCheck(sampleBigDirectory.u8string(), std::wstring(argv[index]) == L"--deathmatch-feedback-check");
+        }
+        if (std::wstring(argv[index]) == L"--map-resources-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunMapResourceChecks(sampleBigDirectory.u8string());
         }
         if (std::wstring(argv[index]) == L"--map-turret-check") {
             ZAudioPlayer::SetMuted(true);

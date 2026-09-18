@@ -13,7 +13,7 @@
 
 class CLevel;
 class ILayerPath;
-struct ZPlacedObject;
+#include "gun_bros_re/gameplay/map/CLayerObject.h"
 
 #include "gun_bros_re/gameplay/enemy/CEnemyWorld.h"
 

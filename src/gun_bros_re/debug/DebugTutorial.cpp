@@ -7,7 +7,7 @@
 #include <cstdio>
 
 bool PrepareDebugTutorial(CResTOCManager &toc, ZPackTables &tables, ZSurvivalGameContext &context,
-    ZSurvivalLaunch &launch) {
+    CGame::Launch &launch) {
     if (!CreateTransientProfile(toc, tables, context.profile)) { return false; }
     context.tutorial = true;
     context.debugTutorial = true;

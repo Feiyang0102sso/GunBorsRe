@@ -1,7 +1,8 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 /** Exercise Haven's placed turret models and authored indicator scripts. */
 #include "TestOutput.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
-#include "gun_bros_viewer/scenes/MapTurretPreview.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 using namespace MapDetail;
@@ -13,16 +14,16 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     if (!window.Open("Map turret check", 1000, 800)) { return 1; }
     ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    ZLoadedMap loaded;
+    CMap loaded;
     for (const ZCatalogMap &entry : BuildCatalog(toc)) {
         if (entry.packName != "pack9" || entry.mapIndex != 0) { continue; }
-        if (!LoadMap(toc, entry.packIndex, entry.mapIndex, loaded)) { return 1; }
-        LoadProps(toc, loaded);
+        if (!LoadPreviewMap(toc, entry.packIndex, entry.mapIndex, loaded)) { return 1; }
+        loaded.LoadProps(toc);
         LoadPlacedEnemies(toc, program, loaded);
         break;
     }
     unsigned wrongParts = 0;
-    for (const auto &placed : loaded.enemies) {
+    for (const auto &placed : loaded.GetResources().enemies) {
         const CEnemy &enemy = *placed;
         const unsigned move = placed->data->script.GetStates()[enemy.GetStateId()].GetOwnSequence()[0];
         std::printf("[map-turret] sequence-move=%u selected-part=%d actual=%u\n", move,
@@ -31,7 +32,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     }
     ZQuadBatch batch;
     if (!batch.Create(program)) { return 1; }
-    MapTurretPreview preview;
+    ZMapTurretPreview preview;
     preview.Bind(loaded);
     unsigned failures = wrongParts;
     // Expected authored states, including the script-driven opening/closing completion.
@@ -41,32 +42,32 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
         unsigned changedFrames = 0;
         for (unsigned elapsed = 0; elapsed < 1024; elapsed += 16) {
             int previousStep = -1;
-            for (const ZPlacedProp &prop : loaded.props) {
-                if (prop.runtime) { previousStep = prop.background.GetStep(); break; }
+            for (const CProp &prop : loaded.GetResources().props) {
+                if (preview.Contains(prop)) { previousStep = prop.GetPlayer(0).GetStep(); break; }
             }
             AdvanceEnemies(loaded, 16);
             preview.Update(16);
-            for (const ZPlacedProp &prop : loaded.props) {
-                if (prop.runtime) {
-                    if (previousStep != prop.background.GetStep()) { ++changedFrames; }
+            for (const CProp &prop : loaded.GetResources().props) {
+                if (preview.Contains(prop)) {
+                    if (previousStep != prop.GetPlayer(0).GetStep()) { ++changedFrames; }
                     break;
                 }
             }
         }
         unsigned indicators = 0;
-        for (const ZPlacedProp &prop : loaded.props) {
-            if (!prop.runtime) { continue; }
+        for (const CProp &prop : loaded.GetResources().props) {
+            if (!preview.Contains(prop)) { continue; }
             ++indicators;
-            if (prop.runtime->GetStateId() != indicatorStates[state] || prop.runtime->GetUnsupportedCount() != 0) { ++failures; }
-            const int pausedStep = prop.background.GetStep();
+            if (prop.GetStateId() != indicatorStates[state] || prop.GetUnsupportedCount() != 0) { ++failures; }
+            const int pausedStep = prop.GetPlayer(0).GetStep();
             preview.Update(0);
-            if (pausedStep != prop.background.GetStep()) { ++failures; }
+            if (pausedStep != prop.GetPlayer(0).GetStep()) { ++failures; }
         }
-        if (indicators != 2 || loaded.enemies.size() != 2) { ++failures; }
+        if (indicators != 2 || loaded.GetResources().enemies.size() != 2) { ++failures; }
         if (state == 2) {
             if (changedFrames != 0) { ++failures; }
         } else if (changedFrames == 0) { ++failures; }
-        for (const auto &placed : loaded.enemies) {
+        for (const auto &placed : loaded.GetResources().enemies) {
             const CEnemy &enemy = *placed;
             if (enemy.GetStateId() != enemyStates[state]) { ++failures; }
             const unsigned move = placed->data->script.GetStates()[enemy.GetStateId()].GetOwnSequence()[0];
@@ -82,24 +83,24 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_BLEND);
         glDisable(GL_DEPTH_TEST);
-        BuildGeometry(loaded, batch, true, true, false);
+        loaded.DrawBackground(batch, true, true, false);
         batch.Draw(program, mvp);
-        DrawMapObjects(loaded, batch, program, mvp, true);
+        CRenderQueue::Draw(loaded, batch, program, mvp, true);
         if (!Capture::SaveFrame(window, TestOutput::Path("turret-state-" + std::to_string(state) + ".png"))) { return 1; }
         preview.Cycle();
     }
     // The gameplay CProp entry point must retain the authored off/charge/idle/active cycle.
-    for (const ZPlacedProp &prop : loaded.props) {
-        if (!prop.runtime) { continue; }
+    for (const CProp &prop : loaded.GetResources().props) {
+        if (!preview.Contains(prop)) { continue; }
         CProp runtime;
-        runtime.Bind(prop.sprite->data, &prop.sprite->durations);
+        runtime.Bind(prop.resources->data, &prop.resources->durations);
         for (unsigned state = 0; state < 4; ++state) {
             if (runtime.GetStateId() != state) { ++failures; }
             runtime.HandleMessage(0);
         }
         if (runtime.GetStateId() != 0 || runtime.GetUnsupportedCount() != 0) { ++failures; }
     }
-    ZLoadedMap empty;
+    CMap empty;
     preview.Bind(empty);
     preview.Cycle();
     preview.Update(16);
@@ -112,23 +113,23 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     CLevel scene(toc, tables, program);
     scene.BindCombat(catalog, player, vitals, 1.0f);
     CLevel level;
-    ZMapPropWorld props(loaded, scene, level);
+    CLevel::Props props(loaded, scene, level);
     props.Reset();
-    for (unsigned layer = 0; layer < loaded.map.GetObjectLayerCount(); ++layer) {
-        props.StartLayer(loaded.map.GetObjectLayer(layer).GetLayerIndex());
+    for (unsigned layer = 0; layer < loaded.GetObjectLayerCount(); ++layer) {
+        props.StartLayer(loaded.GetObjectLayer(layer).GetLayerIndex());
     }
     for (unsigned state = 0; state < 4; ++state) {
         unsigned checked = 0;
-        for (const ZPlacedProp &prop : loaded.props) {
-            if (prop.sprite->resource.packHash != CStringToKey("pack9") || prop.sprite->resource.localIndex != 47) { continue; }
+        for (const CProp &prop : loaded.GetResources().props) {
+            if (prop.resources->resource.packHash != CStringToKey("pack9") || prop.resources->resource.localIndex != 47) { continue; }
             ++checked;
-            if (!prop.active || !prop.runtime || prop.runtime->GetStateId() != state) { ++failures; }
+            if (!prop.active || !prop.HasScript() || prop.GetStateId() != state) { ++failures; }
             props.SendMessage(prop.objectId, 0);
         }
         if (checked != 2) { ++failures; }
     }
     // Real combat animation follows the same selected part and original activation messages.
-    const CEnemy::Template &entry = *loaded.enemies[0]->data;
+    const CEnemy::Template &entry = *loaded.GetResources().enemies[0]->data;
     CEnemy gameModel;
     gameModel.combat.enabled = true;
     if (!gameModel.Bind(tables, entry, false, nullptr)) { return 1; }

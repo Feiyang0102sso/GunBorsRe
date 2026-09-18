@@ -25,13 +25,12 @@
 #include "gun_bros_re/gameplay/enemy/CEnemySpawner.h"
 #include "gun_bros_re/gameplay/level/CLevelIndicator.h"
 #include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
-#include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/enemy/CFlock.h"
 #include "gun_bros_re/gameplay/brother/CPlayer.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include "gun_bros_re/gameplay/ZMultiplayerStatistics.h"
-#include "gun_bros_re/gameplay/ZPropWorld.h"
 #include "gun_bros_re/gameplay/ZProjectileTypes.h"
 #include "gun_bros_re/gameplay/ZBulletResources.h"
 #include "gun_bros_re/effects/ZParticleResources.h"
@@ -53,7 +52,6 @@ class CProfileManager;
 class CPowerup;
 class CPowerUpSelector;
 struct ZPowerupEntry;
-class ZPropWorld;
 
 constexpr float kArenaWidth = 1200;
 constexpr float kArenaHeight = 900;
@@ -83,6 +81,9 @@ constexpr std::uint32_t kLevelVariableCount = 8;
 class CLevel : public ZGameScriptObject, private CEnemyWorld,
     public ZProjectileWorld, public ZBrotherAIWorld {
 public:
+    // Internal implementation of the original level-owned prop pool.
+    class Props;
+
     bool IsManualSpawnTag(unsigned char tag) const { return m_manualSpawnTags[tag]; }
     /**
      * What a LEVEL resource holds.
@@ -337,7 +338,7 @@ public:
         if (m_template == nullptr) { return nullptr; }
         return this;
     }
-    void SetProps(ZPropWorld *props) { m_props = props; }
+    void SetProps(Props *props) { m_props = props; }
     void SetPlayerProgress(CPlayerProgress *progress);
     void AddExperience(unsigned amount);
     std::uint64_t GetExperience() const {
@@ -616,7 +617,7 @@ private:
     void UpdateCamera(int deltaMs = 0);
     int CountEnemySlots(const GameObjectRef *enemy = nullptr) const override;
     void StartObjectLayer(int layer) override;
-    bool SpawnMapObject(const ZPlacedObject &object, int objectId) override;
+    bool SpawnMapObject(const CLayerObject::Object &object, int objectId) override;
     void SendEnemyMessage(int objectId, int message) override;
     void SendPropMessage(int objectId, int message) override;
     void SetEnemyPortal(int enemyId, int propId) override;
@@ -724,7 +725,7 @@ private:
     CParticleEffectPlayer *StartParticleEffect(const GameObjectRef &ref, float x, float y, float z, float angle);
     void EmitBulletCue(const ZGunCue &cue, float x, float y, float z, float direction, CBullet *owner = nullptr);
     void AdvanceParticles(int deltaMs);
-    ZPropWorld *m_props = nullptr;
+    Props *m_props = nullptr;
     bool CommitPowerupUse(CPowerUpSelector &selector, const GameObjectRef &resource, unsigned count);
     CPowerup *m_powerups = nullptr;
     CPowerup *m_peerPowerups = nullptr;

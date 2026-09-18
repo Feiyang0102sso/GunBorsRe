@@ -10,7 +10,7 @@
 #include "gun_bros_re/data/CChallengeManager.h"
 #include "gun_bros_re/data/ZProfileImport.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 #include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"

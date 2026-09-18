@@ -21,7 +21,7 @@ void CLevel::SetMap(CMap &map, const CCollisionData &collision, ZWeaponCollision
     m_cameraScale = cameraScale;
     m_playerRadius = playerRadius;
     m_actor.BindLevel(map, collision, m_objects, playerRadius);
-    const ZMapRectangle bounds = map.GetCameraExtent();
+    const CLayerCamera::Rectangle bounds = map.GetCameraExtent();
     m_left = bounds.x + playerRadius;
     m_top = bounds.y + playerRadius;
     m_right = bounds.x + bounds.width - playerRadius;

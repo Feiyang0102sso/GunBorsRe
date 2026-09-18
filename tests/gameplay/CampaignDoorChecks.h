@@ -1,5 +1,5 @@
 #pragma once
-namespace MapDetail { struct ZLoadedMap; }
+class CMap;
 class CLevel;
 class CGame;
 int RunCampaignDoorCheck();
@@ -9,9 +9,9 @@ int RunCampaignRescueCheck();
 int RunCampaignPortalCheck();
 int RunCampaignCacheCheck();
 int RunCampaignLava2Check();
-int CheckCampaignCache(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
-int CheckCampaignPortal(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
-int CheckCampaignRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
-int CheckCampaignProgression(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session, unsigned mapIndex);
-int CheckCampaignTargets(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
-int CheckCampaignDoorPassage(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &session);
+int CheckCampaignCache(CMap &map, CLevel &scene, CGame &session);
+int CheckCampaignPortal(CMap &map, CLevel &scene, CGame &session);
+int CheckCampaignRescue(CMap &map, CLevel &scene, CGame &session);
+int CheckCampaignProgression(CMap &map, CLevel &scene, CGame &session, unsigned mapIndex);
+int CheckCampaignTargets(CMap &map, CLevel &scene, CGame &session);
+int CheckCampaignDoorPassage(CMap &map, CLevel &scene, CGame &session);

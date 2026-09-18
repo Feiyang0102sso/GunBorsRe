@@ -6,8 +6,8 @@
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/data/MissionObjective.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -22,7 +22,7 @@ class ZMissionProbeWorld : public CEnemyWorld {
 public:
     bool SpawnEnemy(const GameObjectRef &, int, int, int) override { return true; }
     int CountEnemies(const GameObjectRef *, int) const override { return 0; }
-    bool SpawnMapObject(const ZPlacedObject &, int objectId) override {
+    bool SpawnMapObject(const CLayerObject::Object &, int objectId) override {
         if (std::find(spawned.begin(), spawned.end(), objectId) != spawned.end()) { ++duplicates; }
         spawned.push_back(objectId);
         return true;

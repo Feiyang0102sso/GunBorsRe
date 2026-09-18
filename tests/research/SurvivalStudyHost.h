@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 int RunViewerSurvival(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,

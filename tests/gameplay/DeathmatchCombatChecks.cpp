@@ -37,7 +37,7 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
         CProfileManager profile = source;
         ZSurvivalGameContext context{profile, {}};
         context.persistProgress = false;
-        ZSurvivalLaunch launch;
+        CGame::Launch launch;
         launch.bigDirectory = directory;
         launch.packShortName = tables.GetPackName(level.mapRef.packHash);
         launch.mapIndex = level.mapRef.localIndex;

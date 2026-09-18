@@ -6,7 +6,7 @@
  */
 #pragma once
 #include "gun_bros_re/data/CGameAssetRef.h"
-struct ZPlacedObject;
+#include "gun_bros_re/gameplay/map/CLayerObject.h"
 /** The level world decides which spawn nodes are free and owns the actors. */
 class CEnemyWorld {
 public:
@@ -17,7 +17,7 @@ public:
     // actors immediately can use their ordinary count.
     virtual int CountEnemySlots(const GameObjectRef *enemy = nullptr) const { return CountEnemies(enemy); }
     virtual void StartObjectLayer(int layer) {}
-    virtual bool SpawnMapObject(const ZPlacedObject &object, int objectId) { return false; }
+    virtual bool SpawnMapObject(const CLayerObject::Object &object, int objectId) { return false; }
     virtual void SendEnemyMessage(int objectId, int message) {}
     virtual void SendPropMessage(int objectId, int message) {}
     virtual void SetEnemyPortal(int enemyId, int propId) {}

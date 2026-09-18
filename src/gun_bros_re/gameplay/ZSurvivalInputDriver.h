@@ -7,7 +7,7 @@
 #include <memory>
 #include "engine/platform/ZWindow.h"
 class CLevel;
-struct ZMapRectangle;
+#include "gun_bros_re/gameplay/map/CLayerCamera.h"
 
 class ZSurvivalInputDriver {
 public:
@@ -15,9 +15,9 @@ public:
     virtual void Update(int deltaMs, float &moveX, float &moveY) = 0;
     virtual void Report() const = 0;
 };
-using ZSurvivalInputFactory = std::unique_ptr<ZSurvivalInputDriver> (*)(CLevel &, const ZMapRectangle &);
+using ZSurvivalInputFactory = std::unique_ptr<ZSurvivalInputDriver> (*)(CLevel &, const CLayerCamera::Rectangle &);
 void SetSurvivalInputFactory(ZSurvivalInputFactory factory);
-std::unique_ptr<ZSurvivalInputDriver> CreateSurvivalInputDriver(CLevel &scene, const ZMapRectangle &bounds);
+std::unique_ptr<ZSurvivalInputDriver> CreateSurvivalInputDriver(CLevel &scene, const CLayerCamera::Rectangle &bounds);
 namespace MapDetail {
 void AppendSurvivalShortcut(std::vector<ZKeyCode> &inputs, ZKeyCode key);
 }

@@ -13,7 +13,7 @@ struct SurvivalRewardsFixture {
     ZWindow & window;
     CInputPad & survivalHud;
     ZShaderProgram & program;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
 };
@@ -32,7 +32,7 @@ struct SurvivalDeathFixture {
     ZWindow & window;
     ZShaderProgram & program;
     ZQuadBatch & batch;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
     CBrotherAI & brother;
@@ -53,7 +53,7 @@ struct SurvivalBossFixture {
     ZPlayerVitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
     CGame & session;
@@ -73,11 +73,11 @@ struct SurvivalFeedbackFixture {
     ZPlayerVitals & vitals;
     CInputPad & survivalHud;
     ZShaderProgram & program;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
     CGame & session;
-    MapDetail::ZMapPropWorld & props;
+    CLevel::Props & props;
     float startX;
     float startY;
     float startFacing;
@@ -93,7 +93,7 @@ struct SurvivalLevelSoundsFixture {
 struct SurvivalPropRoutesFixture {
     unsigned & checkFailures;
     bool check;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CLevel & scene;
 };
 
@@ -110,7 +110,7 @@ struct SurvivalTriggerRoutesFixture {
 
 struct SurvivalPlacedPropsFixture {
     bool check;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
 };
 
 struct SurvivalBrotherPoseFixture {
@@ -132,7 +132,7 @@ struct SurvivalTutorialFixture {
     ZPlayerVitals & vitals;
     CPlayerProgress & progress;
     ZShaderProgram & program;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     std::size_t & weaponSlot;
     unsigned & equippedWeaponSlot;
@@ -165,14 +165,14 @@ struct SurvivalWavesFixture {
     CPlayerProgress & progress;
     ZWindow & window;
     ZShaderProgram & program;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     std::size_t & weaponSlot;
     CLevel & scene;
     CBrotherAI & brother;
     CBrother & brotherModel;
     CGame & session;
-    MapDetail::ZMapPropWorld & props;
+    CLevel::Props & props;
     bool tutorial;
     float startX;
     float startY;
@@ -187,7 +187,7 @@ struct SurvivalHordeFixture {
     bool check;
     unsigned startWave;
     ZPlayerVitals & vitals;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CLevel & scene;
     CGame & session;
     bool horde;
@@ -201,7 +201,7 @@ struct SurvivalCampaignFixture {
     bool check;
     const ZMissionEntry * archiveMission;
     ZPlayerVitals & vitals;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CLevel & scene;
     CGame & session;
     bool horde;
@@ -228,7 +228,7 @@ struct SurvivalSceneFixture {
     ZWindow & window;
     ZShaderProgram & program;
     ZQuadBatch & batch;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
     CBrotherAI & brother;

@@ -1,6 +1,6 @@
 #pragma once
 /** Borrowed runtime views. Observers never own the level, actors or resources. */
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 
 constexpr int kScenarioContinue = -1;
 
@@ -13,18 +13,18 @@ struct ZSurvivalResources {
     ZWindow & window;
     CInputPad & survivalHud;
     ZShaderProgram & program;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
 };
 
 struct ZSurvivalState {
-    const ZSurvivalLaunch &launch;
+    const CGame::Launch &launch;
     ZPlayerVitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;
     ZQuadBatch & batch;
-    MapDetail::ZLoadedMap & loaded;
+    CMap & loaded;
     CBrother & player;
     CLevel & scene;
     CBrotherAI & brother;
@@ -39,7 +39,7 @@ struct ZSurvivalState {
     std::string & capturePath;
     std::vector<ZWeaponEntry> & weapons;
     CInputPad & survivalHud;
-    MapDetail::ZMapPropWorld & props;
+    CLevel::Props & props;
     bool withBrother;
     CPlayerProgress & progress;
     std::size_t & weaponSlot;

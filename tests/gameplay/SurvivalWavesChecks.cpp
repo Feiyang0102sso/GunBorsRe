@@ -189,11 +189,11 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             const bool fromSelector = airstrikeCase++ >= 3;
             session.Restart(startX, startY, startFacing);
             CLevel airstrikeScene(toc, tables, program);
-    airstrikeScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    airstrikeScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             airstrikeScene.Reset();
             // Exercise the same session update as gameplay: movie-only tests
             // cannot detect actors continuing to move during an air strike.
-            CGame airstrikeSession(airstrikeScene, loaded.map, enemies);
+            CGame airstrikeSession(airstrikeScene, loaded, enemies);
             if (!airstrikeSession.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
             airstrikeSession.Restart(startX, startY, startFacing);
             CEnemy *target = airstrikeScene.Spawn(0, 700, 650);
@@ -340,7 +340,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // projectiles. No caller-supplied aim or automatic pilot firing.
             if (!EquipControlledPlayer(tables, loaded, program, weapons[0])) { return 1; }
             CLevel aimScene(toc, tables, program);
-    aimScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    aimScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             aimScene.Reset();
             aimScene.GetPlayer().x = 600;
             aimScene.GetPlayer().y = 650;
@@ -388,7 +388,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         session.Restart(startX, startY, startFacing);
         {
             CLevel turretScene(toc, tables, program);
-    turretScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    turretScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             turretScene.Reset();
             CEnemy *target = turretScene.Spawn(0, 600, 460);
             if (target == nullptr) { return 1; }
@@ -513,7 +513,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             // Isolate impact contracts from steering: a stationary original
             // enemy receives real CBullet -> CombatScene -> script splash hits.
             CLevel blastScene(toc, tables, program);
-    blastScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    blastScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             const unsigned grenadeBullets[] = {90, 93, 94};
             for (unsigned bulletIndex : grenadeBullets) {
                 blastScene.Reset();
@@ -676,7 +676,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         const std::size_t alternateWeapon = (weaponSlot + 1) % weapons.size();
         if (!EquipControlledPlayer(tables, loaded, program, weapons[alternateWeapon]) ||
             !EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
-        if (loaded.players[0].model.get() != stablePlayer || player.GetVitals() != &vitals ||
+        if (loaded.GetResources().players[0].model.get() != stablePlayer || player.GetVitals() != &vitals ||
             player.GetArmorMultiplier(0) != armorBefore) { ++checkFailures; }
         // Kill through the actual shared hit path, then exercise the same R action.
         ZCombatHit fatal;
@@ -713,7 +713,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         // invincibility only to keep the automated pilot running deterministically.
         vitals.invincible = true;
         const int targetWave = std::min(static_cast<int>(startWave + checkWaves), session.GetLevel().GetWaveLimit());
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.map.GetVisibleBounds());
+        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         float previousDamage = 0;
         int stalledMs = 0;
@@ -778,7 +778,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 std::printf("[survival-check] alive %s pos=%.1f,%.1f health=%.1f state=%d behaviour=%d\n",
                     actor->data->owner.c_str(), enemy.x, enemy.y, enemy.health,
                     actor->GetStateId(), enemy.behaviour);
-                ILayerPath *path = loaded.map.GetPathLayer(session.GetLevel().GetPathLayer());
+                ILayerPath *path = loaded.GetPathLayer(session.GetLevel().GetPathLayer());
                 if (path != nullptr) {
                     const int first = path->FindNearest(enemy.x, enemy.y);
                     const int last = path->FindNearest(scene.GetPlayer().x, scene.GetPlayer().y);
@@ -792,8 +792,8 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                         const auto &point = path->GetNodes()[next];
                         std::printf("[survival-check] containing=%d goal=%d next=%d center=%.1f,%.1f\n", containing, goal, next, point.x, point.y);
                     }
-                    const auto &vertices = loaded.collisionScene.GetVertices();
-                    for (const auto &edge : loaded.collisionScene.GetEdges()) {
+                    const auto &vertices = loaded.GetResources().collisionScene.GetVertices();
+                    for (const auto &edge : loaded.GetResources().collisionScene.GetEdges()) {
                         const ZCollisionPoint &a = vertices[edge.firstVertex];
                         const ZCollisionPoint &b = vertices[edge.secondVertex];
                         if (std::hypot((a.x + b.x) * 0.5f - enemy.x, (a.y + b.y) * 0.5f - enemy.y) < 85) {

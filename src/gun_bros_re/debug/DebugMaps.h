@@ -5,7 +5,7 @@
 #include "gun_bros_re/data/ZMissionCatalog.h"
 class ZWindow;
 class CProfileManager;
-struct ZSurvivalLaunch;
+#include "gun_bros_re/gameplay/CGameSession.h"
 struct ZSurvivalGameContext;
 struct DebugMapSelection {
     std::string pack;
@@ -20,7 +20,7 @@ inline constexpr int kDebugMapSessionChoice = 2;
 inline constexpr int kDebugMapSessionComplete = 3;
 bool ShowDebugMapPicker(CResTOCManager &toc, ZPackTables &tables, ZWindow &window, DebugMapSelection &selection,
     const std::string &message = "");
-ZSurvivalLaunch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
+CGame::Launch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
     ZSurvivalGameContext &context);
 void RunDebugMaps(const std::string &bigDirectory, ZWindow &window, DebugMapSelection &selection,
     const CProfileManager &profile);

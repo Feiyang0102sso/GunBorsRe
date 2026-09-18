@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
 using namespace MapDetail;
 bool SaveSurvivalProgress(ZSurvivalGameContext *context, const CPlayerProgress &progress,

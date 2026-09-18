@@ -4,7 +4,7 @@
 #include "TestOutput.h"
 #include "tests/checks/M5LevelFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>

@@ -1,6 +1,7 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 /** Compare one real cover transition at fixed time under historical dock widths. */
 #include "TestOutput.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 using namespace MapDetail;
@@ -14,15 +15,15 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
     ZQuadBatch batch;
     if (!batch.Create(program)) { return 1; }
-    ZLoadedMap loaded;
+    CMap loaded;
     std::size_t selected = 0;
     bool found = false;
     for (const ZCatalogMap &entry : BuildCatalog(toc)) {
-        ZLoadedMap candidate;
-        if (!LoadMap(toc, entry.packIndex, entry.mapIndex, candidate)) { return 1; }
-        LoadProps(toc, candidate);
-        for (std::size_t index = 0; index < candidate.props.size(); ++index) {
-            if (candidate.props[index].sprite->interactiveKind == ZInteractivePropKind::Cover) {
+        CMap candidate;
+        if (!LoadPreviewMap(toc, entry.packIndex, entry.mapIndex, candidate)) { return 1; }
+        candidate.LoadProps(toc);
+        for (std::size_t index = 0; index < candidate.GetResources().props.size(); ++index) {
+            if (ResearchPropKind(candidate.GetResources().props[index]) == ZInteractivePropKind::Cover) {
                 selected = index;
                 found = true;
                 break;
@@ -34,16 +35,19 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
         break;
     }
     if (!found) { return 1; }
-    const ZPlacedProp cover = loaded.props[selected];
-    loaded.props.clear();
-    loaded.props.push_back(cover);
+    const float coverX = loaded.GetResources().props[selected].x;
+    const float coverY = loaded.GetResources().props[selected].y;
+    CProp cover = std::move(loaded.GetResources().props[selected]);
+    loaded.GetResources().props.clear();
+    loaded.GetResources().props.push_back(std::move(cover));
+    loaded.GetResources().props[0].BindResources();
     // State 1 and a fixed random salt exercise the same original transition twice.
     SetCoverState(loaded, static_cast<ZCoverState>(1));
-    StartTransitionParticles(toc, loaded, ZInteractivePropKind::Cover, 1);
+    DispatchPreviewActions(toc, loaded);
     for (unsigned time = 0; time < 400; time += 16) { AdvanceParticleEffects(loaded, 16); }
     std::size_t particles = 0;
     float worldRadius = 0;
-    for (const auto &effect : loaded.activeParticleEffects) {
+    for (const auto &effect : loaded.GetResources().activeParticleEffects) {
         for (std::size_t index = 0; index < effect.player.GetParticleCount(); ++index) {
             const auto &particle = effect.player.GetParticle(index);
             ++particles;
@@ -59,10 +63,10 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
     const char *names[] = {"no-dock", "old-dock", "large-text-dock"};
     float previousZoom = 0;
     for (unsigned index = 0; index < 3; ++index) {
-        ZMapCamera camera = FitCamera(loaded, width - dockWidths[index], height);
+        CCamera::Viewport camera = FitCamera(loaded, width - dockWidths[index], height);
         // Centre the same prop in every capture; only projection scale changes.
-        camera.x = cover.x - width / camera.zoom * 0.5f;
-        camera.y = cover.y - height / camera.zoom * 0.5f;
+        camera.x = coverX - width / camera.zoom * 0.5f;
+        camera.y = coverY - height / camera.zoom * 0.5f;
         float mvp[kMatrix4dElements];
         Matrix4dOrthoTopLeft(width / camera.zoom, height / camera.zoom, kMapDepthRange, mvp);
         Matrix4dTranslate(mvp, -camera.x, -camera.y);
@@ -72,7 +76,7 @@ int RunCoverScaleStudy(const std::string &bigDirectory) {
         glEnable(GL_BLEND);
         glDisable(GL_DEPTH_TEST);
         batch.Begin();
-        AddSpriteQuads(loaded.props[0], CurrentQuads(*MainSlotFor(loaded.props[0]), loaded.props[0].main), batch);
+        loaded.GetResources().props[0].DrawSlot(batch, 1);
         AddParticleQuads(loaded, batch, -1000, 1000);
         batch.Upload();
         batch.Draw(program, mvp);

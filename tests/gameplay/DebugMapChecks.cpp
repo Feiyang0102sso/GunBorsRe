@@ -7,7 +7,7 @@
 #include "TestOutput.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 
 static int CheckWallWeaponResources(CResTOCManager &toc, ZPackTables &tables) {
     // Enumerate actual gun-to-bullet dependencies; do not infer attributes
@@ -146,12 +146,12 @@ int RunCampaignContentCheck() {
                 const auto &layer = map.GetObjectLayer(layerIndex);
                 unsigned objectId = 0;
                 for (const auto &object : layer.GetObjects()) {
-                    if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Player)) { ++players; }
+                    if (object.objectType == static_cast<unsigned>(CLayerObject::ObjectType::Player)) { ++players; }
                     if (pack.GetShortName() == "pack2" && (index == 0 || index == 2 || index == 4 || index == 5 || index == 6)) {
                         std::printf("[campaign-object] MAP %u layer=%u id=%u type=%u ref=%s:%u xy=%d,%d tag=%u\n",
                             index, layer.GetLayerIndex(), objectId, object.objectType,
                             tables.GetPackName(object.packHash).c_str(), object.localIndex, object.x, object.y, object.spawnTag);
-                        if (object.objectType == static_cast<unsigned>(ZPlacedObjectType::Prop)) {
+                        if (object.objectType == static_cast<unsigned>(CLayerObject::ObjectType::Prop)) {
                             if (!tables.ReadSectionResource(object.packHash, ZGameSection::Prop, object.localIndex, bytes)) { return 1; }
                             CArrayInputStream propInput(bytes);
                             CProp::Template data;

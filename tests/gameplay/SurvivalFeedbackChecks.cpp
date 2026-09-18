@@ -1,3 +1,4 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -36,8 +37,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         if (moved <= 0) { ++checkFailures; }
         std::printf("[feedback-check] notice-moving=%.3f interstitial=%d failures=%u\n", moved, survivalHud.HasInterstitial(), checkFailures);
         // Reproduce duplicate object index 0 in the actual layer-2/layer-3 map.
-        for (const auto &prop : loaded.props) {
-            if (!prop.active || prop.sprite->interactiveKind != ZInteractivePropKind::Spire) { continue; }
+        for (const auto &prop : loaded.GetResources().props) {
+            if (!prop.active || ResearchPropKind(prop) != ZInteractivePropKind::Spire) { continue; }
             float targetX = 0, targetY = 0;
             const unsigned target = props.ResolveIndicatorTarget(prop.objectId);
             const bool bound = target != 0 && props.GetIndicatorTarget(target, targetX, targetY);
@@ -64,12 +65,11 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         }
         // The spire's four phases come from pack7 PROP33's Flow. Compare the
         // runtime clock against native 58's actual Q8 scale, not guessed seconds.
-        for (ZPlacedProp &prop : loaded.props) {
-            if (!prop.active || prop.runtime == nullptr || prop.sprite->interactiveKind != ZInteractivePropKind::Spire) { continue; }
-            CProp &spire = *prop.runtime;
+        for (CProp &prop : loaded.GetResources().props) {
+            if (!prop.active || !prop.HasScript() || ResearchPropKind(prop) != ZInteractivePropKind::Spire) { continue; }
+            CProp &spire = prop;
             const bool layersCorrect = spire.GetAnimation(2) == 255 &&
-                BackgroundSlotFor(prop) == RuntimeSlotFor(prop, 0) &&
-                ForegroundSlotFor(prop) == RuntimeSlotFor(prop, 2);
+                !spire.GetCurrentQuads(0).empty() && spire.GetCurrentQuads(2).empty();
             if (!layersCorrect) { ++checkFailures; }
             spire.HandleMessage(0);
             const unsigned activeState = spire.GetStateId();
@@ -123,7 +123,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // has no hit handler. A dormant original turret must not swallow a
             // penetrating round before it reaches the ordinary enemy behind it.
             CLevel probe(toc, tables, program);
-    probe.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    probe.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             probe.Reset();
             CEnemy *front = nullptr, *back = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
@@ -158,7 +158,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // is still heading towards it. Same real BULLET template, same
             // update path; only the camera rectangle is supplied here.
             CLevel cullScene(toc, tables, program);
-    cullScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    cullScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             cullScene.Reset();
             cullScene.SetViewCenter(600, 450);
             cullScene.SetViewBounds(600, 450, 200, 200);  // y in [350, 550]
@@ -207,7 +207,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // centre. Check the final screen rectangle, not just its dimensions.
         {
             CLevel anchorScene(toc, tables, program);
-    anchorScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    anchorScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             CEnemy *target = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 0) {
@@ -255,11 +255,13 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         for (unsigned kinds = 1; kinds <= 2; ++kinds) {
             std::vector<GameObjectRef> batchDeathSounds;
             CLevel deathScene(toc, tables, program);
-    deathScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    deathScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             deathScene.Reset();
+            // Exercise both sound groups within the original active-enemy limit.
+            const unsigned actorsPerKind = std::min(12u, deathScene.GetEnemyLimit() / kinds);
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash != CStringToKey("pack1") || enemies[index].ordinal >= kinds) { continue; }
-                for (unsigned count = 0; count < 12; ++count) {
+                for (unsigned count = 0; count < actorsPerKind; ++count) {
                     CEnemy *actor = deathScene.Spawn(index, 800, 500);
                     if (actor == nullptr) { ++checkFailures; continue; }
                     actor->Damage(actor->combat.health);
@@ -303,7 +305,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             const auto sounds = deathScene.GetSoundCueCount();
             if (sounds != kinds) { ++checkFailures; }
             std::printf("[audio-health-check] group-death kinds=%u actors=%u sounds=%zu expected=%u failures=%u\n",
-                kinds, kinds * 12, sounds, kinds, checkFailures);
+                kinds, kinds * actorsPerKind, sounds, kinds, checkFailures);
             // Repeat the actual authored sound across a production tick
             // boundary. Do not assume a random death move always cues at t=0.
             deathScene.Update(16, 0, 0, false);
@@ -316,7 +318,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             // ... and is audible again once that copy has finished. Its own
             // scene has no actors, so nothing else can cue a sound meanwhile.
             CLevel windowScene(toc, tables, program);
-    windowScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
+    windowScene.BindCombat(enemies, player, vitals, loaded.GetResources().playerTemplate->GetGameScale());
             windowScene.Reset();
             const GameObjectRef &repeated = batchDeathSounds.front();
             windowScene.PlayMoveSound(repeated);
@@ -375,8 +377,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
         // Capture through the production map/HUD draw, centred on the spire.
         session.Restart(startX, startY, startFacing);
         for (unsigned tick = 0; tick < 300; ++tick) { session.Update(16, 0, 0, false); }
-        for (const ZPlacedProp &prop : loaded.props) {
-            if (!prop.active || prop.sprite->interactiveKind != ZInteractivePropKind::Spire) { continue; }
+        for (const CProp &prop : loaded.GetResources().props) {
+            if (!prop.active || ResearchPropKind(prop) != ZInteractivePropKind::Spire) { continue; }
             scene.GetPlayer().x = prop.x + 150;
             scene.GetPlayer().y = prop.y - 30;
             for (std::size_t index = 0; index < enemies.size(); ++index) {

@@ -7,7 +7,7 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/ZPropWorld.h"
+#include "gun_bros_re/gameplay/map/CLevelProps.h"
 #include <chrono>
 
 class CInputPad;
@@ -15,6 +15,7 @@ class CInputPad;
 /** Coordinates one active CLevel and the HUD/session state around it. */
 class CGame {
 public:
+    struct Launch;
     CGame(CLevel &level, CMap &map, const std::vector<CEnemy::Template> &catalog);
     bool Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
         const GameObjectRef *selectedLevel = nullptr, bool archive = false);
@@ -52,7 +53,7 @@ public:
     void AdvanceBossSkip();
     bool IsBossSkipActive() const { return m_bossSkipActive; }
 
-    void SetProps(ZPropWorld *props) { m_level.SetProps(props); }
+    void SetProps(CLevel::Props *props) { m_level.SetProps(props); }
     CLevel &GetLevel() { return m_level; }
     const CLevel &GetLevel() const { return m_level; }
     int CountEnemies(const GameObjectRef *enemy = nullptr, int objectId = -1) const {

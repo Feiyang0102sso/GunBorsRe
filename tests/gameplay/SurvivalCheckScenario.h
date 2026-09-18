@@ -46,7 +46,7 @@ private:
  * Declare it next to the record; both must outlive the session call. */
 struct DevelopmentBinding {
     SurvivalCheckScenario scenario;
-    DevelopmentBinding(ZSurvivalLaunch &launch, SurvivalDevelopment &development)
+    DevelopmentBinding(CGame::Launch &launch, SurvivalDevelopment &development)
         : scenario(development) {
         // Performance CSVs/screenshots use the same explicit case directory.
         if (development.outputDirectory.empty()) { development.outputDirectory = TestOutput::Path(""); }

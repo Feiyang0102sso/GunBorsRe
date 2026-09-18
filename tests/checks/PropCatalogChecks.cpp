@@ -4,8 +4,8 @@
 #include "TestOutput.h"
 #include "tests/checks/PropCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/CProp.h"
-#include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/map/CProp.h"
+#include "gun_bros_re/gameplay/map/CMap.h"
 #include <cstdio>
 #include <fstream>
 #include <filesystem>
@@ -53,11 +53,11 @@ int RunPropCheck(const std::string &bigDirectory) {
             report << " end=" << prop.GetStateId() << " hp=" << prop.GetHealth();
             const auto cues = prop.TakeActions();
             actions += static_cast<unsigned>(cues.size());
-            for (const ZPropAction &cue : cues) {
+            for (const CProp::Action &cue : cues) {
                 report << " action=" << static_cast<int>(cue.kind);
                 if (cue.resource.IsNull()) { continue; }
                 ZGameSection section = ZGameSection::ParticleEffect;
-                if (cue.kind == ZPropAction::Kind::Sound) { section = ZGameSection::SoundEffect; }
+                if (cue.kind == CProp::Action::Kind::Sound) { section = ZGameSection::SoundEffect; }
                 if (!tables.ReadSectionResource(cue.resource.packHash, section, cue.resource.localIndex, payload)) { ++failures; }
             }
             failures += prop.GetUnsupportedCount();

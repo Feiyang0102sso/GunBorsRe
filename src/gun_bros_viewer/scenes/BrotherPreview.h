@@ -1,3 +1,4 @@
+class CMap;
 #pragma once
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "engine/graphics/ZMeshBuffer.h"
@@ -52,9 +53,9 @@ void AdvanceBrotherPreview(CBrother &model, std::int32_t deltaMs);
 class ZWindow;
 class CLevel;
 namespace MapDetail {
-struct ZLoadedMap;
+
 /** Move every placed player's animation on. */
-void AdvancePlayers(ZLoadedMap &loaded, std::int32_t deltaMs);
+void AdvancePlayers(CMap &loaded, std::int32_t deltaMs);
 /**
  * Run the animation clock forward, in the bites playback would use.
  *
@@ -62,7 +63,7 @@ void AdvancePlayers(ZLoadedMap &loaded, std::int32_t deltaMs);
  * the same map at two different times and diff them. Deterministic, because
  * the bite size is fixed rather than taken from the wall clock.
  */
-void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
+void WarmUp(CMap &loaded, std::uint32_t totalMs,
             CLevel *effects = nullptr, bool firing = false);
 /**
  * Drive the first player with WASD and resolve the requested movement.
@@ -70,6 +71,6 @@ void WarmUp(ZLoadedMap &loaded, std::uint32_t totalMs,
  * Maps contain one real player spawn. A few abandoned campaign maps contain
  * none; those remain valid viewers and simply ignore movement input.
  */
-bool UpdateControlledPlayer(ZLoadedMap &loaded, const ZWindow &window,
+bool UpdateControlledPlayer(CMap &loaded, const ZWindow &window,
                             std::uint64_t elapsedMs);
 }

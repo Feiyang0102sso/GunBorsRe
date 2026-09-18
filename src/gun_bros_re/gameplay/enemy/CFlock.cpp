@@ -3,7 +3,7 @@
  */
 #include "gun_bros_re/gameplay/enemy/CFlock.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
-#include "gun_bros_re/gameplay/CLayerPathMesh.h"
+#include "gun_bros_re/gameplay/map/CLayerPathMesh.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include <set>
 

@@ -4,7 +4,7 @@
 /** @file CEnemySpawner.cpp
  * @brief CEnemySpawner rules from iOS :146174-146945 and spawner.link.
  */
-#include "gun_bros_re/gameplay/ILayerPath.h"
+#include "gun_bros_re/gameplay/map/ILayerPath.h"
 #include "gun_bros_re/gameplay/enemy/CEnemySpawner.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include <cstdio>

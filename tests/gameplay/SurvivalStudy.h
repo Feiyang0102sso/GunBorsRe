@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/ZMapScene.h"
+#include "gun_bros_re/gameplay/CGameSession.h"
 #include "gun_bros_re/debug/SurvivalDevelopment.h"
 #include "gun_bros_re/debug/FlockMetrics.h"
 int RunLocalLiveCheck(const std::string &bigDirectory);

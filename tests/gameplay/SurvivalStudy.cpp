@@ -2,7 +2,7 @@
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
 int RunFlockPerformanceCheck(const std::string &bigDirectory) {
-    ZSurvivalLaunch launch;
+    CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = "pack7";
     launch.mapIndex = 6;
@@ -15,7 +15,7 @@ int RunFlockPerformanceCheck(const std::string &bigDirectory) {
     return RunSurvivalSession(launch);
 }
 int RunFlockCheck(const std::string &bigDirectory) {
-    ZSurvivalLaunch launch;
+    CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = "pack7";
     launch.mapIndex = 6;
@@ -25,7 +25,7 @@ int RunFlockCheck(const std::string &bigDirectory) {
     return RunSurvivalSession(launch);
 }
 int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime, bool uncachedPaths) {
-    ZSurvivalLaunch launch;
+    CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
     launch.packShortName = "pack2";
     launch.mapIndex = 7;
@@ -46,7 +46,7 @@ int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packSho
     const ZMissionEntry *archiveMission, bool performanceStudy, ZWindow *sharedWindow, bool feedbackStudy,
     bool bossStudy, bool deathStudy) {
 
-    ZSurvivalLaunch launch{bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,
+    CGame::Launch launch{bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,
         startWave, gameContext, withBrother, archiveMission, sharedWindow};
     SurvivalDevelopment development{screenshotPath, advanceMs, firePreview, showCollisions,
         check, checkWaves, powerupStudy, performanceStudy, feedbackStudy, bossStudy, deathStudy};

@@ -70,7 +70,7 @@ using namespace ResearchDefaults;
 
 }  // namespace
 
-std::unique_ptr<ZSurvivalInputDriver> MakeResearchPilot(CLevel &scene, const ZMapRectangle &bounds) {
+std::unique_ptr<ZSurvivalInputDriver> MakeResearchPilot(CLevel &scene, const CLayerCamera::Rectangle &bounds) {
     return std::make_unique<SurvivalPilot>(scene, bounds);
 }
 

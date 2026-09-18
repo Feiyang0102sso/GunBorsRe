@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "TestOutput.h"
 using namespace MapDetail;
 

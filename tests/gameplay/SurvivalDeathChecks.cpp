@@ -27,18 +27,18 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
         int width = 0, height = 0;
         window.GetDrawableSize(width, height);
         const auto captureDeath = [&](const std::string &suffix) {
-            loaded.players[0].x = scene.GetPlayer().x;
-            loaded.players[0].y = scene.GetPlayer().y;
-            loaded.players[0].facingDegrees = scene.GetPlayer().facing;
+            loaded.GetResources().players[0].x = scene.GetPlayer().x;
+            loaded.GetResources().players[0].y = scene.GetPlayer().y;
+            loaded.GetResources().players[0].facingDegrees = scene.GetPlayer().facing;
             const float zoom = GameViewCameraZoom(width, height);
             float mvp[kMatrix4dElements];
             Matrix4dOrthoTopLeft(width / zoom, height / zoom, kMapDepthRange, mvp);
             Matrix4dTranslate(mvp, -scene.GetPlayer().x + width / zoom / 2, -scene.GetPlayer().y + height / zoom / 2);
             glViewport(0, 0, width, height);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            BuildGeometry(loaded, batch, true, true, false);
+            loaded.DrawBackground(batch, true, true, false);
             batch.Draw(program, mvp);
-            DrawMapObjects(loaded, batch, program, mvp, true, &scene, &brotherModel, brother.y, width);
+            CRenderQueue::Draw(loaded, batch, program, mvp, true, &scene, &brotherModel, brother.y, width);
             return Capture::SaveFrame(window, TestOutput::Path("player-death-") + packShortName + "-" + suffix + ".png");
         };
         for (unsigned scenario = 0; scenario < 2; ++scenario) {

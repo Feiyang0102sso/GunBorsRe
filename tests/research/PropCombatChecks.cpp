@@ -1,5 +1,6 @@
+#include "gun_bros_re/gameplay/map/ZMapViewer.h"
 /** Verify isolated barrel detonations through the real map and combat hosts. */
-#include "gun_bros_re/gameplay/ZMapWorldInternal.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "tests/Checks.h"
 using namespace MapDetail;
 
@@ -19,9 +20,9 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
     for (const ZCatalogMap &entry : BuildCatalog(toc)) {
         if (!((entry.packName == "pack2" && entry.mapIndex == 7) ||
               (entry.packName == "pack12" && entry.mapIndex == 0))) { continue; }
-        ZLoadedMap loaded;
-        if (!LoadMap(toc, entry.packIndex, entry.mapIndex, loaded)) { return 1; }
-        LoadProps(toc, loaded);
+        CMap loaded;
+        if (!LoadPreviewMap(toc, entry.packIndex, entry.mapIndex, loaded)) { return 1; }
+        loaded.LoadProps(toc);
         CBrother player;
         ZPlayerVitals vitals;
         // This fixture isolates props; no player damage or account is needed.
@@ -30,24 +31,24 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
     scene.BindCombat(enemies, player, vitals, 1.0f);
         CLevel level;
         CLevel::Template levelTemplate;
-        level.Bind(levelTemplate, loaded.map);
-        ZMapPropWorld props(loaded, scene, level);
+        level.Bind(levelTemplate, loaded);
+        CLevel::Props props(loaded, scene, level);
         scene.SetProps(&props);
         bool checkedEnemyDamage = false;
-        for (ZPlacedProp &target : loaded.props) {
-            if (target.sprite->interactiveKind != ZInteractivePropKind::Barrel) { continue; }
+        for (CProp &target : loaded.GetResources().props) {
+            if (ResearchPropKind(target) != ZInteractivePropKind::Barrel) { continue; }
             props.Reset();
             props.StartLayer(target.objectLayer);
             std::vector<float> healthBefore;
-            for (const ZPlacedProp &prop : loaded.props) {
+            for (const CProp &prop : loaded.GetResources().props) {
                 float health = 0;
-                if (prop.active && prop.runtime) { health = prop.runtime->GetHealth(); }
+                if (prop.active && prop.HasScript()) { health = prop.GetHealth(); }
                 healthBefore.push_back(health);
             }
             ZCombatHit bullet;
             bullet.owner = kPlayerCombatId;
             bullet.projectile = 123;
-            bullet.damage = target.runtime->GetHealth();
+            bullet.damage = target.GetHealth();
             bullet.applyArmorAttack = false;
             const ZCombatTrace contact = props.Trace(bullet, target.x - 150, target.y,
                 300, 0, 1, {});
@@ -56,7 +57,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 ++failures;
                 continue;
             }
-            const auto &vertices = target.runtime->GetEntryCollision().GetVertices();
+            const auto &vertices = target.GetEntryCollision().GetVertices();
             if (vertices.empty()) { ++failures; continue; }
             float centerX = 0, centerY = 0;
             for (const auto &vertex : vertices) { centerX += vertex.x; centerY += vertex.y; }
@@ -65,15 +66,15 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             splash.y = target.y + centerY / static_cast<float>(vertices.size());
             splash.damage = 1;
             splash.projectile = 0;
-            const float initialHealth = target.runtime->GetHealth();
+            const float initialHealth = target.GetHealth();
             props.Splash(splash, 0);
             splash.owner = kBrotherCombatId;
             props.Splash(splash, 0);
-            if (target.runtime->GetHealth() != initialHealth) { ++failures; }
+            if (target.GetHealth() != initialHealth) { ++failures; }
             // A real human bullet splash still reaches the same target.
             splash.projectile = bullet.projectile;
             props.Splash(splash, 0);
-            if (target.runtime->GetHealth() != initialHealth - 1) { ++failures; }
+            if (target.GetHealth() != initialHealth - 1) { ++failures; }
             CEnemy *blastTarget = nullptr;
             float enemyHealth = 0;
             if (!checkedEnemyDamage) {
@@ -96,15 +97,15 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 checkedEnemyDamage = true;
             }
             unsigned otherDamaged = 0;
-            for (std::size_t index = 0; index < loaded.props.size(); ++index) {
-                const ZPlacedProp &prop = loaded.props[index];
-                if (&prop != &target && prop.active && prop.runtime &&
-                    prop.runtime->GetHealth() < healthBefore[index]) { ++otherDamaged; }
+            for (std::size_t index = 0; index < loaded.GetResources().props.size(); ++index) {
+                const CProp &prop = loaded.GetResources().props[index];
+                if (&prop != &target && prop.active && prop.HasScript() &&
+                    prop.GetHealth() < healthBefore[index]) { ++otherDamaged; }
             }
-            if (target.runtime->GetHealth() != 0 || otherDamaged != 0) { ++failures; }
+            if (target.GetHealth() != 0 || otherDamaged != 0) { ++failures; }
             std::printf("[prop-combat-check] %s object=%d pos=%.0f,%.0f target-hp=%.0f other-damaged=%u\n",
                 entry.packName.c_str(), target.objectId, target.x, target.y,
-                target.runtime->GetHealth(), otherDamaged);
+                target.GetHealth(), otherDamaged);
             ++tested;
         }
         if (entry.packName == "pack2") {
@@ -116,10 +117,10 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 !player.EquipWeapon(tables, playerData.GetScript(), weapons[0].data, "barrel chain check") ||
                 !player.CreateBuffers(program)) { return 1; }
             scene.Reset();
-            std::vector<ZPlacedProp *> cluster;
+            std::vector<CProp *> cluster;
             float centerX = 0, centerY = 0;
             // The three barrels in the user's first-map example; positions stay authored.
-            for (ZPlacedProp &prop : loaded.props) {
+            for (CProp &prop : loaded.GetResources().props) {
                 if (prop.objectId == 60 || prop.objectId == 63 || prop.objectId == 64) {
                     cluster.push_back(&prop);
                     centerX += prop.x;
@@ -159,8 +160,8 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 if (enemy.GetPartCount() == 1) { break; }
             }
             unsigned exploded = 0;
-            for (const ZPlacedProp *prop : cluster) {
-                if (prop->runtime->GetHealth() == 0) { ++exploded; }
+            for (const CProp *prop : cluster) {
+                if (prop->GetHealth() == 0) { ++exploded; }
             }
             std::printf("[prop-combat-check] grenade-chain barrels=%u parts=%u hp=%.0f->%.0f hits=%u\n",
                 exploded, enemy.GetPartCount(), initialHealth, enemy.combat.health, enemy.combat.hitCount);
@@ -169,15 +170,15 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             // A separate barrel hit immediately afterwards must still damage
             // the unarmored enemy. A fabricated invulnerability timer fails this.
             bool subsequentBlastChecked = false;
-            for (ZPlacedProp &prop : loaded.props) {
-                if (!prop.active || !prop.runtime || prop.runtime->GetHealth() <= 0 ||
-                    prop.sprite->interactiveKind != ZInteractivePropKind::Barrel) { continue; }
+            for (CProp &prop : loaded.GetResources().props) {
+                if (!prop.active || !prop.HasScript() || prop.GetHealth() <= 0 ||
+                    ResearchPropKind(prop) != ZInteractivePropKind::Barrel) { continue; }
                 enemy.combat.x = prop.x + 30;
                 enemy.combat.y = prop.y;
                 ZCombatHit bullet;
                 bullet.owner = kPlayerCombatId;
                 bullet.projectile = 123;
-                bullet.damage = prop.runtime->GetHealth();
+                bullet.damage = prop.GetHealth();
                 const ZCombatTrace contact = props.Trace(bullet, prop.x - 150, prop.y, 300, 0, 1, {});
                 const float before = enemy.combat.health;
                 if (contact.target == 0 || props.ApplyHit(contact.target, bullet) != ZHitResult::Hit) { return 1; }
