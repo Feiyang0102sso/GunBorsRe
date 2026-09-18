@@ -22,10 +22,11 @@
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "engine/glu/script/ScriptResolver.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
-#include "gun_bros_re/gameplay/CEnemySpawner.h"
+#include "gun_bros_re/gameplay/enemy/CEnemySpawner.h"
 #include "gun_bros_re/gameplay/level/CLevelIndicator.h"
-#include "gun_bros_re/gameplay/level/CLevelObjectPool.h"
+#include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
 #include "gun_bros_re/gameplay/CMap.h"
+#include "gun_bros_re/gameplay/enemy/CFlock.h"
 #include "gun_bros_re/gameplay/brother/CPlayer.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include "gun_bros_re/gameplay/ZCombatTypes.h"
@@ -49,7 +50,6 @@ class CGame;
 class CMap;
 class CMPMatch;
 class CProfileManager;
-struct ZEnemyTemplateData;
 class CPowerup;
 class CPowerUpSelector;
 struct ZPowerupEntry;
@@ -80,7 +80,7 @@ constexpr std::uint8_t kLevelExportOnLevelStart = 0;
 constexpr std::uint32_t kLevelVariableCount = 8;
 
 /** A level and the script it runs. */
-class CLevel : public ZGameScriptObject, private ZLevelWorld,
+class CLevel : public ZGameScriptObject, private CEnemyWorld,
     public ZProjectileWorld, public ZBrotherAIWorld {
 public:
     bool IsManualSpawnTag(unsigned char tag) const { return m_manualSpawnTags[tag]; }
@@ -168,11 +168,11 @@ public:
     /** Voices sounding right now. One WAV never occupies more than one. */
     unsigned GetVoiceCount() const;
 
-    void BindCombat(const std::vector<ZEnemyTemplateData> &catalog, CBrother &player,
+    void BindCombat(const std::vector<CEnemy::Template> &catalog, CBrother &player,
         ZPlayerVitals &vitals, float playerGameScale);
 
     /** Bind the original session owner after the level runtime is constructed. */
-    void AttachRuntime(CGame &game, const std::vector<ZEnemyTemplateData> &catalog);
+    void AttachRuntime(CGame &game, const std::vector<CEnemy::Template> &catalog);
     struct PickupCollection {
         GameObjectRef resource;
         int objectId = 0;
@@ -213,9 +213,9 @@ public:
     /** Map and geometry must outlive the level runtime. */
     void SetMap(CMap &map, const CCollisionData &collision, ZWeaponCollision &weaponCollision,
         float cameraScale, float playerRadius);
-    ZCombatEnemy *Spawn(std::size_t entry, float x, float y);
+    CEnemy *Spawn(std::size_t entry, float x, float y);
     bool PreloadEnemies(const RequirementList &requirements, const CScript &levelScript);
-    ZCombatEnemy *SpawnNearby(std::size_t entry);
+    CEnemy *SpawnNearby(std::size_t entry);
     void Update(int deltaMs, float moveX, float moveY, bool shoot);
     void PlayerMatrix(float *matrix) const;
     void SetBrother(CBrother *model, CBrotherAI *brother);
@@ -293,7 +293,7 @@ public:
     bool GetBrotherWaypoint(float x, float y, float targetX, float targetY,
         float &waypointX, float &waypointY) override;
     void ResolveBrotherForce(float previousX, float previousY, float &x, float &y) override;
-    void EnemyMatrix(const ZCombatEnemy &enemy, float *matrix) const;
+    void EnemyMatrix(const CEnemy &enemy, float *matrix) const;
     struct MovementBounds { float left, top, right, bottom; };
     void ResolveMovement(float previousX, float previousY, float &x, float &y,
         float radius, bool player = true) const;
@@ -304,7 +304,7 @@ public:
         if (m_map == nullptr) { return nullptr; }
         return m_map->GetPathLayer(m_pathLayer);
     }
-    void EnemyCircle(const ZCombatEnemy &enemy, int part, float &x, float &y, float &radius) const;
+    void EnemyCircle(const CEnemy &enemy, int part, float &x, float &y, float &radius) const;
     struct HealthBar {
         float x, y, width, height, border, fraction, red;
         float green = 0, blue = 0;
@@ -323,8 +323,8 @@ public:
         m_textScaleX = scaleX;
         m_textScaleY = scaleY;
     }
-    ZCombatEnemy *Find(ZCombatId id);
-    const ZCombatEnemy *Find(ZCombatId id) const;
+    CEnemy *Find(ZCombatId id);
+    const CEnemy *Find(ZCombatId id) const;
     std::size_t AliveCount() const;
     float GetPlayerRadius() const { return m_playerRadius; }
     ZPlayerVitals &GetPlayerVitals() { return *m_vitals; }
@@ -350,6 +350,7 @@ public:
     std::uint64_t GetXplodium() const { return m_actor.GetXplodium(); }
     ZCombatId GetAutoAimTarget() const { return m_actor.GetTargetingController().GetTarget(); }
     bool HasClearPath(float x, float y, float targetX, float targetY, float radius) const;
+    bool TestEnemyLineOfSight(float x, float y, float targetX, float targetY) const;
     bool CanWalkTo(float x, float y, float targetX, float targetY) const;
     ZCombatTrace Trace(const ZCombatHit &hit, float x, float y, float dx, float dy,
         float radius, const std::vector<ZCombatId> &skipTargets) override;
@@ -358,7 +359,7 @@ public:
     float GetProjectilePowerupMultiplier(ZCombatId owner) const override;
     float GetEnemyTimeScale() const override;
     unsigned GetTotalKills() const;
-    const ZEnemyModelCache &GetEnemyModelCache() const { return m_objects.GetEnemyModelCache(); }
+    const CEnemy::ResourceCache &GetEnemyModelCache() const { return m_objects.GetEnemyModelCache(); }
     void SetViewCenter(float x, float y) {
         m_viewCenterX = x;
         m_viewCenterY = y;
@@ -375,8 +376,8 @@ public:
     bool LinkedParticleAnchor(ZCombatId actor, int node, float &x, float &y, float &z, float &angle) override;
     bool Anchor(ZCombatId actor, int part, int node,
         float &x, float &y, float &z, float &direction) override;
-    std::vector<std::unique_ptr<ZCombatEnemy>> &GetEnemies() { return m_objects.GetEnemies(); }
-    const std::vector<std::unique_ptr<ZCombatEnemy>> &GetEnemies() const { return m_objects.GetEnemies(); }
+    std::vector<std::unique_ptr<CEnemy>> &GetEnemies() { return m_objects.GetEnemies(); }
+    const std::vector<std::unique_ptr<CEnemy>> &GetEnemies() const { return m_objects.GetEnemies(); }
     CPlayer &GetPlayer() { return m_actor; }
     const CPlayer &GetPlayer() const { return m_actor; }
     float damageDealt = 0;
@@ -396,7 +397,7 @@ public:
      *
      * The template and map must outlive the level.
      */
-    void Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world = nullptr, int startWave = 0);
+    void Bind(const Template &levelTemplate, CMap &map, CEnemyWorld *world = nullptr, int startWave = 0);
 
     /**
      * Seed the stream CGame natives 1 and 2 draw from for this level's script.
@@ -429,7 +430,7 @@ public:
     }
     void OnEnemyKilled(int objectId, const GameObjectRef &enemy);
     /** CLevel::OnEnemyKilled reward/statistic half, before Flow export 5. */
-    void RewardEnemy(const ZCombatEnemy &actor);
+    void RewardEnemy(const CEnemy &actor);
     void OnEnemyTeleport(int objectId, const GameObjectRef &enemy);
     void BeginCombatFrame();
     void QueueLevelEvent(std::uint8_t event) { m_pendingLevelEvents.push_back(event); }
@@ -514,7 +515,7 @@ public:
     unsigned GetClearedWaves() const { return m_clearedWaves; }
     const std::vector<bool> &GetWavePerfectResults() const { return m_wavePerfectResults; }
     const std::vector<ZWeaponCombatProgress> &GetWeaponProgress() const { return m_weaponProgress; }
-    const std::vector<ZEnemyCasualty> &GetCasualties() const { return m_casualties; }
+    const std::vector<CEnemyCasualty> &GetCasualties() const { return m_casualties; }
     std::vector<CChallengeManager::Kill> TakeChallengeKills();
     std::vector<GameObjectRef> TakeChallengePowerups();
     void RecordChallengePowerup(const GameObjectRef &ref) { m_challengePowerups.push_back(ref); }
@@ -541,12 +542,12 @@ private:
     void ApplyPickupActions(CPickup &pickup, unsigned peer);
     void UpdateLocalRevive(int deltaMs);
     void CreditAssistMastery(unsigned peer, unsigned slot, unsigned experience);
-    void Actions(ZCombatEnemy &actor);
-    void SelectTarget(ZCombatEnemy &actor);
-    void PartMatrix(const ZCombatEnemy &actor, int part, float *matrix) const;
+    void Actions(CEnemy &actor);
+    void SelectTarget(CEnemy &actor);
+    void PartMatrix(const CEnemy &actor, int part, float *matrix) const;
     void FinishSpawns();
     ZCombatId ParticipantOwner(ZCombatId owner) const;
-    void UpdateNavigation(ZCombatEnemy &actor, int deltaMs);
+    void UpdateNavigation(CEnemy &actor);
     void ApplyBrotherForce(ZCombatId target, float x, float y, int durationMs);
 
     CPlayer m_actor;
@@ -581,6 +582,7 @@ private:
     CLevelIndicator m_peerIndicator;
     bool m_peerIndicatorVisible = false;
     std::vector<CEnemy::CombatState *> m_flockEnemies;
+    CFlock m_flock;
     std::vector<ExperienceText> m_experienceTexts;
     float m_textViewX = 0;
     float m_textViewY = 0;
@@ -652,7 +654,7 @@ private:
 
     std::uint32_t m_unimplementedCalls;
     CEnemySpawner m_spawner;
-    ZLevelWorld *m_world = nullptr;
+    CEnemyWorld *m_world = nullptr;
     int m_timerMs = 0;
     int m_timerFunction = -1;
     int m_eventTimerMs = 0;
@@ -690,7 +692,7 @@ private:
     float m_globalEnemyMultipliers[5] = {1, 1, 1, 1, 1};
     float m_enemyMultipliers[32][5] = {};
     CGame *m_game = nullptr;
-    const std::vector<ZEnemyTemplateData> *m_catalog = nullptr;
+    const std::vector<CEnemy::Template> *m_catalog = nullptr;
     CMPMatch *m_match = nullptr;
     // BIG pickup templates and expanded Sprite frames; no live object ownership.
     // Templates/packs belong to the level; expanded frames belong to CSpritePlayer.
@@ -737,7 +739,7 @@ private:
     float m_viewWidth = 572;
     float m_viewHeight = 429;
     std::vector<ZWeaponCombatProgress> m_weaponProgress;
-    std::vector<ZEnemyCasualty> m_casualties;
+    std::vector<CEnemyCasualty> m_casualties;
     std::vector<CChallengeManager::Kill> m_challengeKills;
     std::vector<GameObjectRef> m_challengePowerups;
     bool m_horde = false;

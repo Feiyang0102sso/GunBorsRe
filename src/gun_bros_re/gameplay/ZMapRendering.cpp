@@ -96,15 +96,13 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
     // lose their alpha and turn into black rectangles, and a model's own
     // ground-shadow disc goes opaque white.
     for (std::size_t i = 0; i < loaded.enemies.size(); ++i) {
-        ZPlacedEnemy &placed = loaded.enemies[i];
-        const float scale = EnemyModelWorldScale(*placed.model, placed.gameScale,
-                                                 kLevelCameraScale);
+        CEnemy &placed = *loaded.enemies[i];
+        const float scale = placed.GetWorldScale(placed.data->gameScale, kLevelCameraScale);
 
         ZMapRenderItem item;
-        item.y = static_cast<int>(placed.y);
-        item.enemy = placed.model.get();
-        BuildEnemyGameMatrix(*placed.model, mapMvp, placed.x, placed.y, scale,
-                             0.0f, item.matrix);
+        item.y = static_cast<int>(placed.combat.y);
+        item.enemy = &placed;
+        placed.BuildGameMatrix(mapMvp, placed.combat.x, placed.combat.y, scale, 0.0f, item.matrix);
         items.push_back(item);
     }
 
@@ -140,13 +138,13 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
         }
         for (const auto &actor : scene->GetEnemies()) {
             ZMapRenderItem item;
-            item.y = static_cast<int>(actor->model.enemy.combat.y);
-            item.enemy = &actor->model;
+            item.y = static_cast<int>(actor->combat.y);
+            item.enemy = &*actor;
             float world[kMatrix4dElements];
             scene->EnemyMatrix(*actor, world);
             Matrix4dMultiply(mapMvp, world, item.matrix);
             // Original stun shake is a screen-pixel draw offset, never collision motion.
-            item.matrix[3] += 2.0f * actor->model.enemy.stun.GetOffset() / viewportWidth;
+            item.matrix[3] += 2.0f * actor->stun.GetOffset() / viewportWidth;
             items.push_back(item);
         }
     }
@@ -175,7 +173,7 @@ void DrawMapObjects(ZLoadedMap &loaded, ZQuadBatch &batch, const ZShaderProgram 
         glEnable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         if (item.player != nullptr) { item.player->Draw(program, item.matrix); }
-        if (item.enemy != nullptr) { DrawEnemyModel(*item.enemy, program, item.matrix); }
+        if (item.enemy != nullptr) { (*item.enemy).Draw(program, item.matrix); }
         glDisable(GL_DEPTH_TEST);
     }
     if (showProps) {

@@ -2,6 +2,8 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+2026-09-18 敌人更新：敌人专属生产源码归入 `gameplay/enemy/`，按本轮用户要求使用 C 文件前缀、保留 I 前缀，文件头标出原版对应与宿主差异。`ZEnemyModel`、`ZCombatEnemy`、`ZPlacedEnemy` 组合层已删除，模板、资源、脚本和动画归同一个 `CEnemy`；菜单归 `CMenuMeshEnemy`；对象池直接持有敌人实例。恢复 `CMeshPathFinder` 与 `CFlock` 目标距离图、地图／道具视线查询、原骨骼位置查询和 native 54 的 LEVEL 资源生成链。网络保留 TODO，本地合作／PvP Bot 不依赖网络生成器。完整范围、证据、验收与未验证边界见 [敌人职责归位](enemy-responsibility-migration.md)。本段覆盖后文旧敌人路径与旧 Z 包装状态。
+
 2026-09-17 夜间更新：`ZWeaponEffects.h/.cpp` 已删除，未留下别名或转发壳。UI 直接播放粒子；地图临时实例、弹体、附属效果、带状拖尾分别归 `CParticleSystem`、`CBullet/CLevel`、`EffectContainer`、`TrailEffectHolder/CRibbonTrailEffect`；兄弟强化播放器归 `CBrotherParticles.cpp`。`CBrotherPowerups.cpp` 保持独立。原版依据、各阶段验证与保留的宿主适配见 [夜间交接](weapon-effects-night-migration.md)，具体路径见 [文件名映射](source-name-map.md)。以下批次描述中的旧状态保留为历史记录。
 
 后续主线（2026-09-16）：用户指定继续处理运行行为硬编码、重复执行逻辑与原版职责归位，具体问题、优先级及验收见 [运行行为与原版职责对齐路线](runtime-alignment-roadmap.md)。本页保留上一阶段实际结果，不将下一阶段待办计为已完成。

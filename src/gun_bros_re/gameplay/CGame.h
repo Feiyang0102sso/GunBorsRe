@@ -15,7 +15,7 @@ class CInputPad;
 /** Coordinates one active CLevel and the HUD/session state around it. */
 class CGame {
 public:
-    CGame(CLevel &level, CMap &map, const std::vector<ZEnemyTemplateData> &catalog);
+    CGame(CLevel &level, CMap &map, const std::vector<CEnemy::Template> &catalog);
     bool Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
         const GameObjectRef *selectedLevel = nullptr, bool archive = false);
     void Restart(float x, float y, float facingDegrees);

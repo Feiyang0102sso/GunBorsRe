@@ -185,7 +185,7 @@ int CheckCampaignPortal(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &sessio
     // Clear actual waves; neither set a wave number nor enable the portal.
     for (int elapsed = 0; elapsed < 240000 && level.GetWave() < 10; elapsed += 16) {
         for (const auto &actor : scene.GetEnemies()) {
-            const auto &enemy = actor->model.enemy.combat;
+            const auto &enemy = actor->combat;
             if (enemy.dead || enemy.removed) { continue; }
             ZCombatHit hit;
             hit.owner = kPlayerCombatId;
@@ -235,7 +235,7 @@ static int CheckLaterRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &se
         const unsigned before = rescued;
         for (int elapsed = 0; elapsed < 30000; elapsed += 16) {
             for (const auto &actor : scene.GetEnemies()) {
-                const auto &enemy = actor->model.enemy.combat;
+                const auto &enemy = actor->combat;
                 if (enemy.templateRef.packHash == CStringToKey("pack1") && enemy.templateRef.localIndex == 14) {
                     if (enemy.dead) { return 1; }
                     continue;
@@ -281,10 +281,10 @@ int CheckCampaignRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &sessio
         for (const auto &actor : scene.GetEnemies()) {
             if (actor->objectId != 200) { continue; }
             refugeeSeen = true;
-            refugeeDied = refugeeDied || actor->model.enemy.combat.dead;
-            if (!interrupted && actor->model.enemy.GetStateId() == 6) { shouldInterrupt = true; }
+            refugeeDied = refugeeDied || actor->combat.dead;
+            if (!interrupted && actor->GetStateId() == 6) { shouldInterrupt = true; }
             if (elapsed % 5008 == 0) {
-                const auto &enemy = actor->model.enemy;
+                const auto &enemy = *actor;
                 std::printf("[campaign-rescue-check] refugee state=%u xy=%.0f,%.0f dead=%d removed=%d\n",
                     enemy.GetInterpreter().GetStateId(), enemy.combat.x, enemy.combat.y, enemy.combat.dead, enemy.combat.removed);
             }
@@ -296,7 +296,7 @@ int CheckCampaignRescue(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &sessio
             for (int wait = 0; wait < 4000; wait += 16) { session.Update(16, 0, 0, false); }
             bool waiting = false;
             for (const auto &actor : scene.GetEnemies()) {
-                if (actor->objectId == 200 && actor->model.enemy.GetStateId() == 7) { waiting = true; }
+                if (actor->objectId == 200 && actor->GetStateId() == 7) { waiting = true; }
             }
             if (!waiting || session.CountEnemies(nullptr, 200) != 1) { return 1; }
             scene.GetPlayer().x = platformX;
@@ -375,7 +375,7 @@ int CheckCampaignProgression(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &s
     // state or call its death export from the test. Virtual time is bounded.
     for (int elapsed = 0; elapsed < 120000; elapsed += 16) {
         for (auto &actor : scene.GetEnemies()) {
-            auto &enemy = actor->model.enemy;
+            auto &enemy = *actor;
             if (enemy.combat.templateRef.packHash == CStringToKey("pack1") && enemy.combat.templateRef.localIndex == 17) {
                 finalEnemySeen = true;
             }
@@ -409,7 +409,7 @@ int CheckCampaignProgression(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &s
     std::printf("[campaign-progression-check] stalled state=%d kills=%u alive=%d spawned=%u final=%d failures=1\n",
         level.GetStateId(), scene.GetTotalKills(), session.CountEnemies(nullptr, -1), level.GetSpawner().GetSpawnCount(), finalEnemySeen);
     for (const auto &actor : scene.GetEnemies()) {
-        const auto &enemy = actor->model.enemy.combat;
+        const auto &enemy = actor->combat;
         if (!enemy.dead && !enemy.removed) {
             std::printf("[campaign-progression-check] remaining object=%d ref=%08x:%u hp=%.0f xy=%.0f,%.0f\n",
                 actor->objectId, enemy.templateRef.packHash, enemy.templateRef.localIndex, enemy.health, enemy.x, enemy.y);
@@ -436,7 +436,7 @@ int CheckCampaignTargets(MapDetail::ZLoadedMap &map, CLevel &scene, CGame &sessi
     // MAP 4 turret: trace the same segments as player projectiles, then deliver
     // damage through CombatScene so the real ENEMY hit script decides the result.
     for (auto &actor : scene.GetEnemies()) {
-        auto &enemy = actor->model.enemy;
+        auto &enemy = *actor;
         if (enemy.combat.templateRef.packHash != CStringToKey("pack1") || enemy.combat.templateRef.localIndex != 16) { continue; }
         ZCombatHit hit;
         hit.owner = kPlayerCombatId;

@@ -4,6 +4,8 @@
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
+unsigned CheckEnemyResources(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
+    const CEnemy::Template &entry, const ZShaderProgram &program);
 namespace ArenaDetail {
 int CheckArena(ArenaScene &ready);
 }
@@ -28,7 +30,7 @@ int CheckArena(ArenaScene &ready) {
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("arena-check.csv"));
     report << "index,owner,script,health,allegiance,target_type,parts,shots,travel,hits,unknown_natives,death_count,incoming_damage,deferred\n";
-    unsigned failures = 0;
+    unsigned failures = CheckEnemyResources(toc, tables, scene, catalog.front(), program);
     unsigned scripted = 0;
     unsigned unused = 0;
     unsigned unsupported = 0;
@@ -85,13 +87,13 @@ int CheckArena(ArenaScene &ready) {
         if (!window.PumpEvents()) { return 1; }
         scene.Reset();
         if (!Equip(tables, playerData, weapons[0], player, program)) { return 1; }
-        ZCombatEnemy *actor = scene.Spawn(i, 600, 340);
+        CEnemy *actor = scene.Spawn(i, 600, 340);
         if (actor == nullptr) { ++failures; continue; }
-        const ZCombatId id = actor->model.enemy.combat.id;
-        const float initialHealth = actor->model.enemy.combat.health;
-        const int allegiance = actor->model.enemy.combat.variables[16];
-        const int targetType = actor->model.enemy.combat.targetType;
-        const unsigned parts = actor->model.enemy.GetPartCount();
+        const ZCombatId id = actor->combat.id;
+        const float initialHealth = actor->combat.health;
+        const int allegiance = actor->combat.variables[16];
+        const int targetType = actor->combat.targetType;
+        const unsigned parts = actor->GetPartCount();
         const std::size_t beforeShots = scene.GetShotCount();
         if (catalog[i].script.IsPresent()) { ++scripted; } else { ++unused; }
         // Far, near and moving targets cover attack range entry and departure.
@@ -107,7 +109,7 @@ int CheckArena(ArenaScene &ready) {
         unsigned deathCount = 0;
         unsigned deferred = 0;
         if (actor != nullptr) {
-            CEnemy &enemy = actor->model.enemy;
+            CEnemy &enemy = *actor;
             std::printf("[arena-audit] %zu state=%u behaviour=%d range=%.0f contact=%d/%d/%d hp_in=%.1f\n",
                 i, enemy.GetStateId(), enemy.combat.behaviour, enemy.combat.triggerDistance,
                 enemy.combat.variables[12], enemy.combat.variables[13], enemy.combat.variables[17], vitals.incomingDamage);
@@ -136,11 +138,11 @@ int CheckArena(ArenaScene &ready) {
             // of the contract, not just the transition to zero health.
             for (int tick = 0; tick < 200; ++tick) {
                 scene.Update(kStepMs, 0, 0, false);
-                ZCombatEnemy *corpse = scene.Find(id);
+                CEnemy *corpse = scene.Find(id);
                 if (corpse == nullptr) { break; }
-                unknown = corpse->model.enemy.GetUnsupportedFunctionCount();
-                deferred |= corpse->model.enemy.combat.deferredMechanisms;
-                if (corpse->model.enemy.combat.deathCount > 1) { ++failures; break; }
+                unknown = corpse->GetUnsupportedFunctionCount();
+                deferred |= corpse->combat.deferredMechanisms;
+                if (corpse->combat.deathCount > 1) { ++failures; break; }
             }
             unsupported += static_cast<unsigned>(unknown);
         }
@@ -155,9 +157,9 @@ int CheckArena(ArenaScene &ready) {
     // Contracts use a real ordinary enemy and a real pistol projectile.
     scene.Reset();
     Equip(tables, playerData, weapons[0], player, program);
-    ZCombatEnemy *actor = scene.Spawn(0, 600, 340);
+    CEnemy *actor = scene.Spawn(0, 600, 340);
     if (actor == nullptr) { return 1; }
-    CEnemy &enemy = actor->model.enemy;
+    CEnemy &enemy = *actor;
     enemy.combat.behaviour = 7;
     enemy.combat.health = 10000;
     enemy.combat.maxHealth = 10000;
@@ -194,22 +196,22 @@ int CheckArena(ArenaScene &ready) {
     if (!vitals.dead || vitals.deaths != 1) { ++failures; }
     scene.Reset();
     if (vitals.health != vitals.maximum || vitals.dead || scene.GetBulletCount() != 0 || scene.AliveCount() != 0) { ++failures; }
-    ZCombatEnemy *first = scene.Spawn(0, 300, 300);
-    ZCombatEnemy *second = scene.Spawn(0, 900, 300);
+    CEnemy *first = scene.Spawn(0, 300, 300);
+    CEnemy *second = scene.Spawn(0, 900, 300);
     if (first == nullptr || second == nullptr) { ++failures; }
     else {
-        const float otherHealth = second->model.enemy.combat.health;
-        first->model.enemy.Damage(1);
-        if (second->model.enemy.combat.health != otherHealth || first->model.enemy.combat.id == second->model.enemy.combat.id) { ++failures; }
+        const float otherHealth = second->combat.health;
+        first->Damage(1);
+        if (second->combat.health != otherHealth || first->combat.id == second->combat.id) { ++failures; }
     }
     for (int count = 0; count < 12; ++count) {
         if (scene.SpawnNearby(0) == nullptr) { ++failures; break; }
     }
     for (std::size_t i = 0; i < scene.GetEnemies().size(); ++i) {
-        const CEnemy::CombatState &one = scene.GetEnemies()[i]->model.enemy.combat;
+        const CEnemy::CombatState &one = scene.GetEnemies()[i]->combat;
         if (one.x < 40 || one.x > kArenaWidth - 40 || one.y < 145 || one.y > kArenaHeight - 40) { ++failures; }
         for (std::size_t j = i + 1; j < scene.GetEnemies().size(); ++j) {
-            const CEnemy::CombatState &other = scene.GetEnemies()[j]->model.enemy.combat;
+            const CEnemy::CombatState &other = scene.GetEnemies()[j]->combat;
             if (one.id == other.id || std::hypot(one.x - other.x, one.y - other.y) < 70) { ++failures; }
         }
     }
@@ -225,14 +227,14 @@ int CheckArena(ArenaScene &ready) {
     second = scene.Spawn(0, 500, 240);
     if (first == nullptr || second == nullptr) { ++failures; }
     else {
-        const ZCombatId ally = first->model.enemy.combat.id;
-        const ZCombatId hostile = second->model.enemy.combat.id;
+        const ZCombatId ally = first->combat.id;
+        const ZCombatId hostile = second->combat.id;
         const std::size_t shots = scene.GetShotCount();
         bool selectedHostile = false;
         for (int tick = 0; tick < 300; ++tick) {
             scene.Update(16, 0, 0, false);
-            ZCombatEnemy *turret = scene.Find(ally);
-            if (turret != nullptr && turret->model.enemy.combat.targetId == hostile) { selectedHostile = true; }
+            CEnemy *turret = scene.Find(ally);
+            if (turret != nullptr && turret->combat.targetId == hostile) { selectedHostile = true; }
         }
         if (!selectedHostile || scene.GetShotCount() == shots) {
             std::printf("[arena-check] FAIL friendly targeting\n"); ++failures;
@@ -250,29 +252,29 @@ int CheckArena(ArenaScene &ready) {
         if (!Equip(tables, playerData, weapons[i], player, program)) { ++failures; continue; }
         actor = scene.Spawn(0, 600, 350);
         if (actor == nullptr) { ++failures; continue; }
-        actor->model.enemy.combat.health = 10000;
-        actor->model.enemy.combat.maxHealth = 10000;
-        actor->model.enemy.GetPart(0).radius = 130;
-        actor->model.enemy.combat.behaviour = 7;
+        actor->combat.health = 10000;
+        actor->combat.maxHealth = 10000;
+        actor->GetPart(0).radius = 130;
+        actor->combat.behaviour = 7;
         const std::size_t initialShots = scene.GetShotCount();
         scene.PlayerMatrix(matrix);
         player.SetInput(false, true);
         for (int time = 0; time < 3000; time += 16) {
-            actor->model.enemy.combat.variables[0] = 0;
+            actor->combat.variables[0] = 0;
             scene.Update(16, 0, 0, true);
         }
         // Short-range and deployable weapons need a target near their landing
         // point. Keep the same real scene update so spawned units also run.
-        if (actor->model.enemy.combat.health == 10000 && !weapons[i].visualOnly) {
-            actor->model.enemy.combat.x = 600;
-            actor->model.enemy.combat.y = 580;
-            actor->model.enemy.GetPart(0).radius = 40;
+        if (actor->combat.health == 10000 && !weapons[i].visualOnly) {
+            actor->combat.x = 600;
+            actor->combat.y = 580;
+            actor->GetPart(0).radius = 40;
             for (int time = 0; time < 5000; time += 16) {
-                actor->model.enemy.combat.variables[0] = 0;
+                actor->combat.variables[0] = 0;
                 scene.Update(16, 0, 0, true);
             }
         }
-        const float dealt = 10000 - actor->model.enemy.combat.health;
+        const float dealt = 10000 - actor->combat.health;
         weaponReport << i << ',' << weapons[i].name << ',' << scene.GetShotCount() - initialShots << ','
             << dealt << ',' << scene.GetSpawnCount() << ',' << weapons[i].visualOnly << '\n';
         if (!weapons[i].visualOnly && scene.GetShotCount() == initialShots) {
@@ -281,7 +283,7 @@ int CheckArena(ArenaScene &ready) {
         if (!weapons[i].visualOnly && dealt <= 0) {
             std::printf("[arena-check] FAIL weapon %zu did not damage\n", i); ++failures;
         }
-        if (player.weapon->IsBeam() && firstBeam == weapons.size()) { firstBeam = i; }
+        if (player.ActiveWeapon().IsBeam() && firstBeam == weapons.size()) { firstBeam = i; }
     }
     if (firstBeam < weapons.size()) {
         const int steps[] = {8, 16, 32};
@@ -291,15 +293,15 @@ int CheckArena(ArenaScene &ready) {
             Equip(tables, playerData, weapons[firstBeam], player, program);
             actor = scene.Spawn(0, 600, 350);
             if (actor == nullptr) { return 1; }
-            actor->model.enemy.combat.health = 10000;
-            actor->model.enemy.combat.maxHealth = 10000;
-            actor->model.enemy.GetPart(0).radius = 130;
-            player.weapon->SetShooting(true);
-            player.weapon->TakeCues();
+            actor->combat.health = 10000;
+            actor->combat.maxHealth = 10000;
+            actor->GetPart(0).radius = 130;
+            player.ActiveWeapon().SetShooting(true);
+            player.ActiveWeapon().TakeCues();
             scene.PlayerMatrix(matrix);
             scene.SpawnProjectile(weapons[firstBeam].data.GetBulletRef(), 600, 600, 0, -90, 1, kPlayerCombatId, 0);
             for (int time = 0; time < 960; time += steps[run]) { scene.Update(player, matrix, 0, steps[run]); }
-            damage[run] = 10000 - actor->model.enemy.combat.health;
+            damage[run] = 10000 - actor->combat.health;
         }
         std::printf("[arena-check] beam %zu at 8/16/32 ms: %.3f %.3f %.3f\n", firstBeam, damage[0], damage[1], damage[2]);
         const float minimum = std::min(damage[0], std::min(damage[1], damage[2]));
@@ -340,12 +342,12 @@ int CheckArena(ArenaScene &ready) {
     if (actor == nullptr) {
         return 1;
     }
-    actor->model.enemy.combat.health = 100;
-    actor->model.enemy.combat.maxHealth = 100;
+    actor->combat.health = 100;
+    actor->combat.maxHealth = 100;
     armorHit.owner = kPlayerCombatId;
     armorHit.ownerType = 0;
-    scene.ApplyHit(actor->model.enemy.combat.id, armorHit);
-    const float armoredOutgoing = 100 - actor->model.enemy.combat.health;
+    scene.ApplyHit(actor->combat.id, armorHit);
+    const float armoredOutgoing = 100 - actor->combat.health;
     if (std::abs(armoredOutgoing - 10.5f) > 0.001f) {
         ++failures;
     }
@@ -388,7 +390,7 @@ int CheckArena(ArenaScene &ready) {
     scene.FunctionResolver(55, globalSpeed, 2);
     actor = scene.Spawn(0, 600, 300);
     if (actor == nullptr) { return 1; }
-    CEnemy &scaledEnemy = actor->model.enemy;
+    CEnemy &scaledEnemy = *actor;
     // The six-argument call is used by pack10 ENEMY Flow @0x97 (physical 13).
     // Optional values must survive the native boundary; a short call must not
     // inherit them from a previous invocation or synthesize an invalid effect.
@@ -421,16 +423,16 @@ int CheckArena(ArenaScene &ready) {
     scene.Bind(multiplierTemplate, multiplierMap);
     // Render the same original mesh twice: plain and native-29 hit flash.
     // This catches confusing an enemy's white overlay with a gun's red heat.
-    ZCombatEnemy *plain = scene.Spawn(0, 400, 450);
-    ZCombatEnemy *flashed = scene.Spawn(0, 800, 450);
+    CEnemy *plain = scene.Spawn(0, 400, 450);
+    CEnemy *flashed = scene.Spawn(0, 800, 450);
     if (plain == nullptr || flashed == nullptr) { return 1; }
-    plain->model.enemy.Update(1000);
-    flashed->model.enemy.Update(1000);
-    plain->model.enemy.combat.x = 400;
-    plain->model.enemy.combat.y = 450;
-    flashed->model.enemy.combat.x = 800;
-    flashed->model.enemy.combat.y = 450;
-    flashed->model.enemy.FunctionResolver(29, nullptr, 0);
+    plain->Update(1000);
+    flashed->Update(1000);
+    plain->combat.x = 400;
+    plain->combat.y = 450;
+    flashed->combat.x = 800;
+    flashed->combat.y = 450;
+    flashed->FunctionResolver(29, nullptr, 0);
     int renderWidth = 0, renderHeight = 0;
     window.GetDrawableSize(renderWidth, renderHeight);
     glViewport(0, 0, renderWidth, renderHeight);
@@ -445,7 +447,7 @@ int CheckArena(ArenaScene &ready) {
         float world[16], model[16];
         scene.EnemyMatrix(*actor, world);
         Matrix4dMultiply(renderProjection, world, model);
-        DrawEnemyModel(actor->model, program, model);
+        (*actor).Draw(program, model);
     }
     glDisable(GL_DEPTH_TEST);
     if (glGetError() != 0 || !Capture::SaveFrame(window, TestOutput::Path("enemy-hit-flash-check.png"))) { ++failures; }

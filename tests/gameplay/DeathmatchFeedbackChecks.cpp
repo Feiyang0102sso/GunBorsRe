@@ -189,7 +189,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     for (unsigned elapsed = 0; elapsed < 5000; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (const auto &actor : scene.GetEnemies()) {
-            const auto &state = actor->model.enemy.combat;
+            const auto &state = actor->combat;
             if (!state.turret || state.removed) { continue; }
             turretId = state.id;
             if (state.targetId == kPlayerCombatId) {

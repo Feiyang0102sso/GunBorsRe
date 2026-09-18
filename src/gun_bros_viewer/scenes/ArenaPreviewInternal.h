@@ -28,7 +28,7 @@ struct ArenaScene {
     CResTOCManager &toc;
     ZPackTables &tables;
     const ZShaderProgram &program;
-    const std::vector<ZEnemyTemplateData> &catalog;
+    const std::vector<CEnemy::Template> &catalog;
     const std::vector<ZWeaponEntry> &weapons;
     const CBrother::Template &playerData;
     CBrother &player;

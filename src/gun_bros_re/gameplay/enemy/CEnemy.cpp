@@ -1,9 +1,12 @@
+/** Original: src/gunbros/enemy.cpp Bind :73381, Spawn :73239, Update :67732.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /**
  * @file CEnemy.cpp
  * @brief An enemy's part table, and the script functions that build it.
  */
 
-#include "gun_bros_re/gameplay/CEnemy.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 
 #include <cmath>
@@ -68,6 +71,7 @@ void CEnemy::Bind(const CScript &script, const CMoveSetMesh &moveSet,
 }
 
 bool CEnemy::SpawnForUI() {
+    // Export 3, what CEnemy::SpawnForUI runs (:72858). What the menus do.
     if (!m_interpreter.HasScript()) {
         std::printf("[enemy] no script; the model stays as bound\n");
         return false;
@@ -81,6 +85,7 @@ bool CEnemy::SpawnForUI() {
 }
 
 bool CEnemy::Spawn() {
+    // Export 0, what CEnemy::Spawn runs (:73239). What a level does.
     if (!m_interpreter.HasScript()) {
         std::printf("[enemy] no script; the model stays as bound\n");
         return false;
@@ -295,4 +300,16 @@ std::int16_t *CEnemy::VariableResolver(std::uint8_t variable) {
     }
     m_variableScratch = 0;
     return &m_variableScratch;
+}
+
+// Original enemy.cpp :68332 refreshes the script BEFORE UI animation clocks.
+void CEnemy::UpdateUI(std::int32_t deltaMs) {
+    m_interpreter.Refresh();
+    const float seconds = static_cast<float>(deltaMs) * 0.001f;
+    for (std::uint32_t index = 0; index < m_partCount; ++index) {
+        Part &part = m_parts[index];
+        part.hitFlash = std::fmax(0.0f, part.hitFlash - seconds * 4);
+        part.extraAngleDegrees += part.extraAngleDegreesPerSecond * seconds;
+        part.controller.Update(deltaMs);
+    }
 }

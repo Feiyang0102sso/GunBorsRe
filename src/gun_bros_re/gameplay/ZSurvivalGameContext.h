@@ -20,7 +20,7 @@ struct ZSurvivalResult {
     unsigned wavesPerRevolution = 0, waveLimit = 0;
     unsigned kills = 0, waves = 0, perfectWaves = 0, wave = 0;
     std::uint64_t experience = 0, xplodium = 0;
-    std::vector<ZEnemyCasualty> casualties;
+    std::vector<CEnemyCasualty> casualties;
     std::vector<ZWeaponCombatProgress> weapons;
 };
 

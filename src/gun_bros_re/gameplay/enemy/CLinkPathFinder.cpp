@@ -1,4 +1,7 @@
-#include "gun_bros_re/gameplay/CLinkPathFinder.h"
+/** Original: src/gunbros/linkPathFinder.cpp Init :168567, Update :168635.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
+#include "gun_bros_re/gameplay/enemy/CLinkPathFinder.h"
 
 void CLinkPathFinder::Init(const ILayerPath *path, float x, float y) {
     m_path = path;

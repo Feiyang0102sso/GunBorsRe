@@ -37,7 +37,7 @@
 #include "gun_bros_re/gameplay/ZMapScene.h"
 #include "gun_bros_re/gameplay/CBGM.h"
 
-#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
@@ -436,7 +436,7 @@ struct ZMapRenderItem {
     int y = 0;
     const ZPlacedProp *prop = nullptr;
     CBrother *player = nullptr;
-    ZEnemyModel *enemy = nullptr;
+    CEnemy *enemy = nullptr;
     CParticleSystem::RenderItem particle;
     float matrix[kMatrix4dElements] = {};
 };

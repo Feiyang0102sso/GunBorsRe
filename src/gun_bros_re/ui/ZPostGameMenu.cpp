@@ -14,12 +14,12 @@ public:
             if (index < 0 || index >= static_cast<int>(state.result.casualties.size())) { return true; }
             class CasualtyCallback : public ZMovieRegionCallback {
             public:
-                CasualtyCallback(ZPostGameListCallbacks &owner, const ZEnemyCasualty &value) : list(owner), casualty(value) {}
+                CasualtyCallback(ZPostGameListCallbacks &owner, const CEnemyCasualty &value) : list(owner), casualty(value) {}
                 bool DrawMovieRegion(const ZMovieRegion &area) override {
                     return list.view.DrawCasualty(list.tables, list.toc, casualty, 0, &area);
                 }
                 ZPostGameListCallbacks &list;
-                const ZEnemyCasualty &casualty;
+                const CEnemyCasualty &casualty;
             } callback(*this, state.result.casualties[index]);
             const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_MODEL_GALLERY_ITEM");
             const auto *movie = view.movies.GetMovie(ordinal);

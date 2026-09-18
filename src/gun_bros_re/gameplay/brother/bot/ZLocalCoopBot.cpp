@@ -209,7 +209,7 @@ bool ZLocalCoopBot::CanUseSelectedPowerup(const CPowerUpSelector &selector) {
     float x = 0, y = 0;
     selector.m_level->ActorPosition(selector.m_owner, x, y);
     for (const auto &actor : selector.m_level->GetEnemies()) {
-        const auto &enemy = actor->model.enemy.combat;
+        const auto &enemy = actor->combat;
         if (enemy.dead || enemy.removed || !enemy.enabled || enemy.health <= 0) { continue; }
         ++alive;
         const float dx = enemy.x - x, dy = enemy.y - y;

@@ -95,7 +95,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     vitals.maximum = progress.GetHealth();
     vitals.health = vitals.maximum / 2;
     CLevel scene(toc, tables, program);
-    std::vector<ZEnemyTemplateData> enemies;
+    std::vector<CEnemy::Template> enemies;
     scene.BindCombat(enemies, player, vitals, 1);
     scene.SetPlayerProgress(&progress);
     CMap map;

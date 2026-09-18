@@ -21,8 +21,6 @@
 
 // CBrother constructor :139098; CPlayer::Move uses the full radius for triggers.
 constexpr float kBrotherTriggerRadius = 22.0f;
-// CEffectLayer::AddTextEffect :66884 has twenty fixed text-effect slots.
-constexpr unsigned kTextEffectCapacity = 20;
 
 void CLevel::FocusCameraOnEnemy(float x, float y) {
     if (m_map == nullptr) { return; }
@@ -98,7 +96,7 @@ CLevel::CLevel() : m_template(nullptr), m_map(nullptr), m_unimplementedCalls(0) 
     }
 }
 
-void CLevel::AttachRuntime(CGame &game, const std::vector<ZEnemyTemplateData> &catalog) {
+void CLevel::AttachRuntime(CGame &game, const std::vector<CEnemy::Template> &catalog) {
     m_game = &game;
     m_catalog = &catalog;
     m_objects.SetLevel(this);
@@ -126,7 +124,7 @@ void CLevel::ResetWorld(float x, float y, float facingDegrees) {
     BeginCombatFrame();
 }
 
-void CLevel::Bind(const Template &levelTemplate, CMap &map, ZLevelWorld *world, int startWave) {
+void CLevel::Bind(const Template &levelTemplate, CMap &map, CEnemyWorld *world, int startWave) {
     SetLevelContext(this);
     m_template = &levelTemplate;
     m_map = &map;
@@ -272,7 +270,24 @@ std::int16_t CLevel::FunctionResolver(std::uint8_t function, const std::int16_t 
             if (function == 31 || function == 32) { path->SetAllNodesLocked(function == 31); }
         }
         return 0;
-    case 33: return 0; // Desktop path searches read current locks without a distance-map cache.
+    case 33:
+        // Desktop path searches read current locks without a distance-map cache.
+        // Updated: the mesh cache now exists; original RefreshDistanceMaps
+        // requests invalidate it explicitly as well as through node-lock revisions.
+        m_flock.Clear();
+        // A LEVEL callback can run after this frame's corpse removal. Rebuild
+        // membership from the pool before using any cached actor addresses.
+        m_flockEnemies.clear();
+        for (const auto &actor : m_objects.GetEnemies()) {
+            if (actor->combat.enabled && !actor->combat.removed) {
+                m_flockEnemies.push_back(&actor->combat);
+            }
+        }
+        if (m_map != nullptr) {
+            const auto *path = dynamic_cast<const CLayerPathMesh *>(m_map->GetPathLayer(m_pathLayer));
+            if (path != nullptr) { m_flock.RefreshDistanceMaps(*path, m_flockEnemies); }
+        }
+        return 0;
     case 34:
         if (first >= 0 && first < 32) { m_triggerPauseMs[first] = second * 1000 / 256; }
         return 0;
@@ -605,25 +620,6 @@ bool CLevel::GetResource(int index, GameObjectRef &out) const {
     return !out.IsNull() && out.localIndex != kNoLocalIndex;
 }
 
-void CLevel::OnEnemyKilled(int objectId, const GameObjectRef &enemy) {
-    // Count delivered deaths once, including the event that clears the level.
-    ++m_kills;
-    if (m_template == nullptr || m_cleared) {
-        return;
-    }
-    ++m_statisticsKills[m_statisticsGroup];
-    int resourceIndex = -1;
-    const auto &resources = m_template->script.GetResources();
-    for (std::size_t index = 0; index < resources.size(); ++index) {
-        const ZScriptResourceRef &ref = resources[index];
-        if (ref.packHash == enemy.packHash && ref.resourceId == enemy.localIndex && ref.sectionOrType == 5) {
-            resourceIndex = static_cast<int>(index);
-            break;
-        }
-    }
-    m_interpreter.CallExportFunction(5, static_cast<std::int16_t>(objectId),
-        static_cast<std::int16_t>(resourceIndex));
-}
 
 void CLevel::BeginCombatFrame() {
     m_pendingLevelEvents.clear();
@@ -631,9 +627,6 @@ void CLevel::BeginCombatFrame() {
     m_pendingPickups.clear();
 }
 
-void CLevel::QueueEnemyTeleport(int objectId, const GameObjectRef &enemy) {
-    m_pendingTeleports.push_back({objectId, enemy});
-}
 
 void CLevel::QueuePickupSpawn(const GameObjectRef &pickup, float x, float y) {
     m_pendingPickups.push_back({pickup, x, y});
@@ -686,136 +679,6 @@ void CLevel::CreditWeaponProgress(const GameObjectRef &weapon,
     m_weaponProgress.push_back({weapon, experience, masteryLimit});
 }
 
-void CLevel::RewardEnemy(const ZCombatEnemy &actor) {
-    if (m_actor.GetProgress() == nullptr) { return; }
-    // CLevel::OnEnemyKilled :119609: offset 912 is XP, 876 is Xplodium.
-    // Multiplier attribute 2 is Xplodium; attribute 3 is XP. Both round up.
-    const GameObjectRef &ref = actor.model.enemy.combat.templateRef;
-    const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-        GetEnemyMultiplier(ref, 3) * m_playerModel->GetArmorMultiplier(3) *
-        CFriendPowerManager::Multiplier(m_playerModel->friendCount, 5)));
-    const bool playerKill = actor.model.enemy.combat.pendingHit.owner == kPlayerCombatId;
-    if (m_localLive) {
-        const ZCombatId owner = actor.model.enemy.combat.pendingHit.owner;
-        if (owner == kPlayerCombatId || owner == kBrotherCombatId) {
-            unsigned killer = 0;
-            if (owner == kBrotherCombatId) { killer = 1; }
-            ZMultiplayerStatistics &statistics = m_multiplayer[killer];
-            ++statistics.wave.kills;
-            ++statistics.total.kills;
-            ++statistics.streak;
-            statistics.total.bestStreak = std::max(statistics.total.bestStreak, statistics.streak);
-            const unsigned other = 1 - killer;
-            unsigned assistExperience = experience;
-            if (other == 1 && m_brotherModel != nullptr) {
-                assistExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-                    GetEnemyMultiplier(ref, 3) * m_brotherModel->GetArmorMultiplier(3) *
-                    CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
-            }
-            unsigned assisted = 0;
-            for (unsigned slot = 0; slot < 2; ++slot) {
-                if ((actor.assistMask[other] & (1u << slot)) == 0) { continue; }
-                ++assisted;
-                ++m_multiplayer[other].wave.assists;
-                ++m_multiplayer[other].total.assists;
-                CreditAssistMastery(other, slot, assistExperience);
-            }
-            if (assisted == 0) {
-                unsigned slot = m_playerModel->gunSlot;
-                if (other == 1) { slot = m_brotherWeaponSlot; }
-                // OnEnemyKilledByBro grants mastery without a numerical assist.
-                CreditAssistMastery(other, slot, assistExperience);
-            }
-            if (killer == 1 && m_brotherModel != nullptr) {
-                const unsigned peerExperience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
-                    GetEnemyMultiplier(ref, 3) * m_brotherModel->GetArmorMultiplier(3) *
-                    CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 5)));
-                const unsigned peerXplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
-                    GetEnemyMultiplier(ref, 2) * m_brotherModel->GetArmorMultiplier(4) *
-                    CFriendPowerManager::Multiplier(m_brotherModel->friendCount, 6)));
-                AddPeerExperience(peerExperience);
-                AddPeerXplodium(peerXplodium);
-                if (!actor.model.enemy.combat.pendingHit.weapon.IsNull()) {
-                    CreditAssistMastery(1,
-                        actor.model.enemy.combat.pendingHit.weaponSlot, peerExperience);
-                }
-            }
-        }
-    }
-
-    bool counted = false;
-    for (ZEnemyCasualty &entry : m_casualties) {
-        if (entry.resource.packHash == ref.packHash && entry.resource.localIndex == ref.localIndex) {
-            ++entry.count;
-            counted = true;
-            break;
-        }
-    }
-    if (!counted) { m_casualties.push_back({ref, 1, actor.data->owner}); }
-
-    const ZCombatHit &hit = actor.model.enemy.combat.pendingHit;
-    // Original CLevel::OnEnemyKilled :119912, six-byte statistic key.
-    if (playerKill || hit.owner == kBrotherCombatId) {
-        bool recorded = false;
-        for (CChallengeManager::Kill &kill : m_challengeKills) {
-            if (kill.enemy.packHash == ref.packHash && kill.enemy.localIndex == ref.localIndex &&
-                kill.bullet.packHash == hit.bullet.packHash && kill.bullet.localIndex == hit.bullet.localIndex &&
-                kill.group == m_statisticsGroup && kill.critical == hit.critical && kill.player == playerKill) {
-                ++kill.count;
-                recorded = true;
-                break;
-            }
-        }
-        if (!recorded) {
-            m_challengeKills.push_back({ref, hit.bullet, m_statisticsGroup, 1, hit.critical, playerKill});
-        }
-    }
-    if (playerKill && !hit.weapon.IsNull()) {
-        bool credited = false;
-        for (ZWeaponCombatProgress &entry : m_weaponProgress) {
-            if (entry.resource.packHash == hit.weapon.packHash &&
-                entry.resource.localIndex == hit.weapon.localIndex) {
-                entry.experience += experience;
-                credited = true;
-                break;
-            }
-        }
-        if (!credited) {
-            m_weaponProgress.push_back({hit.weapon, experience, hit.weaponMasteryLimit});
-        }
-    }
-
-    if (m_horde) {
-        // CLevel::OnEnemyKilled :119655-119802: bro kills score once, player
-        // kills twice at the current streak multiplier and advance that streak.
-        std::uint64_t points = static_cast<std::uint64_t>(experience) * (m_killStreak + 1);
-        if (playerKill) {
-            points *= 2;
-            ++m_killStreak;
-        }
-        m_bestKillStreak = std::max(m_bestKillStreak, m_killStreak);
-        m_score = static_cast<unsigned>(std::min<std::uint64_t>(3000000000ULL, m_score + points));
-        if (playerKill) { AddExperience(experience); }
-    } else if (!m_localLive || playerKill) {
-        AddExperience(experience);
-    }
-
-    // CLevel::OnEnemyKilled VA0x950AC captures the projected position once.
-    if ((!m_localLive || playerKill) && m_experienceTexts.size() < kTextEffectCapacity) {
-        const CEnemy::CombatState &enemy = actor.model.enemy.combat;
-        ExperienceText text;
-        text.amount = experience;
-        text.x = static_cast<float>(static_cast<int>((enemy.x - m_textViewX) * m_textScaleX));
-        text.y = static_cast<float>(static_cast<int>((enemy.y - m_textViewY) * m_textScaleY));
-        m_experienceTexts.push_back(text);
-    }
-    if (hit.owner == kPlayerCombatId) {
-        const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
-            GetEnemyMultiplier(ref, 2) * m_playerModel->GetArmorMultiplier(4) *
-            CFriendPowerManager::Multiplier(m_playerModel->friendCount, 6)));
-        AddXplodium(xplodium);
-    }
-}
 
 void CLevel::ResolveWaveReward(unsigned perfectRewardPercent) {
     if (m_playerModel != nullptr && m_playerModel->weapon != nullptr) {
@@ -890,22 +753,6 @@ void CLevel::CheckForCameraChange(float playerX, float playerY) {
     }
 }
 
-void CLevel::OnEnemyTeleport(int objectId, const GameObjectRef &enemy) {
-    if (m_template == nullptr || m_cleared) { return; }
-    int resourceIndex = -1;
-    const auto &resources = m_template->script.GetResources();
-    for (std::size_t index = 0; index < resources.size(); ++index) {
-        const auto &ref = resources[index];
-        if (ref.packHash == enemy.packHash && ref.resourceId == enemy.localIndex && ref.sectionOrType == 5) {
-            resourceIndex = static_cast<int>(index);
-            break;
-        }
-    }
-    // CLevel::OnEnemyTeleport :118252 calls export 9, independently of kills.
-    RemoveIndicator(objectId);
-    m_interpreter.CallExportFunction(9, static_cast<std::int16_t>(objectId), static_cast<std::int16_t>(resourceIndex));
-    std::printf("[level] enemy teleported id=%d resource=%d\n", objectId, resourceIndex);
-}
 
 void CLevel::OnPickupCollected(int objectId, const GameObjectRef &pickup) {
     if (m_template == nullptr || m_cleared) { return; }
@@ -946,32 +793,6 @@ void CLevel::OnPropEvent(int objectId, const GameObjectRef &prop, bool entered) 
     m_interpreter.CallExportFunction(function, static_cast<std::int16_t>(objectId), static_cast<std::int16_t>(resourceIndex));
 }
 
-float CLevel::GetEnemyMultiplier(int enemy, int attribute) const {
-    if (attribute < 0 || attribute >= 5) {
-        return 1;
-    }
-    float multiplier = m_globalEnemyMultipliers[attribute];
-    if (enemy >= 0 && enemy < 32) {
-        multiplier *= m_enemyMultipliers[enemy][attribute];
-    }
-    return multiplier;
-}
-
-float CLevel::GetEnemyMultiplier(const GameObjectRef &enemy, int attribute) const {
-    // Original lookup defaults to resource zero when the type is not listed.
-    int resourceIndex = 0;
-    if (m_template != nullptr) {
-        const auto &resources = m_template->script.GetResources();
-        for (unsigned index = 0; index < resources.size(); ++index) {
-            const auto &resource = resources[index];
-            if (resource.sectionOrType == 5 && resource.packHash == enemy.packHash && resource.resourceId == enemy.localIndex) {
-                resourceIndex = static_cast<int>(index);
-                break;
-            }
-        }
-    }
-    return GetEnemyMultiplier(resourceIndex, attribute);
-}
 
 std::int16_t *CLevel::VariableResolver(std::uint8_t variable) {
     if (variable >= kLevelVariableCount) {
@@ -1040,43 +861,6 @@ void CLevel::SetTileLayerSpeed(const std::int16_t *arguments, std::uint8_t argum
                 speedY);
 }
 
-bool CLevel::SpawnEnemy(const GameObjectRef &enemy, int layerIndex, int nodeIndex, int objectId) {
-    if (m_playerModel == nullptr || m_map == nullptr || m_catalog == nullptr) { return false; }
-    const bool hasAuthoredRoute = layerIndex >= 0 && nodeIndex >= 0;
-    std::size_t entryIndex = 0;
-    while (entryIndex < m_catalog->size()) {
-        const ZEnemyTemplateData &entry = (*m_catalog)[entryIndex];
-        if (entry.packHash == enemy.packHash && entry.ordinal == enemy.localIndex) { break; }
-        ++entryIndex;
-    }
-    if (entryIndex == m_catalog->size()) { return false; }
-    if (layerIndex < 0) { layerIndex = m_pathLayer; }
-    ILayerPath *path = m_map->GetPathLayer(layerIndex);
-    if (path == nullptr || path->GetNodes().empty()) { return false; }
-    const auto &nodes = path->GetNodes();
-    if (nodeIndex < 0) {
-        nodeIndex = m_spawner.GetSpawnPoint(*path, GetPlayer().x, GetPlayer().y,
-            m_cameraLeft, m_cameraTop, m_cameraWidth, m_cameraHeight);
-    }
-    if (nodeIndex < 0 || nodeIndex >= static_cast<int>(nodes.size())) { return false; }
-    ZCombatEnemy *actor = Spawn(entryIndex, nodes[nodeIndex].x, nodes[nodeIndex].y);
-    if (actor == nullptr) { return false; }
-    if (objectId < 0) {
-        const float distance = std::hypot(GetPlayer().x - nodes[nodeIndex].x,
-            GetPlayer().y - nodes[nodeIndex].y);
-        if (m_closestSpawnDistance < 0 || distance < m_closestSpawnDistance) {
-            m_closestSpawnDistance = distance;
-        }
-        if (m_cameraWidth > 0 && nodes[nodeIndex].x >= m_cameraLeft && nodes[nodeIndex].y >= m_cameraTop &&
-            nodes[nodeIndex].x <= m_cameraLeft + m_cameraWidth && nodes[nodeIndex].y <= m_cameraTop + m_cameraHeight) {
-            ++m_onScreenSpawns;
-        }
-    }
-    actor->objectId = objectId;
-    if (hasAuthoredRoute) { actor->model.enemy.SetPath(path); }
-    SetIndicator(objectId, 0, actor->model.enemy.combat.id);
-    return true;
-}
 
 void CLevel::StartObjectLayer(int layer) {
     if (m_props != nullptr) { m_props->StartLayer(layer); }
@@ -1096,15 +880,15 @@ bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
     }
     if (object.objectType != static_cast<unsigned>(ZPlacedObjectType::Enemy)) { return true; }
     for (unsigned index = 0; index < m_catalog->size(); ++index) {
-        const ZEnemyTemplateData &entry = (*m_catalog)[index];
+        const CEnemy::Template &entry = (*m_catalog)[index];
         if (entry.packHash != object.packHash || entry.ordinal != object.localIndex) { continue; }
-        ZCombatEnemy *actor = Spawn(index, object.x, object.y);
+        CEnemy *actor = Spawn(index, object.x, object.y);
         if (actor == nullptr) { return false; }
         actor->objectId = objectId;
         actor->mapPlaced = true;
-        if (object.pathLayer != 255) { actor->model.enemy.SetPath(m_map->GetPathLayer(object.pathLayer)); }
-        SetIndicator(objectId, 0, actor->model.enemy.combat.id);
-        actor->model.enemy.combat.facing = static_cast<float>(object.facing);
+        if (object.pathLayer != 255) { actor->SetPath(m_map->GetPathLayer(object.pathLayer)); }
+        SetIndicator(objectId, 0, actor->combat.id);
+        actor->combat.facing = static_cast<float>(object.facing);
         std::printf("[survival] placed enemy id=%d tag=%u item=%u path=%u facing=%d\n",
             objectId, object.spawnTag, object.localIndex, object.pathLayer, object.facing);
         return true;
@@ -1112,29 +896,6 @@ bool CLevel::SpawnMapObject(const ZPlacedObject &object, int objectId) {
     return false;
 }
 
-void CLevel::SendEnemyMessage(int objectId, int message) {
-    if (m_playerModel == nullptr) { return; }
-    for (const auto &actor : GetEnemies()) {
-        if (actor->objectId != objectId) { continue; }
-        const unsigned before = actor->model.enemy.GetStateId();
-        actor->model.enemy.HandleMessage(message);
-        if (before != actor->model.enemy.GetStateId()) {
-            std::printf("[map-enemy] id=%d message=%d state=%u->%u\n",
-                objectId, message, before, actor->model.enemy.GetStateId());
-        }
-        return;
-    }
-}
-
-void CLevel::SetEnemyPortal(int enemyId, int propId) {
-    if (m_playerModel == nullptr) { return; }
-    for (const auto &actor : GetEnemies()) {
-        if (actor->objectId != enemyId) { continue; }
-        actor->model.enemy.combat.portalObjectId = propId;
-        actor->model.enemy.combat.portalActive = false;
-        return;
-    }
-}
 
 void CLevel::SendPropMessage(int objectId, int message) {
     if (m_props != nullptr) { m_props->SendMessage(objectId, message); }
@@ -1208,8 +969,8 @@ std::uint64_t CLevel::ResolveIndicatorTarget(int objectId) const {
         if (key != 0) { return (2ULL << 32) | key; }
     }
     for (const auto &actor : GetEnemies()) {
-        if (actor->objectId == objectId && !actor->model.enemy.combat.dead && !actor->model.enemy.combat.removed) {
-            return actor->model.enemy.combat.id;
+        if (actor->objectId == objectId && !actor->combat.dead && !actor->combat.removed) {
+            return actor->combat.id;
         }
     }
     return 0;
@@ -1223,50 +984,25 @@ bool CLevel::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
     if ((key >> 32) == 1) {
         return GetPickupIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
-    const ZCombatEnemy *actor = Find(static_cast<ZCombatId>(key));
-    if (actor == nullptr || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { return false; }
-    x = actor->model.enemy.combat.x;
-    y = actor->model.enemy.combat.y;
+    const CEnemy *actor = Find(static_cast<ZCombatId>(key));
+    if (actor == nullptr || actor->combat.dead || actor->combat.removed) { return false; }
+    x = actor->combat.x;
+    y = actor->combat.y;
     return true;
 }
 
 bool CLevel::GetObjectPosition(int objectId, float &x, float &y) const {
     if (m_playerModel == nullptr) { return false; }
     for (const auto &actor : GetEnemies()) {
-        if (actor->objectId != objectId || actor->model.enemy.combat.dead || actor->model.enemy.combat.removed) { continue; }
-        x = actor->model.enemy.combat.x;
-        y = actor->model.enemy.combat.y;
+        if (actor->objectId != objectId || actor->combat.dead || actor->combat.removed) { continue; }
+        x = actor->combat.x;
+        y = actor->combat.y;
         return true;
     }
     if (GetPickupPosition(objectId, x, y)) { return true; }
     return m_props != nullptr && m_props->GetObjectPosition(objectId, x, y);
 }
 
-int CLevel::CountEnemySlots(const GameObjectRef *enemy) const {
-    if (m_playerModel == nullptr) { return 0; }
-    int count = 0;
-    for (const auto &actor : GetEnemies()) {
-        if (actor->model.enemy.combat.removed) { continue; }
-        if (enemy == nullptr || (actor->data->packHash == enemy->packHash && actor->data->ordinal == enemy->localIndex)) {
-            ++count;
-        }
-    }
-    return count;
-}
-
-int CLevel::CountEnemies(const GameObjectRef *enemy, int objectId) const {
-    if (m_playerModel == nullptr) { return 0; }
-    int count = 0;
-    for (const auto &actor : GetEnemies()) {
-        const CEnemy::CombatState &state = actor->model.enemy.combat;
-        if (state.dead || state.removed) { continue; }
-        if (objectId >= 0 && actor->objectId != objectId) { continue; }
-        if (enemy == nullptr || (actor->data->packHash == enemy->packHash && actor->data->ordinal == enemy->localIndex)) {
-            ++count;
-        }
-    }
-    return count;
-}
 
 void CLevel::UpdateMapInteractions(float previousX, float previousY) {
     if (m_playerModel == nullptr || m_map == nullptr || IsMatchSpawnPending(0)) { return; }

@@ -80,43 +80,6 @@ void CLevel::ResolveBrotherForce(float previousX, float previousY, float &x, flo
     ResolveMovement(previousX, previousY, x, y, m_playerRadius);
 }
 
-void CLevel::UpdateNavigation(ZCombatEnemy &actor, int deltaMs) {
-    PerformanceProbe::Scope timing(PerformanceProbe::counters.navigationMs);
-    CEnemy::CombatState &state = actor.model.enemy.combat;
-    if (m_map == nullptr || state.behaviour != 0 || state.dead) {
-        state.hasNavigationTarget = false;
-        return;
-    }
-    actor.navigationTimer -= deltaMs;
-    if (actor.navigationTimer > 0 && state.hasNavigationTarget &&
-        std::hypot(state.navigationX - state.x, state.navigationY - state.y) > 10) { return; }
-    actor.navigationTimer = 240;
-    state.hasNavigationTarget = false;
-    const float radius = actor.model.enemy.GetPart(0).radius * m_cameraScale;
-    if (HasClearPath(state.x, state.y, state.targetX, state.targetY, radius)) { return; }
-    ILayerPath *path = m_map->GetPathLayer(m_pathLayer);
-    if (path == nullptr) { return; }
-    const int start = path->FindNode(state.x, state.y);
-    const int destination = path->FindNode(state.targetX, state.targetY);
-    const auto &nodes = path->GetNodes();
-    if (start < 0 || destination < 0) { return; }
-    int next = path->FindNext(start, destination);
-    if (next < 0) { return; }
-    const int adjacent = next;
-    // Skip centres only when the actual collision sweep has a clear corridor.
-    for (int lookAhead = 0; lookAhead < 8 && next != destination; ++lookAhead) {
-        const int farther = path->FindNext(next, destination);
-        if (farther < 0 || farther == next ||
-            !HasClearPath(state.x, state.y, nodes[farther].x, nodes[farther].y, radius)) { break; }
-        next = farther;
-    }
-    state.hasNavigationTarget = true;
-    state.navigationX = nodes[next].x;
-    state.navigationY = nodes[next].y;
-    if (next == adjacent && next != start) {
-        path->GetConnectionPoint(start, next, state.navigationX, state.navigationY);
-    }
-}
 
 void CLevel::Reset() {
     m_deathChoiceHandled[0] = 0; m_deathChoiceHandled[1] = 0;
@@ -131,6 +94,7 @@ void CLevel::Reset() {
     m_reviveEffectTarget = 0;
     m_peerIndicatorVisible = false;
     m_flockEnemies.clear();
+    m_flock.Clear();
     m_experienceTexts.clear();
     m_actor.ResetXplodiumRemainder();
     m_hasViewCenter = false;
@@ -183,35 +147,4 @@ bool CLevel::CanBrotherWalk(float x, float y, float destinationX, float destinat
         return std::hypot(resolvedX - destinationX, resolvedY - destinationY) < 0.1f;
     }
     return HasClearPath(x, y, destinationX, destinationY, m_playerRadius);
-}
-
-bool CLevel::PreloadEnemies(const RequirementList &requirements, const CScript &levelScript) {
-    return m_objects.PreloadEnemies(requirements, levelScript);
-}
-
-ZCombatEnemy *CLevel::Spawn(std::size_t entry, float x, float y) {
-    ZCombatEnemy *actor = m_objects.SpawnEnemy(entry, x, y);
-    if (actor != nullptr) { SelectTarget(*actor); }
-    return actor;
-}
-
-ZCombatEnemy *CLevel::SpawnNearby(std::size_t entry) {
-    ZCombatEnemy *actor = m_objects.GetNearbyEnemy(entry, m_actor.x, m_actor.y);
-    if (actor != nullptr) { SelectTarget(*actor); }
-    return actor;
-}
-
-ZCombatEnemy *CLevel::Find(ZCombatId id) {
-    return m_objects.FindEnemy(id);
-}
-
-const ZCombatEnemy *CLevel::Find(ZCombatId id) const {
-    for (const auto &actor : m_objects.GetEnemies()) {
-        if (actor->model.enemy.combat.id == id) { return actor.get(); }
-    }
-    return nullptr;
-}
-
-std::size_t CLevel::AliveCount() const {
-    return m_objects.GetAliveEnemyCount();
 }

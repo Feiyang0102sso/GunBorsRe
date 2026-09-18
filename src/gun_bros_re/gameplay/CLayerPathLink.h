@@ -13,7 +13,7 @@ public:
         ZMapRectangle bounds;
     };
     bool Init(CArrayInputStream &stream);
-    int GetSpawnLocation(float sourceX, float sourceY, const ZSpawnFilter &filter, ZRandom &random) const override;
+    int GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const override;
 private:
     std::vector<Region> m_regions;
 };

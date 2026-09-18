@@ -1,6 +1,24 @@
 # 源码文件名映射
 
-日期：2026-09-17。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+日期：2026-09-18。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+
+## 敌人组合层拆分（2026-09-18）
+
+敌人专属生产源码统一位于 `gun_bros_re/gameplay/enemy/`。按本轮用户要求，文件统一 C 前缀，原 I 前缀保留；宿主适配也采用 C 文件名，但文件头明确适配边界，不将自建契约声称为原版类。后文历史路径以本段为准。实施证据与验证见 [敌人职责归位](enemy-responsibility-migration.md)。
+
+| 原职责／文件 | 当前归属 |
+|---|---|
+| `ZEnemyModel.*`、`ZEnemyTemplateData` | `CEnemy::Template`、`CEnemy::ModelConfig/ResourceCache`；`CEnemyTemplate.cpp`、`CEnemyResources.cpp`、`CEnemyDrawing.cpp`，实例脚本与动画归同一个 `CEnemy` |
+| `ZCombatEnemy`、`ZPlacedEnemy` 包装 | 删除；对象池和静态地图直接持有 `CEnemy`，地图模板单独稳定存储；`CEnemyMap.cpp` 实现地图预览的敌人绑定 |
+| `gameplay/CEnemy*`、`CFlock.*`、`CLinkPathFinder.*`、`CStunController.*`、`CTargetingController.*` | 同名文件移入 `enemy/`；原 `CEnemyCombat.cpp` 继续按行为、脚本、伤害拆分实现 |
+| 寻路组合逻辑 | `CMeshPathFinder.*`、`CLayerPathMeshNavigation.cpp`；目标距离图归 `CFlock`，共享地图层定义仍在 `gameplay/` |
+| `level/CLevelObjectPool.*` | `enemy/CLevelObjectPool.*`；敌人槽与拾取物槽仍分别计数，未复制对象池 |
+| `CLevel` 的敌人分配、生成、事件、绘制 | `CLevelEnemies.cpp`、`CLevelEnemySpawning.cpp`、`CLevelEnemyEvents.cpp`、`CLevelEnemyDrawing.cpp`，都是已有 `CLevel` 的分文件实现 |
+| 菜单敌人模型组合 | `CMenuMeshEnemy.*`；调用 `CEnemy::SpawnForUI/UpdateUI/DrawUI` |
+| `ZLevelWorld`、`ZSpawnFilter`、`ZEnemyCasualty` | `CEnemyWorld.h`、`COffscreenSpawnLocationFilter.h`、`CEnemyCasualty.h`；前者是宿主回调契约，后者是宿主结算值，原过滤器保留原符号 |
+| 原刷怪脚本接口实现 | `IEnemySpawnerScriptInterface.cpp`；实现现有 `CEnemySpawner::FunctionResolver`，未补造继承层 |
+
+`CEnemyNodes.cpp` 对应原 `GetNodeLocationChunk`，`CEnemyPerception.cpp` 实现原 native 23 的地图／道具视线查询。共享弹体、地图、图形、脚本、关卡主循环与 Viewer／测试调用方保留各自目录，不纳入敌人私有模块。
 
 共享特效现统一位于 `gun_bros_re/effects/`，共 28 个源码文件，供 UI 与战斗共同使用。原 `gameplay/` 下同名文件不保留转发头；类名、池与持有关系保持不变。范围与验证见 [目录归并记录](effects-directory-migration.md)。下方历史批次中的旧路径按此迁移定位。
 

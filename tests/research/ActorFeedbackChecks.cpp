@@ -10,13 +10,13 @@ namespace {
 unsigned CheckEnemyMovement(CLevel &scene, const CCollisionData &collision,
     CBrother &player, ZPlayerVitals &vitals) {
     scene.Reset();
-    ZCombatEnemy *actor = scene.Spawn(0, 450, 550);
+    CEnemy *actor = scene.Spawn(0, 450, 550);
     if (actor == nullptr) { return 1; }
-    CEnemy &enemy = actor->model.enemy;
+    CEnemy &enemy = *actor;
     // Freeze AI to isolate movement resolution, without disabling collision.
     enemy.stun.SetStunned(10000, 100, 0);
     float centerX = enemy.combat.x, centerY = enemy.combat.y, radius = 0;
-    EnemyCollisionCircle(enemy, actor->data->gameScale, 0, centerX, centerY, radius);
+    enemy.GetCollisionCircle(actor->data->gameScale, 0, centerX, centerY, radius);
     // CBrother constructor :139098 uses 22, independently of the wall radius.
     scene.GetPlayer().x = centerX - (22 + enemy.GetPart(0).radius * 0.8f - 1);
     scene.GetPlayer().y = centerY;
@@ -77,9 +77,9 @@ unsigned CheckMeleeEscape(CLevel &scene, CBrother &player, std::size_t entry) {
     scene.GetEnemies().clear();
     const float startX = 400, startY = 550;
     for (int index = 0; index < 3; ++index) {
-        ZCombatEnemy *actor = scene.Spawn(entry, startX + 25 + index * 55, startY);
+        CEnemy *actor = scene.Spawn(entry, startX + 25 + index * 55, startY);
         if (actor == nullptr) { return 1; }
-        actor->model.enemy.stun.SetStunned(10000, 100, 0);
+        actor->stun.SetStunned(10000, 100, 0);
     }
     scene.GetPlayer().x = startX;
     scene.GetPlayer().y = startY;
@@ -92,10 +92,10 @@ unsigned CheckMeleeEscape(CLevel &scene, CBrother &player, std::size_t entry) {
     scene.GetPlayer().y = 750;
     for (int frame = 0; frame < 150 && brother.CanPassEnemies(); ++frame) { scene.Update(16, 0, 0, false); }
     if (brother.CanPassEnemies() || brother.IsImmunityHidden()) { ++failures; }
-    ZCombatEnemy &actor = *scene.GetEnemies().front();
-    float centerX = actor.model.enemy.combat.x, centerY = actor.model.enemy.combat.y, radius = 0;
-    EnemyCollisionCircle(actor.model.enemy, actor.data->gameScale, 0, centerX, centerY, radius);
-    scene.GetPlayer().x = centerX - (brother.GetRadius() + actor.model.enemy.GetPart(0).radius * 0.8f - 1);
+    CEnemy &actor = *scene.GetEnemies().front();
+    float centerX = actor.combat.x, centerY = actor.combat.y, radius = 0;
+    actor.GetCollisionCircle(actor.data->gameScale, 0, centerX, centerY, radius);
+    scene.GetPlayer().x = centerX - (brother.GetRadius() + actor.GetPart(0).radius * 0.8f - 1);
     scene.GetPlayer().y = centerY;
     const float beforeBlocked = scene.GetPlayer().x;
     scene.Update(16, 1, 0, false);
@@ -132,9 +132,9 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     ZPackTables tables(toc);
     CBrother::Template playerData;
     std::vector<ZWeaponEntry> weapons;
-    std::vector<ZEnemyTemplateData> enemies;
+    std::vector<CEnemy::Template> enemies;
     if (!playerData.Load(toc, tables) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadEnemyCatalog(toc, tables, enemies)) { return 1; }
+        !CEnemy::Template::LoadCatalog(toc, tables, enemies)) { return 1; }
     const ZWeaponEntry *pistol = nullptr;
     const ZWeaponEntry *rifle = nullptr;
     for (const ZWeaponEntry &weapon : weapons) {
@@ -307,7 +307,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     bool meleeChecked = false;
     for (std::size_t index = 0; index < enemies.size(); ++index) {
         scene.Reset();
-        ZCombatEnemy *enemy = scene.Spawn(index, scene.GetPlayer().x + 8, scene.GetPlayer().y);
+        CEnemy *enemy = scene.Spawn(index, scene.GetPlayer().x + 8, scene.GetPlayer().y);
         if (!enemy) { return 1; }
         const auto beforeMelee = scene.GetSoundCueCount();
         bool knockedBack = false;
@@ -323,7 +323,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         if (*player.VariableResolver(3) != 1400) { ++failures; }
         // Isolate one real contact so another attack cannot extend the measured travel.
         const int forceMs = enemy->contactTimer;
-        enemy->model.enemy.combat.enabled = false;
+        enemy->combat.enabled = false;
         const float startX = scene.GetPlayer().x;
         const float startY = scene.GetPlayer().y;
         float firstStep = 0;

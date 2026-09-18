@@ -118,7 +118,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         vitals.invincible = true;
         unsigned expectedExperience = 0;
         for (unsigned death = 0; death < 3; ++death) {
-            ZCombatEnemy *target = rewardProbe.Spawn(0, 600, 350);
+            CEnemy *target = rewardProbe.Spawn(0, 600, 350);
             if (target == nullptr) { ++checkFailures; break; }
             const unsigned experience = static_cast<unsigned>(std::ceil(target->data->experienceReward * player.GetArmorMultiplier(3)));
             if (death == 0) { expectedExperience = experience; }
@@ -128,7 +128,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
             hit.ownerType = 0;
             hit.damage = 1000000;
             hit.applyArmorAttack = false;
-            const ZCombatId targetId = target->model.enemy.combat.id;
+            const ZCombatId targetId = target->combat.id;
             for (unsigned tick = 0; tick < 300 && !target->deathReported; ++tick) {
                 rewardProbe.ApplyHit(targetId, hit);
                 rewardProbe.Update(16, 0, 0, false);
@@ -149,7 +149,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         rewardProbe.Reset();
         rewardProbe.SetHorde(false);
         rewardProbe.SetTextView(400, 100, 2, 1.5f);
-        ZCombatEnemy *xpTarget = rewardProbe.Spawn(0, 600, 350);
+        CEnemy *xpTarget = rewardProbe.Spawn(0, 600, 350);
         if (xpTarget == nullptr) { return 1; }
         ZCombatHit xpHit;
         xpHit.owner = kPlayerCombatId;
@@ -157,12 +157,12 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         xpHit.damage = 1000000;
         xpHit.applyArmorAttack = false;
         for (unsigned tick = 0; tick < 300 && !xpTarget->deathReported; ++tick) {
-            rewardProbe.ApplyHit(xpTarget->model.enemy.combat.id, xpHit);
+            rewardProbe.ApplyHit(xpTarget->combat.id, xpHit);
             rewardProbe.Update(16, 0, 0, false);
         }
         if (!xpTarget->deathReported || rewardProbe.GetExperienceTexts().size() != 1) { return 1; }
         const auto bornText = rewardProbe.GetExperienceTexts().front();
-        const auto &deadState = xpTarget->model.enemy.combat;
+        const auto &deadState = xpTarget->combat;
         if (bornText.amount != expectedExperience || bornText.x != int((deadState.x - 400) * 2) ||
             bornText.y != int((deadState.y - 100) * 1.5f) || bornText.alpha != 1) { ++checkFailures; }
         rewardProbe.SetTextView(900, 700, 4, 3);

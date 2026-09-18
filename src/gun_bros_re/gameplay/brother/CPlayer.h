@@ -1,6 +1,6 @@
 #pragma once
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/gameplay/CTargetingController.h"
+#include "gun_bros_re/gameplay/enemy/CTargetingController.h"
 #include "gun_bros_re/data/CPlayerProgress.h"
 
 class CCollisionData;

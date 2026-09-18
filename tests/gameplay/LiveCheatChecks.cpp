@@ -28,7 +28,7 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {
                 std::chrono::steady_clock::now() - updateStarted).count();
             peakUpdateUs = std::max(peakUpdateUs, static_cast<long long>(updateUs));
             for (auto &actor : scene.GetEnemies()) {
-                auto &enemy = actor->model.enemy;
+                auto &enemy = *actor;
                 if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
                     enemy.Damage(enemy.combat.health);
                 }
@@ -74,17 +74,17 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
     fixture.vitals.invincible = true;
     fixture.brother.vitals.invincible = true;
-    ZCombatEnemy *victim = nullptr;
+    CEnemy *victim = nullptr;
     for (unsigned elapsed = 0; elapsed < 10000 && victim == nullptr; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (auto &actor : scene.GetEnemies()) {
-            if (!actor->mapPlaced && actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { victim = actor.get(); break; }
+            if (!actor->mapPlaced && actor->CanReceiveProjectile(0, kPlayerCombatId)) { victim = actor.get(); break; }
         }
     }
     if (victim == nullptr) { return 1; }
     hud.BeginLiveWave(scene.GetMultiplayerStatistics(0), scene.GetMultiplayerStatistics(1));
     const unsigned killsBeforeWait = session.GetKills();
-    victim->model.enemy.Damage(victim->model.enemy.combat.health);
+    victim->Damage(victim->combat.health);
     session.Update(16, 0, 0, false);
     std::printf("[live-cheat-progress] wait-death-delivered=%d\n", session.GetKills() > killsBeforeWait);
     if (session.GetKills() <= killsBeforeWait) { ++failures; }

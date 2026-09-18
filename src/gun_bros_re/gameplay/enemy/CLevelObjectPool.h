@@ -1,3 +1,6 @@
+/** Original: src/gunbros/levelObjectPool.cpp constructor :145287, GetEnemy :145509, Release :145426.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /**
  * @file CLevelObjectPool.h
  * @brief Runtime storage and allocation for level objects.
@@ -9,7 +12,7 @@
 #ifndef GUN_BROS_RE_CLEVELOBJECTPOOL_H
 #define GUN_BROS_RE_CLEVELOBJECTPOOL_H
 
-#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
 
 #include <map>
@@ -18,28 +21,15 @@
 
 class CLevel;
 
-struct ZCombatEnemy {
-    const ZEnemyTemplateData *data = nullptr;
-    ZEnemyModel model;
-    int contactTimer = 0;
-    int brotherContactTimer = 0;
-    int corpseMs = 0;
-    int objectId = -1;
-    bool mapPlaced = false; // Map mechanisms are not dynamic wave enemies.
-    bool deathReported = false;
-    int navigationTimer = 0;
-    unsigned assistMask[2]{}; // Each peer's original two gun configuration bits.
-};
-
 /** Owns the level's enemy instances and their allocation bookkeeping. */
 // Pickups use a separate twenty-object limit, independent of particle effects.
 class CLevelObjectPool {
 public:
     CLevelObjectPool() = default;
     CLevelObjectPool(ZPackTables &tables, const ZShaderProgram &program,
-        const std::vector<ZEnemyTemplateData> &catalog);
+        const std::vector<CEnemy::Template> &catalog);
     void BindRuntime(ZPackTables &tables, const ZShaderProgram &program,
-        const std::vector<ZEnemyTemplateData> &catalog);
+        const std::vector<CEnemy::Template> &catalog);
 
     void SetLevel(CLevel *level) { m_level = level; }
     void SetUsesMapCoordinates(bool enabled) { m_usesMapCoordinates = enabled; }
@@ -50,20 +40,20 @@ public:
     void ClearPickups();
     const std::vector<std::unique_ptr<CPickup>> &GetPickups() const { return m_pickups; }
     bool PreloadEnemies(const RequirementList &requirements, const CScript &levelScript);
-    ZCombatEnemy *SpawnEnemy(std::size_t entry, float x, float y, bool forcePool = false);
-    ZCombatEnemy *GetNearbyEnemy(std::size_t entry, float centerX, float centerY);
-    ZCombatEnemy *FindEnemy(ZCombatId id);
+    CEnemy *SpawnEnemy(std::size_t entry, float x, float y, bool forcePool = false);
+    CEnemy *GetNearbyEnemy(std::size_t entry, float centerX, float centerY);
+    CEnemy *FindEnemy(ZCombatId id);
     std::size_t GetAliveEnemyCount() const;
 
     void QueueEnemy(const GameObjectRef &resource, float x, float y,
         int objectId, bool forcePool, ZCombatId summoner);
-    std::vector<ZCombatEnemy *> FinishEnemySpawns();
+    std::vector<CEnemy *> FinishEnemySpawns();
     ZCombatId GetSummoner(ZCombatId owner) const;
     void ReleaseEnemy(std::size_t index);
 
-    std::vector<std::unique_ptr<ZCombatEnemy>> &GetEnemies() { return m_enemies; }
-    const std::vector<std::unique_ptr<ZCombatEnemy>> &GetEnemies() const { return m_enemies; }
-    const ZEnemyModelCache &GetEnemyModelCache() const { return m_enemyModelCache; }
+    std::vector<std::unique_ptr<CEnemy>> &GetEnemies() { return m_enemies; }
+    const std::vector<std::unique_ptr<CEnemy>> &GetEnemies() const { return m_enemies; }
+    const CEnemy::ResourceCache &GetEnemyModelCache() const { return m_enemyModelCache; }
     unsigned GetSpawnCount() const { return m_spawnCount; }
     unsigned GetInvalidSpawnCount() const { return m_invalidSpawnCount; }
     void RecordInvalidSpawn() { ++m_invalidSpawnCount; }
@@ -80,11 +70,11 @@ private:
 
     ZPackTables *m_tables = nullptr;
     const ZShaderProgram *m_program = nullptr;
-    const std::vector<ZEnemyTemplateData> *m_catalog = nullptr;
+    const std::vector<CEnemy::Template> *m_catalog = nullptr;
     CLevel *m_level = nullptr;
     bool m_usesMapCoordinates = false;
-    ZEnemyModelCache m_enemyModelCache;
-    std::vector<std::unique_ptr<ZCombatEnemy>> m_enemies;
+    CEnemy::ResourceCache m_enemyModelCache;
+    std::vector<std::unique_ptr<CEnemy>> m_enemies;
     std::vector<std::unique_ptr<CPickup>> m_pickups;
     std::vector<PendingEnemy> m_pendingEnemies;
     std::map<ZCombatId, ZCombatId> m_summoners;

@@ -18,7 +18,7 @@
 namespace MissionCatalogDetail {
 
 // This records script requests without pretending to run enemy combat.
-class ZMissionProbeWorld : public ZLevelWorld {
+class ZMissionProbeWorld : public CEnemyWorld {
 public:
     bool SpawnEnemy(const GameObjectRef &, int, int, int) override { return true; }
     int CountEnemies(const GameObjectRef *, int) const override { return 0; }

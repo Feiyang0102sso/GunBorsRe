@@ -5,6 +5,7 @@
 #define GUN_BROS_RE_ZCOMBATTYPES_H
 
 #include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/gameplay/enemy/CEnemyCasualty.h"
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -13,12 +14,6 @@ struct ZWeaponCombatProgress {
     GameObjectRef resource;
     unsigned experience = 0;
     unsigned maximum = 0;
-};
-
-struct ZEnemyCasualty {
-    GameObjectRef resource;
-    unsigned count = 0;
-    std::string name;
 };
 
 // IDs survive vector growth and never point at actors that have been removed.

@@ -196,32 +196,32 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             CGame airstrikeSession(airstrikeScene, loaded.map, enemies);
             if (!airstrikeSession.Load(toc, tables, toc.GetPack(packIndex)->GetPackHash(), mapIndex, archiveLevel, archiveMission != nullptr)) { return 1; }
             airstrikeSession.Restart(startX, startY, startFacing);
-            ZCombatEnemy *target = airstrikeScene.Spawn(0, 700, 650);
-            ZCombatEnemy *outside = airstrikeScene.Spawn(0, 4600, 650);
+            CEnemy *target = airstrikeScene.Spawn(0, 700, 650);
+            CEnemy *outside = airstrikeScene.Spawn(0, 4600, 650);
             if (target == nullptr || outside == nullptr) { return 1; }
             for (int elapsed = 0; elapsed < 1000; elapsed += 16) {
-                target->model.enemy.Update(16);
-                outside->model.enemy.Update(16);
+                target->Update(16);
+                outside->Update(16);
             }
-            target->model.enemy.TakeActions();
-            outside->model.enemy.TakeActions();
+            target->TakeActions();
+            outside->TakeActions();
             // Arena clamps initial spawns; explicitly place the radius probe
             // outside the blast only after its authored spawn state has matured.
-            outside->model.enemy.combat.x = 600;
-            outside->model.enemy.combat.y = 650;
-            target->model.enemy.combat.health = 100000;
-            target->model.enemy.combat.maxHealth = 100000;
+            outside->combat.x = 600;
+            outside->combat.y = 650;
+            target->combat.health = 100000;
+            target->combat.maxHealth = 100000;
             // Put the blast at a camera center far from the player. The target
             // must be hit there; the player's vicinity is outside every radius.
             airstrikeScene.SetViewCenter(5000, 650);
-            target->model.enemy.combat.x = 5100;
-            target->model.enemy.combat.y = 650;
+            target->combat.x = 5100;
+            target->combat.y = 650;
             consumable.localIndex = static_cast<std::uint8_t>(airstrikeIndex);
             consumableProbe.AddPowerup(consumable, 2);
             CPowerUpSelector airstrike(toc, tables, player, vitals, airstrikeScene, consumableProbe);
             airstrikeScene.SetPowerup(&airstrike.GetPowerup());
             if (!airstrike.InitPowerups() || !airstrike.Select(airstrikeIndex) || !airstrike.UseSelected(fromSelector) || airstrike.UseSelected() || airstrike.GetCount() != 1) { ++checkFailures; }
-            if (target->model.enemy.combat.hitCount != 0) { ++checkFailures; }
+            if (target->combat.hitCount != 0) { ++checkFailures; }
             // Paused presentation has no elapsed time and must not finish a movie.
             for (unsigned repeat = 0; repeat < 10; ++repeat) { airstrikeScene.UpdatePowerup(airstrike.GetPowerup(), 0); }
             if (airstrike.GetPowerup().GetElapsed() != 0) { ++checkFailures; }
@@ -231,8 +231,8 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             unsigned closingFrames = 0;
             const float frozenX = airstrikeScene.GetPlayer().x;
             const float frozenY = airstrikeScene.GetPlayer().y;
-            const float frozenEnemyX = target->model.enemy.combat.x;
-            const float frozenEnemyY = target->model.enemy.combat.y;
+            const float frozenEnemyX = target->combat.x;
+            const float frozenEnemyY = target->combat.y;
             const float frozenHealth = vitals.health;
             // Haven's LEVEL also creates two map turrets. Freeze preserves
             // the starting count; it does not imply only our two probes exist.
@@ -249,7 +249,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                     }
                 }
                 if (airstrikeScene.GetPlayer().x != frozenX || airstrikeScene.GetPlayer().y != frozenY || airstrikeScene.GetShotCount() != 0) { ++movingFrames; }
-                if (target->model.enemy.combat.x != frozenEnemyX || target->model.enemy.combat.y != frozenEnemyY ||
+                if (target->combat.x != frozenEnemyX || target->combat.y != frozenEnemyY ||
                     vitals.health != frozenHealth || airstrikeScene.GetEnemies().size() != frozenEnemyCount) { ++movingFrames; }
                 if (airstrike.GetPowerup().splashCount > 0 && splashTime == 0) { splashTime = elapsed + 16; }
                 if (elapsed == 992) {
@@ -287,11 +287,11 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             if (airstrikeIndex == 10) { expectedDamage = 500; }
             if (airstrikeIndex == 11) { expectedDamage = 1600; }
             if (airstrike.GetPowerup().IsPresentationActive() || airstrike.GetPowerup().splashCount != 1 || splashTime < 1200 ||
-                std::abs(target->model.enemy.combat.totalDamage - expectedDamage) > 0.01f ||
-                outside->model.enemy.combat.hitCount != 0 || airstrike.GetCount() != 1) { ++checkFailures; }
+                std::abs(target->combat.totalDamage - expectedDamage) > 0.01f ||
+                outside->combat.hitCount != 0 || airstrike.GetCount() != 1) { ++checkFailures; }
             std::printf("[airstrike-check] item=%u time=%u movies=%u effects=%u damage=%.2f expected=%.2f outside-hits=%d stock=%u failures=%u\n",
                 airstrikeIndex, splashTime, airstrike.GetPowerup().movieCompletions, airstrike.GetPowerup().effectCount,
-                target->model.enemy.combat.totalDamage, expectedDamage, outside->model.enemy.combat.hitCount, airstrike.GetCount(), checkFailures);
+                target->combat.totalDamage, expectedDamage, outside->combat.hitCount, airstrike.GetCount(), checkFailures);
             // Release the original intro normally, then verify real input works
             // again. A cleared pause flag alone does not prove gameplay resumed.
             for (unsigned frame = 0; frame < 100; ++frame) { airstrikeSession.Update(16, 0, 0, false); }
@@ -345,15 +345,15 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             aimScene.GetPlayer().x = 600;
             aimScene.GetPlayer().y = 650;
             aimScene.GetPlayer().facing = 270;
-            ZCombatEnemy *target = aimScene.Spawn(0, 700, 650);
+            CEnemy *target = aimScene.Spawn(0, 700, 650);
             if (target == nullptr) { return 1; }
-            for (int elapsed = 0; elapsed < 1000; elapsed += 16) { target->model.enemy.Update(16); }
+            for (int elapsed = 0; elapsed < 1000; elapsed += 16) { target->Update(16); }
             // Maturation can queue an enemy shot before this fixture begins.
             // Discard only those setup actions; measured scene updates remain real.
-            target->model.enemy.TakeActions();
-            target->model.enemy.combat.health = 100000;
-            target->model.enemy.combat.maxHealth = 100000;
-            target->model.enemy.stun.SetStunned(6000, 0, 0);
+            target->TakeActions();
+            target->combat.health = 100000;
+            target->combat.maxHealth = 100000;
+            target->stun.SetStunned(6000, 0, 0);
             consumable.localIndex = 12;
             consumableProbe.AddPowerup(consumable, 2);
             CPowerUpSelector aimPowerup(toc, tables, player, vitals, aimScene, consumableProbe);
@@ -365,11 +365,11 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             std::printf("[autoaim-probe] idle shots=%zu target=%llu failures=%u\n", aimScene.GetShotCount(),
                 static_cast<unsigned long long>(aimScene.GetAutoAimTarget()), checkFailures);
             for (int elapsed = 0; elapsed < 1800; elapsed += 16) { aimScene.Update(16, 0, 0, true); }
-            if (aimScene.GetShotCount() == 0 || target->model.enemy.combat.hitCount == 0 ||
+            if (aimScene.GetShotCount() == 0 || target->combat.hitCount == 0 ||
                 aimScene.GetAutoAimTarget() == 0 || std::abs(aimScene.GetPlayer().facing - 90) > 5.1f) { ++checkFailures; }
             std::printf("[autoaim-probe] hold facing=%.2f target=%.1f,%.1f shots=%zu hits=%d failures=%u\n",
-                aimScene.GetPlayer().facing, target->model.enemy.combat.x, target->model.enemy.combat.y,
-                aimScene.GetShotCount(), target->model.enemy.combat.hitCount, checkFailures);
+                aimScene.GetPlayer().facing, target->combat.x, target->combat.y,
+                aimScene.GetShotCount(), target->combat.hitCount, checkFailures);
             aimScene.Update(16, 0, 0, false);
             const auto releasedShots = aimScene.GetShotCount();
             for (int elapsed = 0; elapsed < 320; elapsed += 16) { aimScene.Update(16, 0, 0, false); }
@@ -383,22 +383,22 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             player.Update(1);
             if (player.IsAutoFire()) { ++checkFailures; }
             std::printf("[autoaim-play-check] shots=%zu hits=%d hold/release/swap/90sec/expiry failures=%u\n",
-                releasedShots, target->model.enemy.combat.hitCount, checkFailures);
+                releasedShots, target->combat.hitCount, checkFailures);
         }
         session.Restart(startX, startY, startFacing);
         {
             CLevel turretScene(toc, tables, program);
     turretScene.BindCombat(enemies, player, vitals, loaded.playerTemplate->GetGameScale());
             turretScene.Reset();
-            ZCombatEnemy *target = turretScene.Spawn(0, 600, 460);
+            CEnemy *target = turretScene.Spawn(0, 600, 460);
             if (target == nullptr) { return 1; }
-            for (int elapsed = 0; elapsed < 1000; elapsed += 16) { target->model.enemy.Update(16); }
-            target->model.enemy.TakeActions();
-            target->model.enemy.combat.x = 600;
-            target->model.enemy.combat.y = 460;
-            target->model.enemy.combat.health = 100000;
-            target->model.enemy.combat.maxHealth = 100000;
-            target->model.enemy.stun.SetStunned(60000, 0, 0);
+            for (int elapsed = 0; elapsed < 1000; elapsed += 16) { target->Update(16); }
+            target->TakeActions();
+            target->combat.x = 600;
+            target->combat.y = 460;
+            target->combat.health = 100000;
+            target->combat.maxHealth = 100000;
+            target->stun.SetStunned(60000, 0, 0);
             consumable.localIndex = 19;
             consumableProbe.AddPowerup(consumable, 2);
             CPowerUpSelector turretPowerup(toc, tables, player, vitals, turretScene, consumableProbe);
@@ -411,7 +411,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 turretScene.UpdatePowerup(turretPowerup.GetPowerup(), 16);
                 unsigned liveTurrets = 0;
                 for (const auto &actor : turretScene.GetEnemies()) {
-                    if (actor->model.enemy.combat.turret && !actor->model.enemy.combat.removed) { ++liveTurrets; }
+                    if (actor->combat.turret && !actor->combat.removed) { ++liveTurrets; }
                 }
                 peakTurrets = std::max(peakTurrets, liveTurrets);
                 if (player.IsTurretActive() && liveTurrets == 1 && firstActiveMs < 0) {
@@ -424,7 +424,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 }
             }
             if (firstActiveMs < 0 || stoppedMs <= firstActiveMs || peakTurrets != 1 ||
-                target->model.enemy.combat.hitCount == 0 || turretPowerup.GetCount() != 1 ||
+                target->combat.hitCount == 0 || turretPowerup.GetCount() != 1 ||
                 turretPowerup.consumed != 1 || turretPowerup.failures != 0) { ++checkFailures; }
             if (!turretPowerup.UseSelected()) { ++checkFailures; }
             // Cancelled pre-throw requests release their reservation, without
@@ -438,7 +438,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             if (player.IsTurretActive() || turretPowerup.GetCount() != 1) { ++checkFailures; }
             std::printf("[turret-play-check] active=%d stopped=%d peak=%u shots=%zu hits=%d stock=%u failures=%u\n",
                 firstActiveMs, stoppedMs, peakTurrets, turretScene.GetShotCount(),
-                target->model.enemy.combat.hitCount, turretPowerup.GetCount(), checkFailures);
+                target->combat.hitCount, turretPowerup.GetCount(), checkFailures);
         }
         session.Restart(startX, startY, startFacing);
         const unsigned boosts[] = {18, 17, 16};
@@ -517,9 +517,9 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             const unsigned grenadeBullets[] = {90, 93, 94};
             for (unsigned bulletIndex : grenadeBullets) {
                 blastScene.Reset();
-                ZCombatEnemy *target = blastScene.Spawn(0, 600, 450);
+                CEnemy *target = blastScene.Spawn(0, 600, 450);
                 if (target == nullptr) { return 1; }
-                CEnemy &enemy = target->model.enemy;
+                CEnemy &enemy = *target;
                 // Let the original spawn sequence reach its ordinary hit handler.
                 for (int elapsed = 0; elapsed < 1000; elapsed += 16) { enemy.Update(16); }
                 enemy.combat.health = 10000;
@@ -572,9 +572,9 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                     if (!enemies[enemyIndex].script.IsPresent()) { continue; }
                     for (unsigned flags : attributes) {
                         blastScene.Reset();
-                        ZCombatEnemy *target = blastScene.Spawn(enemyIndex, 600, 450);
+                        CEnemy *target = blastScene.Spawn(enemyIndex, 600, 450);
                         if (target == nullptr) { return 1; }
-                        CEnemy &enemy = target->model.enemy;
+                        CEnemy &enemy = *target;
                         for (int elapsed = 0; elapsed < 1000; elapsed += 16) { enemy.Update(16); }
                         enemy.combat.health = 10000;
                         enemy.combat.maxHealth = 10000;
@@ -725,7 +725,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             pilot->Update(16, moveX, moveY);
             session.Update(16, moveX, moveY, !withBrother || gameContext != nullptr);
             float damage = scene.damageDealt;
-            for (const auto &actor : scene.GetEnemies()) { damage += actor->model.enemy.combat.totalDamage; }
+            for (const auto &actor : scene.GetEnemies()) { damage += actor->combat.totalDamage; }
             stalledMs += 16;
             if (damage != previousDamage) { stalledMs = 0; previousDamage = damage; }
             if (stalledMs > 120000) {
@@ -773,17 +773,17 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             scene.GetShotCount(), scene.GetSoundCueCount(), scene.GetPlayer().x, scene.GetPlayer().y,
             vitals.stunMs, player.GetStateId());
         for (const auto &actor : scene.GetEnemies()) {
-            const CEnemy::CombatState &enemy = actor->model.enemy.combat;
+            const CEnemy::CombatState &enemy = actor->combat;
             if (!enemy.dead) {
                 std::printf("[survival-check] alive %s pos=%.1f,%.1f health=%.1f state=%d behaviour=%d\n",
                     actor->data->owner.c_str(), enemy.x, enemy.y, enemy.health,
-                    actor->model.enemy.GetStateId(), enemy.behaviour);
+                    actor->GetStateId(), enemy.behaviour);
                 ILayerPath *path = loaded.map.GetPathLayer(session.GetLevel().GetPathLayer());
                 if (path != nullptr) {
                     const int first = path->FindNearest(enemy.x, enemy.y);
                     const int last = path->FindNearest(scene.GetPlayer().x, scene.GetPlayer().y);
                     std::printf("[survival-check] navigation=%d to=%.1f,%.1f radius=%.1f path=%d->%d next=%d\n",
-                        enemy.hasNavigationTarget, enemy.navigationX, enemy.navigationY, actor->model.enemy.GetPart(0).radius,
+                        enemy.hasNavigationTarget, enemy.navigationX, enemy.navigationY, actor->GetPart(0).radius,
                         first, last, path->FindNext(first, last));
                     const int containing = path->FindNode(enemy.x, enemy.y);
                     const int goal = path->FindNode(scene.GetPlayer().x, scene.GetPlayer().y);

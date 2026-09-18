@@ -98,7 +98,7 @@ ZCombatId CLevel::FindBrotherTarget(float x, float y, float radius) {
     for (const auto &actor : m_objects.GetEnemies()) {
         float targetX = 0;
         float targetY = 0;
-        const ZCombatId id = actor->model.enemy.combat.id;
+        const ZCombatId id = actor->combat.id;
         if (!GetBrotherTarget(id, targetX, targetY)) { continue; }
         const float distance = std::hypot(targetX - x, targetY - y);
         if (distance < radius) { radius = distance; nearest = id; }
@@ -108,9 +108,9 @@ ZCombatId CLevel::FindBrotherTarget(float x, float y, float radius) {
 
 bool CLevel::GetBrotherTarget(ZCombatId id, float &x, float &y) {
     if (IsDeathmatch() && id == kPlayerCombatId && !IsMatchSpawnPending(0) && !m_vitals->dead) { x = m_actor.x; y = m_actor.y; return true; }
-    ZCombatEnemy *actor = Find(id);
+    CEnemy *actor = Find(id);
     if (actor == nullptr) { return false; }
-    const CEnemy &enemy = actor->model.enemy;
+    const CEnemy &enemy = *actor;
     if (!enemy.combat.enabled || !enemy.combat.targetable ||
         !enemy.CanReceiveProjectile(0, kBrotherCombatId)) { return false; }
     x = enemy.combat.x;
@@ -141,35 +141,6 @@ bool CLevel::GetBrotherWaypoint(float x, float y, float targetX, float targetY,
     return true;
 }
 
-void CLevel::EnemyMatrix(const ZCombatEnemy &actor, float *matrix) const {
-    float identity[16];
-    Matrix4dIdentity(identity);
-    const CEnemy::CombatState &state = actor.model.enemy.combat;
-    const float scale = EnemyModelWorldScale(actor.model, actor.data->gameScale, m_cameraScale) * state.scaleFactor;
-    BuildEnemyGameMatrix(actor.model, identity, state.x, state.y, scale, state.facing, matrix);
-}
-
-void CLevel::PartMatrix(const ZCombatEnemy &actor, int index, float *matrix) const {
-    float base[16];
-    EnemyMatrix(actor, base);
-    const CEnemy::Part &part = actor.model.enemy.GetPart(index);
-    if (!part.followsFacing) {
-        float identity[16];
-        Matrix4dIdentity(identity);
-        const CEnemy::CombatState &state = actor.model.enemy.combat;
-        BuildEnemyGameMatrix(actor.model, identity, state.x, state.y,
-            EnemyModelWorldScale(actor.model, actor.data->gameScale, m_cameraScale) * state.scaleFactor, 0, base);
-    }
-    ZMeshPart placement;
-    placement.extraAngleDegrees = part.extraAngleDegrees;
-    placement.extraAxisX = part.extraAxisX;
-    placement.extraAxisY = part.extraAxisY;
-    placement.extraAxisZ = part.extraAxisZ;
-    if (part.boneIndex >= 0) {
-        actor.model.enemy.GetPart(0).controller.GetAnimation().GetNodeAt(part.boneIndex, placement.attachment);
-    }
-    MeshCameraBuildPartMatrix(placement, base, matrix);
-}
 
 bool CLevel::Anchor(ZCombatId id, int part, int node, float &x, float &y, float &z, float &direction) {
     if (id == kPlayerCombatId && IsMatchSpawnPending(0)) { return false; }
@@ -192,9 +163,9 @@ bool CLevel::Anchor(ZCombatId id, int part, int node, float &x, float &y, float 
         direction = m_brother->facing - 90;
         return true;
     }
-    ZCombatEnemy *actor = Find(id);
-    if (actor == nullptr || actor->model.enemy.combat.removed || actor->model.enemy.combat.dead) { return false; }
-    CEnemy &enemy = actor->model.enemy;
+    CEnemy *actor = Find(id);
+    if (actor == nullptr || actor->combat.removed || actor->combat.dead) { return false; }
+    CEnemy &enemy = *actor;
     x = enemy.combat.x;
     y = enemy.combat.y;
     z = 0;
@@ -217,48 +188,6 @@ bool CLevel::Anchor(ZCombatId id, int part, int node, float &x, float &y, float 
     return true;
 }
 
-void CLevel::SelectTarget(ZCombatEnemy &actor) {
-    CEnemy &enemy = actor.model.enemy;
-    if (IsDeathmatch() && enemy.combat.summoner != 0) {
-        if (enemy.combat.summoner == kPlayerCombatId && m_brother != nullptr) {
-            enemy.SetTarget(kBrotherCombatId, m_brother->x, m_brother->y, !IsMatchSpawnPending(1) && !m_brother->vitals.dead);
-        } else { enemy.SetTarget(kPlayerCombatId, m_actor.x, m_actor.y, !IsMatchSpawnPending(0) && !m_vitals->dead); }
-        return;
-    }
-    if (enemy.combat.targetType != 2) {
-        // Local peer has no network target packet: choose the nearest living
-        // brother on this host, including while the human player is down.
-        if (m_localLive && m_brother != nullptr && !m_brother->vitals.dead &&
-            (m_vitals->dead || std::hypot(m_brother->x - enemy.combat.x, m_brother->y - enemy.combat.y) <
-                std::hypot(m_actor.x - enemy.combat.x, m_actor.y - enemy.combat.y))) {
-            enemy.SetTarget(kBrotherCombatId, m_brother->x, m_brother->y, true);
-            return;
-        }
-        enemy.SetTarget(kPlayerCombatId, m_actor.x, m_actor.y, !m_vitals->dead);
-        return;
-    }
-    ZCombatEnemy *nearest = nullptr;
-    float distance = 100000;
-    for (auto &other : m_objects.GetEnemies()) {
-        const CEnemy &target = other->model.enemy;
-        if (!target.combat.enabled || !target.combat.targetable ||
-            !target.CanReceiveProjectile(0, enemy.combat.id)) { continue; }
-        const float current = std::hypot(target.combat.x - enemy.combat.x, target.combat.y - enemy.combat.y);
-        if (current < distance) { distance = current; nearest = other.get(); }
-    }
-    if (nearest != nullptr) {
-        const CEnemy::CombatState &target = nearest->model.enemy.combat;
-        enemy.SetTarget(target.id, target.x, target.y, true);
-    } else { enemy.SetTarget(0, enemy.combat.x, enemy.combat.y, false); }
-}
-
-void CLevel::EnemyCircle(const ZCombatEnemy &actor, int part, float &x, float &y, float &radius) const {
-    const CEnemy &enemy = actor.model.enemy;
-    const CEnemy::CombatState &state = enemy.combat;
-    x = state.x;
-    y = state.y;
-    EnemyCollisionCircle(enemy, actor.data->gameScale, part, x, y, radius);
-}
 
 bool CLevel::ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float &angle) {
     // CBrother::GetParticleEffectAnchor :134152 returns position and zero
@@ -279,7 +208,7 @@ bool CLevel::ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float
 bool CLevel::LinkedParticleAnchor(ZCombatId id, int node, float &x, float &y, float &z, float &angle) {
     auto *actor = Find(id);
     if (actor == nullptr) { return false; }
-    const auto &state = actor->model.enemy.combat;
+    const auto &state = actor->combat;
     float nodeDirection = 0;
     // GetParticleEffectAnchor :68615 re-reads the active part on each update.
     if (!Anchor(id, state.variables[14], node, x, y, z, nodeDirection)) { return false; }

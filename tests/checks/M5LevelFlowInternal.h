@@ -5,7 +5,7 @@
 #include "tests/checks/M5LevelFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/CMap.h"
-#include "gun_bros_re/gameplay/CEnemy.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/data/ZPackTables.h"
 #include <cstdio>
 #include <filesystem>
@@ -14,7 +14,7 @@
 
 namespace M5LevelFlowDetail {
 
-class IndicatorWorld : public ZLevelWorld {
+class IndicatorWorld : public CEnemyWorld {
 public:
     bool SpawnEnemy(const GameObjectRef &, int, int, int) override { return false; }
     int CountEnemies(const GameObjectRef *, int) const override { return 0; }
@@ -27,7 +27,7 @@ public:
 unsigned CheckCameraScale();
 
 /** A script test world: validate enemy resources, then finish them after 1s. */
-class LevelFlowWorld : public ZLevelWorld {
+class LevelFlowWorld : public CEnemyWorld {
 public:
     LevelFlowWorld(CLevel &level, ZPackTables &tables, CMap &map) : m_level(level), m_tables(tables), m_map(map) {}
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override {

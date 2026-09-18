@@ -12,8 +12,8 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
     ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
     ZPackTables tables(toc);
-    std::vector<ZEnemyTemplateData> enemies;
-    if (!LoadEnemyCatalog(toc, tables, enemies) || enemies.empty()) { return 1; }
+    std::vector<CEnemy::Template> enemies;
+    if (!CEnemy::Template::LoadCatalog(toc, tables, enemies) || enemies.empty()) { return 1; }
     unsigned failures = 0;
     unsigned tested = 0;
     for (const ZCatalogMap &entry : BuildCatalog(toc)) {
@@ -74,23 +74,23 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             splash.projectile = bullet.projectile;
             props.Splash(splash, 0);
             if (target.runtime->GetHealth() != initialHealth - 1) { ++failures; }
-            ZCombatEnemy *blastTarget = nullptr;
+            CEnemy *blastTarget = nullptr;
             float enemyHealth = 0;
             if (!checkedEnemyDamage) {
                 blastTarget = scene.Spawn(0, 600, 450);
                 if (!blastTarget) { return 1; }
                 // Finish the original spawn state, then place this target inside
                 // the blast. Its health and hit behavior still come from BIG.
-                for (int elapsed = 0; elapsed < 1024; elapsed += 16) { blastTarget->model.enemy.Update(16); }
-                blastTarget->model.enemy.combat.x = target.x + 30;
-                blastTarget->model.enemy.combat.y = target.y;
-                enemyHealth = blastTarget->model.enemy.combat.health;
+                for (int elapsed = 0; elapsed < 1024; elapsed += 16) { blastTarget->Update(16); }
+                blastTarget->combat.x = target.x + 30;
+                blastTarget->combat.y = target.y;
+                enemyHealth = blastTarget->combat.health;
             }
             if (props.ApplyHit(contact.target, bullet) != ZHitResult::Hit) { ++failures; continue; }
             for (int elapsed = 0; elapsed < 128; elapsed += 16) { props.Update(16); }
             if (blastTarget) {
-                blastTarget->model.enemy.Update(16);
-                const float remaining = blastTarget->model.enemy.combat.health;
+                blastTarget->Update(16);
+                const float remaining = blastTarget->combat.health;
                 if (enemyHealth <= 0 || remaining >= enemyHealth) { ++failures; }
                 std::printf("[prop-combat-check] %s enemy-hp=%.0f->%.0f\n", entry.packName.c_str(), enemyHealth, remaining);
                 checkedEnemyDamage = true;
@@ -131,7 +131,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             centerY /= 3;
             props.Reset();
             props.StartLayer(cluster[0]->objectLayer);
-            ZCombatEnemy *target = nullptr;
+            CEnemy *target = nullptr;
             for (std::size_t index = 0; index < enemies.size(); ++index) {
                 if (enemies[index].packHash == CStringToKey("pack1") && enemies[index].ordinal == 27) {
                     target = scene.Spawn(index, centerX, centerY);
@@ -139,7 +139,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 }
             }
             if (!target) { return 1; }
-            CEnemy &enemy = target->model.enemy;
+            CEnemy &enemy = *target;
             const float initialHealth = enemy.combat.health;
             GameObjectRef grenade;
             grenade.packHash = CStringToKey("pack5");

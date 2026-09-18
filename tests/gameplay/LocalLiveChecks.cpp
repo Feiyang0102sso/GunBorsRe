@@ -168,7 +168,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     // Two weapon slots of one peer can both assist the same accepted kill.
     bool checkedAssist = false;
     for (auto &enemy : scene.GetEnemies()) {
-        auto &target = enemy->model.enemy;
+        auto &target = *enemy;
         if (target.combat.dead || target.combat.health <= 0 || !target.CanReceiveProjectile(0, kBrotherCombatId)) { continue; }
         // Keep autonomous shots out of this attribution assertion, without
         // changing the original enemy template or accepting zero-damage hits.
@@ -214,7 +214,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     const float pausedBotX = bot.x, pausedBotY = bot.y;
     // Corpses may already have been removed; never assume a live front().
     std::vector<std::pair<float, float>> pausedEnemies;
-    for (const auto &enemy : scene.GetEnemies()) { pausedEnemies.push_back({enemy->model.enemy.combat.x, enemy->model.enemy.combat.y}); }
+    for (const auto &enemy : scene.GetEnemies()) { pausedEnemies.push_back({enemy->combat.x, enemy->combat.y}); }
     const auto shotsBeforePause = fixture.scene.GetShotCount();
     session.SetSuspended(true);
     for (unsigned tick = 0; tick < 100; ++tick) { session.Update(16, 1, 1, true); }
@@ -223,8 +223,8 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
         fixture.scene.GetShotCount() != shotsBeforePause ||
         hud->LiveWaveRemaining() != waitBefore) { return 1; }
     for (unsigned index = 0; index < pausedEnemies.size(); ++index) {
-        if (scene.GetEnemies()[index]->model.enemy.combat.x != pausedEnemies[index].first ||
-            scene.GetEnemies()[index]->model.enemy.combat.y != pausedEnemies[index].second) { return 1; }
+        if (scene.GetEnemies()[index]->combat.x != pausedEnemies[index].first ||
+            scene.GetEnemies()[index]->combat.y != pausedEnemies[index].second) { return 1; }
     }
     session.SetSuspended(false);
     for (unsigned tick = 0; tick < 60; ++tick) { session.Update(16, -1, 0, false); }
@@ -251,7 +251,7 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     for (unsigned elapsed = 0; elapsed < 120000 && scene.GetClearedWaves() < 2; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (auto &enemy : scene.GetEnemies()) {
-            if (!enemy->model.enemy.combat.dead) { scene.ApplyHit(enemy->model.enemy.combat.id, clearWave); }
+            if (!enemy->combat.dead) { scene.ApplyHit(enemy->combat.id, clearWave); }
         }
     }
     if (scene.GetClearedWaves() < 2 || scene.GetInvalidSpawnCount() != 0) {

@@ -1,7 +1,10 @@
+/** Original: src/gunbros/stunController.cpp :394408.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /** @file CStunController.cpp
  * @brief Keep original phase calculation: it uses remaining time / interval.
  */
-#include "gun_bros_re/gameplay/CStunController.h"
+#include "gun_bros_re/gameplay/enemy/CStunController.h"
 
 void CStunController::SetStunned(int durationMs, int intervalMs, int amplitude) {
     m_remainingMs = durationMs;

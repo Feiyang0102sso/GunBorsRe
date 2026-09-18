@@ -7,7 +7,7 @@ struct SurvivalRewardsFixture {
     bool check;
     CResTOCManager & toc;
     ZPackTables & tables;
-    std::vector<ZEnemyTemplateData> & enemies;
+    std::vector<CEnemy::Template> & enemies;
     ZPlayerVitals & vitals;
     CPlayerProgress::Template & progressData;
     ZWindow & window;
@@ -49,7 +49,7 @@ struct SurvivalBossFixture {
     bool bossStudy;
     CResTOCManager & toc;
     ZPackTables & tables;
-    std::vector<ZEnemyTemplateData> & enemies;
+    std::vector<CEnemy::Template> & enemies;
     ZPlayerVitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;
@@ -69,7 +69,7 @@ struct SurvivalFeedbackFixture {
     CResTOCManager & toc;
     ZPackTables & tables;
     std::vector<ZWeaponEntry> & weapons;
-    std::vector<ZEnemyTemplateData> & enemies;
+    std::vector<CEnemy::Template> & enemies;
     ZPlayerVitals & vitals;
     CInputPad & survivalHud;
     ZShaderProgram & program;
@@ -160,7 +160,7 @@ struct SurvivalWavesFixture {
     CResTOCManager & toc;
     ZPackTables & tables;
     std::vector<ZWeaponEntry> & weapons;
-    std::vector<ZEnemyTemplateData> & enemies;
+    std::vector<CEnemy::Template> & enemies;
     ZPlayerVitals & vitals;
     CPlayerProgress & progress;
     ZWindow & window;

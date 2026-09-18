@@ -1,7 +1,10 @@
+/** Original: src/gunbros/targetingController.cpp :223153.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /** @file CTargetingController.cpp
  * @brief CTargetingController::Update/ClearTarget, iOS :223185/:223439.
  */
-#include "gun_bros_re/gameplay/CTargetingController.h"
+#include "gun_bros_re/gameplay/enemy/CTargetingController.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include <algorithm>
 #include <cmath>

@@ -22,9 +22,9 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
         break;
     }
     unsigned wrongParts = 0;
-    for (const ZPlacedEnemy &placed : loaded.enemies) {
-        const CEnemy &enemy = placed.model->enemy;
-        const unsigned move = placed.templateData->script.GetStates()[enemy.GetStateId()].GetOwnSequence()[0];
+    for (const auto &placed : loaded.enemies) {
+        const CEnemy &enemy = *placed;
+        const unsigned move = placed->data->script.GetStates()[enemy.GetStateId()].GetOwnSequence()[0];
         std::printf("[map-turret] sequence-move=%u selected-part=%d actual=%u\n", move,
             enemy.combat.variables[14], enemy.GetPart(1).controller.GetMoveIndex());
         if (enemy.GetPart(1).controller.GetMoveIndex() != move) { ++wrongParts; }
@@ -66,10 +66,10 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
         if (state == 2) {
             if (changedFrames != 0) { ++failures; }
         } else if (changedFrames == 0) { ++failures; }
-        for (const ZPlacedEnemy &placed : loaded.enemies) {
-            const CEnemy &enemy = placed.model->enemy;
+        for (const auto &placed : loaded.enemies) {
+            const CEnemy &enemy = *placed;
             if (enemy.GetStateId() != enemyStates[state]) { ++failures; }
-            const unsigned move = placed.templateData->script.GetStates()[enemy.GetStateId()].GetOwnSequence()[0];
+            const unsigned move = placed->data->script.GetStates()[enemy.GetStateId()].GetOwnSequence()[0];
             if (enemy.GetPart(1).controller.GetMoveIndex() != move || enemy.GetPart(0).controller.GetMoveIndex() != 0) { ++failures; }
             std::printf("[map-turret-check] %s enemy-state=%u part1-move=%u light-frame-changes=%u failures=%u\n",
                 preview.StateName(), enemy.GetStateId(), enemy.GetPart(1).controller.GetMoveIndex(), changedFrames, failures);
@@ -108,7 +108,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     ZPackTables tables(toc);
     CBrother player;
     ZPlayerVitals vitals;
-    std::vector<ZEnemyTemplateData> catalog;
+    std::vector<CEnemy::Template> catalog;
     CLevel scene(toc, tables, program);
     scene.BindCombat(catalog, player, vitals, 1.0f);
     CLevel level;
@@ -128,15 +128,16 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
         if (checked != 2) { ++failures; }
     }
     // Real combat animation follows the same selected part and original activation messages.
-    const ZEnemyTemplateData &entry = *loaded.enemies[0].templateData;
-    ZEnemyModel gameModel;
-    gameModel.enemy.combat.enabled = true;
-    if (!LoadEnemyModel(tables, entry, false, nullptr, ZEnemySpawnMode::Level, gameModel)) { return 1; }
-    gameModel.enemy.HandleMessage(2);
-    if (gameModel.enemy.GetStateId() != 2 || gameModel.enemy.GetPart(1).controller.GetMoveIndex() != 2) { ++failures; }
-    gameModel.enemy.HandleMessage(1);
-    for (unsigned elapsed = 0; elapsed < 1024; elapsed += 16) { gameModel.enemy.Update(16); }
-    if (gameModel.enemy.GetStateId() != 4 || gameModel.enemy.GetPart(1).controller.GetMoveIndex() != 1) { ++failures; }
+    const CEnemy::Template &entry = *loaded.enemies[0]->data;
+    CEnemy gameModel;
+    gameModel.combat.enabled = true;
+    if (!gameModel.Bind(tables, entry, false, nullptr)) { return 1; }
+    gameModel.Spawn();
+    gameModel.HandleMessage(2);
+    if (gameModel.GetStateId() != 2 || gameModel.GetPart(1).controller.GetMoveIndex() != 2) { ++failures; }
+    gameModel.HandleMessage(1);
+    for (unsigned elapsed = 0; elapsed < 1024; elapsed += 16) { gameModel.Update(16); }
+    if (gameModel.GetStateId() != 4 || gameModel.GetPart(1).controller.GetMoveIndex() != 1) { ++failures; }
     std::printf("[map-turret-check] gameplay prop messages and enemy activation failures=%u\n", failures);
     std::printf("[map-turret-check] failures=%u\n", failures);
     return failures == 0 ? 0 : 1;

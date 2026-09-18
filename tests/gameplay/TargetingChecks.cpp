@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/CTargetingController.h"
+#include "gun_bros_re/gameplay/enemy/CTargetingController.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include <cmath>
 #include <cstdio>

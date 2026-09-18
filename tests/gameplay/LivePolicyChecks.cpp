@@ -27,7 +27,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, 
     for (unsigned elapsed = 0; elapsed < 10000 && enemyRef.IsNull(); elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (const auto &actor : scene.GetEnemies()) {
-            if (actor->mapPlaced || !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+            if (actor->mapPlaced || !actor->CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
             enemyRef.packHash = actor->data->packHash;
             enemyRef.localIndex = static_cast<std::uint8_t>(actor->data->ordinal);
             break;
@@ -40,14 +40,14 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, 
     // Position fixtures without updating them, so boundary decisions do not
     // depend on spawn routing, AI shots or projectile travel time.
     for (auto &actor : scene.GetEnemies()) {
-        auto &enemy = actor->model.enemy.combat;
+        auto &enemy = actor->combat;
         enemy.dead = false; enemy.removed = false; enemy.enabled = true; enemy.health = 1;
         enemy.x = fixture.brother.x + ZLocalCoopBot::BotGrenadeRadius + 1;
         enemy.y = fixture.brother.y;
     }
-    auto &last = scene.GetEnemies().back()->model.enemy.combat;
-    auto &first = scene.GetEnemies()[0]->model.enemy.combat;
-    auto &second = scene.GetEnemies()[1]->model.enemy.combat;
+    auto &last = scene.GetEnemies().back()->combat;
+    auto &first = scene.GetEnemies()[0]->combat;
+    auto &second = scene.GetEnemies()[1]->combat;
     GameObjectRef item = powerups.GetEquipped(0);
     if (item.IsNull()) { return 1; }
     // Fixture identities only. Production derives the category from BIG.

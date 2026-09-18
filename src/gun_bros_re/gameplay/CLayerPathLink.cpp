@@ -44,14 +44,14 @@ bool CLayerPathLink::Init(CArrayInputStream &stream) {
 }
 
 // CLayerPathLink::GetSpawnLocation :166819; DistanceList :167261.
-int CLayerPathLink::GetSpawnLocation(float sourceX, float sourceY, const ZSpawnFilter &filter, ZRandom &random) const {
+int CLayerPathLink::GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const {
     const auto &nodes = m_nodes;
     // {node index, squared distance to the player}, nearest first.
     std::vector<std::pair<int, float>> nearest;
     for (std::size_t index = 0; index < nodes.size(); ++index) {
         const ILayerPath::Node &node = nodes[index];
         if (node.locked) { continue; }
-        const bool onScreen = !filter.Accepts(node.x, node.y);
+        const bool onScreen = !filter.AcceptSpawnLocation(node.x, node.y);
         if (onScreen) { continue; }
         const float dx = sourceX - node.x;
         const float dy = sourceY - node.y;

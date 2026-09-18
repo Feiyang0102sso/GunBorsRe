@@ -40,7 +40,7 @@
 #include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/ZMapScene.h"
 #include "gun_bros_re/ZStartupSequence.h"
-#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/enemy/CMenuMeshEnemy.h"
 #include "engine/graphics/ZQuadBatch.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/glu/sprite/CSpriteGlu.h"
@@ -508,7 +508,7 @@ public:
         const GameObjectTypeRef *previewItem = nullptr, const ZMovieRegion *storePanel = nullptr, float spin = 0);
 
     /** CEnemy::SpawnForUI assembles the original result-card model. */
-    bool DrawCasualty(ZPackTables &tables, CResTOCManager &toc, const ZEnemyCasualty &casualty, float x,
+    bool DrawCasualty(ZPackTables &tables, CResTOCManager &toc, const CEnemyCasualty &casualty, float x,
         const ZMovieRegion *originalRegion = nullptr);
 
     ZWindow ownedWindow;
@@ -670,13 +670,7 @@ private:
     bool originalHeaderBound = false;
     unsigned originalHeaderTime = 0, originalHeaderButtonTime = 0;
     std::uint64_t originalHeaderTick = 0;
-    struct EnemyPreview {
-        ZEnemyTemplateData data;
-        ZEnemyModel model;
-        std::string name;
-        std::uint64_t lastTick = 0;
-    };
-    std::map<std::uint64_t, std::unique_ptr<EnemyPreview>> enemyPreviews;
+    std::map<std::uint64_t, std::unique_ptr<CMenuMeshEnemy>> enemyPreviews;
 };
 bool MatchesEquipmentSlot(const ZStoreEntry &entry, unsigned slot,
     const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armors);

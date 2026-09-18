@@ -8,7 +8,7 @@
 #include <cstdio>
 
 CGame::CGame(CLevel &level, CMap &map,
-    const std::vector<ZEnemyTemplateData> &catalog) : m_level(level), m_map(map) {
+    const std::vector<CEnemy::Template> &catalog) : m_level(level), m_map(map) {
     m_level.AttachRuntime(*this, catalog);
 }
 

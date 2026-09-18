@@ -1,8 +1,11 @@
+/** Original: src/gunbros/levelObjectPool.cpp constructor :145287, GetEnemy :145509, Release :145426.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /** @file CLevelObjectPool.cpp
  * @brief Original level-object allocation boundary used by CLevel.
  */
 #define NOMINMAX
-#include "gun_bros_re/gameplay/level/CLevelObjectPool.h"
+#include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
 
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -21,11 +24,11 @@ constexpr std::size_t kPickupPoolCapacity = 20; // GetPickup :145637 compares th
 }
 
 CLevelObjectPool::CLevelObjectPool(ZPackTables &tables, const ZShaderProgram &program,
-    const std::vector<ZEnemyTemplateData> &catalog)
+    const std::vector<CEnemy::Template> &catalog)
     : m_tables(&tables), m_program(&program), m_catalog(&catalog) {}
 
 void CLevelObjectPool::BindRuntime(ZPackTables &tables, const ZShaderProgram &program,
-    const std::vector<ZEnemyTemplateData> &catalog) {
+    const std::vector<CEnemy::Template> &catalog) {
     m_tables = &tables;
     m_program = &program;
     m_catalog = &catalog;
@@ -60,14 +63,14 @@ bool CLevelObjectPool::PreloadEnemies(const RequirementList &requirements, const
         }
         const std::uint64_t key = (static_cast<std::uint64_t>(ref.packHash) << 32) | ref.resourceId;
         if (m_enemyModelCache.entries.count(key) != 0) { continue; }
-        const ZEnemyTemplateData *data = nullptr;
+        const CEnemy::Template *data = nullptr;
         for (const auto &entry : *m_catalog) {
             if (entry.packHash == ref.packHash && entry.ordinal == ref.resourceId) {
                 data = &entry;
                 break;
             }
         }
-        if (data == nullptr || !PreloadEnemyModel(*m_tables, *data, *m_program, m_enemyModelCache)) {
+        if (data == nullptr || !CEnemy::Preload(*m_tables, *data, *m_program, m_enemyModelCache)) {
             std::printf("[preload] enemy=%08x:%u failed\n", ref.packHash, ref.resourceId);
             return false;
         }
@@ -81,7 +84,7 @@ bool CLevelObjectPool::PreloadEnemies(const RequirementList &requirements, const
     return true;
 }
 
-ZCombatEnemy *CLevelObjectPool::SpawnEnemy(std::size_t entry, float x, float y, bool forcePool) {
+CEnemy *CLevelObjectPool::SpawnEnemy(std::size_t entry, float x, float y, bool forcePool) {
     PerformanceProbe::Scope timing(PerformanceProbe::counters.spawnMs);
     if (PerformanceProbe::enabled) { ++PerformanceProbe::counters.spawns; }
     if (m_tables == nullptr || m_program == nullptr || m_catalog == nullptr) { return nullptr; }
@@ -93,18 +96,18 @@ ZCombatEnemy *CLevelObjectPool::SpawnEnemy(std::size_t entry, float x, float y, 
         return nullptr;
     }
 
-    std::unique_ptr<ZCombatEnemy> actor(new ZCombatEnemy());
+    std::unique_ptr<CEnemy> actor(new CEnemy());
     actor->data = &(*m_catalog)[entry];
     CLevel *scriptLevel = nullptr;
     if (m_level != nullptr) { scriptLevel = m_level->GetScriptLevel(); }
-    actor->model.enemy.SetLevelContext(scriptLevel);
-    CEnemy::CombatState &state = actor->model.enemy.combat;
+    actor->SetLevelContext(scriptLevel);
+    CEnemy::CombatState &state = actor->combat;
     state.templateRef.packHash = actor->data->packHash;
     state.templateRef.localIndex = static_cast<std::uint8_t>(actor->data->ordinal);
     state.enabled = actor->data->script.IsPresent();
     state.id = m_nextId++;
     state.randomState = static_cast<std::uint32_t>(state.id * 7919);
-    actor->model.enemy.SetRandomSeed(state.randomState);
+    actor->SetRandomSeed(state.randomState);
     state.x = std::clamp(x, 70.0f, kPoolArenaWidth - 70);
     state.y = std::clamp(y, 150.0f, kPoolArenaHeight - 70);
     if (m_usesMapCoordinates) {
@@ -113,18 +116,18 @@ ZCombatEnemy *CLevelObjectPool::SpawnEnemy(std::size_t entry, float x, float y, 
     }
     state.previousX = state.x;
     state.previousY = state.y;
-    if (!LoadEnemyModel(*m_tables, *actor->data, true, m_program,
-        ZEnemySpawnMode::Level, actor->model, &m_enemyModelCache)) {
+    if (!actor->Bind(*m_tables, *actor->data, true, m_program, &m_enemyModelCache)) {
         ++m_invalidSpawnCount;
         return nullptr;
     }
-    ZCombatEnemy *result = actor.get();
+    actor->Spawn();
+    CEnemy *result = actor.get();
     m_enemies.push_back(std::move(actor));
     ++m_spawnCount;
     return result;
 }
 
-ZCombatEnemy *CLevelObjectPool::GetNearbyEnemy(std::size_t entry, float centerX, float centerY) {
+CEnemy *CLevelObjectPool::GetNearbyEnemy(std::size_t entry, float centerX, float centerY) {
     float radius = 40;
     if (m_catalog != nullptr && entry < m_catalog->size()) {
         radius = std::max(radius, static_cast<float>((*m_catalog)[entry].radius116));
@@ -140,8 +143,8 @@ ZCombatEnemy *CLevelObjectPool::GetNearbyEnemy(std::size_t entry, float centerX,
         }
         bool free = true;
         for (const auto &actor : m_enemies) {
-            const CEnemy::CombatState &state = actor->model.enemy.combat;
-            const float otherRadius = std::max(35.0f, actor->model.enemy.GetPart(0).radius);
+            const CEnemy::CombatState &state = actor->combat;
+            const float otherRadius = std::max(35.0f, actor->GetPart(0).radius);
             if (!state.removed && std::hypot(x - state.x, y - state.y) < radius + otherRadius + 15) {
                 free = false;
                 break;
@@ -153,9 +156,9 @@ ZCombatEnemy *CLevelObjectPool::GetNearbyEnemy(std::size_t entry, float centerX,
     return nullptr;
 }
 
-ZCombatEnemy *CLevelObjectPool::FindEnemy(ZCombatId id) {
+CEnemy *CLevelObjectPool::FindEnemy(ZCombatId id) {
     for (auto &actor : m_enemies) {
-        if (actor->model.enemy.combat.id == id) { return actor.get(); }
+        if (actor->combat.id == id) { return actor.get(); }
     }
     return nullptr;
 }
@@ -163,7 +166,7 @@ ZCombatEnemy *CLevelObjectPool::FindEnemy(ZCombatId id) {
 std::size_t CLevelObjectPool::GetAliveEnemyCount() const {
     std::size_t count = 0;
     for (const auto &actor : m_enemies) {
-        const CEnemy::CombatState &state = actor->model.enemy.combat;
+        const CEnemy::CombatState &state = actor->combat;
         if (!state.dead && !state.removed) { ++count; }
     }
     return count;
@@ -183,18 +186,18 @@ void CLevelObjectPool::QueueEnemy(const GameObjectRef &resource, float x, float 
     std::printf("[combat] missing spawn resource %08x:%u\n", resource.packHash, resource.localIndex);
 }
 
-std::vector<ZCombatEnemy *> CLevelObjectPool::FinishEnemySpawns() {
+std::vector<CEnemy *> CLevelObjectPool::FinishEnemySpawns() {
     std::vector<PendingEnemy> pending;
     pending.swap(m_pendingEnemies);
-    std::vector<ZCombatEnemy *> spawned;
+    std::vector<CEnemy *> spawned;
     spawned.reserve(pending.size());
     for (const PendingEnemy &entry : pending) {
-        ZCombatEnemy *actor = SpawnEnemy(entry.entry, entry.x, entry.y, entry.forcePool);
+        CEnemy *actor = SpawnEnemy(entry.entry, entry.x, entry.y, entry.forcePool);
         if (actor == nullptr) { continue; }
         actor->objectId = entry.objectId;
-        actor->model.enemy.combat.summoner = entry.summoner;
+        actor->combat.summoner = entry.summoner;
         if (entry.summoner != 0) {
-            m_summoners[actor->model.enemy.combat.id] = entry.summoner;
+            m_summoners[actor->combat.id] = entry.summoner;
         }
         spawned.push_back(actor);
     }
@@ -209,7 +212,7 @@ ZCombatId CLevelObjectPool::GetSummoner(ZCombatId owner) const {
 
 void CLevelObjectPool::ReleaseEnemy(std::size_t index) {
     if (index >= m_enemies.size()) { return; }
-    const ZCombatId id = m_enemies[index]->model.enemy.combat.id;
+    const ZCombatId id = m_enemies[index]->combat.id;
     m_summoners.erase(id);
     m_enemies.erase(m_enemies.begin() + index);
 }

@@ -82,7 +82,7 @@ unsigned CLevel::GetTotalKills() const {
     unsigned total = kills;
     // Dead actors can retain their original corpse animation for ten seconds.
     // Saving must include them before their render objects are retired.
-    for (const auto &actor : m_objects.GetEnemies()) { total += actor->model.enemy.combat.deathCount; }
+    for (const auto &actor : m_objects.GetEnemies()) { total += actor->combat.deathCount; }
     return total;
 }
 
@@ -98,7 +98,7 @@ bool CLevel::TouchesPickup(float x, float y) const {
         m_actor.previousX - m_actor.x, m_actor.previousY - m_actor.y, x, y, m_playerRadius + 10) <= 1;
 }
 
-void CLevel::BindCombat(const std::vector<ZEnemyTemplateData> &catalog, CBrother &player,
+void CLevel::BindCombat(const std::vector<CEnemy::Template> &catalog, CBrother &player,
     ZPlayerVitals &vitals, float playerGameScale) {
     m_catalog = &catalog;
     m_playerModel = &player;

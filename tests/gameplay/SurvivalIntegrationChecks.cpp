@@ -180,7 +180,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                     }
                     if (!barrelGateChecked) {
                         for (const auto &actor : scene.GetEnemies()) {
-                            CEnemy &enemy = actor->model.enemy;
+                            CEnemy &enemy = *actor;
                             if (enemy.combat.dead || !enemy.combat.enabled) { continue; }
                             const float originalX = enemy.combat.x;
                             const float originalY = enemy.combat.y;
@@ -197,8 +197,8 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                                 for (unsigned tick = 0; tick < 8; ++tick) {
                                     session.Update(16, 0, 0, false);
                                     // A regression may kill and retire the actor during Update.
-                                    const ZCombatEnemy *target = scene.Find(enemyId);
-                                    if (!target || target->model.enemy.combat.health != healthBefore) {
+                                    const CEnemy *target = scene.Find(enemyId);
+                                    if (!target || target->combat.health != healthBefore) {
                                         std::printf("[tutorial-check] armored barrel damaged enemy object=%d\n", prop.objectId);
                                         return 1;
                                     }
@@ -217,7 +217,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                     }
                     bool inGrenadeRange = false;
                     for (const auto &actor : scene.GetEnemies()) {
-                        const auto &enemy = actor->model.enemy.combat;
+                        const auto &enemy = actor->combat;
                         if (enemy.dead || !enemy.enabled) { continue; }
                         const float dx = enemy.x - scene.GetPlayer().x, dy = enemy.y - scene.GetPlayer().y;
                         moveX = dx; moveY = dy;
@@ -231,7 +231,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
             session.Update(16, moveX, moveY, fireGun);
             if (barrelGateChecked && !armorBreakChecked && powerups.GetCount(13) == 0) {
                 for (const auto &actor : scene.GetEnemies()) {
-                    CEnemy &enemy = actor->model.enemy;
+                    CEnemy &enemy = *actor;
                     if (enemy.combat.dead || !enemy.combat.enabled || enemy.GetPartCount() != 1) { continue; }
                     // ENEMY27 Flow @0xA9..0xB9 removes armor and rejects the
                     // first grenade. Later hits use @0x86 without a grace timer.

@@ -63,7 +63,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     std::vector<CMPMatch::Entry> matches;
     CMPMatch match;
     CPlayerConfiguration matchConfiguration;
-    std::vector<ZEnemyTemplateData> enemies;
+    std::vector<CEnemy::Template> enemies;
     ZPlayerVitals vitals;
     vitals.invincible = false;
     CPlayerProgress::Template progressData;
@@ -106,7 +106,7 @@ int RunSurvivalSession(const ZSurvivalLaunch &launch) {
     if (gameContext != nullptr) { loadingProfile = &gameContext->profile; }
     ZLoadingScreen loading(window, loadingMovies, tables, loadingProfile, true, false, &music, launch.localLive, launch.deathmatch);
     if (!loading.IsValid()) { return 1; }
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !LoadEnemyCatalog(toc, tables, enemies) ||
+    if (!LoadWeaponCatalog(toc, tables, weapons) || !CEnemy::Template::LoadCatalog(toc, tables, enemies) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     unsigned matchSeed = static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count());
     if (development->deathmatchCheck || !capturePath.empty()) { matchSeed = 42 + launch.matchIndex; }

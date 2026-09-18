@@ -1394,11 +1394,11 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
             index, sprite >> 16, sprite & 255, duration, changed, particles, failures);
     }
     // Inspect the same original ENEMY resources in both spawn paths.
-    std::vector<ZEnemyTemplateData> enemies;
+    std::vector<CEnemy::Template> enemies;
     ZMenuState casualtyState;
     casualtyState.page = 28;
     casualtyState.result.horde = true;
-    if (!LoadEnemyCatalog(toc, tables, enemies)) { return 1; }
+    if (!CEnemy::Template::LoadCatalog(toc, tables, enemies)) { return 1; }
     for (const auto &entry : enemies) {
         std::vector<std::uint8_t> bytes;
         if (!tables.ReadSectionResource(entry.packHash, ZGameSection::Enemy, entry.ordinal, bytes)) { return 1; }
@@ -1408,16 +1408,20 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
         nameRef.Init(input);
         const std::string name = ReadGameString(toc, nameRef);
         if (name.find("Zom") != 0 && name.find("ZOM") != 0 && name != "CUTTLES" && name != "Cuttles") { continue; }
-        ZEnemyCasualty casualty;
+        CEnemyCasualty casualty;
         casualty.resource.packHash = entry.packHash;
         casualty.resource.localIndex = static_cast<std::uint8_t>(entry.ordinal);
         casualty.name = name;
         casualty.count = 5;
         casualtyState.result.casualties.push_back(casualty);
-        for (auto mode : {ZEnemySpawnMode::Menu, ZEnemySpawnMode::Level}) {
-            ZEnemyModel model;
-            if (!LoadEnemyModel(tables, entry, false, nullptr, mode, model)) { return 1; }
-            const int config = EnemyPartConfig(model, 0);
+        for (bool inLevel : {false, true}) {
+            CEnemy model;
+            if (!model.Bind(tables, entry, false, nullptr)) { return 1; }
+            // Bind must not run either spawn export or select an arbitrary move.
+            if (model.GetPartCount() != 1 || model.GetPartConfig(0) != -1) { ++failures; }
+            if (inLevel) { model.Spawn(); }
+            else { model.SpawnForUI(); }
+            const int config = model.GetPartConfig(0);
             if (config < 0) { return 1; }
             const auto &bounds = model.configs[config]->mesh.GetBounds();
             const auto &meshConfig = entry.moveSet.GetMeshConfigs()[config];
@@ -1433,9 +1437,9 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
                 originalBounds.inverseExtent, originalBounds.maxX-originalBounds.minX,
                 originalBounds.maxY-originalBounds.minY, originalBounds.maxZ-originalBounds.minZ, failures);
             std::printf("[enemy-scale-check] %s %s mode=%d game=%.1f ui=%.1f factor=%.4f bounds=%.2f/%.2f/%.2f inverse=%.5f world=%.4f\n",
-                entry.owner.c_str(), name.c_str(), int(mode), entry.gameScale, entry.uiScalePercent,
-                model.enemy.combat.scaleFactor, bounds.maxX-bounds.minX, bounds.maxY-bounds.minY,
-                bounds.maxZ-bounds.minZ, bounds.inverseExtent, EnemyModelWorldScale(model, entry.gameScale, 1));
+                entry.owner.c_str(), name.c_str(), int(inLevel), entry.gameScale, entry.uiScalePercent,
+                model.combat.scaleFactor, bounds.maxX-bounds.minX, bounds.maxY-bounds.minY,
+                bounds.maxZ-bounds.minZ, bounds.inverseExtent, model.GetWorldScale(entry.gameScale, 1));
         }
     }
     // Render the corrected models through the real, uniformly sized Movie cards.

@@ -7,7 +7,7 @@ constexpr int kScenarioContinue = -1;
 struct ZSurvivalResources {
     CResTOCManager & toc;
     ZPackTables & tables;
-    std::vector<ZEnemyTemplateData> & enemies;
+    std::vector<CEnemy::Template> & enemies;
     ZPlayerVitals & vitals;
     CPlayerProgress::Template & progressData;
     ZWindow & window;
@@ -35,7 +35,7 @@ struct ZSurvivalState {
     float startFacing;
     CResTOCManager & toc;
     ZPackTables & tables;
-    std::vector<ZEnemyTemplateData> & enemies;
+    std::vector<CEnemy::Template> & enemies;
     std::string & capturePath;
     std::vector<ZWeaponEntry> & weapons;
     CInputPad & survivalHud;

@@ -80,7 +80,7 @@ namespace MenuDetail {
         // CMenuMission handles selection on release; dragging must never enter a planet.
         clicked = !down && previousDown && dragDistance < 9;
         previousDown = down;
-        
+
         if (scripted) {
             pointerPressed = false;
             pointerHeld = false;
@@ -147,77 +147,34 @@ namespace MenuDetail {
     }
 
     /** CEnemy::SpawnForUI assembles the original result-card model. */
-    bool ZGameMenu::DrawCasualty(ZPackTables &tables, CResTOCManager &toc, const ZEnemyCasualty &casualty, float x,
+    bool ZGameMenu::DrawCasualty(ZPackTables &tables, CResTOCManager &toc, const CEnemyCasualty &casualty, float x,
         const ZMovieRegion *originalRegion ) {
         const std::uint64_t key = (static_cast<std::uint64_t>(casualty.resource.packHash) << 8) | casualty.resource.localIndex;
         if (enemyPreviews.count(key) == 0) {
-            auto preview = std::make_unique<EnemyPreview>();
-            if (!ReadEnemyTemplate(tables, casualty.resource.packHash, casualty.resource.localIndex, casualty.name, preview->data) ||
-                !LoadEnemyModel(tables, preview->data, true, &imageProgram, ZEnemySpawnMode::Menu, preview->model)) { return false; }
+            auto preview = std::make_unique<CMenuMeshEnemy>();
             // The first ENEMY asset is its localized name, before its script.
-            std::vector<std::uint8_t> bytes;
-            if (!tables.ReadSectionResource(casualty.resource.packHash, ZGameSection::Enemy, casualty.resource.localIndex, bytes)) { return false; }
-            CArrayInputStream stream(bytes);
-            stream.ReadUInt8();
-            CGameAssetRef nameRef;
-            nameRef.Init(stream);
-            preview->name = ReadGameString(toc, nameRef);
+            if (!preview->Bind(tables, toc, casualty.resource, imageProgram)) { return false; }
             enemyPreviews[key] = std::move(preview);
         }
-        EnemyPreview &preview = *enemyPreviews[key];
+        CMenuMeshEnemy &preview = *enemyPreviews[key];
         if (originalRegion != nullptr) {
             const ZMovieRegion &region = *originalRegion;
             if (region.index == 2) {
                 // CMenuMeshOption::TextCallback :176114: two font-0 lines.
-                movies.Text(preview.name, region.x + (region.width - movies.TextWidth(preview.name, 0)) / 2,
+                movies.Text(preview.GetName(), region.x + (region.width - movies.TextWidth(preview.GetName(), 0)) / 2,
                     region.y, 0, 1, 0, region.alpha);
                 const std::string kills = movies.NamedString("IDS_WRAPUP_KILLS") + std::to_string(casualty.count);
                 return movies.Text(kills, region.x + (region.width - movies.TextWidth(kills, 0)) / 2,
                     region.y + movies.TextHeight(0), 0, 1, 0, region.alpha);
             }
             if (region.index != 1) { return true; }
-            const int body = EnemyPartConfig(preview.model, 0);
-            if (body < 0) { return true; }
-            if (preview.lastTick != 0) { preview.model.enemy.Update(static_cast<int>(clock - preview.lastTick)); }
-            preview.lastTick = clock;
-            // CEnemy::GetBoundsInternal :67314: union of integer XY boxes,
-            // all scaled by PART 0 inverse extent * 100; attachment is ignored.
-            const float units = preview.model.configs[body]->mesh.GetBounds().inverseExtent * 100;
-            int left = 0, top = 0, right = 0, bottom = 0;
-            bool bounded = false;
-            for (unsigned part = 0; part < preview.model.enemy.GetPartCount(); ++part) {
-                const int config = EnemyPartConfig(preview.model, part);
-                if (config < 0) { continue; }
-                const auto &bounds = preview.model.configs[config]->mesh.GetBounds();
-                const int width = static_cast<int>((bounds.maxX - bounds.minX) * units);
-                const int height = static_cast<int>((bounds.maxY - bounds.minY) * units);
-                if (width == 0 || height == 0) { continue; }
-                const int x1 = static_cast<int>(bounds.centerX) - width / 2;
-                const int y1 = static_cast<int>(bounds.centerY) - height / 2;
-                if (!bounded) { left = x1; top = y1; right = x1 + width; bottom = y1 + height; bounded = true; }
-                else { left = std::min(left, x1); top = std::min(top, y1); right = std::max(right, x1 + width); bottom = std::max(bottom, y1 + height); }
-            }
-            if (!bounded) { return false; }
-            const float fit = std::min(region.width / (right - left), region.height / (bottom - top)) * preview.data.uiScalePercent / 100;
-            float projection3D[16], translation[16], scaling[16], tilt[16], facing[16], first[16], next[16], model[16];
-            Matrix4dOrthoTopLeft(kMenuWidth, kMenuHeight, 32767, projection3D);
-            projection3D[11] = -1;
-            // CEnemy::DrawUI :68451 anchors at center/bottom; no viewport crop.
-            const float originX = static_cast<float>(static_cast<int>(region.x + region.width / 2));
-            const float originY = static_cast<float>(static_cast<int>(region.y + region.height));
-            Matrix4dTranslation(originX, originY, -500, translation);
-            Matrix4dScale(fit, scaling);
-            Matrix4dRotationX(3.14159265f * 0.5f, tilt);
-            Matrix4dRotationZ(3.14159265f, facing);
-            Matrix4dMultiply(projection3D, translation, first);
-            Matrix4dMultiply(first, scaling, next);
-            Matrix4dMultiply(next, tilt, first);
-            Matrix4dMultiply(first, facing, model);
+            preview.Update(clock);
             glEnable(GL_DEPTH_TEST);
             glClear(GL_DEPTH_BUFFER_BIT);
-            DrawEnemyModel(preview.model, imageProgram, model);
+            const bool drawn = preview.Draw(imageProgram, region.x, region.y,
+                region.width, region.height, kMenuWidth, kMenuHeight);
             glDisable(GL_DEPTH_TEST);
-            return true;
+            return drawn;
         }
         return false;
     }
@@ -407,7 +364,7 @@ namespace MenuDetail {
         if (enabled && inside) { wheel = window.TakeWheelDelta(); }
         bool pressed = pointerPressed && inside;
         bool held = pointerHeld;
-        
+
         if (scripted && dragX != 0) { pressed = inside; held = true; }
 
         motion.Update(position, clock, dragX, wheel, held, pressed, enabled, maximum, stride, duration);

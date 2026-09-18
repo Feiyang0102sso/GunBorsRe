@@ -11,6 +11,12 @@ const char *const kShaders = Paths::Shaders().c_str();
 
 bool Equip(ZPackTables &tables, const CBrother::Template &data, const ZWeaponEntry &entry,
     CBrother &player, const ZShaderProgram &program) {
+    // Arena weapon selection is not a respawn. Keep the same actor, health,
+    // script timers and retained weapon meshes, as CBrother::SetUIGun does.
+    if (player.weapon != nullptr) {
+        const std::uint64_t key = (static_cast<std::uint64_t>(entry.packHash) << 32) | entry.ordinal;
+        return player.SelectCachedWeapon(tables, entry.data, entry.owner, key, program);
+    }
     return player.EquipWeapon(tables, data.GetScript(), entry.data, entry.owner) &&
         player.CreateBuffers(program);
 }
@@ -25,11 +31,11 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
     ZPackTables tables(toc);
-    std::vector<ZEnemyTemplateData> catalog;
+    std::vector<CEnemy::Template> catalog;
     std::vector<ZWeaponEntry> weapons;
     CBrother::Template playerData;
     ZPlayerVitals vitals;
-    if (!LoadEnemyCatalog(toc, tables, catalog) || catalog.empty() ||
+    if (!CEnemy::Template::LoadCatalog(toc, tables, catalog) || catalog.empty() ||
         !LoadWeaponCatalog(toc, tables, weapons) || !playerData.Load(toc, tables) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     if (weapons.empty() || weaponIndex >= weapons.size() || enemyIndex >= catalog.size()) {
@@ -180,11 +186,11 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         // Actor meshes share a depth buffer; UI and billboards are layered after.
         glEnable(GL_DEPTH_TEST);
         for (auto &actor : scene.GetEnemies()) {
-            if (actor->model.enemy.combat.removed) { continue; }
+            if (actor->combat.removed) { continue; }
             scene.EnemyMatrix(*actor, model);
             Matrix4dMultiply(projection, model, mvp);
-            mvp[3] += 2.0f * actor->model.enemy.stun.GetOffset() / width;
-            DrawEnemyModel(actor->model, program, mvp);
+            mvp[3] += 2.0f * actor->stun.GetOffset() / width;
+            actor->Draw(program, mvp);
         }
         Matrix4dMultiply(projection, playerMatrix, mvp);
         player.Draw(program, mvp);
@@ -192,7 +198,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         glDisable(GL_DEPTH_TEST);
         // Every bar uses the same predicate as projectile damage filtering.
         for (auto &actor : scene.GetEnemies()) {
-            CEnemy &enemy = actor->model.enemy;
+            CEnemy &enemy = *actor;
             const CEnemy::CombatState &state = enemy.combat;
             if (state.removed || state.dead) { continue; }
             float barY = state.y - std::max(60.0f, actor->data->gameScale * 0.55f);
@@ -232,7 +238,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         float damage = scene.damageDealt;
         unsigned deferred = 0;
         for (const auto &actor : scene.GetEnemies()) {
-            const CEnemy::CombatState &state = actor->model.enemy.combat;
+            const CEnemy::CombatState &state = actor->combat;
             kills += state.deathCount; hits += state.hitCount;
             damage += state.totalDamage;
             deferred |= state.deferredMechanisms;
@@ -256,7 +262,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         std::snprintf(line, sizeof(line), "Alive %zu   Kills %u   Landed hits %u", scene.AliveCount(), kills, hits);
         controls.DrawLabel(line, 16, 158, hudWidth - 32, fontHeight, hudProjection);
         if (!scene.GetEnemies().empty()) {
-            const CEnemy::CombatState &state = scene.GetEnemies().front()->model.enemy.combat;
+            const CEnemy::CombatState &state = scene.GetEnemies().front()->combat;
             std::snprintf(line, sizeof(line), "Filter %d   Target type %d", state.variables[16], state.targetType);
             controls.DrawLabel(line, 16, kInfoHeight + 8, hudWidth - 32, fontHeight, hudProjection);
         }

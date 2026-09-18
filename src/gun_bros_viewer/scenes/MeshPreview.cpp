@@ -38,7 +38,7 @@
 
 #include "gun_bros_re/data/ZPackTables.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
@@ -415,8 +415,8 @@ void WalkEnemies(CResPackTOC &pack, ZPackTables &tables, int packIndex,
 
     for (std::uint32_t ordinal = 0; ordinal < count; ++ordinal) {
         const std::string owner = OwnerLabel(pack, "enemy", ordinal);
-        ZEnemyTemplateData entry;
-        if (!ReadEnemyTemplate(tables, pack.GetPackHash(), ordinal, owner, entry)) {
+        CEnemy::Template entry;
+        if (!entry.Load(tables, pack.GetPackHash(), ordinal, owner)) {
             sink.OnTemplateFailed(owner);
             continue;
         }

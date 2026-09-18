@@ -14,7 +14,7 @@ public:
     void Report() const override;
 private:
     struct Node { float x = 0; float y = 0; std::vector<int> neighbors; };
-    void Plan(const ZCombatEnemy &target);
+    void Plan(const CEnemy &target);
     CLevel &m_scene;
     std::vector<Node> m_nodes;
     std::vector<int> m_route;

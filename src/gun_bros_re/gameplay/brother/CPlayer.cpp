@@ -2,7 +2,7 @@
 #include "gun_bros_re/gameplay/brother/CPlayer.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/CCollisionData.h"
-#include "gun_bros_re/gameplay/level/CLevelObjectPool.h"
+#include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
 #include "gun_bros_re/gameplay/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
@@ -120,11 +120,11 @@ void CPlayer::Move() {
     const CBrother &player = (*m_model);
     if (!player.CanPassEnemies()) {
         for (const auto &actor : m_objects->GetEnemies()) {
-            const CEnemy &enemy = actor->model.enemy;
+            const CEnemy &enemy = *actor;
             if (!enemy.CanCollideWithPlayer()) { continue; }
             const CEnemy::CombatState &state = enemy.combat;
             float offsetX, offsetY;
-            EnemyRotationOffset(enemy, actor->data->gameScale, offsetX, offsetY);
+            enemy.GetRotationOffset(actor->data->gameScale, offsetX, offsetY);
             const ZCollisionPoint enemyPrevious(state.previousX + offsetX, state.previousY + offsetY);
             const ZCollisionPoint enemyCurrent(state.x + offsetX, state.y + offsetY);
             const float moveX = x - previousX, moveY = y - previousY;

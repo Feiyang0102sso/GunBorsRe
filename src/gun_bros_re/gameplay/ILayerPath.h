@@ -12,21 +12,13 @@
 
 class ZRandom;
 
-/** Desktop value form of the original offscreen spawn filter. */
-struct ZSpawnFilter {
-    float left, top, right, bottom;
-    bool enabled;
-    bool Accepts(float x, float y) const {
-        if (!enabled) { return true; }
-        return x < left || x > right || y < top || y > bottom;
-    }
-};
+#include "gun_bros_re/gameplay/enemy/COffscreenSpawnLocationFilter.h"
 
 class ILayerPath {
 public:
     virtual ~ILayerPath() = default;
     /** Native path layers own their distinct spawn search algorithms. */
-    virtual int GetSpawnLocation(float sourceX, float sourceY, const ZSpawnFilter &filter, ZRandom &random) const { return -1; }
+    virtual int GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const { return -1; }
     struct Node {
         float x = 0;
         float y = 0;
@@ -37,6 +29,7 @@ public:
     void SetLayerIndex(unsigned index) { m_layerIndex = index; }
     unsigned GetLayerIndex() const { return m_layerIndex; }
     const std::vector<Node> &GetNodes() const { return m_nodes; }
+    std::uint64_t GetRevision() const { return m_revision; }
     void SetNodeLocked(int index, bool locked);
     virtual void PropogateNodeLock(int boundary, int origin, bool locked) {}
     virtual void UnlockNodesBetween(int first, int origin, int last) {}
@@ -55,10 +48,11 @@ public:
     int FindNext(int start, int destination) const;
 protected:
     /** Runtime query results depend only on topology and node locks. */
-    void InvalidateRoutes() { m_nextRoutes.clear(); }
+    void InvalidateRoutes() { m_nextRoutes.clear(); ++m_revision; }
     unsigned m_layerIndex = 0;
     std::vector<Node> m_nodes;
 private:
+    std::uint64_t m_revision = 0;
     int FindNextUncached(int start, int destination) const;
     // Host query cache: retain the existing Dijkstra tie order exactly.
     // iOS CFlock::RefreshDistanceMaps :170441 and CalculateDistanceMap :167955

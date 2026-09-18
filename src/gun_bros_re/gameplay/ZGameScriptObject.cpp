@@ -5,7 +5,7 @@
 
 #include "gun_bros_re/gameplay/ZGameScriptObject.h"
 
-#include "gun_bros_re/gameplay/CEnemy.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/CGun.h"

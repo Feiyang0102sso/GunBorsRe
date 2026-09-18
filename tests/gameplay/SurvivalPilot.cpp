@@ -12,7 +12,8 @@
 
 namespace {
 constexpr float kGridSpacing = 24;
-constexpr float kAttackDistance = 120;
+// Keep room to disengage before melee/stun enemies surround the test driver.
+constexpr float kAttackDistance = 240;
 constexpr float kRadiansToDegrees = 180.0f / 3.14159265f;
 }
 
@@ -50,7 +51,7 @@ SurvivalPilot::SurvivalPilot(CLevel &scene, const ZMapRectangle &bounds) : m_sce
     }
 }
 
-void SurvivalPilot::Plan(const ZCombatEnemy &target) {
+void SurvivalPilot::Plan(const CEnemy &target) {
     m_route.clear();
     m_step = 0;
     int start = -1;
@@ -96,7 +97,7 @@ void SurvivalPilot::Plan(const ZCombatEnemy &target) {
             }
         }
     }
-    const CEnemy::CombatState &enemy = target.model.enemy.combat;
+    const CEnemy::CombatState &enemy = target.combat;
     const float angle = m_elapsed * 0.0003f;
     const float desiredX = enemy.x + std::cos(angle) * kAttackDistance;
     const float desiredY = enemy.y + std::sin(angle) * kAttackDistance;
@@ -132,7 +133,7 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     m_retreatMs = std::max(0, m_retreatMs - deltaMs);
     m_noDamageMs += deltaMs;
     float damage = m_scene.damageDealt;
-    for (const auto &actor : m_scene.GetEnemies()) { damage += actor->model.enemy.combat.totalDamage; }
+    for (const auto &actor : m_scene.GetEnemies()) { damage += actor->combat.totalDamage; }
     if (damage != m_lastDamage) {
         m_noDamageMs = 0;
         m_lastDamage = damage;
@@ -144,34 +145,43 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     }
     moveX = 0;
     moveY = 0;
-    ZCombatEnemy *target = nullptr;
+    CEnemy *target = nullptr;
     // Keep an engagement stable. Re-selecting the nearest enemy while retreating
     // can alternate between two ranged units and trap the pilot at their midpoint.
-    ZCombatEnemy *previousTarget = m_scene.Find(m_target);
-    if (previousTarget != nullptr && previousTarget->model.enemy.combat.enabled &&
-        previousTarget->model.enemy.combat.targetable && previousTarget->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
+    CEnemy *previousTarget = m_scene.Find(m_target);
+    if (previousTarget != nullptr && previousTarget->combat.enabled &&
+        previousTarget->combat.targetable && previousTarget->CanReceiveProjectile(0, kPlayerCombatId)) {
         target = previousTarget;
     }
     float nearest = 100000;
-    if (target == nullptr) {
+    if (target != nullptr) {
+        nearest = std::hypot(target->combat.x - m_scene.GetPlayer().x,
+            target->combat.y - m_scene.GetPlayer().y);
+    }
+    {
         for (const auto &actor : m_scene.GetEnemies()) {
             // Match the brother's targeting filters. Authored map actors can
             // accept collision callbacks without being combat targets.
-            if (!actor->model.enemy.combat.enabled || !actor->model.enemy.combat.targetable ||
-                !actor->model.enemy.CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
-            const CEnemy::CombatState &enemy = actor->model.enemy.combat;
+            if (!actor->combat.enabled || !actor->combat.targetable ||
+                !actor->CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+            const CEnemy::CombatState &enemy = actor->combat;
             const float distance = std::hypot(enemy.x - m_scene.GetPlayer().x, enemy.y - m_scene.GetPlayer().y);
-            if (distance < nearest) { nearest = distance; target = actor.get(); }
+            // Retain the engagement unless a closer enemy enters contact range.
+            // The pilot must shoot its way out; invincibility does not disable stun.
+            if (distance < nearest && (target == nullptr || distance < 150)) {
+                nearest = distance;
+                target = actor.get();
+            }
         }
     }
     if (target == nullptr) { return; }
-    const CEnemy::CombatState &enemy = target->model.enemy.combat;
+    const CEnemy::CombatState &enemy = target->combat;
     float aimX = enemy.x;
     float aimY = enemy.y;
-    const unsigned partCount = target->model.enemy.GetPartCount();
+    const unsigned partCount = target->GetPartCount();
     if (partCount > 1) {
         const unsigned part = static_cast<unsigned>(m_elapsed / 1800) % partCount;
-        const CEnemy::Part &piece = target->model.enemy.GetPart(part);
+        const CEnemy::Part &piece = target->GetPart(part);
         if (piece.visible && piece.radius > 0) {
             float radius = 0;
             m_scene.EnemyCircle(*target, part, aimX, aimY, radius);

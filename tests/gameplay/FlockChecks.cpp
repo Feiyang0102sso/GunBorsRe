@@ -1,7 +1,7 @@
 /** Real BIG actors must separate while pursuing the same distant target. */
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CFlock.h"
+#include "gun_bros_re/gameplay/enemy/CFlock.h"
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -23,29 +23,36 @@ int CheckFlockMovement(CLevel &scene) {
     scene.Reset();
     scene.GetPlayer().x = 1000;
     scene.GetPlayer().y = 450;
-    ZCombatEnemy *first = scene.Spawn(0, 600, 440);
-    ZCombatEnemy *second = scene.Spawn(0, 600, 460);
+    CEnemy *first = scene.Spawn(0, 600, 440);
+    CEnemy *second = scene.Spawn(0, 600, 460);
     if (first == nullptr || second == nullptr) { return 1; }
     // Finish spawn animation before isolating the movement native from AI.
     for (int step = 0; step < 80; ++step) { scene.Update(16, 0, 0, false); }
-    first->model.enemy.combat.x = 600;
-    first->model.enemy.combat.y = 440;
-    second->model.enemy.combat.x = 600;
-    second->model.enemy.combat.y = 460;
+    first->combat.x = 600;
+    first->combat.y = 440;
+    second->combat.x = 600;
+    second->combat.y = 460;
+    // Isolate flock movement from the map's shared-edge route. These coordinates
+    // need not lie in one authored cell; mesh pursuit is covered by path-cache.
+    std::vector<CEnemy::CombatState *> pursuit{&first->combat, &second->combat};
     for (int step = 0; step < 60; ++step) {
-        for (ZCombatEnemy *actor : {first, second}) {
-            auto &state = actor->model.enemy.combat;
+        for (CEnemy *actor : {first, second}) {
+            auto &state = actor->combat;
             state.behaviour = 0;
             state.arrivalDistance = 0;
             state.targetType = 0;
             state.targetRange = 100000;
             state.variables[0] = 60;
             state.variables[12] = 0;
+            state.hasNavigationTarget = false;
+            actor->SetTarget(kPlayerCombatId, 1000, 450, true);
         }
-        scene.Update(16, 0, 0, false);
+        CFlock::RefreshFlock(pursuit);
+        first->Update(16);
+        second->Update(16);
     }
-    const auto &a = first->model.enemy.combat;
-    const auto &b = second->model.enemy.combat;
+    const auto &a = first->combat;
+    const auto &b = second->combat;
     const float gap = std::hypot(a.x - b.x, a.y - b.y);
     const bool passed = gap > 20 && a.x > 600 && b.x > 600;
     std::printf("[flock-check] initial-gap=20 final-gap=%.3f forward=%.3f/%.3f passed=%d\n",
@@ -53,7 +60,7 @@ int CheckFlockMovement(CLevel &scene) {
     unsigned failures = 0;
     if (!passed) { ++failures; }
     // A frozen actor keeps its position even with neighbours exerting force.
-    auto &enemy = first->model.enemy;
+    auto &enemy = *first;
     const float frozenX = enemy.combat.x;
     const float frozenY = enemy.combat.y;
     enemy.stun.SetStunned(750, 30, 4);
@@ -94,6 +101,17 @@ int CheckFlockMovement(CLevel &scene) {
     left.flockX = 100;
     CFlock::RefreshFlock(neighbours);
     if (left.flockX != 0) { ++failures; }
+    // A LEVEL refresh may follow the same frame that releases corpse storage.
+    // Keep another live actor so navigation still needs a target distance map.
+    const ZCombatId retiredId = first->combat.id;
+    first->combat.dead = true;
+    first->combat.health = 0;
+    first->corpseMs = 10001;
+    scene.Update(16, 0, 0, false);
+    if (scene.Find(retiredId) != nullptr) { ++failures; }
+    scene.FunctionResolver(33, nullptr, 0);
+    scene.Update(16, 0, 0, false);
+    if (!std::isfinite(second->combat.x) || !std::isfinite(second->combat.y)) { ++failures; }
     std::printf("[flock-check] stun/link-arrival/cutoff/coincidence/membership failures=%u\n", failures);
     if (failures != 0) { return 1; }
     return 0;

@@ -57,7 +57,7 @@ void CGame::AdvanceBossSkip() {
         }
         if (step > 0 && now - frameStarted >= std::chrono::milliseconds(GameCheats::BossSkipFrameBudgetMs)) { break; }
         for (auto &actor : m_level.GetEnemies()) {
-            CEnemy &enemy = actor->model.enemy;
+            CEnemy &enemy = *actor;
             if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
                 enemy.Damage(enemy.combat.health);
                 ++m_bossSkipDefeated;

@@ -3,6 +3,7 @@
  */
 #include "engine/core/ZRandom.h"
 #include "gun_bros_re/gameplay/CLayerPathMesh.h"
+#include <limits>
 
 void CLayerPathMesh::PropogateNodeLock(int boundary, int origin, bool locked) {
     if (origin < 0 || origin >= static_cast<int>(m_nodes.size())) { return; }
@@ -53,20 +54,34 @@ void CLayerPathMesh::GetConnectionPoint(int from, int to, float &x, float &y) co
 }
 
 int CLayerPathMesh::FindNode(float x, float y) const {
+    // GetCellForLocation :167744 uses ray crossings, including concave quads.
+    // Outside the mesh it returns the nearest unlocked centre by squared distance.
+    int nearest = -1;
+    float best = std::numeric_limits<float>::max();
     for (unsigned index = 0; index < m_quads.size(); ++index) {
         if (m_nodes[index].locked) { continue; }
-        bool positive = false, negative = false;
+        bool inside = false;
         const Quad &quad = m_quads[index];
-        for (unsigned side = 0; side < 4; ++side) {
-            const ZCollisionPoint &a = m_vertices[quad.vertices[side]];
-            const ZCollisionPoint &b = m_vertices[quad.vertices[(side + 1) % 4]];
-            const float cross = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
-            if (cross > 0.01f) { positive = true; }
-            if (cross < -0.01f) { negative = true; }
+        unsigned previous = 3;
+        for (unsigned current = 0; current < 4; ++current) {
+            const auto &a = m_vertices[quad.vertices[current]];
+            const auto &b = m_vertices[quad.vertices[previous]];
+            if ((a.y <= y && y < b.y) || (b.y <= y && y < a.y)) {
+                const float crossing = a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y);
+                if (x < crossing) { inside = !inside; }
+            }
+            previous = current;
         }
-        if (!positive || !negative) { return static_cast<int>(index); }
+        if (inside) { return static_cast<int>(index); }
+        const float dx = m_nodes[index].x - x;
+        const float dy = m_nodes[index].y - y;
+        const float squared = dx * dx + dy * dy;
+        if (squared < best) {
+            nearest = static_cast<int>(index);
+            best = squared;
+        }
     }
-    return FindNearest(x, y);
+    return nearest;
 }
 
 bool CLayerPathMesh::Init(CArrayInputStream &stream) {
@@ -106,7 +121,7 @@ bool CLayerPathMesh::Init(CArrayInputStream &stream) {
     return !stream.Overran() && refs == neighbourRefCount;
 }
 
-int CLayerPathMesh::GetSpawnLocation(float, float, const ZSpawnFilter &filter, ZRandom &random) const {
+int CLayerPathMesh::GetSpawnLocation(float, float, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const {
     const auto &nodes = m_nodes;
     if (nodes.empty()) { return -1; }
     // CLayerPathMesh::GetSpawnLocation :168115 starts at a random polygon
@@ -117,7 +132,7 @@ int CLayerPathMesh::GetSpawnLocation(float, float, const ZSpawnFilter &filter, Z
         const std::size_t index = (start + offset) % nodes.size();
         const auto &node = nodes[index];
         if (node.locked) { continue; }
-        if (!filter.Accepts(node.x, node.y)) { continue; }
+        if (!filter.AcceptSpawnLocation(node.x, node.y)) { continue; }
         return static_cast<int>(index);
     }
     return -1;

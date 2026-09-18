@@ -49,7 +49,7 @@ void Enemy(ZMarkerBatch &markers, const CEnemy &enemy, float gameScale,
         for (unsigned part = 0; part < enemy.GetPartCount(); ++part) {
             if (!enemy.GetPart(part).visible) { continue; }
             float centerX = x, centerY = y, radius = 0;
-            EnemyCollisionCircle(enemy, gameScale, part, centerX, centerY, radius);
+            enemy.GetCollisionCircle(gameScale, part, centerX, centerY, radius);
             Circle(markers, centerX, centerY, radius, width);
         }
     }
@@ -83,13 +83,13 @@ void DrawCollisionOverlay(ZMarkerBatch &markers, const ZShaderProgram &program,
         }
         if (combat != nullptr) {
             for (const auto &actor : combat->GetEnemies()) {
-                const auto &state = actor->model.enemy.combat;
-                Enemy(markers, actor->model.enemy, actor->data->gameScale,
+                const auto &state = actor->combat;
+                Enemy(markers, *actor, actor->data->gameScale,
                     state.x, state.y, style->width * pixelSize, enabled);
             }
         } else if (map != nullptr) {
             for (const auto &actor : map->enemies) {
-                Enemy(markers, actor.model->enemy, actor.gameScale, actor.x, actor.y, style->width * pixelSize, enabled);
+                Enemy(markers, *actor, actor->data->gameScale, actor->combat.x, actor->combat.y, style->width * pixelSize, enabled);
             }
         }
         DrawLines(markers, program, projection, *style);

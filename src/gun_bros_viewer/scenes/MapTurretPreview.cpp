@@ -15,9 +15,9 @@ void MapTurretPreview::Bind(ZLoadedMap &map) {
     m_indicators.clear();
     m_state = 0;
     const auto packHash = CStringToKey("pack9");
-    for (ZPlacedEnemy &placed : map.enemies) {
-        if (placed.templateData->packHash == packHash && placed.templateData->ordinal == 0) {
-            m_enemies.push_back(&placed.model->enemy);
+    for (auto &placed : map.enemies) {
+        if (placed->data->packHash == packHash && placed->data->ordinal == 0) {
+            m_enemies.push_back(placed.get());
         }
     }
     if (m_enemies.empty()) { return; }

@@ -4,6 +4,7 @@
 #include "gun_bros_re/gameplay/CLayerPathLink.h"
 #include "gun_bros_re/gameplay/CLayerPathMesh.h"
 #include <cstdio>
+int CheckEnemyNavigation();
 
 namespace {
 class BranchingPath : public CLayerPathMesh {
@@ -24,7 +25,7 @@ public:
 }
 
 int RunPathCacheCheck() {
-    unsigned failures = 0;
+    unsigned failures = CheckEnemyNavigation();
     BranchingPath path;
     PerformanceProbe::enabled = true;
     PerformanceProbe::counters = {};

@@ -28,7 +28,7 @@
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptState.h"
-#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include "engine/graphics/CMesh.h"
@@ -96,7 +96,7 @@ constexpr std::int32_t kWarmUpFrameMs = 16;
 // menu gives it; DrawUI divides it by 100.
 // Named for their template offsets, which is the one thing certainly true
 // about them. Read so the two scales land at the right place.
-using EnemyTemplate = ZEnemyTemplateData;
+using EnemyTemplate = CEnemy::Template;
 
 /** "pack1 enemy 18" */
 std::string OwnerLabel(const std::string &packName, std::uint32_t ordinal) {
@@ -112,7 +112,7 @@ bool CollectEnemies(CResTOCManager &tocManager, ZPackTables &tables,
 // A move set names one pack for every model in it, and that is the
 // pack an enemy's parts come out of.
 
-    return LoadEnemyCatalog(tocManager, tables, out);
+    return CEnemy::Template::LoadCatalog(tocManager, tables, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ bool CollectEnemies(CResTOCManager &tocManager, ZPackTables &tables,
 // ---------------------------------------------------------------------------
 
 /** One mesh config of a move set, decoded and uploaded. */
-using LoadedConfig = ZEnemyModelConfig;
+using LoadedConfig = CEnemy::ModelConfig;
 
 /**
  * Every model a move set names, whether or not the script ends up using it.
@@ -132,8 +132,8 @@ using LoadedConfig = ZEnemyModelConfig;
 bool LoadConfigs(ZPackTables &tables, const EnemyTemplate &entry,
                  std::vector<std::shared_ptr<LoadedConfig>> &out,
                  bool createBuffers, const ZShaderProgram *program) {
-    ZEnemyModel model;
-    const bool result = LoadEnemyModel(tables, entry, createBuffers, program, ZEnemySpawnMode::Level, model);
+    CEnemy model;
+    const bool result = model.Bind(tables, entry, createBuffers, program);
     out = std::move(model.configs);
     return result;
 }
@@ -339,7 +339,7 @@ struct Turntable {
 };
 
 /** One enemy on screen: its models, its script, and the parts it assembled. */
-struct LoadedEnemy : ZEnemyModel {
+struct LoadedEnemy : CEnemy {
     // Shared EnemyModel owns configs, scripts, parts and the reused pose buffer.
 
     // Which move the viewer is holding on part 0 once M or N has taken it away
@@ -373,17 +373,18 @@ bool BuildEnemy(ZPackTables &tables, const EnemyTemplate &entry,
 // than a blank window, and say that is what happened -- this is the viewer
 // being helpful, not the engine doing it.
 
-    if (!LoadEnemyModel(tables, entry, true, &program, ZEnemySpawnMode::Level, out)) {
+    if (!out.Bind(tables, entry, true, &program)) {
         std::printf("[enemy] %s: model unavailable\n", entry.owner.c_str());
         return false;
     }
-    std::printf("[enemy] %s: %zu configs -> %u parts\n", entry.owner.c_str(), out.configs.size(), out.enemy.GetPartCount());
+    out.Spawn();
+    std::printf("[enemy] %s: %zu configs -> %u parts\n", entry.owner.c_str(), out.configs.size(), out.GetPartCount());
     return true;
 }
 
 /** Which config a part is currently showing, or -1 when it shows nothing. */
 std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex) {
-    return EnemyPartConfig(loaded, partIndex);
+    return loaded.GetPartConfig(partIndex);
 }
 
 /**
@@ -414,12 +415,12 @@ std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex)
  * script no longer picking, an unlooped move would freeze on its last frame.
  */
 void TakeOverBodyMove(LoadedEnemy &loaded) {
-    if (loaded.enemy.IsBodyMoveLocked()) {
+    if (loaded.IsBodyMoveLocked()) {
         return;
     }
 
-    CMoveSetMeshController &controller = loaded.enemy.GetPart(0).controller;
-    loaded.enemy.SetBodyMoveLocked(true);
+    CMoveSetMeshController &controller = loaded.GetPart(0).controller;
+    loaded.SetBodyMoveLocked(true);
     controller.GetAnimation().SetLooped(true);
 
     // Start from whatever the script had chosen, so the first press steps one
@@ -439,7 +440,7 @@ void SelectBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded,
     TakeOverBodyMove(loaded);
     loaded.bodyMoveIndex = moveIndex;
 
-    CMoveSetMeshController &controller = loaded.enemy.GetPart(0).controller;
+    CMoveSetMeshController &controller = loaded.GetPart(0).controller;
     CMeshAnimationController &animation = controller.GetAnimation();
     controller.SetMove(moveIndex);
     animation.SetTimeMs(animation.GetRangeStartMs());
@@ -472,7 +473,7 @@ void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
     // states forever, which is what reading GetStateId() here used to do.
     int stateId = loaded.heldStateId;
     if (stateId < 0) {
-        stateId = static_cast<int>(loaded.enemy.GetStateId());
+        stateId = static_cast<int>(loaded.GetStateId());
     }
 
     for (std::size_t tried = 0; tried < stateCount; ++tried) {
@@ -490,7 +491,7 @@ void StepState(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
         }
 
         loaded.heldStateId = stateId;
-        loaded.enemy.SetState(static_cast<std::uint8_t>(stateId));
+        loaded.SetState(static_cast<std::uint8_t>(stateId));
 
         // Ids are zero-based, so the last one is stateCount - 1. Spelt out
         // because "state 6 of 7" reads like there is a seventh still to come.
@@ -514,10 +515,10 @@ void HoldState(LoadedEnemy &loaded) {
     if (loaded.heldStateId < 0) {
         return;
     }
-    if (loaded.enemy.GetStateId() == loaded.heldStateId) {
+    if (loaded.GetStateId() == loaded.heldStateId) {
         return;
     }
-    loaded.enemy.SetState(static_cast<std::uint8_t>(loaded.heldStateId));
+    loaded.SetState(static_cast<std::uint8_t>(loaded.heldStateId));
 }
 
 void StepBodyMove(const EnemyTemplate &entry, LoadedEnemy &loaded, int step) {
@@ -563,11 +564,11 @@ ZMeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
     ZMeshBounds combined = ZMeshBounds();
     bool any = false;
 
-    for (std::uint32_t i = 0; i < loaded.enemy.GetPartCount(); ++i) {
+    for (std::uint32_t i = 0; i < loaded.GetPartCount(); ++i) {
         if (part0Only && i > 0) {
             break;
         }
-        if (loaded.enemy.GetPart(i).boneIndex != kEnemyNoBoneIndex) {
+        if (loaded.GetPart(i).boneIndex != kEnemyNoBoneIndex) {
             continue;
         }
         const std::int32_t configIndex = PartConfigIndex(loaded, i);
@@ -599,7 +600,7 @@ ZMeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
 
     // An enemy every part of which hangs off a bone would otherwise frame to
     // nothing. Fall back to part 0, which is the one everything hangs from.
-    if (!any && loaded.enemy.GetPartCount() > 0) {
+    if (!any && loaded.GetPartCount() > 0) {
         const std::int32_t configIndex = PartConfigIndex(loaded, 0);
         if (configIndex >= 0) {
             combined = loaded.configs[configIndex]->mesh.GetBounds();
@@ -698,7 +699,7 @@ void BuildBaseMatrix(const ZMeshBounds &bounds, const Turntable &view, float sca
  */
 void DrawEnemy(LoadedEnemy &loaded, const ZShaderProgram &program,
                const float *base) {
-    DrawEnemyModel(loaded, program, base);
+    loaded.Draw(program, base);
 }
 
 }  // namespace
@@ -718,9 +719,10 @@ int RunEnemySurvey(const std::string &bigDirectory) {
     unsigned assembled = 0;
     unsigned attached = 0;
     for (std::size_t i = 0; i < enemies.size(); ++i) {
-        ZEnemyModel model;
-        if (!LoadEnemyModel(tables, enemies[i], false, nullptr, ZEnemySpawnMode::Level, model)) { return 1; }
-        CEnemy &enemy = model.enemy;
+        CEnemy model;
+        if (!model.Bind(tables, enemies[i], false, nullptr)) { return 1; }
+        model.Spawn();
+        CEnemy &enemy = model;
 
         ReportPartTable(i, enemies[i], enemy);
         if (enemy.GetPartCount() > 1) {
@@ -831,22 +833,22 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
     }
     if (stateIndex >= 0) {
         loaded->heldStateId = stateIndex;
-        loaded->enemy.SetState(static_cast<std::uint8_t>(stateIndex));
+        loaded->SetState(static_cast<std::uint8_t>(stateIndex));
         std::printf("[enemy] entered state %d\n", stateIndex);
     }
     if (bodyMoveIndex >= 0) {
         SelectBodyMove(enemies[slot], *loaded, bodyMoveIndex);
     }
     for (std::uint32_t elapsed = 0; elapsed < advanceMs; elapsed += kWarmUpFrameMs) {
-        loaded->enemy.Update(kWarmUpFrameMs);
+        loaded->Update(kWarmUpFrameMs);
         if (stepTarget == StepTarget::States) {
             HoldState(*loaded);
         }
     }
     std::printf("[enemy] after %u ms: state %u, body on move %d%s\n", advanceMs,
-                loaded->enemy.GetStateId(),
-                loaded->enemy.GetPart(0).controller.GetMoveIndex(),
-                loaded->enemy.IsBodyMoveLocked() ? " (held)" : " (script's)");
+                loaded->GetStateId(),
+                loaded->GetPart(0).controller.GetMoveIndex(),
+                loaded->IsBodyMoveLocked() ? " (held)" : " (script's)");
 
     glEnable(GL_DEPTH_TEST);
 
@@ -952,7 +954,7 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
             singleStep = false;
         }
         if (elapsedMs > 0) {
-            loaded->enemy.Update(static_cast<std::int32_t>(elapsedMs));
+            loaded->Update(static_cast<std::int32_t>(elapsedMs));
             if (stepTarget == StepTarget::States) {
                 HoldState(*loaded);
             }

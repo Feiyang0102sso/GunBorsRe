@@ -13,7 +13,7 @@
 #include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/CProp.h"
 #include "gun_bros_re/gameplay/TileSet.h"
-#include "gun_bros_re/gameplay/ZEnemyModel.h"
+#include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
@@ -235,22 +235,6 @@ struct ZActiveParticleEffect {
     CParticleEffectPlayer player;
 };
 
-/** One enemy template standing on the map, with the model it draws as. */
-struct ZPlacedEnemy {
-    float x;
-    float y;
-
-    // Both by pointer, and both for the same reason: CEnemy::Bind keeps the
-    // ADDRESS of the move set and the script, so the template has to stay put
-    // for as long as the model does. Holding either by value here would leave
-    // the model pointing at freed memory the moment this vector grew.
-    std::unique_ptr<ZEnemyTemplateData> templateData;
-    std::unique_ptr<ZEnemyModel> model;
-
-    // The template's game scale, which is half of how big it is drawn.
-    float gameScale;
-};
-
 /** A player standing on one of the map's spawn points. */
 struct ZPlacedPlayer {
     float x;
@@ -280,7 +264,15 @@ struct ZLoadedMap {
 
     // The enemies the object layer places. Held by pointer because an
     // EnemyModel owns GL buffers and points at its own meshes.
-    std::vector<ZPlacedEnemy> enemies;
+    // Templates precede actors so they outlive every borrowed script/move set.
+    // Both by pointer, and both for the same reason: CEnemy::Bind keeps the
+    // ADDRESS of the move set and the script, so the template has to stay put
+    // for as long as the model does. Holding either by value here would leave
+    // the model pointing at freed memory the moment this vector grew.
+    // The template's game scale, which is half of how big it is drawn.
+    // CEnemy now owns the old model resources directly; scale stays in Template.
+    std::vector<std::unique_ptr<CEnemy::Template>> enemyTemplates;
+    std::vector<std::unique_ptr<CEnemy>> enemies;
 
     // The player template, owned here because every PlacedPlayer's controllers
     // hold the ADDRESS of its move set -- the same trap PlacedEnemy documents.

@@ -1,4 +1,6 @@
-#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+/** Original: src/gunbros/enemy.cpp Bind :73381, Spawn :73239, Update :67732.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /**
  * @file CEnemy.h
  * @brief An enemy's part table, and the script functions that build it.
@@ -29,15 +31,19 @@
  * but implements only what standing a model up requires; unrecognised script
  * calls are logged with their arguments, which is how the list of what to
  * build next gets collected.
+ * Historical M4 note above: this class now also owns runtime combat, AI,
+ * resources and drawing; its implementation is split by responsibility.
  */
 
 #ifndef GUN_BROS_RE_GUN_BROS_CENEMY_H
 #define GUN_BROS_RE_GUN_BROS_CENEMY_H
-#include "gun_bros_re/gameplay/CStunController.h"
+#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+#include "gun_bros_re/gameplay/enemy/CStunController.h"
 
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptInterpreter.h"
-#include "gun_bros_re/gameplay/CLinkPathFinder.h"
+#include "gun_bros_re/gameplay/enemy/CLinkPathFinder.h"
+#include "gun_bros_re/gameplay/enemy/CMeshPathFinder.h"
 #include "engine/glu/script/ScriptResolver.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMoveSetMesh.h"
@@ -45,6 +51,12 @@
 #include "gun_bros_re/gameplay/ZCombatTypes.h"
 #include "gun_bros_re/gameplay/CCollisionData.h"
 #include <array>
+#include <map>
+#include <memory>
+#include "engine/graphics/ZMeshBuffer.h"
+#include "engine/graphics/ZShaderProgram.h"
+#include "engine/graphics/ZTexture.h"
+#include "gun_bros_re/data/ZPackTables.h"
 
 #include <cstdint>
 #include <vector>
@@ -74,6 +86,132 @@ constexpr std::uint8_t kEnemyScriptSetPartDirection = 0x10;
 
 class CEnemy : public ZGameScriptObject {
 public:
+    /**
+     * One enemy template, read as far as the two draw scales.
+     *
+     * CEnemy::Template::Init (:67174) reads, in order: a flag byte, a
+     * CGameAssetRef, a CScript, the CMoveSetMesh, a GameObjectRef, four numbers,
+     * the two scales, and finally a CCollisionData. Only that last one belongs to
+     * the collision work, so this stops one field short of it.
+     * Historical note: Init now reads and validates CCollisionData as well.
+     *
+     * **The two scales are the pair the same model is drawn at in the two places
+     * it appears.** CEnemy::Draw (:67499) uses the first in the world;
+     * CEnemy::DrawUI (:68451) uses the second as a PERCENTAGE on top of a
+     * fit-to-box, for the menus and the results screen.
+     */
+    struct Template {
+        std::uint32_t packHash;
+        std::uint32_t ordinal;
+        std::string owner;
+        // enemy_template.bt / CEnemy::Template::Init :67183, template mem+120.
+        CGameAssetRef name;
+
+        CScript script;
+        CMoveSetMesh moveSet;
+
+        // Template word 66, CEnemy::Bind's this[213].
+        float gameScale;
+
+        // Template word 67, CEnemy::Bind's this[214]. DrawUI divides it by 100.
+        float uiScalePercent;
+
+        // Named for their template offsets, which is the one thing certainly true
+        // about them. Read so the two scales land at the right place.
+        GameObjectRef objectRef104;
+        std::uint16_t experienceReward;
+        std::uint16_t xplodiumReward;
+        std::uint8_t flag117;
+        std::uint8_t radius116;
+        CCollisionData collision;
+
+        Template();
+        bool Init(CArrayInputStream &stream);
+        /** Read one ENEMY resource. `owner` is filled in for logging. */
+        bool Load(ZPackTables &tables, std::uint32_t packHash, std::uint32_t ordinal,
+            const std::string &owner);
+        /** Stable full ENEMY directory, including unused templates without scripts. */
+        static bool LoadCatalog(CResTOCManager &toc, ZPackTables &tables,
+            std::vector<Template> &entries);
+    };
+
+    /** One mesh config of a move set, decoded and -- optionally -- uploaded. */
+    struct ModelConfig {
+        CMesh mesh;
+        ZTexture texture;
+        ZMeshBuffer buffer;
+        bool valid;
+
+        ModelConfig() : valid(false) {}
+    };
+
+    /** Per-scene GL resources: poses/controllers stay on each individual enemy.
+     * Drawing uploads a part's pose immediately before its draw, so the immutable
+     * meshes, textures and upload buffers can be reused by the next enemy.
+     */
+    struct ResourceCache {
+        std::map<std::uint64_t, std::vector<std::shared_ptr<ModelConfig>>> entries;
+        unsigned hits = 0, misses = 0;
+    };
+
+    /**
+     * Which of the script's two spawn exports to run.
+     *
+     * They assemble different models. A turret's export 3 sets nothing at all, so
+     * the menu shows only its base; its export 0 adds the barrel as a second part
+     * and hangs it off a bone. Whichever the caller is imitating, pick that one.
+     */
+    // Call Spawn() for export 0 or SpawnForUI() for export 3 after Bind().
+
+    /**
+     * An enemy's models plus the object that decides which of them to show.
+     *
+     * Never copied or moved once built: `CMeshBuffer` owns a GL name, and the
+     * meshes CEnemy was bound to are the ones inside `configs`.
+     */
+
+    // Windows resource ownership implements Template::Load and CEnemy::Bind.
+    // No second enemy or script object exists outside this instance.
+    /**
+     * Load every model the template names, then let its script assemble them.
+     * The order is the original's: CMoveSetMesh::Load (:123213) queues every
+     * config before anything runs, because the script that picks between them has
+     * not run yet.
+     * The caller now explicitly follows Bind with Spawn or SpawnForUI.
+     * @param program Null when `createBuffers` is false, which is how a survey
+     *        reads the meshes without a GL context.
+     */
+    bool Bind(ZPackTables &tables, const Template &entry, bool createBuffers,
+        const ZShaderProgram *program, ResourceCache *cache = nullptr);
+    /** Decode/upload authored configs without spawning or running enemy scripts. */
+    static bool Preload(ZPackTables &tables, const Template &entry,
+        const ZShaderProgram &program, ResourceCache &cache);
+    std::int32_t GetPartConfig(std::uint32_t partIndex) const;
+    void Draw(const ZShaderProgram &program, const float *base);
+    bool DrawUI(const ZShaderProgram &program, float x, float y, float width,
+        float height, float canvasWidth, float canvasHeight);
+    void UpdateUI(std::int32_t deltaMs);
+    float GetWorldScale(float gameScale, float cameraScale) const;
+    void BuildGameMatrix(const float *base, float x, float y, float scale,
+        float facingDegrees, float *out) const;
+    /** CEnemy::GetRotationOffset :71429, before the optional hurtbox scale factor. */
+    void GetRotationOffset(float gameScale, float &x, float &y) const;
+    /** Shared hurtbox calculation. x/y enter as the actor's world anchor. */
+    void GetCollisionCircle(float gameScale, int part, float &x, float &y, float &radius) const;
+    /** Original node position in map units, independent of the rendering camera. */
+    bool GetNodeLocationChunk(int part, int node, float &x, float &y, float &z) const;
+
+    const Template *data = nullptr;
+    std::vector<std::shared_ptr<ModelConfig>> configs;
+    // Reused between frames so the evaluator does not reallocate.
+    std::vector<float> pose;
+    int contactTimer = 0;
+    int brotherContactTimer = 0;
+    int corpseMs = 0;
+    int objectId = -1;
+    bool mapPlaced = false; // Map mechanisms are not dynamic wave enemies.
+    bool deathReported = false;
+    unsigned assistMask[2]{}; // Each peer's original two gun configuration bits.
     /** One of the eight slots, in the order Bind leaves them. */
     struct Part {
         CMoveSetMeshController controller;
@@ -137,6 +275,8 @@ public:
      */
     struct CombatState {
         GameObjectRef templateRef;
+        // Native 59 writes mem+1284..1296. Its later consumer remains unverified.
+        std::array<float, 4> native59Parameters{};
         // IDs are the original class 7 variable IDs (:68982), not field offsets.
         // 0 move speed; 1 facing mode; 2 hit part; 3 damage /256;
         // 4 splash-hit flag; 5 hit world angle; 6 bullet speed; 7 hit edge group;
@@ -210,7 +350,13 @@ public:
         std::vector<Action> actions;
     };
 
+    // TODO(network): EnemyStatePacket, EnemyEventPacket, collision serialization
+    // and remote ownership stay deferred; local Bots share this local instance.
     CEnemy();
+    CEnemy(const CEnemy &) = delete;
+    CEnemy &operator=(const CEnemy &) = delete;
+    CEnemy(CEnemy &&) = delete;
+    CEnemy &operator=(CEnemy &&) = delete;
 
     /**
      * Lay out the eight slots and bind the script, as CEnemy::Bind does.
@@ -230,6 +376,8 @@ public:
      * purely to show a model is SpawnForUI (:72858), which calls export 3.
      * State 0 is entered first, because a state may override any export and
      * because the assembly calls often live in the first state's enter code.
+     * Correction verified at :72856 and menuMeshEnemy.cpp :169128: no state is
+     * entered before export 3. The earlier assumption above is historical only.
      *
      * @return whether anything ran at all.
      */
@@ -283,6 +431,7 @@ public:
         const GameObjectRef &bullet, const CCollisionData &collision);
     void SetTarget(ZCombatId id, float x, float y, bool alive);
     void SetPath(const ILayerPath *path);
+    void UpdateNavigation(const CLayerPathMesh &path, const std::vector<float> &distances);
     bool CanReceiveProjectile(int ownerType, ZCombatId owner) const;
     /** CEnemy::CanCollide :67243, specialized for a player (object type 0). */
     bool CanCollideWithPlayer() const;
@@ -331,6 +480,8 @@ public:
     bool IsScriptSequenceFrameFinished() override;
 
 private:
+    static float NormalizeAngle(float angle);
+    static float AngleDifference(float from, float to);
     bool ResolveCombatFunction(std::uint8_t function, const std::int16_t *arguments,
         std::uint8_t argumentCount, std::int16_t &result);
     void UpdateCombatBeforeAnimation(int deltaMs);
@@ -354,6 +505,7 @@ private:
     CScriptInterpreter m_interpreter;
     const ILayerPath *m_path = nullptr;
     CLinkPathFinder m_linkPathFinder;
+    CMeshPathFinder m_meshPathFinder;
 
     // Whether SetBodyMoveLocked has taken part 0's move away from the script.
     bool m_bodyMoveLocked;

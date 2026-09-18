@@ -1,3 +1,6 @@
+/** Original: src/gunbros/linkPathFinder.cpp Init :168567, Update :168635.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 #pragma once
 /** @file CLinkPathFinder.h
  * @brief Follow authored links, with the original patrol/once modes.

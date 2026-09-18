@@ -1,3 +1,6 @@
+/** Original: src/gunbros/targetingController.cpp :223153.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /** @file CTargetingController.h
  * @brief Original type-2 enemy targeting used by the player's Auto Aim item.
  */

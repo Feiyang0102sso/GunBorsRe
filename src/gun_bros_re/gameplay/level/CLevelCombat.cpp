@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CFlock.h"
+#include "gun_bros_re/gameplay/enemy/CFlock.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include <algorithm>
@@ -15,83 +15,6 @@ constexpr float kRadians = 3.14159265f / 180;
 constexpr int kCorpseLimitMs = 10000;
 }
 
-void CLevel::Actions(ZCombatEnemy &actor) {
-    CEnemy &enemy = actor.model.enemy;
-    const CEnemy::CombatState &state = enemy.combat;
-    for (const CEnemy::Action &action : enemy.TakeActions()) {
-        float x = state.x, y = state.y, z = 0, direction = state.facing - 90;
-        // Death effects still use the final pose, even though the actor is no
-        // longer a valid continuous beam/effect anchor.
-        if (!state.dead) { Anchor(state.id, action.part, action.node, x, y, z, direction); }
-        int ownerType = 1;
-        if (state.targetType == 2) { ownerType = 0; }
-        if (action.kind == CEnemy::Action::Kind::LevelEvent) {
-            QueueLevelEvent(static_cast<std::uint8_t>(action.slot));
-        } else if (action.kind == CEnemy::Action::Kind::Teleported) {
-            QueueEnemyTeleport(actor.objectId, state.templateRef);
-        } else if (action.kind == CEnemy::Action::Kind::Shake) {
-            if (m_map != nullptr) { m_map->GetCamera().Shake(action.durationMs); }
-        } else if (action.kind == CEnemy::Action::Kind::TurretActive) {
-            // CEnemy native 71 :72744 selects the local player when offline.
-            CBrother *owner = m_playerModel;
-            if (state.summoner == kBrotherCombatId && m_brotherModel != nullptr) { owner = m_brotherModel; }
-            owner->SetTurretIsActive(action.slot != 0);
-            std::printf("[turret] actor=%llu active=%d\n", static_cast<unsigned long long>(state.id), action.slot != 0);
-        } else if (action.kind == CEnemy::Action::Kind::SpawnPickup) {
-            QueuePickupSpawn(action.resource, x, y);
-        } else if (action.kind == CEnemy::Action::Kind::Bullet) {
-            if (action.slot != 1) { direction = action.direction - 90; }
-            SpawnProjectile(action.resource, x, y, z, direction,
-                action.speed, state.id, ownerType, action.part, action.node);
-        } else if (action.kind == CEnemy::Action::Kind::Stun) {
-            if (ownerType == 1 && std::hypot(m_actor.x - x, m_actor.y - y) < action.radius) {
-                m_playerModel->Stun(action.durationMs);
-            }
-            if (ownerType == 1 && m_brother != nullptr && std::hypot(m_brother->x - x, m_brother->y - y) < action.radius) {
-                m_brotherModel->Stun(action.durationMs);
-            }
-        } else if (action.kind == CEnemy::Action::Kind::CollisionResolved) {
-            // Record assistance only after the enemy Flow accepts the collision.
-            if (m_localLive && (action.result == ZHitResult::Hit || action.result == ZHitResult::Killed) &&
-                !action.resource.IsNull() && action.slot >= 0 && action.slot < 2) {
-                if (action.owner == kPlayerCombatId) { actor.assistMask[0] |= 1u << action.slot; }
-                if (action.owner == kBrotherCombatId) { actor.assistMask[1] |= 1u << action.slot; }
-            }
-            ResolveHit(action.projectile, action.result);
-        } else if (action.kind == CEnemy::Action::Kind::RemoveBullet) {
-            RemoveOldestProjectile(state.id);
-        } else if (action.kind == CEnemy::Action::Kind::Broadcast) {
-            for (auto &other : m_objects.GetEnemies()) {
-                if (other.get() != &actor && !other->model.enemy.combat.dead) {
-                    other->model.enemy.TriggerEvent(static_cast<std::uint8_t>(action.slot));
-                }
-            }
-        } else if (action.kind == CEnemy::Action::Kind::Splash || action.kind == CEnemy::Action::Kind::SpawnEnemy) {
-            ZCombatHit hit;
-            hit.owner = state.id;
-            hit.ownerType = ownerType;
-            hit.x = x; hit.y = y; hit.direction = direction;
-            hit.damage = action.damage * GetDamageMultiplier(state.id);
-            if (action.kind == CEnemy::Action::Kind::Splash) { Splash(hit, action.radius, 360, action.force, action.durationMs); }
-            else { SpawnFromProjectile(action.resource, hit); }
-        } else {
-            ZGunCue cue;
-            cue.resource = action.resource;
-            cue.effectGroup = action.effectGroup;
-            cue.effectScale = action.effectScale;
-            cue.alignEffect = action.alignEffect;
-            cue.linkedEnemyEffect = action.kind == CEnemy::Action::Kind::LinkedEffect;
-            cue.kind = ZGunCue::Kind::Effect;
-            if (action.kind == CEnemy::Action::Kind::Sound) { cue.kind = ZGunCue::Kind::Sound; }
-            if (action.kind == CEnemy::Action::Kind::LoopSound) { cue.kind = ZGunCue::Kind::LoopSound; }
-            if (action.kind == CEnemy::Action::Kind::StopSound) { cue.kind = ZGunCue::Kind::StopSound; }
-            if (action.kind == CEnemy::Action::Kind::LinkedEffect) { cue.kind = ZGunCue::Kind::Trail; }
-            if (action.kind == CEnemy::Action::Kind::StopEffect) { cue.kind = ZGunCue::Kind::StopTrail; }
-            if (action.kind == CEnemy::Action::Kind::Shake || action.kind == CEnemy::Action::Kind::Reward) { continue; }
-            Emit(cue, x, y, z, direction, state.id, action.slot, action.part, action.node);
-        }
-    }
-}
 
 void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // Equipment changes create a new script host; reconnect before input.
@@ -129,18 +52,25 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // AddObject/RemoveObject maintain membership, including unremoved corpses.
     m_flockEnemies.clear();
     for (auto &actor : m_objects.GetEnemies()) {
-        auto &state = actor->model.enemy.combat;
-        if (state.enabled && !state.removed) { m_flockEnemies.push_back(&state); }
+        auto &state = actor->combat;
+        if (state.enabled && !state.removed) {
+            SelectTarget(*actor);
+            m_flockEnemies.push_back(&state);
+        }
     }
     {
         PerformanceProbe::Scope timing(PerformanceProbe::counters.flockMs);
+        if (m_map != nullptr) {
+            const auto *path = dynamic_cast<const CLayerPathMesh *>(m_map->GetPathLayer(m_pathLayer));
+            if (path != nullptr) { m_flock.RefreshDistanceMaps(*path, m_flockEnemies); }
+        }
         if (PerformanceProbe::disableFlock) {
             for (auto *state : m_flockEnemies) { state->flockX = 0; state->flockY = 0; }
         } else
         { CFlock::RefreshFlock(m_flockEnemies); }
     }
     for (auto &actor : m_objects.GetEnemies()) {
-        CEnemy &enemy = actor->model.enemy;
+        CEnemy &enemy = *actor;
         CEnemy::CombatState &state = enemy.combat;
         if (!state.enabled || state.removed) { continue; }
         PerformanceProbe::Scope timing(PerformanceProbe::counters.enemyMs);
@@ -150,8 +80,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         if (!state.dead) {
             enemyDeltaMs = std::max(1, static_cast<int>(std::lround(deltaMs * GetObjectTimeScale())));
         }
-        SelectTarget(*actor);
-        UpdateNavigation(*actor, enemyDeltaMs);
+        UpdateNavigation(*actor);
         enemy.Update(enemyDeltaMs);
         for (std::uint32_t part = 0; part < enemy.GetPartCount(); ++part) {
             for (const ZMoveSoundRef &sound : enemy.GetPart(part).controller.TakeSounds()) {
@@ -217,7 +146,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     }
     for (auto &actor : m_objects.GetEnemies()) {
         Actions(*actor);
-        CEnemy::CombatState &state = actor->model.enemy.combat;
+        CEnemy::CombatState &state = actor->combat;
         if (state.dead) {
             actor->corpseMs += deltaMs;
             if (actor->corpseMs > kCorpseLimitMs) { state.removed = true; }
@@ -227,7 +156,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     // Accumulate completed actor statistics before erasing removed instances.
     auto &enemyObjects = m_objects.GetEnemies();
     for (std::size_t i = 0; i < enemyObjects.size();) {
-        CEnemy::CombatState &state = enemyObjects[i]->model.enemy.combat;
+        CEnemy::CombatState &state = enemyObjects[i]->combat;
         if (state.dead && !enemyObjects[i]->deathReported) {
             RewardEnemy(*enemyObjects[i]);
             GameObjectRef enemy;
@@ -294,7 +223,7 @@ void CLevel::ActorPosition(ZCombatId actor, float &x, float &y) const {
 std::vector<ZBrotherAIWorld::Threat> CLevel::GetBrotherThreats() const {
     std::vector<ZBrotherAIWorld::Threat> result;
     for (const auto &actor : m_objects.GetEnemies()) {
-        const auto &enemy = actor->model.enemy;
+        const auto &enemy = *actor;
         if (!enemy.combat.enabled || !enemy.combat.targetable) { continue; }
         result.push_back({enemy.combat.x, enemy.combat.y, enemy.GetPart(0).radius + m_playerRadius});
     }

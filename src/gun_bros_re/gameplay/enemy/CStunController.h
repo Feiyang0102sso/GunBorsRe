@@ -1,3 +1,6 @@
+/** Original: src/gunbros/stunController.cpp :394408.
+ * Windows graphics/resource storage is adapted; original data comes from BIG.
+ */
 /** @file CStunController.h
  * @brief Original timed stun and alternating screen-space offset (:394408).
  */

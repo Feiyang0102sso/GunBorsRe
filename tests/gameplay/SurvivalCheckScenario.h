@@ -8,6 +8,7 @@
  */
 #include "gameplay/SurvivalFixtures.h"
 #include "gun_bros_re/debug/SurvivalDevelopment.h"
+#include "TestOutput.h"
 
 /** Routes each session hook to the check the development record selected. */
 class SurvivalCheckScenario : public ZSurvivalScenario {
@@ -45,8 +46,10 @@ private:
  * Declare it next to the record; both must outlive the session call. */
 struct DevelopmentBinding {
     SurvivalCheckScenario scenario;
-    DevelopmentBinding(ZSurvivalLaunch &launch, const SurvivalDevelopment &development)
+    DevelopmentBinding(ZSurvivalLaunch &launch, SurvivalDevelopment &development)
         : scenario(development) {
+        // Performance CSVs/screenshots use the same explicit case directory.
+        if (development.outputDirectory.empty()) { development.outputDirectory = TestOutput::Path(""); }
         launch.development = &development;
         launch.scenario = &scenario;
     }
