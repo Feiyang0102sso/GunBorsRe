@@ -48,12 +48,12 @@ public:
 
     void Update(int deltaMs) ;
 
-    ZCombatTrace Trace(const ZCombatHit &hit, float x, float y, float dx, float dy,
-        float radius, const std::vector<ZCombatId> &skip) ;
+    Collision::Trace Trace(const Collision::Hit &hit, float x, float y, float dx, float dy,
+        float radius, const std::vector<Collision::ObjectId> &skip) ;
 
-    ZHitResult ApplyHit(ZCombatId target, const ZCombatHit &hit) ;
+    Collision::HitResult ApplyHit(Collision::ObjectId target, const Collision::Hit &hit) ;
 
-    void Splash(const ZCombatHit &hit, float radius) ;
+    void Splash(const Collision::Hit &hit, float radius) ;
 
     unsigned GetFailures() const {
         unsigned failures = 0;
@@ -66,7 +66,7 @@ public:
     unsigned GetHitCount() const { return m_hitCount; }
 
 private:
-    static constexpr ZCombatId kPropIdBase = 1ull << 62;
+    static constexpr Collision::ObjectId kPropIdBase = 1ull << 62;
 
     bool PlayerInside(const CProp &prop) const ;
 

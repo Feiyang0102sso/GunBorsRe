@@ -42,7 +42,7 @@ bool MakeTimedPowerup(ZPowerupEntry &entry, bool unsupported = false) {
 }
 
 unsigned CheckPowerupRuntime(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
-    CBrother &player, ZPlayerVitals &vitals) {
+    CBrother &player, CBrother::Vitals &vitals) {
     ZPowerupEntry timed;
     ZPowerupEntry unsupported;
     if (!MakeTimedPowerup(timed) || !MakeTimedPowerup(unsupported, true)) { return 1; }

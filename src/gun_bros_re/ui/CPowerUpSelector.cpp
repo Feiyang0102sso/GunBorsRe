@@ -4,7 +4,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/ui/ZMenuData.h"
 #include "gun_bros_re/ui/ZTextLayout.h"
 #include "engine/platform/ZWindow.h"

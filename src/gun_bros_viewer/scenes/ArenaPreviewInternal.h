@@ -10,7 +10,7 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "engine/graphics/ZMarkerBatch.h"
 #include "engine/core/ZMatrix4d.h"
-#include "gun_bros_re/gameplay/CBullet.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -32,6 +32,6 @@ struct ArenaScene {
     const std::vector<ZWeaponEntry> &weapons;
     const CBrother::Template &playerData;
     CBrother &player;
-    ZPlayerVitals &vitals;
+    CBrother::Vitals &vitals;
     CLevel &scene;
 };

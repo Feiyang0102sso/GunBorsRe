@@ -15,7 +15,7 @@
 #include "gun_bros_re/gameplay/map/TileSet.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/gameplay/ZProjectileTypes.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
 #include <array>
 #include <map>
@@ -76,7 +76,7 @@ struct CMap::Resources {
     // Effective player collision: the level-selected map layer plus every
     // placed prop's local collision translated into world space.
     CCollisionData collisionScene;
-    ZWeaponCollision weaponCollision;
+    CCollisionData::Scene weaponCollision;
 
     // The enemies the object layer places. Held by pointer because an
     // EnemyModel owns GL buffers and points at its own meshes.

@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "engine/graphics/CMeshCamera.h"
 /** Real BIG mine scripts, animated firing, and original map boundary regression. */
 #define NOMINMAX
@@ -9,25 +9,25 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
-#include "gun_bros_re/gameplay/CBullet.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include <cstdio>
 #include <cmath>
 
 /** Observe real projectile splash dispatch without unrelated enemy scheduling. */
-class MineCheckWorld : public ZProjectileWorld {
+class MineCheckWorld : public CBullet::World {
 public:
     unsigned explosions = 0;
     float damage = 0;
-    ZCombatTrace Trace(const ZCombatHit &, float, float, float, float, float,
-        const std::vector<ZCombatId> &) override { return {}; }
-    ZHitResult ApplyHit(ZCombatId, const ZCombatHit &) override { return ZHitResult::Hit; }
-    void Splash(const ZCombatHit &hit, float, float, float, int) override {
+    Collision::Trace Trace(const Collision::Hit &, float, float, float, float, float,
+        const std::vector<Collision::ObjectId> &) override { return {}; }
+    Collision::HitResult ApplyHit(Collision::ObjectId, const Collision::Hit &) override { return Collision::HitResult::Hit; }
+    void Splash(const Collision::Hit &hit, float, float, float, int) override {
         ++explosions;
         damage += hit.damage;
     }
-    void SpawnFromProjectile(const GameObjectRef &, const ZCombatHit &) override {}
-    bool FindTarget(const ZCombatHit &, float, float &, float &) override { return false; }
-    bool Anchor(ZCombatId, int, int, float &, float &, float &, float &) override { return false; }
+    void SpawnFromProjectile(const GameObjectRef &, const Collision::Hit &) override {}
+    Collision::ObjectId FindSeekTarget(const Collision::Hit &, float) override { return Collision::NoObject; }
+    bool Anchor(Collision::ObjectId, int, int, float &, float &, float &, float &) override { return false; }
 };
 
 int RunMineCheck(const std::string &bigDirectory) {
@@ -166,7 +166,7 @@ int RunMineCheck(const std::string &bigDirectory) {
             MeshCameraBuildGameMatrix(identity, 900, 540,
                 other.GetWorldScale(playerTemplate.GetGameScale(), 1), 0, otherModel);
             other.weapon->Fire();
-            effects.EmitBrother(other, otherModel, 0, kPlayerCombatId);
+            effects.EmitBrother(other, otherModel, 0, Collision::Player);
             player.SetInput(false, true);
             for (int frame = 0; frame < 1250; ++frame) {
                 player.Update(16);

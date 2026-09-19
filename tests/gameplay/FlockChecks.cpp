@@ -45,7 +45,7 @@ int CheckFlockMovement(CLevel &scene) {
             state.variables[0] = 60;
             state.variables[12] = 0;
             state.hasNavigationTarget = false;
-            actor->SetTarget(kPlayerCombatId, 1000, 450, true);
+            actor->SetTarget(Collision::Player, 1000, 450, true);
         }
         CFlock::RefreshFlock(pursuit);
         first->Update(16);
@@ -103,7 +103,7 @@ int CheckFlockMovement(CLevel &scene) {
     if (left.flockX != 0) { ++failures; }
     // A LEVEL refresh may follow the same frame that releases corpse storage.
     // Keep another live actor so navigation still needs a target distance map.
-    const ZCombatId retiredId = first->combat.id;
+    const Collision::ObjectId retiredId = first->combat.id;
     first->combat.dead = true;
     first->combat.health = 0;
     first->corpseMs = 10001;

@@ -40,7 +40,7 @@ int CGame::Run(const Launch &launch) {
     CMPMatch match;
     CPlayerConfiguration matchConfiguration;
     std::vector<CEnemy::Template> enemies;
-    ZPlayerVitals vitals;
+    CBrother::Vitals vitals;
     vitals.invincible = false;
     CPlayerProgress::Template progressData;
     CPlayerProgress progress;
@@ -95,7 +95,7 @@ int CGame::Run(const Launch &launch) {
         if (!LoadMPMatches(toc, tables, matches) || launch.matchIndex >= matches.size()) { return 1; }
         const auto &entry = matches[launch.matchIndex];
         match.Bind(entry.data, matchSeed);
-        match.SetBotLevel(static_cast<CMPMatch::BotLevel>(GameHostSettings().dmBotLevel));
+        match.SetBotLevel(static_cast<ZBotSettings::Difficulty>(GameHostSettings().dmBotLevel));
         for (unsigned slot = 0; slot < 2; ++slot) {
             if (launch.loadout[slot] >= entry.guns.size()) { return 1; }
             matchConfiguration.guns[slot] = entry.guns[launch.loadout[slot]];
@@ -232,7 +232,7 @@ int CGame::Run(const Launch &launch) {
             if (chosen[slot] == nullptr) { return 1; }
         }
         deathmatchBot->Configure(matchSeed, *chosen[0], *chosen[1],
-                                 static_cast<CMPMatch::BotLevel>(GameHostSettings().dmBotLevel));
+                                 static_cast<ZBotSettings::Difficulty>(GameHostSettings().dmBotLevel));
     }
     if (withBrother) {
         brother.vitals.maximum = progress.GetHealth();
@@ -357,9 +357,9 @@ int CGame::Run(const Launch &launch) {
         }
     }
     player.gunSlot = equippedWeaponSlot;
-    CPowerUpSelector peerPowerups(toc, tables, brotherModel, brother.vitals, scene, *peerProfile, kBrotherCombatId);
+    CPowerUpSelector peerPowerups(toc, tables, brotherModel, brother.vitals, scene, *peerProfile, Collision::Brother);
     if ((launch.localLive || launch.deathmatch) && !peerPowerups.InitPowerups()) { return 1; }
-    if (launch.localLive || launch.deathmatch) { scene.SetPowerup(&peerPowerups.GetPowerup(), kBrotherCombatId); }
+    if (launch.localLive || launch.deathmatch) { scene.SetPowerup(&peerPowerups.GetPowerup(), Collision::Brother); }
     if (launch.deathmatch) {
         powerups.SetDeathmatch(&match);
         peerPowerups.SetDeathmatch(&match);

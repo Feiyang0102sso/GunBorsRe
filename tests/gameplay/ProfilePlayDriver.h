@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/game/ZGameObserver.h"
+#include "gun_bros_re/host/ZGameObserver.h"
 
 /** Deterministic pointer/shortcut and animation assertions for profile-play. */
 class ProfilePlayDriver : public ZGameObserver {

@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/ZLocalOnlineServices.h"
+#include "gun_bros_re/host/ZLocalOnlineServices.h"
 
 void CInputPad::BeginLiveWave(const ZMultiplayerStatistics &player, const ZMultiplayerStatistics &peer) {
     m_liveStats[0] = player; m_liveStats[1] = peer;

@@ -4,7 +4,7 @@
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/game/CGameSession.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -13,8 +13,8 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
 // A stationary enemy in open space must not make the peer zigzag every frame.
 class SteadyPeerWorld : public ZBrotherAIWorld {
 public:
-    ZCombatId FindBrotherTarget(float, float, float) override { return 1; }
-    bool GetBrotherTarget(ZCombatId, float &x, float &y) override { x = 350; y = 0; return true; }
+    Collision::ObjectId FindBrotherTarget(float, float, float) override { return 1; }
+    bool GetBrotherTarget(Collision::ObjectId, float &x, float &y) override { x = 350; y = 0; return true; }
     bool GetBrotherWaypoint(float, float, float x, float y, float &outX, float &outY) override { outX = x; outY = y; return true; }
     void ResolveBrotherForce(float, float, float &, float &) override {}
     std::vector<Threat> GetBrotherThreats() const override { return {{350, 0, 22}}; }
@@ -51,12 +51,11 @@ bool CaptureRescueEffect(SurvivalDeathFixture &fixture, const char *name) {
     Matrix4dTranslate(mvp, -scene.GetPlayer().x + width / zoom / 2, -scene.GetPlayer().y + height / zoom / 2);
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    fixture.loaded.DrawBackground(fixture.batch, true, true, false);
+    fixture.loaded.DrawBackground(fixture.batch, true, false);
     fixture.batch.Draw(fixture.program, mvp);
-    fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
     CRenderQueue::Draw(fixture.loaded, fixture.batch, fixture.program, mvp, true, &scene,
         &fixture.brotherModel, fixture.brother.y, width);
-    fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
+    fixture.scene.Draw(mvp, nullptr, kLevelCameraScale, true);
     return Capture::SaveFrame(fixture.window, TestOutput::Path(name));
 }
 
@@ -169,14 +168,14 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     bool checkedAssist = false;
     for (auto &enemy : scene.GetEnemies()) {
         auto &target = *enemy;
-        if (target.combat.dead || target.combat.health <= 0 || !target.CanReceiveProjectile(0, kBrotherCombatId)) { continue; }
+        if (target.combat.dead || target.combat.health <= 0 || !target.CanReceiveProjectile(0, Collision::Brother)) { continue; }
         // Keep autonomous shots out of this attribution assertion, without
         // changing the original enemy template or accepting zero-damage hits.
         fixture.scene.Clear();
         bot.vitals.stunMs = 100;
         const auto id = target.combat.id;
-        ZCombatHit assist;
-        assist.owner = kBrotherCombatId;
+        Collision::Hit assist;
+        assist.owner = Collision::Brother;
         assist.weapon = fixture.brotherModel.gunResource;
         assist.damage = target.combat.health * 0.1f;
         assist.part = 0;
@@ -190,8 +189,8 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
         const auto peerXpBefore = scene.GetPeerExperience();
         const auto peerOreBefore = scene.GetMultiplayerStatistics(1).total.xplodium;
         const auto killsBefore = scene.GetMultiplayerStatistics(0).total.kills;
-        ZCombatHit fatal = assist;
-        fatal.owner = kPlayerCombatId;
+        Collision::Hit fatal = assist;
+        fatal.owner = Collision::Player;
         fatal.weapon = player.gunResource;
         fatal.damage = 100000;
         scene.ApplyHit(id, fatal);
@@ -245,8 +244,8 @@ int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud) {
     // kills during that synthetic wait have no corresponding wave transition.
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
 
-    ZCombatHit clearWave;
-    clearWave.owner = kPlayerCombatId;
+    Collision::Hit clearWave;
+    clearWave.owner = Collision::Player;
     clearWave.damage = 100000;
     for (unsigned elapsed = 0; elapsed < 120000 && scene.GetClearedWaves() < 2; elapsed += 16) {
         session.Update(16, 0, 0, false);

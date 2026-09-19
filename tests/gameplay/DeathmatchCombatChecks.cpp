@@ -4,7 +4,7 @@
 #include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
@@ -85,12 +85,12 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerU
 
     // Both projectile and beam tracing must identify the opposing participant.
     for (unsigned flags : {0u, 0x100u}) {
-        ZCombatHit traceHit; traceHit.ownerType = 0; traceHit.flags = flags;
-        traceHit.owner = kPlayerCombatId;
+        Collision::Hit traceHit; traceHit.ownerType = 0; traceHit.flags = flags;
+        traceHit.owner = Collision::Player;
         const auto toBot = scene.Trace(traceHit, bot.previousX, bot.previousY, bot.x - bot.previousX, bot.y - bot.previousY, 1, {});
-        traceHit.owner = kBrotherCombatId;
+        traceHit.owner = Collision::Brother;
         const auto toPlayer = scene.Trace(traceHit, scene.GetPlayer().x, scene.GetPlayer().y, 0, 0, 1, {});
-        if (toBot.target != kBrotherCombatId || toPlayer.target != kPlayerCombatId) {
+        if (toBot.target != Collision::Brother || toPlayer.target != Collision::Player) {
             std::printf("[deathmatch-check] trace failed flags=%u targets=%llu,%llu\n", flags, toBot.target, toPlayer.target); return 1;
         }
     }
@@ -103,10 +103,10 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerU
     }
     vitals.invincible = false; bot.vitals.invincible = false;
     for (unsigned peer = 0; peer < 2; ++peer) {
-        ZCombatHit blast; blast.ownerType = 0; blast.damage = 10;
-        ZPlayerVitals *target = &bot.vitals;
-        blast.owner = kPlayerCombatId; blast.x = bot.x; blast.y = bot.y;
-        if (peer == 1) { target = &vitals; blast.owner = kBrotherCombatId; blast.x = scene.GetPlayer().x; blast.y = scene.GetPlayer().y; }
+        Collision::Hit blast; blast.ownerType = 0; blast.damage = 10;
+        CBrother::Vitals *target = &bot.vitals;
+        blast.owner = Collision::Player; blast.x = bot.x; blast.y = bot.y;
+        if (peer == 1) { target = &vitals; blast.owner = Collision::Brother; blast.x = scene.GetPlayer().x; blast.y = scene.GetPlayer().y; }
         const float before = target->health;
         scene.Splash(blast, 1, 360, 0, 0);
         if (target->health >= before || target->dead) { std::printf("[deathmatch-check] splash failed peer=%u\n", peer); return 1; }
@@ -158,14 +158,14 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerU
     if (ZLocalPVPBot::UseMatchConsumable(powerups, true) || !match.EnterShop(1) || !match.EnterShop(1) || match.EnterShop(1)) { return 1; }
 
     // Friendly fire remains disabled on the shooter; the opposing actor takes damage.
-    ZCombatHit hit; hit.owner = kPlayerCombatId; hit.ownerType = 0; hit.damage = 100000;
+    Collision::Hit hit; hit.owner = Collision::Player; hit.ownerType = 0; hit.damage = 100000;
     vitals.invincible = false; bot.vitals.invincible = false;
-    if (scene.ApplyHit(kPlayerCombatId, hit) != ZHitResult::Ignored) { return 1; }
+    if (scene.ApplyHit(Collision::Player, hit) != Collision::HitResult::Ignored) { return 1; }
     std::printf("[deathmatch-check] directed-fatal remaining=%u limit=%u health=%.1f protection=%d shield=%d\n",
         match.RemainingMs(), match.Data().seconds, bot.vitals.health, *opponent.VariableResolver(3), opponent.IsShield());
     for (unsigned kill = 0; kill < match.Data().killLimit; ++kill) {
-        const auto fatalResult = scene.ApplyHit(kBrotherCombatId, hit);
-        if (fatalResult != ZHitResult::Killed) {
+        const auto fatalResult = scene.ApplyHit(Collision::Brother, hit);
+        if (fatalResult != Collision::HitResult::Killed) {
             std::printf("[deathmatch-check] fatal hit failed result=%u match=%u health=%.1f dead=%d invincible=%d unlimited=%d protection=%d shield=%d\n",
                 unsigned(fatalResult), unsigned(match.GetResult()), bot.vitals.health, bot.vitals.dead, bot.vitals.invincible,
                 bot.vitals.unlimitedHealth, *opponent.VariableResolver(3), opponent.IsShield());

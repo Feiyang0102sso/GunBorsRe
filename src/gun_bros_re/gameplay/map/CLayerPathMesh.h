@@ -4,7 +4,7 @@
 #ifndef GUN_BROS_RE_CLAYERPATHMESH_H
 #define GUN_BROS_RE_CLAYERPATHMESH_H
 #include "gun_bros_re/gameplay/map/ILayerPath.h"
-#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include <array>
 
 class CLayerPathMesh : public ILayerPath {
@@ -14,7 +14,7 @@ public:
         std::array<std::uint16_t, 4> vertices{};
     };
     bool Init(CArrayInputStream &stream);
-    int GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const override;
+    int GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, CRandGen &random) const override;
     int FindNode(float x, float y) const override;
     // Original layerPathMesh.cpp :167837, :167955, :168066.
     bool GetSharedSide(int from, int to, ZCollisionPoint &a, ZCollisionPoint &b) const;

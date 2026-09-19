@@ -91,7 +91,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
 
     ZShaderProgram program;
     CBrother player;
-    ZPlayerVitals vitals;
+    CBrother::Vitals vitals;
     vitals.maximum = progress.GetHealth();
     vitals.health = vitals.maximum / 2;
     CLevel scene(toc, tables, program);

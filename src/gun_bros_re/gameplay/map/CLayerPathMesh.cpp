@@ -13,7 +13,7 @@
 /** @file CLayerPathMesh.cpp
  * @brief Wire format and centre calculation from iOS :167381-167560.
  */
-#include "engine/core/ZRandom.h"
+#include "engine/core/CRandGen.h"
 #include "gun_bros_re/gameplay/map/CLayerPathMesh.h"
 #include <limits>
 
@@ -133,7 +133,7 @@ bool CLayerPathMesh::Init(CArrayInputStream &stream) {
     return !stream.Overran() && refs == neighbourRefCount;
 }
 
-int CLayerPathMesh::GetSpawnLocation(float, float, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const {
+int CLayerPathMesh::GetSpawnLocation(float, float, const COffscreenSpawnLocationFilter &filter, CRandGen &random) const {
     const auto &nodes = m_nodes;
     if (nodes.empty()) { return -1; }
     // CLayerPathMesh::GetSpawnLocation :168115 starts at a random polygon

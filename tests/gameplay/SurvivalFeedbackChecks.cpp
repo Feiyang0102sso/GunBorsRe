@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -98,20 +98,20 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             CEnemy &enemy = *actor;
             for (unsigned tick = 0; tick < 100; ++tick) { enemy.Update(16); }
             const float health = enemy.combat.health;
-            ZCombatHit hit;
-            hit.owner = kPlayerCombatId;
+            Collision::Hit hit;
+            hit.owner = Collision::Player;
             hit.ownerType = 0;
             hit.damage = health / 10;
             hit.part = 0;
             hit.x = enemy.combat.x;
             hit.y = enemy.combat.y + 100;
             hit.projectile = 10001;
-            const ZHitResult first = scene.ApplyHit(enemy.combat.id, hit);
-            hit.owner = kBrotherCombatId;
+            const Collision::HitResult first = scene.ApplyHit(enemy.combat.id, hit);
+            hit.owner = Collision::Brother;
             hit.projectile = 10002;
-            const ZHitResult second = scene.ApplyHit(enemy.combat.id, hit);
+            const Collision::HitResult second = scene.ApplyHit(enemy.combat.id, hit);
             for (unsigned tick = 0; tick < 100; ++tick) { enemy.Update(16); }
-            if (first == ZHitResult::Hit && second == ZHitResult::Hit) {
+            if (first == Collision::HitResult::Hit && second == Collision::HitResult::Hit) {
                 ++simultaneousHits;
                 if (enemy.combat.hitCount != 2 || std::abs(health - enemy.combat.health - hit.damage * 2) > 0.01f) { ++checkFailures; }
             }
@@ -144,7 +144,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 if ((bullet.GetFlags() & 0x140) == 0x40) { round = ref; break; }
             }
             if (round.IsNull()) { return 1; }
-            if (probe.SpawnProjectile(round, 600, 350, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            if (probe.SpawnProjectile(round, 600, 350, 0, 90, 600, Collision::Brother, 0) == 0) { return 1; }
             float matrix[16];
             probe.PlayerMatrix(matrix);
             for (unsigned tick = 0; tick < 90; ++tick) { probe.Update(player, matrix, 0, 16); }
@@ -166,8 +166,8 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
             cullScene.PlayerMatrix(cullMatrix);
             // Both start just below the view. One travels away from it, one
             // towards it; the outbound one is the only one culled at once.
-            if (cullScene.SpawnProjectile(round, 600, 560, 0, 90, 600, kBrotherCombatId, 0) == 0) { return 1; }
-            if (cullScene.SpawnProjectile(round, 600, 560, 0, -90, 600, kBrotherCombatId, 0) == 0) { return 1; }
+            if (cullScene.SpawnProjectile(round, 600, 560, 0, 90, 600, Collision::Brother, 0) == 0) { return 1; }
+            if (cullScene.SpawnProjectile(round, 600, 560, 0, -90, 600, Collision::Brother, 0) == 0) { return 1; }
             // 160ms: the outbound one is well clear of the near edge and gone,
             // the inbound one has entered the view and is still travelling.
             for (unsigned tick = 0; tick < 10; ++tick) { cullScene.Update(player, cullMatrix, 0, 16); }
@@ -359,7 +359,7 @@ int CheckSurvivalFeedback(SurvivalFeedbackFixture fixture) {
                 const auto before = windowScene.GetSoundCueCount();
                 unsigned peakVoices = 0;
                 for (unsigned tick = 0; tick < 5; ++tick) {
-                    windowScene.Emit(sound, 600, 450, 0, 0, kPlayerCombatId);
+                    windowScene.Emit(sound, 600, 450, 0, 0, Collision::Player);
                     peakVoices = std::max(peakVoices, windowScene.GetVoiceCount());
                     windowScene.Update(16, 0, 0, false);
                 }

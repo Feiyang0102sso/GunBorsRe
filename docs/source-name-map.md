@@ -1,6 +1,42 @@
 # 源码文件名映射
 
-日期：2026-09-18。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+日期：2026-09-19。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
+
+## 应用根目录归包（2026-09-19）
+
+用户明确要求 startup 三个文件保留当前实现，不进行原版对齐；本次仅迁移以下 8 个文件并更新全部源码／测试引用，保留注释及现有行为。根目录保留程序入口 `main.cpp`。本节覆盖下方历史路径。
+
+| 原根目录文件 | 当前目录 | 职责 |
+|---|---|---|
+| `ZConfig.h`、`ZHostSettings.h/.cpp` | `gun_bros_re/host/` | 桌面配置键、读取与运行状态 |
+| `ZLocalOnlineServices.h/.cpp` | `gun_bros_re/host/` | 菜单共用的本地匹配与购买服务模拟 |
+| `ZStartupSequence.h/.cpp`、`ZStartupSequenceInternal.h` | `gun_bros_re/startup/` | 现有 Logo 视频、音轨、跳过与启动图交接 |
+
+工程递归收录源码，无需添加工程或配置目录。验收：旧 include 路径清零，迁移内容只发生 include 路径替换；Debug Game、Viewer、Tests 构建成功，debug-input、media、intro、offline-social、scene-transition、game-menu 六项检查全部通过，受保护文件变更为 0。构建与测试日志归档于 `obj/root-package-migration-20260919/`。本轮未重建 Release。
+
+后续简化：移除仅包含重复 include 和启动目录变量的 `ZStartupSequenceInternal.h`，相同的用途注释已在实现文件中保留。启动目录在 `ZStartupSequence.cpp` 内按已有 `Paths` 定义取得，媒体测试也直接使用 `Paths`，不再依赖启动内部头文件。`startup/` 现在只保留 `.h/.cpp`，播放行为不变。
+
+简化验证：Debug 三产物构建成功，media、intro 两项检查通过，受保护文件变更为 0；日志归档于 `obj/startup-header-cleanup-20260919/`。
+
+## gameplay 全目录归位（2026-09-19）
+
+本节覆盖下文历史路径。详见 [完整归属、原版证据与验证](gameplay-optimization-result.md)。gameplay 根目录已无游离源码。后续按职责纠正：战斗音效 `ZCombatAudio.*` 回归 `gameplay/audio/`，不再为移除 gameplay 的 Z 文件而放进 host。
+
+| 原文件／职责 | 当前路径或所有者 |
+|---|---|
+| 根目录 `CGun*`、`CBullet*` | `gun_bros_re/gameplay/weapon/` |
+| 根目录 `CArmor*`、`CCollisionData*`、`CBGM*` | 分别为 `gameplay/armor/`、`collision/`、`audio/` |
+| `ZBulletResources`／`ZBulletVisual` | `CBullet::Template::Load` 与 `CLevel::GetBulletTemplate`，旧包装删除 |
+| `ZCombatTypes`、`ZProjectileTypes` | `CBrother::Vitals`、`CGun::Progress`、`Collision` 值消息、`CBullet::State/View/World`、`CCollisionData::Scene` |
+| `ZCombatGeometry`、`ZProjectileGeometry` | `gameplay/collision/Collision.h`、`CBrother::ProjectMuzzle` |
+| `ZGameScriptObject` 中的游戏分派／CGame 变量 | `gameplay/script/ScriptResolver.*`、`gameplay/game/CGameScript.cpp` |
+| `ZGameScriptObject.*`、`game/ZGameKeys.h`、`game/ZGameObserver.h` | `gun_bros_re/host/`，保留必要宿主身份 |
+| `ZCombatAudio.*` | `gun_bros_re/gameplay/audio/`，战斗声音资源与播放策略；尚未完整复刻原声音事件生命周期 |
+| `CMissionScriptContext.h` | `gameplay/script/`；原 RTTI 明确命名，消费者为 Mission 条件查询 |
+| `CMPMatch.*`、`ZMultiplayerStatistics.h`、`game/ZLiveShopSession.h` | `gameplay/multiplayer/` |
+| `brother/bot/*`、难度和每条生命预算 | `gameplay/multiplayer/bot/`，集中配置为 `ZBotSettings.h` |
+| `CInputPadMeter.h`、`map/ZMapViewer.h` | `gun_bros_re/ui/`、`gun_bros_viewer/scenes/` |
+| `engine/core/ZRandom.h` | `engine/core/CRandGen.h`，按原 MT19937 语义恢复；游戏对象共享关卡流 |
 
 ## 游戏会话归位（2026-09-18）
 

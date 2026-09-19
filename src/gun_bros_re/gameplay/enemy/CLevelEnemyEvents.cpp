@@ -40,12 +40,12 @@ void CLevel::RewardEnemy(const CEnemy &actor) {
     const unsigned experience = static_cast<unsigned>(std::ceil(actor.data->experienceReward *
         GetEnemyMultiplier(ref, 3) * m_playerModel->GetArmorMultiplier(3) *
         CFriendPowerManager::Multiplier(m_playerModel->friendCount, 5)));
-    const bool playerKill = actor.combat.pendingHit.owner == kPlayerCombatId;
+    const bool playerKill = actor.combat.pendingHit.owner == Collision::Player;
     if (m_localLive) {
-        const ZCombatId owner = actor.combat.pendingHit.owner;
-        if (owner == kPlayerCombatId || owner == kBrotherCombatId) {
+        const Collision::ObjectId owner = actor.combat.pendingHit.owner;
+        if (owner == Collision::Player || owner == Collision::Brother) {
             unsigned killer = 0;
-            if (owner == kBrotherCombatId) { killer = 1; }
+            if (owner == Collision::Brother) { killer = 1; }
             ZMultiplayerStatistics &statistics = m_multiplayer[killer];
             ++statistics.wave.kills;
             ++statistics.total.kills;
@@ -99,9 +99,9 @@ void CLevel::RewardEnemy(const CEnemy &actor) {
     }
     if (!counted) { m_casualties.push_back({ref, 1, actor.data->owner}); }
 
-    const ZCombatHit &hit = actor.combat.pendingHit;
+    const Collision::Hit &hit = actor.combat.pendingHit;
     // Original CLevel::OnEnemyKilled :119912, six-byte statistic key.
-    if (playerKill || hit.owner == kBrotherCombatId) {
+    if (playerKill || hit.owner == Collision::Brother) {
         bool recorded = false;
         for (CChallengeManager::Kill &kill : m_challengeKills) {
             if (kill.enemy.packHash == ref.packHash && kill.enemy.localIndex == ref.localIndex &&
@@ -118,7 +118,7 @@ void CLevel::RewardEnemy(const CEnemy &actor) {
     }
     if (playerKill && !hit.weapon.IsNull()) {
         bool credited = false;
-        for (ZWeaponCombatProgress &entry : m_weaponProgress) {
+        for (CGun::Progress &entry : m_weaponProgress) {
             if (entry.resource.packHash == hit.weapon.packHash &&
                 entry.resource.localIndex == hit.weapon.localIndex) {
                 entry.experience += experience;
@@ -155,7 +155,7 @@ void CLevel::RewardEnemy(const CEnemy &actor) {
         text.y = static_cast<float>(static_cast<int>((enemy.y - m_textViewY) * m_textScaleY));
         m_experienceTexts.push_back(text);
     }
-    if (hit.owner == kPlayerCombatId) {
+    if (hit.owner == Collision::Player) {
         const unsigned xplodium = static_cast<unsigned>(std::ceil(actor.data->xplodiumReward *
             GetEnemyMultiplier(ref, 2) * m_playerModel->GetArmorMultiplier(4) *
             CFriendPowerManager::Multiplier(m_playerModel->friendCount, 6)));

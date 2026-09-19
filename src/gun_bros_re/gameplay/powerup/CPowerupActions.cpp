@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstdio>
 
-void CPowerup::BindActor(CBrother &player, ZPlayerVitals &vitals) {
+void CPowerup::BindActor(CBrother &player, CBrother::Vitals &vitals) {
     m_player = &player;
     m_vitals = &vitals;
 }

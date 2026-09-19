@@ -21,7 +21,7 @@ private:
     unsigned m_step = 0;
     int m_planTimer = 0;
     int m_elapsed = 0;
-    ZCombatId m_target = 0;
+    Collision::ObjectId m_target = 0;
     float m_lastDamage = 0;
     int m_noDamageMs = 0;
     int m_retreatMs = 0;

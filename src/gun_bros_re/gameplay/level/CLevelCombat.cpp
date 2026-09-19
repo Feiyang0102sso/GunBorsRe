@@ -4,7 +4,7 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/enemy/CFlock.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include <algorithm>
 #include <cmath>
@@ -100,34 +100,34 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
         if (m_brother != nullptr && !m_brother->vitals.dead && !state.dead &&
             state.variables[16] != 1 && state.targetType != 2 && state.variables[12] > 0 &&
             state.variables[13] > 0 && actor->brotherContactTimer == 0 &&
-            CombatGeometry::CircleCircle({m_brother->previousX, m_brother->previousY},
+            Collision::CircleCircle({m_brother->previousX, m_brother->previousY},
                 {m_brother->x, m_brother->y}, m_brotherModel->GetRadius(),
                 {state.previousX, state.previousY}, {state.x, state.y}, enemy.GetPart(0).radius, contactFraction)) {
-            ZCombatHit contact;
+            Collision::Hit contact;
             contact.owner = state.id;
             contact.ownerType = 1;
             contact.damage = state.variables[17] * GetDamageMultiplier(state.id);
-            ApplyHit(kBrotherCombatId, contact);
+            ApplyHit(Collision::Brother, contact);
             const float angle = (state.facing - 90) * kRadians;
-            ApplyBrotherForce(kBrotherCombatId, std::cos(angle) * state.variables[12],
+            ApplyBrotherForce(Collision::Brother, std::cos(angle) * state.variables[12],
                 std::sin(angle) * state.variables[12], state.variables[13]);
             actor->brotherContactTimer = state.variables[13];
             enemy.TriggerEvent(8);
         }
         if (!state.dead && state.variables[16] != 1 && state.targetType != 2 && !m_vitals->dead &&
             state.variables[12] > 0 && state.variables[13] > 0 &&
-            actor->contactTimer == 0 && CombatGeometry::CircleCircle({m_actor.previousX, m_actor.previousY},
+            actor->contactTimer == 0 && Collision::CircleCircle({m_actor.previousX, m_actor.previousY},
                 {m_actor.x, m_actor.y}, m_playerModel->GetRadius(),
                 {state.previousX, state.previousY}, {state.x, state.y}, enemy.GetPart(0).radius, contactFraction)) {
             if (state.variables[17] > 0) {
-                ZCombatHit contact;
+                Collision::Hit contact;
                 contact.owner = state.id;
                 contact.ownerType = 1;
                 contact.damage = state.variables[17] * GetDamageMultiplier(state.id);
-                ApplyHit(kPlayerCombatId, contact);
+                ApplyHit(Collision::Player, contact);
             }
             const float angle = (state.facing - 90) * kRadians;
-            ApplyBrotherForce(kPlayerCombatId, std::cos(angle) * state.variables[12],
+            ApplyBrotherForce(Collision::Player, std::cos(angle) * state.variables[12],
                 std::sin(angle) * state.variables[12], state.variables[13]);
             actor->contactTimer = state.variables[13];
             enemy.TriggerEvent(8);
@@ -137,7 +137,7 @@ void CLevel::Update(int deltaMs, float moveX, float moveY, bool shoot) {
     float matrix[16];
     if (m_brotherModel != nullptr) {
         BrotherMatrix(matrix);
-        EmitBrother(*m_brotherModel, matrix, m_brother->facing, kBrotherCombatId, m_weaponCollision);
+        EmitBrother(*m_brotherModel, matrix, m_brother->facing, Collision::Brother, m_weaponCollision);
     }
     PlayerMatrix(matrix);
     {
@@ -186,7 +186,7 @@ bool CLevel::IsTeamDeathComplete() const {
 
 bool CLevel::NeedsDeathChoice(unsigned peer) const {
     if (!m_localLive || peer > 1 || !m_afterDeathAvailable[peer] || m_brother == nullptr) { return false; }
-    const ZPlayerVitals *vitals = m_vitals;
+    const CBrother::Vitals *vitals = m_vitals;
     if (peer == 1) { vitals = &m_brother->vitals; }
     return vitals->dead && vitals->deaths > m_deathChoiceHandled[peer];
 }
@@ -196,9 +196,9 @@ void CLevel::FinishDeathChoice(unsigned peer) {
     if (peer == 1 && m_brother != nullptr) { m_deathChoiceHandled[1] = m_brother->vitals.deaths; }
 }
 
-bool CLevel::ReviveActor(ZCombatId actor, unsigned reason) {
-    if (actor == kPlayerCombatId) { return m_playerModel->OnRevive(reason); }
-    if (actor == kBrotherCombatId && m_brotherModel != nullptr) { return m_brotherModel->OnRevive(reason); }
+bool CLevel::ReviveActor(Collision::ObjectId actor, unsigned reason) {
+    if (actor == Collision::Player) { return m_playerModel->OnRevive(reason); }
+    if (actor == Collision::Brother && m_brotherModel != nullptr) { return m_brotherModel->OnRevive(reason); }
     return false;
 }
 
@@ -215,9 +215,9 @@ bool CLevel::ReviveTestBot() {
     return true;
 }
 
-void CLevel::ActorPosition(ZCombatId actor, float &x, float &y) const {
+void CLevel::ActorPosition(Collision::ObjectId actor, float &x, float &y) const {
     x = m_actor.x; y = m_actor.y;
-    if (actor == kBrotherCombatId && m_brother != nullptr) { x = m_brother->x; y = m_brother->y; }
+    if (actor == Collision::Brother && m_brother != nullptr) { x = m_brother->x; y = m_brother->y; }
 }
 
 std::vector<ZBrotherAIWorld::Threat> CLevel::GetBrotherThreats() const {
@@ -233,7 +233,7 @@ std::vector<ZBrotherAIWorld::Threat> CLevel::GetBrotherThreats() const {
 void CLevel::UpdateLocalRevive(int deltaMs) {
     if (IsDeathmatch()) { return; }
     if (m_localLive && m_brother != nullptr) {
-        const ZPlayerVitals *vitals[] = {m_vitals, &m_brother->vitals};
+        const CBrother::Vitals *vitals[] = {m_vitals, &m_brother->vitals};
         for (unsigned peer = 0; peer < 2; ++peer) {
             auto &stats = m_multiplayer[peer];
             const unsigned deaths = vitals[peer]->deaths;
@@ -246,13 +246,13 @@ void CLevel::UpdateLocalRevive(int deltaMs) {
         if (m_brotherModel->OnRevive()) { m_localBotReviveRequested = false; }
     }
     if (!m_localLive || m_brother == nullptr || m_brotherModel == nullptr) { return; }
-    ZCombatId target = 0;
+    Collision::ObjectId target = 0;
     CBrother *actor = nullptr;
     if (m_vitals->dead && m_vitals->deathAnimationComplete && !m_brother->vitals.dead) {
-        target = kPlayerCombatId;
+        target = Collision::Player;
         actor = &(*m_playerModel);
     } else if (m_brother->vitals.dead && m_brother->vitals.deathAnimationComplete && !m_vitals->dead) {
-        target = kBrotherCombatId;
+        target = Collision::Brother;
         actor = &(*m_brotherModel);
     }
     if (target != m_reviveTarget) { m_reviveTarget = target; m_reviveProgress = 0; }
@@ -280,7 +280,7 @@ void CLevel::UpdateLocalRevive(int deltaMs) {
     m_reviveProgress = std::min(1.0f, m_reviveProgress + deltaMs * 0.0001f);
     if (m_reviveProgress < 1 || !actor->OnRevive()) { return; }
     ++m_reviveCount;
-    if (target == kBrotherCombatId) { AddExperience(10); } // SetRevivePercent :115366.
+    if (target == Collision::Brother) { AddExperience(10); } // SetRevivePercent :115366.
     else { AddPeerExperience(10); }
     m_reviveProgress = 0;
     m_reviveTarget = 0;

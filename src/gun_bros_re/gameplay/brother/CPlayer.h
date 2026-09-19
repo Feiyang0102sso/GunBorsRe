@@ -15,8 +15,8 @@ class CProfileManager;
 class CPlayer {
 public:
     CPlayer() = default;
-    CPlayer(CBrother &model, ZPlayerVitals &vitals);
-    void BindActor(CBrother &model, ZPlayerVitals &vitals);
+    CPlayer(CBrother &model, CBrother::Vitals &vitals);
+    void BindActor(CBrother &model, CBrother::Vitals &vitals);
     void BindProgress(CPlayerProgress *progress);
     CPlayerProgress *GetProgress() const { return m_progress; }
     bool AddExperience(unsigned amount, bool updateHealth);
@@ -48,7 +48,7 @@ public:
     int forceMs = 0;
 private:
     CBrother *m_model = nullptr;
-    ZPlayerVitals *m_vitals = nullptr;
+    CBrother::Vitals *m_vitals = nullptr;
     CPlayerProgress *m_progress = nullptr;
     CTargetingController m_autoAim;
     std::uint64_t m_xplodium = 0;

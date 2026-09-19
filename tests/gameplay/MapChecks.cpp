@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
@@ -35,6 +35,9 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
     if (!batch.Create(program) || !cover.Create(program)) { return 1; }
     unsigned failures = 0;
     unsigned occludedPixels = 0;
+    ZPackTables tables(toc);
+    std::vector<ZWeaponEntry> weapons;
+    if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
     const char *packs[] = {"pack2", "pack7", "pack9", "pack12"};
     const unsigned maps[] = {7, 6, 0, 0};
     for (unsigned map = 0; map < 4; ++map) {
@@ -91,7 +94,7 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
             player.x = prop.x;
             player.y = prop.y + collisionTop - kPlayerCollisionRadius;
             if (side == 1) { player.y = prop.y + collisionBottom + kPlayerCollisionRadius; }
-            loaded.DrawBackground(batch, true, true, false);
+            loaded.DrawBackground(batch, true, false);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             batch.Draw(program, mvp);
             CRenderQueue::Draw(loaded, batch, program, mvp);
@@ -101,8 +104,12 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
             if (!Capture::SaveFrame(window, path)) { ++failures; }
             // Independent two-object reference: background, ordered bodies, foreground.
             // This also verifies alpha holes; no rectangular occlusion mask is used.
-            loaded.DrawBackground(batch, true, true, false);
+            loaded.DrawBackground(batch, true, false);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            batch.Draw(program, mvp);
+            batch.Begin();
+            prop.DrawSlot(batch, 0);
+            batch.Upload();
             batch.Draw(program, mvp);
             if (side == 1) { cover.Draw(program, mvp); }
             std::vector<unsigned char> withoutPlayer(actual.size());
@@ -131,6 +138,64 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
             std::printf("[map-occlusion-check] %s prop=%08X/%u y=%.0f player-y=%.0f side=%u covered-difference=%u failures=%u\n",
                 packs[map], prop.resources->resource.packHash, prop.resources->resource.localIndex, prop.y, player.y, side, changed, failures);
             std::printf("[map-occlusion-check] side=%u actor-pixels=%u\n", side, actorPixels);
+        }
+        if (map == 1) {
+            // Reproduce the reported Haven beam crossing real foreground art.
+            // Use the gun's BIG bullet reference and native group; never force group 5.
+            const ZWeaponEntry *laser = nullptr;
+            for (const auto &weapon : weapons) {
+                if (weapon.name == "Infinity Laser") { laser = &weapon; break; }
+            }
+            if (laser == nullptr || !EquipControlledPlayer(tables, loaded, program, *laser)) { return 1; }
+            auto player = std::move(loaded.GetResources().players.front().model);
+            loaded.GetResources().players.clear();
+            CLevel effects(toc, tables, program);
+            const float beamX = prop.x - width * 0.4f;
+            const float beamY = prop.y + (collisionTop + collisionBottom) * 0.5f;
+            float world[kMatrix4dElements];
+            Matrix4dIdentity(world);
+            world[3] = beamX;
+            world[7] = beamY;
+            if (effects.SpawnProjectile(laser->data.GetBulletRef(), beamX, beamY, 0, 0, 0, Collision::Player, 0) == 0) { return 1; }
+            effects.Update(*player, world, 90, 16);
+            const auto bullets = effects.GetBulletRenderItems();
+            if (bullets.size() != 1) { return 1; }
+            std::printf("[bullet-occlusion-fixture] group=%d y=%d prop-group=%d prop-y=%d\n",
+                bullets.front().group, bullets.front().y, prop.GetZOrderGroup(), prop.GetZOrder());
+            if (bullets.front().group < prop.GetZOrderGroup() ||
+                (bullets.front().group == prop.GetZOrderGroup() && bullets.front().y <= prop.GetZOrder())) { return 1; }
+
+            loaded.DrawBackground(batch, true, false);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            batch.Draw(program, mvp);
+            CRenderQueue::Draw(loaded, batch, program, mvp, true, &effects);
+            effects.Draw(mvp, nullptr, kLevelCameraScale, true);
+            std::vector<unsigned char> actual(width * height * 4);
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, actual.data());
+            if (!Capture::SaveFrame(window, TestOutput::Path("haven-player-beam-queue.png"))) { return 1; }
+
+            // Independent group/Y reference: the beam is below this prop's origin.
+            loaded.DrawBackground(batch, true, false);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            batch.Draw(program, mvp);
+            CRenderQueue::Draw(loaded, batch, program, mvp);
+            effects.Draw(mvp, nullptr, kLevelCameraScale);
+            std::vector<unsigned char> reference(actual.size());
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, reference.data());
+            const unsigned mismatch = CountOcclusionPixelChanges(actual, reference);
+            if (mismatch != 0) { ++failures; }
+
+            // Replay the old pre-map beam pass: the fixture must detect its loss.
+            loaded.DrawBackground(batch, true, false);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            batch.Draw(program, mvp);
+            effects.Draw(mvp, nullptr, kLevelCameraScale);
+            CRenderQueue::Draw(loaded, batch, program, mvp);
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, reference.data());
+            const unsigned hidden = CountOcclusionPixelChanges(actual, reference);
+            if (hidden < 100) { ++failures; }
+            std::printf("[bullet-occlusion-check] Haven group=%d prop-group=%d mismatch=%u old-order-hidden=%u failures=%u\n",
+                bullets.front().group, prop.GetZOrderGroup(), mismatch, hidden, failures);
         }
     }
     if (occludedPixels < 1000) { ++failures; }

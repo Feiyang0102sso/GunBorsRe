@@ -6,7 +6,7 @@
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/ui/ZMenuData.h"
 #include "gun_bros_re/ui/ZTextLayout.h"
-#include "gun_bros_re/ZHostSettings.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"

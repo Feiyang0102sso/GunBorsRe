@@ -6,7 +6,7 @@
  */
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 #include <algorithm>
@@ -48,9 +48,9 @@ void CLevel::PartMatrix(const CEnemy &actor, int index, float *matrix) const {
 void CLevel::SelectTarget(CEnemy &actor) {
     CEnemy &enemy = actor;
     if (IsDeathmatch() && enemy.combat.summoner != 0) {
-        if (enemy.combat.summoner == kPlayerCombatId && m_brother != nullptr) {
-            enemy.SetTarget(kBrotherCombatId, m_brother->x, m_brother->y, !IsMatchSpawnPending(1) && !m_brother->vitals.dead);
-        } else { enemy.SetTarget(kPlayerCombatId, m_actor.x, m_actor.y, !IsMatchSpawnPending(0) && !m_vitals->dead); }
+        if (enemy.combat.summoner == Collision::Player && m_brother != nullptr) {
+            enemy.SetTarget(Collision::Brother, m_brother->x, m_brother->y, !IsMatchSpawnPending(1) && !m_brother->vitals.dead);
+        } else { enemy.SetTarget(Collision::Player, m_actor.x, m_actor.y, !IsMatchSpawnPending(0) && !m_vitals->dead); }
         return;
     }
     if (enemy.combat.targetType != 2) {
@@ -59,10 +59,10 @@ void CLevel::SelectTarget(CEnemy &actor) {
         if (m_localLive && m_brother != nullptr && !m_brother->vitals.dead &&
             (m_vitals->dead || std::hypot(m_brother->x - enemy.combat.x, m_brother->y - enemy.combat.y) <
                 std::hypot(m_actor.x - enemy.combat.x, m_actor.y - enemy.combat.y))) {
-            enemy.SetTarget(kBrotherCombatId, m_brother->x, m_brother->y, true);
+            enemy.SetTarget(Collision::Brother, m_brother->x, m_brother->y, true);
             return;
         }
-        enemy.SetTarget(kPlayerCombatId, m_actor.x, m_actor.y, !m_vitals->dead);
+        enemy.SetTarget(Collision::Player, m_actor.x, m_actor.y, !m_vitals->dead);
         return;
     }
     CEnemy *nearest = nullptr;
@@ -128,11 +128,11 @@ CEnemy *CLevel::SpawnNearby(std::size_t entry) {
     return actor;
 }
 
-CEnemy *CLevel::Find(ZCombatId id) {
+CEnemy *CLevel::Find(Collision::ObjectId id) {
     return m_objects.FindEnemy(id);
 }
 
-const CEnemy *CLevel::Find(ZCombatId id) const {
+const CEnemy *CLevel::Find(Collision::ObjectId id) const {
     for (const auto &actor : m_objects.GetEnemies()) {
         if (actor->combat.id == id) { return actor.get(); }
     }
@@ -162,7 +162,7 @@ void CLevel::Actions(CEnemy &actor) {
         } else if (action.kind == CEnemy::Action::Kind::TurretActive) {
             // CEnemy native 71 :72744 selects the local player when offline.
             CBrother *owner = m_playerModel;
-            if (state.summoner == kBrotherCombatId && m_brotherModel != nullptr) { owner = m_brotherModel; }
+            if (state.summoner == Collision::Brother && m_brotherModel != nullptr) { owner = m_brotherModel; }
             owner->SetTurretIsActive(action.slot != 0);
             std::printf("[turret] actor=%llu active=%d\n", static_cast<unsigned long long>(state.id), action.slot != 0);
         } else if (action.kind == CEnemy::Action::Kind::SpawnPickup) {
@@ -180,10 +180,10 @@ void CLevel::Actions(CEnemy &actor) {
             }
         } else if (action.kind == CEnemy::Action::Kind::CollisionResolved) {
             // Record assistance only after the enemy Flow accepts the collision.
-            if (m_localLive && (action.result == ZHitResult::Hit || action.result == ZHitResult::Killed) &&
+            if (m_localLive && (action.result == Collision::HitResult::Hit || action.result == Collision::HitResult::Killed) &&
                 !action.resource.IsNull() && action.slot >= 0 && action.slot < 2) {
-                if (action.owner == kPlayerCombatId) { actor.assistMask[0] |= 1u << action.slot; }
-                if (action.owner == kBrotherCombatId) { actor.assistMask[1] |= 1u << action.slot; }
+                if (action.owner == Collision::Player) { actor.assistMask[0] |= 1u << action.slot; }
+                if (action.owner == Collision::Brother) { actor.assistMask[1] |= 1u << action.slot; }
             }
             ResolveHit(action.projectile, action.result);
         } else if (action.kind == CEnemy::Action::Kind::RemoveBullet) {
@@ -198,7 +198,7 @@ void CLevel::Actions(CEnemy &actor) {
             // Native 54 spawns from the LEVEL table, with no player summoner.
             m_objects.QueueEnemy(action.resource, action.x, action.y, action.slot, false, 0);
         } else if (action.kind == CEnemy::Action::Kind::Splash) {
-            ZCombatHit hit;
+            Collision::Hit hit;
             hit.owner = state.id;
             hit.ownerType = ownerType;
             hit.x = x; hit.y = y; hit.direction = direction;

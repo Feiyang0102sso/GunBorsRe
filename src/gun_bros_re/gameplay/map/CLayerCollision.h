@@ -6,7 +6,7 @@
 #ifndef GUN_BROS_RE_GUN_BROS_CLAYERCOLLISION_H
 #define GUN_BROS_RE_GUN_BROS_CLAYERCOLLISION_H
 
-#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/collision/CCollisionData.h"
 
 /** Port of CLayerCollision (src/gunbros/layerCollision.cpp). */
 class CLayerCollision {

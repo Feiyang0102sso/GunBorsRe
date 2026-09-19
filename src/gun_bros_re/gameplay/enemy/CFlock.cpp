@@ -10,7 +10,7 @@
 void CFlock::RefreshDistanceMaps(const CLayerPathMesh &path,
     const std::vector<CEnemy::CombatState *> &enemies) {
     if (m_path != &path) { Clear(); m_path = &path; }
-    std::set<ZCombatId> used;
+    std::set<Collision::ObjectId> used;
     for (const auto *enemy : enemies) {
         if (enemy->dead || !enemy->targetAlive || enemy->behaviour != 0) { continue; }
         if (!used.insert(enemy->targetId).second) { continue; }
@@ -37,7 +37,7 @@ void CFlock::RefreshDistanceMaps(const CLayerPathMesh &path,
     }
 }
 
-const std::vector<float> &CFlock::GetDistanceMap(ZCombatId target) const {
+const std::vector<float> &CFlock::GetDistanceMap(Collision::ObjectId target) const {
     static const std::vector<float> empty;
     const auto found = m_distanceMaps.find(target);
     if (found == m_distanceMaps.end()) { return empty; }

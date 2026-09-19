@@ -155,7 +155,7 @@ bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZM
     return true;
 }
 
-bool ApplyCombatCheat(const std::string &cheat, CLevel &scene, ZPlayerVitals &vitals,
+bool ApplyCombatCheat(const std::string &cheat, CLevel &scene, CBrother::Vitals &vitals,
     CPowerUpSelector &powerups, CGame &session, CGameFlow *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
     if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }

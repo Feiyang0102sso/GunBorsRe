@@ -15,12 +15,15 @@ struct ZVisualAnimation {
 
 std::size_t AnimationFrame(const ZVisualAnimation &animation, float ageMs);
 void FrameBounds(const ZVisualAnimation &animation, float ageMs, float &top, float &bottom);
+void FrameBoundsAt(const ZVisualAnimation &animation, std::size_t frame, float &top, float &bottom);
 
 class ZSpriteRenderer {
 public:
     ZSpriteRenderer(CResTOCManager &manager, const ZShaderProgram &shader);
     ZVisualAnimation &Animation(std::uint32_t packHash, int archetype, int animation);
     void AddSprite(ZVisualAnimation &animation, float ageMs, float x, float y,
+        float scaleX, float scaleY, float angle, float alpha);
+    void AddFrame(const ZVisualAnimation &animation, std::size_t frame, float x, float y,
         float scaleX, float scaleY, float angle, float alpha);
     void Begin();
     void Draw(const float *matrix);

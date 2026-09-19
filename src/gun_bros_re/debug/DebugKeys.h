@@ -2,7 +2,7 @@
 #include "gun_bros_re/debug/DebugConfig.h"
 #include "gun_bros_re/cheats/CheatKeys.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
-#include "gun_bros_re/ZHostSettings.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 
 namespace GameDebugKeys {
 inline bool StartsTutorial(ZKeyCode key, const ZWindow &window) {

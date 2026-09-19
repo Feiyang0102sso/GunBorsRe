@@ -4,7 +4,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include "engine/core/CStringToKey.h"
 #include <cstdio>
 
@@ -12,13 +12,13 @@ CPowerUpSelector::CPowerUpSelector()
     : m_ownedResources(std::make_unique<ZHudResources>()), m_resources(*m_ownedResources) {}
 
 CPowerUpSelector::CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
-    ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile, ZCombatId owner)
+    CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile, Collision::ObjectId owner)
     : CPowerUpSelector() {
     BindPowerups(toc, tables, player, vitals, level, profile, owner);
 }
 
 void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
-    ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile, ZCombatId owner) {
+    CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile, Collision::ObjectId owner) {
     m_resources.m_toc = &toc;
     m_resources.m_tables = &tables;
     m_player = &player;

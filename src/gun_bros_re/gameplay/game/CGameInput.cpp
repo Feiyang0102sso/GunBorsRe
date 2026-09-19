@@ -2,7 +2,7 @@
  * SDL/GL submission and borrowed desktop resources are host adaptations.
  */
 #include "gun_bros_re/gameplay/game/CGameRuntime.h"
-#include "gun_bros_re/gameplay/game/ZGameKeys.h"
+#include "gun_bros_re/host/ZGameKeys.h"
 #include "gun_bros_re/debug/SurvivalDebug.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/cheats/CheatActions.h"

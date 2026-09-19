@@ -9,7 +9,7 @@ struct SurvivalRewardsFixture {
     CResTOCManager & toc;
     ZPackTables & tables;
     std::vector<CEnemy::Template> & enemies;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     CPlayerProgress::Template & progressData;
     ZWindow & window;
     CInputPad & survivalHud;
@@ -29,7 +29,7 @@ struct SurvivalDeathFixture {
     unsigned & checkFailures;
     const std::string & packShortName;
     bool deathStudy;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;
     ZQuadBatch & batch;
@@ -51,7 +51,7 @@ struct SurvivalBossFixture {
     CResTOCManager & toc;
     ZPackTables & tables;
     std::vector<CEnemy::Template> & enemies;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;
     CMap & loaded;
@@ -71,7 +71,7 @@ struct SurvivalFeedbackFixture {
     ZPackTables & tables;
     std::vector<ZWeaponEntry> & weapons;
     std::vector<CEnemy::Template> & enemies;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     CInputPad & survivalHud;
     ZShaderProgram & program;
     CMap & loaded;
@@ -130,7 +130,7 @@ struct SurvivalTutorialFixture {
     CGameFlow * gameContext;
     ZPackTables & tables;
     std::vector<ZWeaponEntry> & weapons;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     CPlayerProgress & progress;
     ZShaderProgram & program;
     CMap & loaded;
@@ -162,7 +162,7 @@ struct SurvivalWavesFixture {
     ZPackTables & tables;
     std::vector<ZWeaponEntry> & weapons;
     std::vector<CEnemy::Template> & enemies;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     CPlayerProgress & progress;
     ZWindow & window;
     ZShaderProgram & program;
@@ -187,7 +187,7 @@ struct SurvivalHordeFixture {
     std::string & capturePath;
     bool check;
     unsigned startWave;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     CMap & loaded;
     CLevel & scene;
     CGame & session;
@@ -201,7 +201,7 @@ struct SurvivalCampaignFixture {
     unsigned mapIndex;
     bool check;
     const ZMissionEntry * archiveMission;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     CMap & loaded;
     CLevel & scene;
     CGame & session;
@@ -225,7 +225,7 @@ struct SurvivalSceneFixture {
     bool deathStudy;
     CResTOCManager & toc;
     ZPackTables & tables;
-    ZPlayerVitals & vitals;
+    CBrother::Vitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;
     ZQuadBatch & batch;

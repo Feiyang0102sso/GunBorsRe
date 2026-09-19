@@ -3,7 +3,7 @@
 #include "gun_bros_re/ui/ZGameFrontEndInternal.h"
 #include "engine/core/ZPaths.h"
 #include "gun_bros_re/ui/ZMenuInternal.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 using namespace MenuDetail;
 
 namespace {

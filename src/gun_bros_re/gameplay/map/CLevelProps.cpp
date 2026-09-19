@@ -1,5 +1,5 @@
 #include "gun_bros_re/gameplay/map/CLevelProps.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -95,22 +95,22 @@ void CLevel::Props::Update(int deltaMs) {
     if (changed) { m_map.BuildCollisionScene(); }
 }
 
-ZCombatTrace CLevel::Props::Trace(const ZCombatHit &hit, float x, float y, float dx, float dy,
-    float radius, const std::vector<ZCombatId> &skip) {
-    ZCombatTrace nearest;
+Collision::Trace CLevel::Props::Trace(const Collision::Hit &hit, float x, float y, float dx, float dy,
+    float radius, const std::vector<Collision::ObjectId> &skip) {
+    Collision::Trace nearest;
     for (const CProp &prop : m_map.GetResources().props) {
         // CLayerCollision::TestCollisionSegment :125350 tests prop edges
         // without CanCollide's health gate. CBullet::CheckCollisionWithLevel
         // :61954 then sends Damage, including to zero-health script walls.
         if (!prop.active || !prop.HasScript() || prop.IsRemoved() || hit.ownerType != 0) { continue; }
-        const ZCombatId id = kPropIdBase + prop.objectId;
+        const Collision::ObjectId id = kPropIdBase + prop.objectId;
         if (std::find(skip.begin(), skip.end(), id) != skip.end()) { continue; }
         const auto &shape = prop.GetCollision(true);
         const auto &vertices = shape.GetVertices();
         for (const ZCollisionEdge &edge : shape.GetEdges()) {
             if (!edge.enabled) { continue; }
             const ZCollisionPoint &first = vertices[edge.firstVertex], &second = vertices[edge.secondVertex];
-            const float fraction = CombatGeometry::EdgeFraction(x - prop.x, y - prop.y, dx, dy, first, second, radius);
+            const float fraction = Collision::EdgeFraction(x - prop.x, y - prop.y, dx, dy, first, second, radius);
             if (fraction < nearest.fraction) {
                 nearest = {id, fraction, -1, edge.group, first.y - second.y, second.x - first.x};
             }
@@ -119,7 +119,7 @@ ZCombatTrace CLevel::Props::Trace(const ZCombatHit &hit, float x, float y, float
     return nearest;
 }
 
-ZHitResult CLevel::Props::ApplyHit(ZCombatId target, const ZCombatHit &hit) {
+Collision::HitResult CLevel::Props::ApplyHit(Collision::ObjectId target, const Collision::Hit &hit) {
     for (CProp &prop : m_map.GetResources().props) {
         if (!prop.active || kPropIdBase + prop.objectId != target || !prop.HasScript() || prop.IsRemoved()) { continue; }
         prop.lastDamager = hit.owner;
@@ -130,19 +130,19 @@ ZHitResult CLevel::Props::ApplyHit(ZCombatId target, const ZCombatHit &hit) {
         // armor first and incorrectly exposes it to the barrel's blast.
         for (const CProp::Action &action : prop.TakeActions()) { ApplyAction(prop, action); }
         ++m_hitCount;
-        return ZHitResult::Hit;
+        return Collision::HitResult::Hit;
     }
-    return ZHitResult::Ignored;
+    return Collision::HitResult::Ignored;
 }
 
-void CLevel::Props::Splash(const ZCombatHit &hit, float radius) {
+void CLevel::Props::Splash(const Collision::Hit &hit, float radius) {
     // CProp::CanCollide accepts human/AI gun ownership, not enemy shots.
     // :123423 also accepts PROP sources (type 2), but rejects a brother
     // source (type 0). A player-owned barrel blast has no bullet object;
     // its allegiance alone must not turn it into a human bullet (type 5).
     if (hit.projectile != 0) {
         if (hit.ownerType != 0) { return; }
-    } else if ((hit.owner & kPropIdBase) == 0 || hit.owner == kBrotherCombatId) { return; }
+    } else if ((hit.owner & kPropIdBase) == 0 || hit.owner == Collision::Brother) { return; }
     for (CProp &prop : m_map.GetResources().props) {
         if (!prop.active || !prop.HasScript() || prop.IsRemoved() || prop.GetHealth() <= 0) { continue; }
         if (hit.owner == kPropIdBase + prop.objectId) { continue; }
@@ -194,7 +194,7 @@ void CLevel::Props::ApplyAction(CProp &prop, const CProp::Action &action) {
                 static_cast<float>(action.force), action.forceMs);
             return;
         }
-        ZCombatHit hit;
+        Collision::Hit hit;
         hit.x = prop.x;
         hit.y = prop.y;
         hit.damage = static_cast<float>(action.damage);
@@ -203,7 +203,7 @@ void CLevel::Props::ApplyAction(CProp &prop, const CProp::Action &action) {
         // CProp::FunctionResolver case 7 :124571 resolves self / last
         // damager / local player. Preserve that object identity for CanCollide.
         hit.owner = kPropIdBase + prop.objectId;
-        if (action.damageOwner == 2) { hit.owner = kPlayerCombatId; }
+        if (action.damageOwner == 2) { hit.owner = Collision::Player; }
         if (action.damageOwner == 1 && prop.lastDamager != 0) { hit.owner = prop.lastDamager; }
         // Self-owned environmental explosions can hurt both sides; the
         // original knockback native explicitly visits only the brothers.
@@ -218,7 +218,7 @@ void CLevel::Props::ApplyAction(CProp &prop, const CProp::Action &action) {
     cue.resource = action.resource;
     cue.effectGroup = action.group;
     float x = prop.x, y = prop.y;
-    ZCombatId owner = 0;
+    Collision::ObjectId owner = 0;
     if (action.kind == CProp::Action::Kind::Sound) { cue.kind = ZGunCue::Kind::Sound; }
     if (action.kind == CProp::Action::Kind::Portal || action.kind == CProp::Action::Kind::AttachedEffect) {
         x = m_scene.GetPlayer().x; y = m_scene.GetPlayer().y;
@@ -228,7 +228,7 @@ void CLevel::Props::ApplyAction(CProp &prop, const CProp::Action &action) {
         // AddEffect starts a one-shot even when native 16 adds an anchor.
         cue.loopParticles = false;
         cue.anchorToActor = true;
-        owner = kPlayerCombatId;
+        owner = Collision::Player;
         cue.kind = ZGunCue::Kind::Trail;
         if (action.kind == CProp::Action::Kind::StopEffect) { cue.kind = ZGunCue::Kind::StopTrail; }
     }

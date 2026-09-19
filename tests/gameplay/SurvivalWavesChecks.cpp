@@ -3,7 +3,7 @@
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/PowerupRuntimeChecks.h"
 #include "TestOutput.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 using namespace MapDetail;
 
 /** Exercise mode changes with real BIG items and isolated inventory. */
@@ -166,10 +166,10 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             std::printf("[powerup-play-check] item=%u shots=%zu stock=%u state=%d failures=%u\n", index,
                 scene.GetShotCount() - before, consumableProbe.GetPowerupCount(consumable), player.GetStateId(), checkFailures);
             if (!powerupProbe.UseSelected()) { ++checkFailures; }
-            ZCombatHit cancel;
+            Collision::Hit cancel;
             cancel.ownerType = 1;
             cancel.damage = 10000;
-            scene.ApplyHit(kPlayerCombatId, cancel);
+            scene.ApplyHit(Collision::Player, cancel);
             for (int elapsed = 0; elapsed < 1000; elapsed += 16) {
                 scene.Update(16, 0, 0, false);
                 scene.UpdatePowerup(powerupProbe.GetPowerup(), 16);
@@ -295,8 +295,15 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 target->combat.totalDamage, expectedDamage, outside->combat.hitCount, airstrike.GetCount(), checkFailures);
             // Release the original intro normally, then verify real input works
             // again. A cleared pause flag alone does not prove gameplay resumed.
+            // Isolate this pause probe from Haven's live turrets. Invincible HP
+            // alone still permits the original direct-bullet knockback/recovery.
+            player.powerups.shieldMs = 2000;
             for (unsigned frame = 0; frame < 100; ++frame) { airstrikeSession.Update(16, 0, 0, false); }
             const float resumedX = airstrikeScene.GetPlayer().x;
+            std::printf("[airstrike-resume-state] item=%u level-state=%d level-move=%d actor-move=%d transition=%d paused=%d force=%d stun=%d dead=%d position=%.1f,%.1f\n",
+                airstrikeIndex, airstrikeScene.GetStateId(), airstrikeScene.CanPlayerMove(), player.CanMove(),
+                airstrikeSession.IsTransitioning(), airstrikeScene.IsPaused(), airstrikeScene.GetPlayer().forceMs,
+                vitals.stunMs, vitals.dead, resumedX, airstrikeScene.GetPlayer().y);
             airstrikeSession.Update(16, 1, 0, true);
             if (airstrikeScene.GetPlayer().x == resumedX) { ++checkFailures; }
             std::printf("[airstrike-resume-check] item=%u selector=%d moved=%d failures=%u\n",
@@ -453,20 +460,20 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.IsFrenzyType(type)) { ++checkFailures; }
             float expected = 332 / 256.0f;
             if (type == 2) { expected = 1.5f; }
-            if (std::abs(scene.GetProjectilePowerupMultiplier(kPlayerCombatId) - expected) > 0.001f) { ++checkFailures; }
+            if (std::abs(scene.GetProjectilePowerupMultiplier(Collision::Player) - expected) > 0.001f) { ++checkFailures; }
         }
         const float beforeDefense = vitals.health;
         player.ReceiveDamage(1);
         if (std::abs(vitals.health - (beforeDefense - 256.0f / 332)) > 0.001f) { ++checkFailures; }
         player.Update(15000);
         scene.UpdatePowerup(powerupProbe.GetPowerup(), 15000); // Advance the DM cooldown with the actor timers.
-        if (scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1 || player.IsFrenzyType(2)) { ++checkFailures; }
+        if (scene.GetProjectilePowerupMultiplier(Collision::Player) != 1 || player.IsFrenzyType(2)) { ++checkFailures; }
         powerupProbe.SetDeathmatch(nullptr);
         consumable.localIndex = 6;
         consumableProbe.AddPowerup(consumable, 2);
         powerupProbe.Select(6);
         if (!powerupProbe.UseSelected() || powerupProbe.UseSelected() || !player.IsFrenzy() ||
-            player.powerups.legacyFrenzyMs != 21000 || scene.GetProjectilePowerupMultiplier(kPlayerCombatId) != 1) { ++checkFailures; }
+            player.powerups.legacyFrenzyMs != 21000 || scene.GetProjectilePowerupMultiplier(Collision::Player) != 1) { ++checkFailures; }
         if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot]) ||
             player.powerups.legacyFrenzyMs != 21000) { ++checkFailures; }
         player.Update(20000);
@@ -527,7 +534,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 enemy.combat.maxHealth = 10000;
                 GameObjectRef bulletRef = consumable;
                 bulletRef.localIndex = static_cast<std::uint8_t>(bulletIndex);
-                if (blastScene.SpawnProjectile(bulletRef, 600, 350, 0, 0, 0, kPlayerCombatId, 0) == 0) { ++checkFailures; }
+                if (blastScene.SpawnProjectile(bulletRef, 600, 350, 0, 0, 0, Collision::Player, 0) == 0) { ++checkFailures; }
                 float matrix[16];
                 blastScene.PlayerMatrix(matrix);
                 unsigned impactState = 255;
@@ -580,8 +587,8 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                         enemy.combat.health = 10000;
                         enemy.combat.maxHealth = 10000;
                         const unsigned before = enemy.GetStateId();
-                        ZCombatHit probe;
-                        probe.owner = kPlayerCombatId;
+                        Collision::Hit probe;
+                        probe.owner = Collision::Player;
                         probe.ownerType = 0;
                         probe.x = 600;
                         probe.y = 350;
@@ -621,7 +628,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
             }
         }
         session.Restart(startX, startY, startFacing);
-        ZCombatHit forceProbe;
+        Collision::Hit forceProbe;
         const float originalMaximum = vitals.maximum;
         const float originalBrotherMaximum = brother.vitals.maximum;
         for (float maximum : {20.0f, 100.0f, 205.0f}) {
@@ -634,7 +641,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                 brother.vitals.health = maximum;
                 brother.vitals.invincible = false;
             }
-            ZCombatHit percentage;
+            Collision::Hit percentage;
             percentage.ownerType = 1;
             percentage.damage = 10;
             percentage.percentDamage = true;
@@ -680,10 +687,10 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         if (loaded.GetResources().players[0].model.get() != stablePlayer || player.GetVitals() != &vitals ||
             player.GetArmorMultiplier(0) != armorBefore) { ++checkFailures; }
         // Kill through the actual shared hit path, then exercise the same R action.
-        ZCombatHit fatal;
+        Collision::Hit fatal;
         fatal.ownerType = 1;
         fatal.damage = 10000;
-        scene.ApplyHit(kPlayerCombatId, fatal);
+        scene.ApplyHit(Collision::Player, fatal);
         if (!vitals.dead || vitals.health != 0 || vitals.deaths != 1) { ++checkFailures; }
         if (session.IsDeathComplete()) {
             std::printf("[death-check] FAIL: postgame opens on fatal hit before death animation\n");
@@ -697,7 +704,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         if (withBrother) {
             // A fatal shared hit must not kill the human. Run the original
             // death animation to its hold state, then the actual wave export.
-            scene.ApplyHit(kBrotherCombatId, fatal);
+            scene.ApplyHit(Collision::Brother, fatal);
             if (!brother.vitals.dead || vitals.dead) { ++checkFailures; }
             for (int elapsed = 0; elapsed < 8000; elapsed += 16) { brotherModel.Update(16); }
             const int deadState = brotherModel.GetStateId();

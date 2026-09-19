@@ -2,7 +2,7 @@
  * SDL/GL submission and borrowed desktop resources are host adaptations.
  */
 #include "gun_bros_re/gameplay/game/CGameRuntime.h"
-#include "gun_bros_re/gameplay/game/ZGameKeys.h"
+#include "gun_bros_re/host/ZGameKeys.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 using namespace MapDetail;
 
@@ -89,7 +89,7 @@ int CGame::Session::Update() {
             session.UpdateAfterDeath(16);
         }
         if (pendingWeapon < weapons.size() && player.TakeWeaponSwap()) {
-            scene.RetireOwner(kPlayerCombatId);
+            scene.RetireOwner(Collision::Player);
             if (launch.observer != nullptr) {
                 const int result = launch.observer->OnFrame(ZGameObserver::FramePhase::BeforeWeaponSwap, frame);
                 if (result >= 0) { return result; }

@@ -150,7 +150,7 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
     // can alternate between two ranged units and trap the pilot at their midpoint.
     CEnemy *previousTarget = m_scene.Find(m_target);
     if (previousTarget != nullptr && previousTarget->combat.enabled &&
-        previousTarget->combat.targetable && previousTarget->CanReceiveProjectile(0, kPlayerCombatId)) {
+        previousTarget->combat.targetable && previousTarget->CanReceiveProjectile(0, Collision::Player)) {
         target = previousTarget;
     }
     float nearest = 100000;
@@ -163,7 +163,7 @@ void SurvivalPilot::Update(int deltaMs, float &moveX, float &moveY) {
             // Match the brother's targeting filters. Authored map actors can
             // accept collision callbacks without being combat targets.
             if (!actor->combat.enabled || !actor->combat.targetable ||
-                !actor->CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+                !actor->CanReceiveProjectile(0, Collision::Player)) { continue; }
             const CEnemy::CombatState &enemy = actor->combat;
             const float distance = std::hypot(enemy.x - m_scene.GetPlayer().x, enemy.y - m_scene.GetPlayer().y);
             // Retain the engagement unless a closer enemy enters contact range.

@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include <array>
 #include <cstdint>
 class ZSpriteRenderer;

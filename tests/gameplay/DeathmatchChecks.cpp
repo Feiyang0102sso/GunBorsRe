@@ -1,7 +1,7 @@
 /** BIG match validation and authoritative life budget regressions. */
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include <cstdio>
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
 #include "engine/core/CStringToKey.h"
@@ -87,7 +87,7 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
         match.Update(16);
         if (match.GetResult() != CMPMatch::Result::Draw) { return 1; }
         std::printf("[deathmatch-check] tier=%u draws=10000 budgets=1 respawn=1 score=1 time=1\n", index);
-        for (const auto difficulty : {CMPMatch::BotLevel::Normal, CMPMatch::BotLevel::Hard}) {
+        for (const auto difficulty : {ZBotSettings::Difficulty::Normal, ZBotSettings::Difficulty::Hard}) {
             match.Bind(entry.data, 42);
             match.SetBotLevel(difficulty);
             for (unsigned use = 0; use < 10; ++use) {
@@ -97,7 +97,7 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
             }
             if (!match.Kill(1, 0) || match.CanUse(1, false) || !match.Respawn(1, true)) { return 1; }
             match.Restart();
-            if (!match.HasUnlimitedBotPowerups() || match.HasHardBot() != (difficulty == CMPMatch::BotLevel::Hard) ||
+            if (!match.HasUnlimitedBotPowerups() || match.HasHardBot() != (difficulty == ZBotSettings::Difficulty::Hard) ||
                 match.CanShop(1) || !match.CanUse(1, true)) { return 1; }
         }
     }

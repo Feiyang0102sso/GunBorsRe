@@ -110,7 +110,7 @@ int SurvivalCheckScenario::OnPowerupCapture(SurvivalPowerupCaptureFixture fixtur
     return CheckSurvivalPowerupCapture(fixture);
 }
 
-int SurvivalCheckScenario::OnLoopStarting(CLevel &scene, ZPlayerVitals &vitals) {
+int SurvivalCheckScenario::OnLoopStarting(CLevel &scene, CBrother::Vitals &vitals) {
     if (!m_development.flockCheck) { return kScenarioContinue; }
     vitals.invincible = true;
     return CheckFlockMovement(scene);
@@ -312,10 +312,10 @@ int SurvivalCheckScenario::AfterCapture(CGame::Session &state) {
             ++m_failures;
         }
         const unsigned points = state.scene.GetScore();
-        ZCombatHit damage;
+        Collision::Hit damage;
         damage.ownerType = 1;
         damage.damage = 1;
-        state.scene.ApplyHit(kPlayerCombatId, damage);
+        state.scene.ApplyHit(Collision::Player, damage);
         if (state.scene.GetKillStreak() != 0 || state.scene.GetScore() != points) { ++m_failures; }
         state.session.Restart(state.startX, state.startY, state.startFacing);
         if (state.scene.GetScore() != 0 || state.scene.GetKillStreak() != 0 || state.session.GetKills() != 0 ||

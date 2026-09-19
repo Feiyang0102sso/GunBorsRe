@@ -36,11 +36,44 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
             Matrix4dTranslate(mvp, -scene.GetPlayer().x + width / zoom / 2, -scene.GetPlayer().y + height / zoom / 2);
             glViewport(0, 0, width, height);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            loaded.DrawBackground(batch, true, true, false);
+            loaded.DrawBackground(batch, true, false);
             batch.Draw(program, mvp);
             CRenderQueue::Draw(loaded, batch, program, mvp, true, &scene, &brotherModel, brother.y, width);
             return Capture::SaveFrame(window, TestOutput::Path("player-death-") + packShortName + "-" + suffix + ".png");
         };
+        // Original direct-hit force is applied once, after damage; immunity and
+        // fatal hits must not start a new movement impulse.
+        session.Restart(startX, startY, startFacing);
+        vitals.invincible = true;
+        Collision::Hit push;
+        push.ownerType = 1;
+        push.damage = 1;
+        push.knockbackSpeed = 120;
+        push.knockbackDurationMs = 500;
+        if (scene.ApplyHit(Collision::Player, push) != Collision::HitResult::Hit ||
+            scene.GetPlayer().forceMs != 500 || std::abs(scene.GetPlayer().forceX - 120) > 0.01f) { ++checkFailures; }
+        push.direction = 90;
+        push.knockbackDurationMs = 1000;
+        scene.ApplyHit(Collision::Player, push);
+        if (scene.GetPlayer().forceMs != 500 || std::abs(scene.GetPlayer().forceX - 120) > 0.01f) { ++checkFailures; }
+        int recoveryMs = 0;
+        while (!player.CanMove() && recoveryMs < 3000) {
+            // Advance the original actor Flow without unrelated enemy attacks.
+            player.Update(16);
+            recoveryMs += 16;
+        }
+        if (!player.CanMove() || recoveryMs < 500) { ++checkFailures; }
+        std::printf("[bullet-knockback-recovery] %s elapsed=%d can-move=%d failures=%u\n",
+            packShortName.c_str(), recoveryMs, player.CanMove(), checkFailures);
+        session.Restart(startX, startY, startFacing);
+        player.powerups.shieldMs = 1000;
+        if (scene.ApplyHit(Collision::Player, push) != Collision::HitResult::Ignored || scene.GetPlayer().forceMs != 0) { ++checkFailures; }
+        player.powerups.shieldMs = 0;
+        vitals.invincible = false;
+        push.damage = 10000;
+        if (scene.ApplyHit(Collision::Player, push) != Collision::HitResult::Killed || scene.GetPlayer().forceMs != 0) { ++checkFailures; }
+        std::printf("[bullet-knockback-check] %s accepted/repeated/shield/fatal failures=%u\n", packShortName.c_str(), checkFailures);
+
         for (unsigned scenario = 0; scenario < 2; ++scenario) {
             session.Restart(startX, startY, startFacing);
             vitals.invincible = true;
@@ -49,12 +82,12 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
             for (int elapsed = 0; elapsed < 5000; elapsed += 16) { session.Update(16, 0, 0, false); }
             if (scenario == 0) {
                 vitals.invincible = false;
-                ZCombatHit fatal;
+                Collision::Hit fatal;
                 fatal.ownerType = 1;
                 fatal.damage = 10000;
-                if (scene.ApplyHit(kPlayerCombatId, fatal) != ZHitResult::Killed) { ++checkFailures; }
+                if (scene.ApplyHit(Collision::Player, fatal) != Collision::HitResult::Killed) { ++checkFailures; }
                 if (vitals.flash != 1) { ++checkFailures; }
-                if (scene.ApplyHit(kPlayerCombatId, fatal) != ZHitResult::Ignored) { ++checkFailures; }
+                if (scene.ApplyHit(Collision::Player, fatal) != Collision::HitResult::Ignored) { ++checkFailures; }
             } else {
                 // Includes an autorepeated last letter, which must not complete.
                 for (char letter : std::string("stsuicid")) {
@@ -92,7 +125,7 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
                 // Other actors keep shooting during death. Inspect ownership,
                 // not the scene-wide shot counter (pack2's enemies fire here).
                 for (const auto &shot : scene.GetProjectileStates()) {
-                    if (shot.owner == kPlayerCombatId) { ++checkFailures; }
+                    if (shot.owner == Collision::Player) { ++checkFailures; }
                 }
                 elapsed += 16;
                 animationElapsed += moveStep;
@@ -121,10 +154,10 @@ int CheckSurvivalDeath(SurvivalDeathFixture fixture) {
         session.Restart(startX, startY, startFacing);
         if (vitals.dead || vitals.deathAnimationComplete || vitals.inputHidden || session.GetLevel().GetWorldTimeScale() != 1) { ++checkFailures; }
         brother.vitals.invincible = false;
-        ZCombatHit fatal;
+        Collision::Hit fatal;
         fatal.ownerType = 1;
         fatal.damage = 10000;
-        scene.ApplyHit(kBrotherCombatId, fatal);
+        scene.ApplyHit(Collision::Brother, fatal);
         if (brother.vitals.flash != 1) { ++checkFailures; }
         brotherModel.Update(250);
         if (std::abs(brother.vitals.flash - 0.5f) > 0.0001f) { ++checkFailures; }

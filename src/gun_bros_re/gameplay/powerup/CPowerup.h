@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+#include "gun_bros_re/host/ZGameScriptObject.h"
 /** @file CPowerup.h
  * @brief Original consumable template (CPowerup::Template::Init :187947).
  */
@@ -6,7 +6,7 @@
 #define GUN_BROS_RE_CPOWERUP_H
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"
-#include "gun_bros_re/gameplay/ZCombatTypes.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include <array>
 #include <memory>
 
@@ -15,7 +15,7 @@ class ZPackTables;
 class CLevel;
 class CPowerUpSelector;
 struct ZPowerupEntry;
-class CBrother;
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 class CLevel;
 
 struct ZPowerupAction {
@@ -78,8 +78,8 @@ public:
      */
     bool Start(const ZPowerupEntry &entry, bool fromSelector = false, unsigned stock = 1);
     /** Stable model ownership survives replacement of its current weapon bank. */
-    void BindActor(CBrother &player, ZPlayerVitals &vitals);
-    void SetOwner(ZCombatId owner);
+    void BindActor(CBrother &player, CBrother::Vitals &vitals);
+    void SetOwner(Collision::ObjectId owner);
     /** Report actual projectile creation; inventory remains the caller's job. */
     unsigned TakeThrownPowerups(GameObjectRef &resource);
     bool Draw();
@@ -105,8 +105,8 @@ private:
     ZPowerupStatus ReadActorStatus() const;
     bool ApplyActorAction(const ZPowerupAction &action);
     CBrother *m_player = nullptr;
-    ZPlayerVitals *m_vitals = nullptr;
-    ZCombatId m_owner = kPlayerCombatId;
+    CBrother::Vitals *m_vitals = nullptr;
+    Collision::ObjectId m_owner = Collision::Player;
     GameObjectRef m_resource;
     GameObjectRef m_pendingGrenade;
     unsigned m_stock = 0;

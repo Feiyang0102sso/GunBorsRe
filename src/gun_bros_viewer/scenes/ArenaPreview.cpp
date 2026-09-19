@@ -34,7 +34,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     std::vector<CEnemy::Template> catalog;
     std::vector<ZWeaponEntry> weapons;
     CBrother::Template playerData;
-    ZPlayerVitals vitals;
+    CBrother::Vitals vitals;
     if (!CEnemy::Template::LoadCatalog(toc, tables, catalog) || catalog.empty() ||
         !LoadWeaponCatalog(toc, tables, weapons) || !playerData.Load(toc, tables) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
@@ -126,7 +126,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         if (nextWeapon != weapon && !vitals.dead) {
             // Release the old gun's continuous effects; enemy attacks and
             // already launched projectiles keep their independent lifetimes.
-            scene.RetireOwner(kPlayerCombatId);
+            scene.RetireOwner(Collision::Player);
             if (Equip(tables, playerData, weapons[nextWeapon], player, program)) { weapon = nextWeapon; }
         }
         int width = 0, height = 0;
@@ -182,7 +182,6 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         markers.Draw(markerProgram, projection, 0.12f, 0.48f, 1, 1);
         float playerMatrix[16], model[16], mvp[16];
         scene.PlayerMatrix(playerMatrix);
-        scene.Draw(projection, nullptr, 1, ZWeaponDrawPass::BehindPlayer);
         // Actor meshes share a depth buffer; UI and billboards are layered after.
         glEnable(GL_DEPTH_TEST);
         for (auto &actor : scene.GetEnemies()) {
@@ -194,7 +193,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         }
         Matrix4dMultiply(projection, playerMatrix, mvp);
         player.Draw(program, mvp);
-        scene.Draw(projection, nullptr, 1, ZWeaponDrawPass::InFrontOfPlayer);
+        scene.Draw(projection, nullptr, 1, true);
         glDisable(GL_DEPTH_TEST);
         // Every bar uses the same predicate as projectile damage filtering.
         for (auto &actor : scene.GetEnemies()) {
@@ -210,7 +209,7 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
             if (state.maxHealth > 0) { fraction = std::clamp(state.health / state.maxHealth, 0.0f, 1.0f); }
             markers.AddRect(state.x - 32, barY + 2, 64 * fraction, 4);
             if (!state.enabled) { markers.Draw(markerProgram, projection, 0.5f, 0.5f, 0.5f, 1); }
-            else if (enemy.CanReceiveProjectile(0, kPlayerCombatId)) { markers.Draw(markerProgram, projection, 0.95f, 0.23f, 0.2f, 1); }
+            else if (enemy.CanReceiveProjectile(0, Collision::Player)) { markers.Draw(markerProgram, projection, 0.95f, 0.23f, 0.2f, 1); }
             else { markers.Draw(markerProgram, projection, 0.22f, 0.95f, 0.5f, 1); }
             char health[64];
             std::snprintf(health, sizeof(health), "%.0f/%.0f", state.health, state.maxHealth);

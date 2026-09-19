@@ -10,7 +10,7 @@
 #include <map>
 #include <utility>
 
-class ZRandom;
+class CRandGen;
 
 #include "gun_bros_re/gameplay/enemy/COffscreenSpawnLocationFilter.h"
 
@@ -18,7 +18,7 @@ class ILayerPath {
 public:
     virtual ~ILayerPath() = default;
     /** Native path layers own their distinct spawn search algorithms. */
-    virtual int GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const { return -1; }
+    virtual int GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, CRandGen &random) const { return -1; }
     struct Node {
         float x = 0;
         float y = 0;

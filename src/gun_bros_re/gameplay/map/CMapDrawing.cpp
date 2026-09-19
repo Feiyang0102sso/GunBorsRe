@@ -8,7 +8,7 @@
 
 using namespace MapDetail;
 
-void CMap::DrawBackground(ZQuadBatch &batch, bool showTiles, bool showProps, bool report) const {
+void CMap::DrawBackground(ZQuadBatch &batch, bool showTiles, bool report) const {
     const CMap &loaded = *this;
     const CMap &map = loaded;
     const TileSet &tileSet = loaded.GetResources().tileSet;
@@ -29,23 +29,19 @@ void CMap::DrawBackground(ZQuadBatch &batch, bool showTiles, bool showProps, boo
 
     const std::uint32_t tileQuads = batch.GetQuadCount();
 
-    if (showProps) {
-        CRenderQueue::DrawBackground(loaded, batch);
-        // Script z=2 effects sit above background scenery but below bodies.
-        AddParticleQuads(loaded, batch, 0, 2);
-        // Main scenery must be interleaved with actors; DrawMapObjects owns that
-        // pass and the final foreground pass (CRenderQueue::Draw :145235).
-    }
+    // Script z=2 effects sit above background scenery but below bodies.
+    // Main scenery must be interleaved with actors; DrawMapObjects owns that
+    // pass and the final foreground pass (CRenderQueue::Draw :145235).
+    // All prop slots now belong to CRenderQueue, including the background slot.
 
     batch.Upload();
 
     // This runs every frame now, so it only says anything when the caller has
     // just changed what is being drawn.
     if (report) {
-        std::printf("[m3] %u tile quads + %u prop quads in %u draw calls "
+        std::printf("[m3] %u tile quads in %u draw calls "
                     "(%u cells empty or unusable)\n",
-                    tileQuads, batch.GetQuadCount() - tileQuads,
-                    batch.GetGroupCount(), skipped);
+                    tileQuads, batch.GetGroupCount(), skipped);
     }
 }
 

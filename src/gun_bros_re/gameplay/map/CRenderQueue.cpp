@@ -20,6 +20,7 @@ bool CRenderQueue::Compare(const Item &left, const Item &right) {
 /** Shared main/foreground passes for the game and permanent map viewers.
  * CRenderQueue::Draw :145123 puts actors and scenery in the SAME main pass.
  * The caller has already drawn tiles and every prop's background slot.
+ * Correction: only tiles are pre-drawn now; props join all three shared passes.
  */
 void CRenderQueue::Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &program,
                 const float *mapMvp, bool showProps , CLevel *scene ,
@@ -66,6 +67,14 @@ void CRenderQueue::Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &p
         items.push_back(item);
     }
     if (scene != nullptr) {
+        scene->BeginProjectileDraw();
+        for (const auto &bullet : scene->GetBulletRenderItems()) {
+            Item item;
+            item.group = bullet.group;
+            item.y = bullet.y;
+            item.bullet = bullet.bullet;
+            items.push_back(item);
+        }
         // CParticleSystem::QueueParticles :133841 adds individual particles,
         // allowing their authored group and world Y to interleave with actors.
         for (const auto &particle : scene->GetMapParticleItems()) {
@@ -99,6 +108,18 @@ void CRenderQueue::Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &p
     std::stable_sort(items.begin(), items.end(), CRenderQueue::Compare);
     glDisable(GL_DEPTH_TEST);
     batch.Begin();
+    // Original queue :145123 runs background/main/foreground over the same list.
+    for (const Item &item : items) {
+        if (item.prop != nullptr) { item.prop->DrawSlot(batch, 0); }
+        if (item.bullet != nullptr) {
+            batch.Upload();
+            batch.Draw(program, mapMvp);
+            batch.Begin();
+            scene->DrawBullet(*item.bullet, mapMvp, CLevel::BulletDrawPass::Background, nullptr, kLevelCameraScale);
+        }
+    }
+    // Script z=2 effects sit above background scenery but below bodies.
+    if (showProps) { AddParticleQuads(loaded, batch, 0, 2); }
     for (const Item &item : items) {
         if (item.prop != nullptr) {
             item.prop->DrawSlot(batch, 1);
@@ -109,6 +130,10 @@ void CRenderQueue::Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &p
             batch.Upload();
             batch.Draw(program, mapMvp);
             batch.Begin();
+        }
+        if (item.bullet != nullptr) {
+            scene->DrawBullet(*item.bullet, mapMvp, CLevel::BulletDrawPass::Main, nullptr, kLevelCameraScale);
+            continue;
         }
         if (item.particle.player != nullptr) {
             scene->DrawMapParticle(item.particle, mapMvp);
@@ -127,8 +152,14 @@ void CRenderQueue::Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &p
     if (showProps) {
         // Explosion/shockwave z=3 and cover debris z=5 sit above bodies.
         AddParticleQuads(loaded, batch, 3, 5);
-        for (const Item &item : items) {
-            if (item.prop != nullptr) { item.prop->DrawSlot(batch, 2); }
+    }
+    for (const Item &item : items) {
+        if (showProps && item.prop != nullptr) { item.prop->DrawSlot(batch, 2); }
+        if (item.bullet != nullptr) {
+            batch.Upload();
+            batch.Draw(program, mapMvp);
+            batch.Begin();
+            scene->DrawBullet(*item.bullet, mapMvp, CLevel::BulletDrawPass::Foreground, nullptr, kLevelCameraScale);
         }
     }
     batch.Upload();
@@ -136,17 +167,4 @@ void CRenderQueue::Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &p
     // Put back what was found: the sprite path draws flat and in order.
     glDisable(GL_DEPTH_TEST);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-}
-void CRenderQueue::DrawBackground(const CMap &map, ZQuadBatch &batch) {
-    std::vector<Item> items;
-    items.reserve(map.GetResources().props.size());
-    for (const CProp &prop : map.GetResources().props) {
-        Item item;
-        item.group = prop.GetZOrderGroup();
-        item.y = prop.GetZOrder();
-        item.prop = &prop;
-        items.push_back(item);
-    }
-    std::stable_sort(items.begin(), items.end(), Compare);
-    for (const Item &item : items) { item.prop->DrawSlot(batch, 0); }
 }

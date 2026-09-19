@@ -4,7 +4,7 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -33,12 +33,12 @@ bool CLevel::CommitPowerupUse(CPowerUpSelector &selector, const GameObjectRef &r
         for (const auto &entry : selector.m_resources.m_powerups) {
             if (entry.resource.packHash == resource.packHash && entry.resource.localIndex == resource.localIndex) {
                 selector.m_cooldowns[resource.localIndex] = entry.data.field124 * 1000;
-                if (selector.m_owner == kPlayerCombatId) { selector.m_useMessages.push_back(entry.name); }
+                if (selector.m_owner == Collision::Player) { selector.m_useMessages.push_back(entry.name); }
                 break;
             }
         }
     }
-    if (selector.m_owner == kPlayerCombatId) {
+    if (selector.m_owner == Collision::Player) {
         for (unsigned index = 0; index < count; ++index) { RecordChallengePowerup(resource); }
     }
     return true;

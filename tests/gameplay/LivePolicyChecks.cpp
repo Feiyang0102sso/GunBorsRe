@@ -1,7 +1,7 @@
-#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
 /** Exercise Live decisions against the real BIG catalog and actor instances. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/game/ZLiveShopSession.h"
+#include "gun_bros_re/gameplay/multiplayer/ZLiveShopSession.h"
 
 int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, CProfileManager &profile) {
     std::uint32_t powerupChoice = 0;
@@ -27,7 +27,7 @@ int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, 
     for (unsigned elapsed = 0; elapsed < 10000 && enemyRef.IsNull(); elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (const auto &actor : scene.GetEnemies()) {
-            if (actor->mapPlaced || !actor->CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+            if (actor->mapPlaced || !actor->CanReceiveProjectile(0, Collision::Player)) { continue; }
             enemyRef.packHash = actor->data->packHash;
             enemyRef.localIndex = static_cast<std::uint8_t>(actor->data->ordinal);
             break;

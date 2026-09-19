@@ -53,9 +53,11 @@ namespace ScriptResolver {
  * @return the function's result, or zero for the many that return nothing and
  *         for every class not implemented yet.
  */
-std::int16_t ResolveFunction(ZScriptObject *host, std::uint16_t functionId,
+inline std::int16_t ResolveFunction(ZScriptObject *host, std::uint16_t functionId,
                              const std::int16_t *arguments,
-                             std::uint8_t argumentCount);
+                             std::uint8_t argumentCount) {
+    return host->ResolveNativeFunction(functionId, arguments, argumentCount);
+}
 
 /**
  * Where one class variable lives, so a script can read and write it.
@@ -64,7 +66,9 @@ std::int16_t ResolveFunction(ZScriptObject *host, std::uint16_t functionId,
  *         variable is not implemented. The interpreter then reads and writes a
  *         scratch slot instead, exactly as the original does.
  */
-std::int16_t *ResolveVariable(ZScriptObject *host, std::uint16_t variableId);
+inline std::int16_t *ResolveVariable(ZScriptObject *host, std::uint16_t variableId) {
+    return host->ResolveNativeVariable(variableId);
+}
 
 }  // namespace ScriptResolver
 

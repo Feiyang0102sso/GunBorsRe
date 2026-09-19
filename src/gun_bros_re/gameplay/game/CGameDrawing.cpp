@@ -8,7 +8,7 @@
 using namespace MapDetail;
 
 int CGame::Session::Draw() {
-    loaded.DrawBackground(batch, true, true, false);
+    loaded.DrawBackground(batch, true, false);
     if (const int result = Notify(ZGameObserver::FramePhase::GeometryDrawn); result >= 0) { return result; }
     glViewport(0, 0, width, height);
     glClearColor(0.04f, 0.05f, 0.07f, 1);
@@ -18,7 +18,6 @@ int CGame::Session::Draw() {
     Matrix4dTranslate(mvp, -camera.x, -camera.y);
     batch.Draw(program, mvp);
     scene.DrawPickups(mvp, kLevelCameraScale);
-    scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
     // Historical explanation of the old separate model pass:
     // The AI brother is a 3D model like the player and the enemies: with no
     // depth test his torso, legs and gun paint over each other in submission
@@ -30,7 +29,7 @@ int CGame::Session::Draw() {
     CBrother *drawBrother = nullptr;
     if (withBrother) { drawBrother = &brotherModel; }
     CRenderQueue::Draw(loaded, batch, program, mvp, true, &scene, drawBrother, brother.y, width);
-    scene.Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
+    scene.Draw(mvp, nullptr, kLevelCameraScale, true);
 
     if (launch.observer != nullptr) {
         const int result = launch.observer->OnStage(ZGameObserver::Stage::WorldDrawn, *this);

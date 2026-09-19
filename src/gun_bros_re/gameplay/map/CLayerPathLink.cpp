@@ -13,7 +13,7 @@
 /** @file CLayerPathLink.cpp
  * @brief Read the original graph; use a small deterministic shortest-path search.
  */
-#include "engine/core/ZRandom.h"
+#include "engine/core/CRandGen.h"
 #include "gun_bros_re/gameplay/map/CLayerPathLink.h"
 #include <cmath>
 #include <limits>
@@ -56,7 +56,7 @@ bool CLayerPathLink::Init(CArrayInputStream &stream) {
 }
 
 // CLayerPathLink::GetSpawnLocation :166819; DistanceList :167261.
-int CLayerPathLink::GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, ZRandom &random) const {
+int CLayerPathLink::GetSpawnLocation(float sourceX, float sourceY, const COffscreenSpawnLocationFilter &filter, CRandGen &random) const {
     const auto &nodes = m_nodes;
     // {node index, squared distance to the player}, nearest first.
     std::vector<std::pair<int, float>> nearest;

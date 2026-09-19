@@ -17,7 +17,7 @@ public:
     // Original RefreshDistanceMaps :170441 shares routes for each target.
     void RefreshDistanceMaps(const CLayerPathMesh &path,
         const std::vector<CEnemy::CombatState *> &enemies);
-    const std::vector<float> &GetDistanceMap(ZCombatId target) const;
+    const std::vector<float> &GetDistanceMap(Collision::ObjectId target) const;
     void Clear() { m_distanceMaps.clear(); m_path = nullptr; }
 private:
     struct DistanceMap {
@@ -26,5 +26,5 @@ private:
         std::vector<float> distances;
     };
     const CLayerPathMesh *m_path = nullptr;
-    std::map<ZCombatId, DistanceMap> m_distanceMaps;
+    std::map<Collision::ObjectId, DistanceMap> m_distanceMaps;
 };

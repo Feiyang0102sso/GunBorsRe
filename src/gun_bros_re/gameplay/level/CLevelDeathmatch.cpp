@@ -3,8 +3,8 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include <cmath>
 #include <limits>
@@ -109,7 +109,7 @@ bool CLevel::RespawnDeathmatch(unsigned peer, bool initial, bool resumeFromShop)
         m_matchInitialAngles[1] = m_matchInitialAngles[0] - 180;
     }
     if (!initial) {
-        const ZPlayerVitals *vitals = m_vitals;
+        const CBrother::Vitals *vitals = m_vitals;
         if (peer == 1) { vitals = &m_brother->vitals; }
         if (!vitals->dead || !vitals->deathAnimationComplete) { return false; }
     }
@@ -130,8 +130,8 @@ bool CLevel::RespawnDeathmatch(unsigned peer, bool initial, bool resumeFromShop)
     }
     if (!initial && !m_match->Respawn(peer, resumeFromShop)) { return false; }
     // Retire the old life's anchors before moving the reused actor ID.
-    ZCombatId actor = kPlayerCombatId;
-    if (peer == 1) { actor = kBrotherCombatId; }
+    Collision::ObjectId actor = Collision::Player;
+    if (peer == 1) { actor = Collision::Brother; }
     RetireOwner(actor);
     m_auxiliaryMs[peer] = 0;
     m_matchSwap[peer] = false;
@@ -177,8 +177,8 @@ bool CLevel::AdvanceDeathmatchEnding(int deltaMs) {
     // Continue both dead actors, including simultaneous final kills, without AI or combat.
     BeginAudioFrame();
     CBrother *models[] = {m_playerModel, m_brotherModel};
-    ZPlayerVitals *vitals[] = {m_vitals, &m_brother->vitals};
-    const ZCombatId actors[] = {kPlayerCombatId, kBrotherCombatId};
+    CBrother::Vitals *vitals[] = {m_vitals, &m_brother->vitals};
+    const Collision::ObjectId actors[] = {Collision::Player, Collision::Brother};
     bool complete = true;
     for (unsigned peer = 0; peer < 2; ++peer) {
         if (!vitals[peer]->dead) { continue; }
@@ -201,7 +201,7 @@ bool CLevel::AdvanceDeathmatchEnding(int deltaMs) {
 
 void CLevel::UpdateDeathmatch(unsigned deltaMs) {
     if (m_match == nullptr) { return; }
-    ZPlayerVitals *vitals[] = {m_vitals, &m_brother->vitals};
+    CBrother::Vitals *vitals[] = {m_vitals, &m_brother->vitals};
     for (unsigned peer = 0; peer < 2; ++peer) {
         if (vitals[peer]->dead && !m_match->GetLife(peer).dead) { RecordMatchDeath(peer, -1); }
     }
@@ -251,23 +251,23 @@ bool CLevel::FinishMatchWeaponSwap(unsigned peer) {
     m_matchSlots[peer] = 1 - m_matchSlots[peer];
     return EquipMatchGun(peer, m_gunConfigurations[peer][m_matchSlots[peer]]);
 }
-bool CLevel::CanHitBrother(const ZCombatHit &hit, ZCombatId target) const {
+bool CLevel::CanHitBrother(const Collision::Hit &hit, Collision::ObjectId target) const {
     if (m_match != nullptr) {
         if (m_match->GetResult() != CMPMatch::Result::Playing) { return false; }
-        if (target == kPlayerCombatId && IsMatchSpawnPending(0)) { return false; }
-        if (target == kBrotherCombatId && IsMatchSpawnPending(1)) { return false; }
-        const ZCombatId owner = ParticipantOwner(hit.owner);
+        if (target == Collision::Player && IsMatchSpawnPending(0)) { return false; }
+        if (target == Collision::Brother && IsMatchSpawnPending(1)) { return false; }
+        const Collision::ObjectId owner = ParticipantOwner(hit.owner);
         // CBrother::CanCollide :135310 accepts an enemy actor source, but
         // rejects direct PROP / BROTHER sources even in DM. A bullet is distinct.
         if (hit.propExplosion) { return hit.ownerType == 1 && hit.owner != target; }
-        return owner != target && (hit.ownerType == 1 || owner == kPlayerCombatId || owner == kBrotherCombatId);
+        return owner != target && (hit.ownerType == 1 || owner == Collision::Player || owner == Collision::Brother);
     }
     return hit.ownerType == 1 && hit.owner != target;
 }
 
-ZCombatId CLevel::ParticipantOwner(ZCombatId owner) const {
+Collision::ObjectId CLevel::ParticipantOwner(Collision::ObjectId owner) const {
     // In-flight shots retain allegiance after the turret actor is removed.
-    const ZCombatId summoner = m_objects.GetSummoner(owner);
+    const Collision::ObjectId summoner = m_objects.GetSummoner(owner);
     if (summoner != 0) { return summoner; }
     return owner;
 }
@@ -276,7 +276,7 @@ bool CLevel::HasLineOfFire(float x, float y, float targetX, float targetY) const
     const auto &geometry = m_weaponCollision->walls;
     for (const auto &edge : geometry.GetEdges()) {
         if (!edge.enabled) { continue; }
-        if (CombatGeometry::EdgeFraction(x, y, targetX - x, targetY - y,
+        if (Collision::EdgeFraction(x, y, targetX - x, targetY - y,
             geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex], 0) <= 1) { return false; }
     }
     return true;

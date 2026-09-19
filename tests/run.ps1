@@ -96,6 +96,12 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'enemies' @('--arena-check')
         Add-Check 'boss' @('--boss-check')
         Add-Check 'map-occlusion' @('--map-occlusion-check')
+        # Unresolved original-navigation studies: explicit opt-in, still return
+        # failure on penetration. Do not disguise them as passing regressions.
+        if ($Case -contains 'haven-collision') { Add-Check 'haven-collision' @('--haven-collision-check') }
+        if ($Case -contains 'haven-artillery') { Add-Check 'haven-artillery' @('--haven-artillery-check') }
+        if ($Case -contains 'haven-artillery-no-flock') { Add-Check 'haven-artillery-no-flock' @('--haven-artillery-no-flock-check') }
+        Add-Check 'haven-muzzle' @('--haven-muzzle-check')
         Add-Check 'pickups' @('--pickup-check')
         Add-Check 'props' @('--prop-check') 1
         Add-Check 'prop-combat' @('--prop-combat-check')
@@ -103,6 +109,7 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'powerups' @('--powerup-check')
         Add-Check 'missions' @('--mission-check')
         Add-Check 'level-flow' @('--level-flow-check')
+        Add-Check 'gameplay-ownership' @('--gameplay-ownership-check')
         Add-Check 'progress' @('--progress-check')
         Add-Check 'daily-bonus' @('--daily-bonus-check')
         Add-Check 'armor-render' @('--armor-render-check')

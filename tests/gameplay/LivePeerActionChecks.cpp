@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
 /** Test-peer commands must not affect a real remote peer or the local account. */
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/cheats/CheatActions.h"

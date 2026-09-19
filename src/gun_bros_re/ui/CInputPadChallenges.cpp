@@ -1,7 +1,7 @@
 /** CInputPad challenge overlay; all geometry and timing comes from BIG Movies. */
 #define NOMINMAX
 #include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/ZHostSettings.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 #include <algorithm>
 
 bool CInputPad::HasChallenges() const {

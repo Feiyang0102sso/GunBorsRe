@@ -4,9 +4,11 @@
  */
 #ifndef GUN_BROS_RE_CGAMEFLOW_H
 #define GUN_BROS_RE_CGAMEFLOW_H
+#include "gun_bros_re/gameplay/enemy/CEnemyCasualty.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/gameplay/ZCombatTypes.h"
-#include "gun_bros_re/gameplay/ZMultiplayerStatistics.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
+#include "gun_bros_re/gameplay/multiplayer/ZMultiplayerStatistics.h"
 #include <map>
 
 class CBGM;
@@ -28,7 +30,7 @@ struct CGameFlow {
         unsigned kills = 0, waves = 0, perfectWaves = 0, wave = 0;
         std::uint64_t experience = 0, xplodium = 0;
         std::vector<CEnemyCasualty> casualties;
-        std::vector<ZWeaponCombatProgress> weapons;
+        std::vector<CGun::Progress> weapons;
     };
 
     CProfileManager &profile;

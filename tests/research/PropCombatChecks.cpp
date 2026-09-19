@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 /** Verify isolated barrel detonations through the real map and combat hosts. */
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "tests/Checks.h"
@@ -24,7 +24,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
         if (!LoadPreviewMap(toc, entry.packIndex, entry.mapIndex, loaded)) { return 1; }
         loaded.LoadProps(toc);
         CBrother player;
-        ZPlayerVitals vitals;
+        CBrother::Vitals vitals;
         // This fixture isolates props; no player damage or account is needed.
         vitals.dead = true;
         CLevel scene(toc, tables, program);
@@ -45,12 +45,12 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 if (prop.active && prop.HasScript()) { health = prop.GetHealth(); }
                 healthBefore.push_back(health);
             }
-            ZCombatHit bullet;
-            bullet.owner = kPlayerCombatId;
+            Collision::Hit bullet;
+            bullet.owner = Collision::Player;
             bullet.projectile = 123;
             bullet.damage = target.GetHealth();
             bullet.applyArmorAttack = false;
-            const ZCombatTrace contact = props.Trace(bullet, target.x - 150, target.y,
+            const Collision::Trace contact = props.Trace(bullet, target.x - 150, target.y,
                 300, 0, 1, {});
             // Use the production target ID returned by its authored collision shape.
             if (contact.target == 0) {
@@ -61,14 +61,14 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             if (vertices.empty()) { ++failures; continue; }
             float centerX = 0, centerY = 0;
             for (const auto &vertex : vertices) { centerX += vertex.x; centerY += vertex.y; }
-            ZCombatHit splash = bullet;
+            Collision::Hit splash = bullet;
             splash.x = target.x + centerX / static_cast<float>(vertices.size());
             splash.y = target.y + centerY / static_cast<float>(vertices.size());
             splash.damage = 1;
             splash.projectile = 0;
             const float initialHealth = target.GetHealth();
             props.Splash(splash, 0);
-            splash.owner = kBrotherCombatId;
+            splash.owner = Collision::Brother;
             props.Splash(splash, 0);
             if (target.GetHealth() != initialHealth) { ++failures; }
             // A real human bullet splash still reaches the same target.
@@ -87,7 +87,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                 blastTarget->combat.y = target.y;
                 enemyHealth = blastTarget->combat.health;
             }
-            if (props.ApplyHit(contact.target, bullet) != ZHitResult::Hit) { ++failures; continue; }
+            if (props.ApplyHit(contact.target, bullet) != Collision::HitResult::Hit) { ++failures; continue; }
             for (int elapsed = 0; elapsed < 128; elapsed += 16) { props.Update(16); }
             if (blastTarget) {
                 blastTarget->Update(16);
@@ -145,7 +145,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
             GameObjectRef grenade;
             grenade.packHash = CStringToKey("pack5");
             grenade.localIndex = 90; // Original standard grenade, also used by boss checks.
-            if (scene.SpawnProjectile(grenade, centerX, centerY, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
+            if (scene.SpawnProjectile(grenade, centerX, centerY, 0, 0, 0, Collision::Player, 0) == 0) { return 1; }
             float matrix[16];
             scene.PlayerMatrix(matrix);
             for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
@@ -175,13 +175,13 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
                     ResearchPropKind(prop) != ZInteractivePropKind::Barrel) { continue; }
                 enemy.combat.x = prop.x + 30;
                 enemy.combat.y = prop.y;
-                ZCombatHit bullet;
-                bullet.owner = kPlayerCombatId;
+                Collision::Hit bullet;
+                bullet.owner = Collision::Player;
                 bullet.projectile = 123;
                 bullet.damage = prop.GetHealth();
-                const ZCombatTrace contact = props.Trace(bullet, prop.x - 150, prop.y, 300, 0, 1, {});
+                const Collision::Trace contact = props.Trace(bullet, prop.x - 150, prop.y, 300, 0, 1, {});
                 const float before = enemy.combat.health;
-                if (contact.target == 0 || props.ApplyHit(contact.target, bullet) != ZHitResult::Hit) { return 1; }
+                if (contact.target == 0 || props.ApplyHit(contact.target, bullet) != Collision::HitResult::Hit) { return 1; }
                 for (unsigned tick = 0; tick < 8; ++tick) { props.Update(16); }
                 std::printf("[prop-combat-check] after-chain barrel hp=%.0f->%.0f\n", before, enemy.combat.health);
                 if (enemy.combat.health >= before) { ++failures; }

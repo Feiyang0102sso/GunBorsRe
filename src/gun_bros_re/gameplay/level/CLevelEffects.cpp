@@ -6,21 +6,19 @@
 #include "gun_bros_re/effects/CParticleSystem.h"
 #include "gun_bros_re/effects/ZParticleResources.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZCombatAudio.h"
+#include "gun_bros_re/gameplay/audio/ZCombatAudio.h"
 #include "gun_bros_re/effects/CEffectLayer.h"
 #include "engine/core/ZMatrix4d.h"
-#include "gun_bros_re/gameplay/CBullet.h"
-#include "gun_bros_re/gameplay/ZBulletResources.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/effects/ZEffectColors.h"
-#include "gun_bros_re/gameplay/ZProjectileGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "engine/graphics/ZEffectProjection.h"
 #include <algorithm>
 #include <cmath>
 
-using ProjectileGeometry::ProjectMuzzle;
-using ProjectileGeometry::SegmentFraction;
+using Collision::SegmentFraction;
 
 namespace {
 constexpr float kRadians = 3.14159265f / 180.0f;
@@ -47,7 +45,7 @@ void CLevel::EmitBulletCue(const ZGunCue &cue, float x, float y, float z, float 
     }
     if (m_projectileWorld != nullptr && owner != nullptr &&
         (cue.kind == ZGunCue::Kind::Splash || cue.kind == ZGunCue::Kind::SpawnEnemy)) {
-        ZCombatHit hit;
+        Collision::Hit hit;
         hit.projectile = owner->id;
         hit.owner = owner->owner;
         hit.weapon = owner->weapon;
@@ -86,7 +84,7 @@ void CLevel::EmitBulletCue(const ZGunCue &cue, float x, float y, float z, float 
         } else { StartParticleEffect(cue.resource, x, y, z, angle); }
     } else if (cue.kind == ZGunCue::Kind::Sound || cue.kind == ZGunCue::Kind::LoopSound ||
                cue.kind == ZGunCue::Kind::StopSound) {
-        ZCombatId soundOwner = kPlayerCombatId;
+        Collision::ObjectId soundOwner = Collision::Player;
         if (owner != nullptr) { soundOwner = owner->owner; }
         m_combatAudio->PlayCue(cue, soundOwner);
     }
@@ -109,7 +107,6 @@ CLevel::CLevel(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &p
     m_program = &program;
     m_effectSprites = std::make_unique<ZSpriteRenderer>(toc, program);
     m_combatAudio = std::make_unique<ZCombatAudio>(tables);
-    m_bulletResources = std::make_unique<ZBulletResources>(tables, program);
     m_particleResources = std::make_unique<ZParticleResources>(tables);
     m_mapParticles = std::move(mapParticles);
     if (!m_mapParticles) { m_mapParticles = std::make_shared<CParticleSystem>(); }
@@ -126,8 +123,8 @@ CLevel::~CLevel() {
     if (m_mapParticles) { Clear(); }
 }
 
-std::vector<ZWeaponProjectileState> CLevel::GetProjectileStates() const {
-    std::vector<ZWeaponProjectileState> result;
+std::vector<CBullet::State> CLevel::GetProjectileStates() const {
+    std::vector<CBullet::State> result;
     for (const auto &shot : m_bullets) {
         if (shot->removed) { continue; }
         result.push_back({shot->source.resource, shot->owner, shot->beam, shot->x, shot->y,
@@ -135,13 +132,13 @@ std::vector<ZWeaponProjectileState> CLevel::GetProjectileStates() const {
         auto &state = result.back();
         state.beamSourceAnimation = shot->beamSourceAnimation;
         state.beamEndAnimation = shot->beamEndAnimation;
-        if (!shot->beam) { state.collisionRadius = shot->visual->data.GetRadius(); }
+        if (!shot->beam) { state.collisionRadius = shot->data->GetRadius(); }
         state.collisionEnabled = shot->HasActiveCollision() && !shot->removed;
     }
     return result;
 }
 
-void CLevel::SetCombatWorld(ZProjectileWorld *world) { m_projectileWorld = world; }
+void CLevel::SetCombatWorld(CBullet::World *world) { m_projectileWorld = world; }
 
 std::uint64_t CLevel::StartPersistentEffect(const GameObjectRef &resource, float x, float y, bool loop) {
     auto *player = StartParticleEffect(resource, x, y, 0, 0);
@@ -179,10 +176,10 @@ void CLevel::SetViewBounds(float centerX, float centerY, float width, float heig
     m_projectileView.height = height;
 }
 
-ZCombatId CLevel::SpawnProjectile(const GameObjectRef &resource, float x, float y,
-    float z, float direction, float speed, ZCombatId owner, int ownerType, int part, int node) {
-    ZBulletVisual *visual = m_bulletResources->Get(resource);
-    if (visual == nullptr) { return 0; }
+Collision::ObjectId CLevel::SpawnProjectile(const GameObjectRef &resource, float x, float y,
+    float z, float direction, float speed, Collision::ObjectId owner, int ownerType, int part, int node) {
+    const CBullet::Template *data = GetBulletTemplate(resource);
+    if (data == nullptr) { return 0; }
     std::unique_ptr<CBullet> shot(new CBullet());
     shot->id = m_nextProjectile++;
     shot->owner = owner;
@@ -192,16 +189,21 @@ ZCombatId CLevel::SpawnProjectile(const GameObjectRef &resource, float x, float 
     shot->part = part;
     shot->source.node = node;
     shot->source.resource = resource;
-    shot->visual = visual;
     shot->x = x;
     shot->y = y;
     shot->z = z;
     shot->direction = direction;
     shot->speed = speed;
-    shot->beam = (visual->data.GetFlags() & kBeamFlag) != 0;
+    shot->beam = (data->GetFlags() & kBeamFlag) != 0;
     if (m_projectileWorld != nullptr) { shot->SetLevelContext(m_projectileWorld->GetScriptLevel()); }
-    shot->Bind(visual->data, false);
-    const ZCombatId id = shot->id;
+    shot->Bind(*data, false);
+    if (m_projectileWorld != nullptr) {
+        float ownerX = 0, ownerY = 0, ownerZ = 0, ownerDirection = 0;
+        if (m_projectileWorld->Anchor(owner, -1, -1, ownerX, ownerY, ownerZ, ownerDirection)) {
+            shot->CheckSpawnCollision(ownerX, ownerY, m_weaponCollision);
+        }
+    }
+    const Collision::ObjectId id = shot->id;
     for (const ZGunCue &cue : shot->TakeCues()) {
         EmitBulletCue(cue, x, y, z, direction, shot.get());
     }
@@ -210,7 +212,7 @@ ZCombatId CLevel::SpawnProjectile(const GameObjectRef &resource, float x, float 
     return id;
 }
 
-void CLevel::ResolveHit(ZCombatId projectile, ZHitResult result) {
+void CLevel::ResolveHit(Collision::ObjectId projectile, Collision::HitResult result) {
     for (auto &shot : m_bullets) {
         if (shot->id == projectile && shot->pendingHit) {
             shot->pendingHit = false;
@@ -220,7 +222,7 @@ void CLevel::ResolveHit(ZCombatId projectile, ZHitResult result) {
     }
 }
 
-bool CLevel::RemoveOldestProjectile(ZCombatId owner) {
+bool CLevel::RemoveOldestProjectile(Collision::ObjectId owner) {
     for (auto &shot : m_bullets) {
         if (shot->owner == owner && !shot->removed) {
             shot->ForceRemoval();
@@ -230,7 +232,7 @@ bool CLevel::RemoveOldestProjectile(ZCombatId owner) {
     return false;
 }
 
-void CLevel::RetireOwner(ZCombatId owner) {
+void CLevel::RetireOwner(Collision::ObjectId owner) {
     m_combatAudio->RetireOwner(owner);
     m_mapParticles->RetireOwner(owner);
     const auto entry = m_brotherParticles.find(owner);
@@ -249,11 +251,11 @@ void CLevel::RetireOwner(ZCombatId owner) {
 }
 
 void CLevel::PlayMoveSound(const GameObjectRef &sound) {
-    m_combatAudio->PlayWav(sound.packHash, sound.localIndex, false, kPlayerCombatId, true);
+    m_combatAudio->PlayWav(sound.packHash, sound.localIndex, false, Collision::Player, true);
 }
 
 void CLevel::Emit(const ZGunCue &cue, float x, float y, float z, float direction,
-    ZCombatId actor, int slot, int part, int node) {
+    Collision::ObjectId actor, int slot, int part, int node) {
     if (cue.kind == ZGunCue::Kind::Sound || cue.kind == ZGunCue::Kind::LoopSound || cue.kind == ZGunCue::Kind::StopSound) {
         m_combatAudio->PlayCue(cue, actor);
         return;
@@ -322,7 +324,7 @@ void CLevel::Emit(const ZGunCue &cue, float x, float y, float z, float direction
     EmitBulletCue(cue, x, y, z, direction);
 }
 
-bool CLevel::HasActorBurst(ZCombatId actor) const { return m_mapParticles->HasActorBurst(actor); }
+bool CLevel::HasActorBurst(Collision::ObjectId actor) const { return m_mapParticles->HasActorBurst(actor); }
 
 void CLevel::Clear() {
     m_bullets.clear();
@@ -380,7 +382,7 @@ std::size_t CLevel::GetShotCount() const { return m_shotsFired; }
 std::size_t CLevel::GetSoundCueCount() const { return m_combatAudio->GetSoundCueCount(); }
 
 void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float facingDegrees,
-    ZCombatId owner, const ZWeaponCollision *collision) {
+    Collision::ObjectId owner, const CCollisionData::Scene *collision) {
     if (!player.weapon) { return; }
     const auto strengthening = player.GetPowerupParticles();
     strengthening->x = modelToScene[3]; strengthening->y = modelToScene[7];
@@ -400,7 +402,7 @@ void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float faci
             continue;
         }
         if (cue.kind == ZGunCue::Kind::Splash && m_projectileWorld != nullptr) {
-            ZCombatHit hit;
+            Collision::Hit hit;
             hit.owner = owner;
             hit.ownerType = 0;
             hit.damage = cue.damage;
@@ -432,10 +434,10 @@ void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float faci
             int hand = cue.hand;
             if (copies == 2) { hand = copy; }
             float x = 0, y = 0, z = 0;
-            if (!ProjectMuzzle(player, modelToScene, hand, cue.node, x, y, z)) { continue; }
+            if (!player.ProjectMuzzle(modelToScene, hand, cue.node, x, y, z)) { continue; }
             if (cue.kind != ZGunCue::Kind::Bullet) { EmitBulletCue(cue, x, y, z, direction); continue; }
-            ZBulletVisual *visual = m_bulletResources->Get(cue.resource);
-            if (visual == nullptr) { continue; }
+            const CBullet::Template *data = GetBulletTemplate(cue.resource);
+            if (data == nullptr) { continue; }
             std::unique_ptr<CBullet> shot(new CBullet());
             shot->id = m_nextProjectile++;
             shot->owner = owner;
@@ -448,24 +450,19 @@ void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float faci
             shot->masteryDamageMultiplier = player.ActiveWeapon().GetMasteryDamageMultiplier(masteryRoll, &shot->critical);
             if (m_projectileWorld != nullptr) { shot->powerupMultiplier = m_projectileWorld->GetProjectilePowerupMultiplier(owner); }
             shot->part = hand;
-            shot->visual = visual;
             shot->source = cue;
             shot->source.hand = hand;
             shot->x = x; shot->y = y; shot->z = z;
             shot->direction = direction + RandomProjectile(cue.minimumAngle, cue.maximumAngle);
             shot->speed = cue.speed;
-            shot->beam = (visual->data.GetFlags() & kBeamFlag) != 0;
+            shot->beam = (data->GetFlags() & kBeamFlag) != 0;
             if (m_projectileWorld != nullptr) { shot->SetLevelContext(m_projectileWorld->GetScriptLevel()); }
-            shot->Bind(visual->data, cue.alternate);
+            shot->Bind(*data, cue.alternate);
             player.ActiveWeapon().AddBullet(*shot);
+            shot->InitializeSeeking(m_projectileWorld);
             // CBullet::Fire :62212-62243 tests owner -> muzzle before movement.
             // A zero-speed mine can already be beyond the terrain at birth.
-            if (collision != nullptr) {
-                const CCollisionData *birthCollision = &collision->walls;
-                if ((shot->flags & 0x20) != 0) { birthCollision = &collision->terrain; }
-                SegmentFraction(modelToScene[3], modelToScene[7], x - modelToScene[3], y - modelToScene[7],
-                    birthCollision, &shot->spawnNormalX, &shot->spawnNormalY, &shot->spawnCollision);
-            }
+            shot->CheckSpawnCollision(modelToScene[3], modelToScene[7], collision);
             if (shot->beam) {
                 const float beamLength = static_cast<float>(shot->maximumBeamLength);
                 const float dx = std::cos(shot->direction * kRadians) * beamLength;
@@ -473,7 +470,7 @@ void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float faci
                 const CCollisionData *walls = nullptr;
                 if (collision != nullptr) {
                     walls = &collision->walls;
-                    if ((visual->data.GetFlags() & 0x20) != 0) { walls = &collision->terrain; }
+                    if ((data->GetFlags() & 0x20) != 0) { walls = &collision->terrain; }
                 }
                 shot->length = beamLength * SegmentFraction(x, y, dx, dy, walls);
             }
@@ -485,7 +482,7 @@ void CLevel::EmitBrother(CBrother &player, const float *modelToScene, float faci
 }
 
 void CLevel::Update(CBrother &player, const float *modelToScene, float facingDegrees,
-    int deltaMs, const ZWeaponCollision *collision) {
+    int deltaMs, const CCollisionData::Scene *collision) {
     // Combat time, for the move-sound window in PlayWav. Advanced before the
     // early exit so a scene without a player still ages its cues.
     m_combatAudio->AdvanceClock(deltaMs);
@@ -493,7 +490,7 @@ void CLevel::Update(CBrother &player, const float *modelToScene, float facingDeg
     if (m_projectileWorld == nullptr) { BeginAudioFrame(); }
     m_effectPlayerX = modelToScene[3];
     m_effectPlayerY = modelToScene[7];
-    EmitBrother(player, modelToScene, facingDegrees, kPlayerCombatId, collision);
+    EmitBrother(player, modelToScene, facingDegrees, Collision::Player, collision);
     const float direction = facingDegrees - 90;
     for (auto &shot : m_bullets) {
         if (!shot->removed) { shot->UpdateProjectile(m_projectileWorld, *m_effectSprites, m_projectileView, player, modelToScene,
@@ -526,43 +523,65 @@ void CLevel::DrawMapParticle(const CParticleSystem::RenderItem &item, const floa
     m_effectSprites->Draw(sceneMvp);
 }
 
-void CLevel::Draw(const float *sceneMvp, const float *previewProjection, float meshCameraScale,
-    ZWeaponDrawPass pass, bool mapParticlesInQueue) {
-    const ZEffectProjection projection(previewProjection);
-    glDisable(GL_DEPTH_TEST);
-    m_effectSprites->Batch().Begin();
+void CLevel::BeginProjectileDraw() {
     m_drawnBeamQuads = 0;
     m_drawnLightningQuads = 0;
+}
+
+std::vector<CLevel::BulletRenderItem> CLevel::GetBulletRenderItems() const {
+    std::vector<BulletRenderItem> result;
+    result.reserve(m_bullets.size());
     for (const auto &shot : m_bullets) {
-        const bool behindPlayer = std::hypot(shot->x - m_effectPlayerX, shot->y - m_effectPlayerY) < 100 || shot->y + 10 < m_effectPlayerY;
-        if (pass == ZWeaponDrawPass::BehindPlayer && !behindPlayer) { continue; }
-        if (pass == ZWeaponDrawPass::InFrontOfPlayer && behindPlayer) { continue; }
-        shot->effects.Draw(*m_effectSprites, m_effectColors, projection, true);
+        // Retired projectiles may still own draining trails, just as before.
+        float ownerX = m_effectPlayerX, ownerY = m_effectPlayerY;
+        float ownerZ = 0, angle = 0;
+        bool hasOwner = shot->owner == Collision::Player;
+        if (m_projectileWorld != nullptr) {
+            hasOwner = m_projectileWorld->Anchor(shot->owner, -1, -1, ownerX, ownerY, ownerZ, angle);
+        }
+        result.push_back({shot.get(), shot->GetZOrderGroup(), shot->GetZOrder(ownerX, ownerY, hasOwner)});
     }
-    for (auto &shot : m_bullets) {
-        // CBullet::GetZOrder (:60280) puts a player's bullet behind its
-        // shooter while within 100 world units. Otherwise use world Y + 10.
-        // This hides the backward half of long tracers inside the gun mesh.
-        const float distance = std::hypot(shot->x - m_effectPlayerX, shot->y - m_effectPlayerY);
-        const bool behindPlayer = distance < 100.0f || shot->y + 10.0f < m_effectPlayerY;
-        if (pass == ZWeaponDrawPass::BehindPlayer && !behindPlayer) { continue; }
-        if (pass == ZWeaponDrawPass::InFrontOfPlayer && behindPlayer) { continue; }
-        if (shot->removed) { continue; }
-        shot->DrawProjectile(*m_effectSprites, m_effectColors, *m_program, sceneMvp, projection,
-            meshCameraScale, m_drawnBeamQuads, m_drawnLightningQuads);
+    return result;
+}
+
+void CLevel::DrawBullet(CBullet &shot, const float *sceneMvp, BulletDrawPass pass,
+    const float *previewProjection, float meshCameraScale) {
+    const ZEffectProjection projection(previewProjection);
+    glDisable(GL_DEPTH_TEST);
+    m_effectSprites->Begin();
+    if (pass == BulletDrawPass::Main) {
+        if (!shot.removed) {
+            shot.DrawProjectile(*m_effectSprites, m_effectColors, *m_program, sceneMvp,
+                projection, meshCameraScale, m_drawnBeamQuads, m_drawnLightningQuads);
+        }
+    } else {
+        shot.effects.Draw(*m_effectSprites, m_effectColors, projection, pass == BulletDrawPass::Background);
     }
-    if (pass == ZWeaponDrawPass::BehindPlayer) {
-        m_effectSprites->Batch().Upload();
-        m_effectSprites->Batch().Draw(*m_program, sceneMvp);
-        return;
+    m_effectSprites->Draw(sceneMvp);
+}
+
+void CLevel::Draw(const float *sceneMvp, const float *previewProjection, float meshCameraScale,
+    bool objectsInQueue) {
+    const ZEffectProjection projection(previewProjection);
+    glDisable(GL_DEPTH_TEST);
+    if (!objectsInQueue) {
+        BeginProjectileDraw();
+        // Standalone previews retain all three passes without requiring a map.
+        for (const auto &shot : m_bullets) { DrawBullet(*shot, sceneMvp, BulletDrawPass::Background, previewProjection, meshCameraScale); }
+        for (const auto &shot : m_bullets) { DrawBullet(*shot, sceneMvp, BulletDrawPass::Main, previewProjection, meshCameraScale); }
+        for (const auto &shot : m_bullets) { DrawBullet(*shot, sceneMvp, BulletDrawPass::Foreground, previewProjection, meshCameraScale); }
     }
-    for (const auto &shot : m_bullets) { shot->effects.Draw(*m_effectSprites, m_effectColors, projection, false); }
+    // CBullet::GetZOrder (:60280) puts a player's bullet behind its
+    // shooter while within 100 world units. Otherwise use world Y + 10.
+    // Historical split used distance to the main player for every projectile.
+    // CBullet::GetZOrder :60280 now uses its actual owner in CRenderQueue.
+    // This hides the backward half of long tracers inside the gun mesh.
+    m_effectSprites->Begin();
     m_effectLayer.Draw(*m_effectSprites, m_effectColors, projection);
-    if (!mapParticlesInQueue) { m_mapParticles->QueueParticles(*m_effectSprites, previewProjection); }
+    if (!objectsInQueue) { m_mapParticles->QueueParticles(*m_effectSprites, previewProjection); }
     for (const auto &entry : m_brotherParticles) {
         const auto particles = entry.second.lock();
         if (particles) { particles->Draw(*m_effectSprites, previewProjection); }
     }
-    m_effectSprites->Batch().Upload();
-    m_effectSprites->Batch().Draw(*m_program, sceneMvp);
+    m_effectSprites->Draw(sceneMvp);
 }

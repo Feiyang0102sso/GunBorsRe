@@ -1,11 +1,11 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 #include "engine/graphics/CMeshCamera.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "gun_bros_viewer/scenes/MapPreview.h"
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include <algorithm>
 #include <charconv>
@@ -419,7 +419,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
         }
         loaded.UpdateLayers(static_cast<std::uint16_t>(elapsedMs));
         audio.Update();
-        loaded.DrawBackground(batch, showTiles, showProps, reportGeometry);
+        loaded.DrawBackground(batch, showTiles, reportGeometry);
         reportGeometry = false;
 
         if (gameView) {
@@ -493,11 +493,10 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
 
         batch.Draw(program, mvp);
         if (weaponEffects) {
-            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::BehindPlayer);
         }
         CRenderQueue::Draw(loaded, batch, program, mvp, showProps, weaponEffects.get());
         if (weaponEffects) {
-            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, ZWeaponDrawPass::InFrontOfPlayer, true);
+            weaponEffects->Draw(mvp, nullptr, kLevelCameraScale, true);
         }
 
         if (showSpawns) {

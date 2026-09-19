@@ -2,7 +2,7 @@
  * UsePowerup is this port's shared entry for equipped and selector requests.
  */
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "engine/core/CStringToKey.h"
 #include <cmath>

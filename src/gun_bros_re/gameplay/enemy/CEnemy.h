@@ -37,7 +37,7 @@
 
 #ifndef GUN_BROS_RE_GUN_BROS_CENEMY_H
 #define GUN_BROS_RE_GUN_BROS_CENEMY_H
-#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+#include "gun_bros_re/host/ZGameScriptObject.h"
 #include "gun_bros_re/gameplay/enemy/CStunController.h"
 
 #include "engine/glu/script/CScript.h"
@@ -48,8 +48,8 @@
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/graphics/CMoveSetMeshController.h"
-#include "gun_bros_re/gameplay/ZCombatTypes.h"
-#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
+#include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include <array>
 #include <map>
 #include <memory>
@@ -265,9 +265,9 @@ public:
         float radius = 0;
         float force = 0;
         int durationMs = 0;
-        ZCombatId projectile = 0;
-        ZCombatId owner = 0;
-        ZHitResult result = ZHitResult::Pending;
+        Collision::ObjectId projectile = 0;
+        Collision::ObjectId owner = 0;
+        Collision::HitResult result = Collision::HitResult::Pending;
     };
 
     /** Runtime state next to the original enemy's script and part table.
@@ -286,9 +286,9 @@ public:
         // 18 path index; 19 critical hit; 20 wave index.
         std::array<std::int16_t, 21> variables{};
         bool enabled = false;
-        ZCombatId id = 0;
+        Collision::ObjectId id = 0;
         // Local equivalent of the projectile creator's participant ownership.
-        ZCombatId summoner = 0;
+        Collision::ObjectId summoner = 0;
         float x = 0;
         float y = 0;
         float previousX = 0;
@@ -307,7 +307,7 @@ public:
         bool targetable = true;
         bool turret = false;
         int targetType = 0;
-        ZCombatId targetId = 0;
+        Collision::ObjectId targetId = 0;
         float targetX = 0;
         float targetY = 0;
         bool hasNavigationTarget = false;
@@ -344,9 +344,9 @@ public:
         std::uint32_t randomState = 1;
         GameObjectRef bullet;
         CCollisionData collision;
-        ZCombatHit pendingHit;
+        Collision::Hit pendingHit;
         bool collisionPending = false;
-        ZHitResult collisionResult = ZHitResult::Pending;
+        Collision::HitResult collisionResult = Collision::HitResult::Pending;
         std::vector<Action> actions;
     };
 
@@ -429,13 +429,13 @@ public:
     CStunController stun;
     void ConfigureTemplate(float radius, bool targetable,
         const GameObjectRef &bullet, const CCollisionData &collision);
-    void SetTarget(ZCombatId id, float x, float y, bool alive);
+    void SetTarget(Collision::ObjectId id, float x, float y, bool alive);
     void SetPath(const ILayerPath *path);
     void UpdateNavigation(const CLayerPathMesh &path, const std::vector<float> &distances);
-    bool CanReceiveProjectile(int ownerType, ZCombatId owner) const;
+    bool CanReceiveProjectile(int ownerType, Collision::ObjectId owner) const;
     /** CEnemy::CanCollide :67243, specialized for a player (object type 0). */
     bool CanCollideWithPlayer() const;
-    ZHitResult ReceiveHit(const ZCombatHit &hit);
+    Collision::HitResult ReceiveHit(const Collision::Hit &hit);
     void Damage(float amount);
     bool TriggerEvent(std::uint8_t event);
     void HandleMessage(int message);

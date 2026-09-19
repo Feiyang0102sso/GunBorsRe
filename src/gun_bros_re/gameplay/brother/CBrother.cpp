@@ -423,9 +423,9 @@ void CBrother::UpdateUI(std::int32_t deltaMs) {
     m_interpreter.Refresh();
 }
 
-ZHitResult CBrother::ReceiveDamage(float damage) {
+Collision::HitResult CBrother::ReceiveDamage(float damage) {
     if (!m_spawned || m_vitals == nullptr || m_vitals->dead || damage <= 0 || m_variables[3] > 0 || IsShield()) {
-        return ZHitResult::Ignored;
+        return Collision::HitResult::Ignored;
     }
     // HandleDamage (:136693) divides by the defense frenzy multiplier.
     damage /= GetFrenzyMultiplier(1);
@@ -433,7 +433,7 @@ ZHitResult CBrother::ReceiveDamage(float damage) {
     m_vitals->incomingDamage += damage;
     m_vitals->flash = 1;
     ++m_vitals->hits;
-    if (m_vitals->invincible) { return ZHitResult::Hit; }
+    if (m_vitals->invincible) { return Collision::HitResult::Hit; }
     // Arena still dispatches HandleDamage's event 5/4 (:136791), including
     // hurt animations. Keep finite HP for percentage-based script queries.
     if (!m_vitals->unlimitedHealth) {
@@ -441,10 +441,10 @@ ZHitResult CBrother::ReceiveDamage(float damage) {
     }
     if (m_vitals->health <= 0) {
         StartDeath();
-        return ZHitResult::Killed;
+        return Collision::HitResult::Killed;
     }
     m_interpreter.HandleEvent(5, 4);
-    return ZHitResult::Hit;
+    return Collision::HitResult::Hit;
 }
 
 bool CBrother::StartDeath() {
@@ -634,4 +634,15 @@ float CBrother::GetProjectilePowerupMultiplier() const {
         if (IsFrenzyType(type)) { multiplier = GetFrenzyMultiplier(type); }
     }
     return multiplier;
+}
+
+/** Project the same animated muzzle transform used to draw the weapon. */
+bool CBrother::ProjectMuzzle( const float *matrix, int hand, int node,
+                   float &x, float &y, float &z) {
+    ZMeshBoneTransform muzzle{};
+    if (!GetMuzzle(hand, node, muzzle)) { return false; }
+    x = matrix[0] * muzzle.posX + matrix[1] * muzzle.posY + matrix[2] * muzzle.posZ + matrix[3];
+    y = matrix[4] * muzzle.posX + matrix[5] * muzzle.posY + matrix[6] * muzzle.posZ + matrix[7];
+    z = matrix[8] * muzzle.posX + matrix[9] * muzzle.posY + matrix[10] * muzzle.posZ + matrix[11];
+    return true;
 }

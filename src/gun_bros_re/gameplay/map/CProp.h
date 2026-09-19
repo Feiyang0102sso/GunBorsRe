@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+#include "gun_bros_re/host/ZGameScriptObject.h"
 /**
  * @file CProp.h
  * @brief The template behind a placed prop: which sprite it draws.
@@ -30,7 +30,7 @@
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/glu/script/CScript.h"
-#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include "engine/graphics/CMoveSet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"

@@ -3,16 +3,16 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include <algorithm>
 #include <cmath>
 
 namespace {
-using CombatGeometry::EdgeFraction;
+using Collision::EdgeFraction;
 }
 
-void CLevel::SetMap(CMap &map, const CCollisionData &collision, ZWeaponCollision &weaponCollision,
+void CLevel::SetMap(CMap &map, const CCollisionData &collision, CCollisionData::Scene &weaponCollision,
     float cameraScale, float playerRadius) {
     m_map = &map;
     m_objects.SetUsesMapCoordinates(true);

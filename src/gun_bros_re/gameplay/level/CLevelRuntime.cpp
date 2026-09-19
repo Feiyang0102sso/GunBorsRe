@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include <algorithm>
 #include <cstdio>
@@ -12,7 +12,7 @@ namespace {
 // CEffectLayer::AddTextEffect :66884 and TextEffect::Update :67086.
 constexpr unsigned kTextEffectLifetimeMs = 2000;
 constexpr float kTextEffectRisePerSecond = 100;
-using CombatGeometry::CircleFraction;
+using Collision::CircleFraction;
 }
 
 bool LoadInitialPlayerHealth(CResTOCManager &toc, ZPackTables &tables, float &health) {
@@ -99,7 +99,7 @@ bool CLevel::TouchesPickup(float x, float y) const {
 }
 
 void CLevel::BindCombat(const std::vector<CEnemy::Template> &catalog, CBrother &player,
-    ZPlayerVitals &vitals, float playerGameScale) {
+    CBrother::Vitals &vitals, float playerGameScale) {
     m_catalog = &catalog;
     m_playerModel = &player;
     m_vitals = &vitals;

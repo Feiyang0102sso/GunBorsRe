@@ -6,7 +6,7 @@
 #ifndef GUN_BROS_RE_CMENUUPGRADEPOPUP_H
 #define GUN_BROS_RE_CMENUUPGRADEPOPUP_H
 #include "engine/glu/movie/CMovie.h"
-#include "gun_bros_re/gameplay/CGun.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include <array>
 
 class CMenuUpgradePopup {

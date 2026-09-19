@@ -37,7 +37,7 @@ int RunMapResourceChecks(const std::string &bigDirectory) {
             loaded.LoadProps(toc);
             props += static_cast<unsigned>(loaded.GetResources().props.size());
             loaded.BuildCollisionScene();
-            loaded.DrawBackground(batch, true, true, false);
+            loaded.DrawBackground(batch, true, false);
 
             // CMap moves its owner, preserving every CProp, Flow self pointer,
             // template, frame cache and atlas address borrowed by live instances.
@@ -50,7 +50,7 @@ int RunMapResourceChecks(const std::string &bigDirectory) {
             if (&assigned.GetResources() != resources) { ++failures; }
             if (first != nullptr && first != &assigned.GetResources().props.front()) { ++failures; }
             for (CProp &prop : assigned.GetResources().props) { prop.Update(16, false); }
-            assigned.DrawBackground(batch, true, true, false);
+            assigned.DrawBackground(batch, true, false);
 
             bool checkedPair = false;
             for (CProp &firstProp : assigned.GetResources().props) {

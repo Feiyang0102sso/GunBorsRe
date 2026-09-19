@@ -5,21 +5,20 @@
  */
 #define NOMINMAX
 #include "TestOutput.h"
-#include "gun_bros_re/ZStartupSequence.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/platform/ZMediaDecoder.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/graphics/ZQuadBatch.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/platform/ZAudioPlayer.h"
-#include "gun_bros_re/gameplay/CBGM.h"
+#include "gun_bros_re/gameplay/audio/CBGM.h"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
-#include "gun_bros_re/ZStartupSequenceInternal.h"
-using namespace StartupSequenceDetail;
 #include "Checks.h"
 
 int RunMediaCheck() {
+    const std::filesystem::path logoDirectory = Paths::Root() / Paths::StartupDirectory;
     unsigned failures = 0;
     for (unsigned track = 0; track < 7; ++track) {
         ZMediaAudio audio;
@@ -29,9 +28,9 @@ int RunMediaCheck() {
         if (!nonzero || audio.samples.size() < audio.sampleRate * audio.channels * 2) { ++failures; }
     }
     ZMediaAudio logoAudio;
-    if (!DecodeMediaAudio(kLogoDirectory / "glu_logo_audio.wav", logoAudio)) { ++failures; }
+    if (!DecodeMediaAudio(logoDirectory / "glu_logo_audio.wav", logoAudio)) { ++failures; }
     ZMediaVideo video;
-    if (!video.Open(kLogoDirectory / "glu_logo_landscape.m4v")) { return 1; }
+    if (!video.Open(logoDirectory / "glu_logo_landscape.m4v")) { return 1; }
     unsigned frames = 0;
     bool ended = false;
     std::uint64_t timestamp = 0;

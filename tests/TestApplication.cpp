@@ -41,10 +41,10 @@
 #include "gun_bros_re/data/ZProfileImport.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include "engine/platform/ZAudioPlayer.h"
-#include "gun_bros_re/ZStartupSequence.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
 #include "tests/research/MovieStudy.h"
 #include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/ZHostSettings.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/CDailyBonusTracking.h"
 
 #include <cstdio>

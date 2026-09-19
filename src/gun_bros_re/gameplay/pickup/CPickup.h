@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+#include "gun_bros_re/host/ZGameScriptObject.h"
 /** @file CPickup.h
  * @brief Original pickup template and collection script, independent of drawing.
  */

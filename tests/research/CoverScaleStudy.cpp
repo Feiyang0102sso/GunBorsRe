@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 /** Compare one real cover transition at fixed time under historical dock widths. */
 #include "TestOutput.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"

@@ -43,7 +43,7 @@ unsigned CheckEnemySight() {
     CCollisionData collision;
     if (!collision.Load(input)) { return 1; }
     CMap map;
-    ZWeaponCollision weaponCollision;
+    CCollisionData::Scene weaponCollision;
     weaponCollision.terrain = collision;
     CLevel level;
     level.SetMap(map, collision, weaponCollision, 1, 22);

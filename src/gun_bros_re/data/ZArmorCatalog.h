@@ -5,7 +5,7 @@
 #define GUN_BROS_RE_ZARMORCATALOG_H
 
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/gameplay/CArmor.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
 
 struct ZArmorEntry {
     std::uint32_t packHash = 0;

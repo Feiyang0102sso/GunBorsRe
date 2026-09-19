@@ -1,6 +1,6 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/ui/ZGameFrontEndInternal.h"
-#include "gun_bros_re/ZConfig.h"
+#include "gun_bros_re/host/ZConfig.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "engine/platform/ZStartup.h"
 #include "engine/core/ZPaths.h"
@@ -18,8 +18,8 @@
 #include <io.h>
 #include "gun_bros_re/ui/ZGameFrontEnd.h"
 #include "engine/platform/ZWindow.h"
-#include "gun_bros_re/ZStartupSequence.h"
-#include "gun_bros_re/ZHostSettings.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "engine/platform/ZAudioPlayer.h"
 
 namespace {

@@ -77,7 +77,7 @@ public:
     // Original resource loading and map passes, with desktop GL dependencies.
     bool Load(CResTOCManager &toc, int packIndex, std::uint32_t mapIndex);
     void LoadProps(CResTOCManager &toc, int selectedObjectLayer = -1);
-    void DrawBackground(ZQuadBatch &batch, bool showTiles, bool showProps, bool report) const;
+    void DrawBackground(ZQuadBatch &batch, bool showTiles, bool report) const;
     void UpdateLayers(std::uint16_t deltaMs);
     void BuildCollisionScene();
 

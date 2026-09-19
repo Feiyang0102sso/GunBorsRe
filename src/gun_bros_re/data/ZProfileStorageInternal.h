@@ -14,7 +14,7 @@
 #include "gun_bros_re/data/Planet.h"
 #include "gun_bros_re/data/Mission.h"
 #include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/gameplay/CGun.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/data/CDailyBonusTracking.h"
 #include "engine/core/CCrc32.h"
 #include <Windows.h>

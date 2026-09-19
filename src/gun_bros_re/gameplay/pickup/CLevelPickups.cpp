@@ -1,6 +1,6 @@
 /** CLevel pickup scheduling and notifications (:118288), with desktop peer reward routing. */
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include <cstdio>
 
 bool CLevel::InitPickups(CResTOCManager &toc, ZPackTables &tables,

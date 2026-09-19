@@ -1,10 +1,10 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/brother/CPlayer.h"
 #include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/gameplay/CCollisionData.h"
+#include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
 #include <algorithm>
@@ -14,10 +14,10 @@
 // different (CPlayer::UpdateMovement :101384). Preserve it during this refactor.
 constexpr float kDesktopPlayerSpeed = 220;
 
-CPlayer::CPlayer(CBrother &model, ZPlayerVitals &vitals)
+CPlayer::CPlayer(CBrother &model, CBrother::Vitals &vitals)
     : m_model(&model), m_vitals(&vitals) {}
 
-void CPlayer::BindActor(CBrother &model, ZPlayerVitals &vitals) {
+void CPlayer::BindActor(CBrother &model, CBrother::Vitals &vitals) {
     m_model = &model;
     m_vitals = &vitals;
 }
@@ -132,7 +132,7 @@ void CPlayer::Move() {
             if (towardEnemy <= 0) { continue; }
             float fraction = 0;
             // Native 0.8 is a body allowance, not a resource radius or model scale.
-            if (CombatGeometry::CircleCircle({previousX, previousY}, {x, y}, player.GetRadius(),
+            if (Collision::CircleCircle({previousX, previousY}, {x, y}, player.GetRadius(),
                 enemyPrevious, enemyCurrent, enemy.GetPart(0).radius * 0.8f, fraction)) {
                 x = previousX + moveX * fraction;
                 y = previousY + moveY * fraction;

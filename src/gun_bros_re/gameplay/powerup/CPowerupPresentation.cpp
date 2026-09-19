@@ -13,7 +13,7 @@
 #include <cstdio>
 #include "gun_bros_re/effects/CParticleEffectPlayer.h"
 #include "gun_bros_re/effects/ZParticleResources.h"
-#include "gun_bros_re/gameplay/ZCombatAudio.h"
+#include "gun_bros_re/gameplay/audio/ZCombatAudio.h"
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 
 /** Host for CPowerup movies, screen particles and completion callbacks.
@@ -47,7 +47,7 @@ CPowerup::CPowerup(CResTOCManager &toc, ZPackTables &tables, CLevel &scene)
     : m_presentation(std::make_unique<Presentation>(toc, tables, scene)) {}
 CPowerup::~CPowerup() = default;
 
-void CPowerup::SetOwner(ZCombatId owner) {
+void CPowerup::SetOwner(Collision::ObjectId owner) {
     m_owner = owner;
 }
 bool CPowerup::IsActive() const { return m_presentation && m_presentation->active; }
@@ -164,7 +164,7 @@ bool CPowerup::ApplyPresentationActions() {
                 // CPowerup native 21 calls OnRevive(1), distinct from rescue(0).
                 if (!presentation.scene.ReviveActor(m_owner, 1)) { ++failures; return false; }
             } else if (action.function == 3) {
-                ZCombatHit hit;
+                Collision::Hit hit;
                 hit.owner = m_owner;
                 hit.ownerType = 0;
                 // Native 3 reads CMap::CCamera's center (+9960/+9964), which

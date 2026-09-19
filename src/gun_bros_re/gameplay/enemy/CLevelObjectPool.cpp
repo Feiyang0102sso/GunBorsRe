@@ -156,7 +156,7 @@ CEnemy *CLevelObjectPool::GetNearbyEnemy(std::size_t entry, float centerX, float
     return nullptr;
 }
 
-CEnemy *CLevelObjectPool::FindEnemy(ZCombatId id) {
+CEnemy *CLevelObjectPool::FindEnemy(Collision::ObjectId id) {
     for (auto &actor : m_enemies) {
         if (actor->combat.id == id) { return actor.get(); }
     }
@@ -173,7 +173,7 @@ std::size_t CLevelObjectPool::GetAliveEnemyCount() const {
 }
 
 void CLevelObjectPool::QueueEnemy(const GameObjectRef &resource, float x, float y,
-    int objectId, bool forcePool, ZCombatId summoner) {
+    int objectId, bool forcePool, Collision::ObjectId summoner) {
     if (m_catalog == nullptr) { ++m_invalidSpawnCount; return; }
     for (std::size_t index = 0; index < m_catalog->size(); ++index) {
         if ((*m_catalog)[index].packHash == resource.packHash &&
@@ -204,7 +204,7 @@ std::vector<CEnemy *> CLevelObjectPool::FinishEnemySpawns() {
     return spawned;
 }
 
-ZCombatId CLevelObjectPool::GetSummoner(ZCombatId owner) const {
+Collision::ObjectId CLevelObjectPool::GetSummoner(Collision::ObjectId owner) const {
     const auto found = m_summoners.find(owner);
     if (found == m_summoners.end()) { return 0; }
     return found->second;
@@ -212,7 +212,7 @@ ZCombatId CLevelObjectPool::GetSummoner(ZCombatId owner) const {
 
 void CLevelObjectPool::ReleaseEnemy(std::size_t index) {
     if (index >= m_enemies.size()) { return; }
-    const ZCombatId id = m_enemies[index]->combat.id;
+    const Collision::ObjectId id = m_enemies[index]->combat.id;
     m_summoners.erase(id);
     m_enemies.erase(m_enemies.begin() + index);
 }

@@ -4,7 +4,7 @@
 #include "gun_bros_re/effects/EffectContainer.h"
 #include "gun_bros_re/effects/ParticleEffectHolder.h"
 #include "gun_bros_re/effects/TrailEffectHolder.h"
-#include "gun_bros_re/gameplay/CBullet.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/effects/CEffectLayer.h"
 #include <cstdio>
 #include <cstring>

@@ -4,7 +4,7 @@
  */
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/debug/SurvivalDebug.h"
-#include "gun_bros_re/ZHostSettings.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "engine/platform/ZGLLoader.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "TestOutput.h"

@@ -3,7 +3,7 @@
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/ui/CMenuSplash.h"
-#include "gun_bros_re/gameplay/game/ZLiveShopSession.h"
+#include "gun_bros_re/gameplay/multiplayer/ZLiveShopSession.h"
 #include "TestOutput.h"
 #include <fstream>
 
@@ -223,7 +223,7 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     while (hud.LiveWaveRemaining() > 6000) { hud.Advance(1); }
     view.Begin(0);
     if (!hud.Draw(hudState) || !Capture::SaveFrame(view.window, TestOutput::Path("live-wave-countdown.png"))) { return 1; }
-    hudState.indicators.push_back({-1, kBrotherCombatId, 4, 512, -100, 500, -1});
+    hudState.indicators.push_back({-1, Collision::Brother, 4, 512, -100, 500, -1});
     view.Begin(0);
     if (!hud.Draw(hudState) || !Capture::SaveFrame(view.window, TestOutput::Path("live-peer-indicator.png"))) { return 1; }
     hudState.indicators.clear();

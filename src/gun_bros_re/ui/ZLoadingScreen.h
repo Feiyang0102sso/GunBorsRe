@@ -5,9 +5,9 @@
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/ui/CMenuSplash.h"
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/ZStartupSequence.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/platform/ZWindow.h"
-#include "gun_bros_re/gameplay/CBGM.h"
+#include "gun_bros_re/gameplay/audio/CBGM.h"
 #include <thread>
 #include <chrono>
 

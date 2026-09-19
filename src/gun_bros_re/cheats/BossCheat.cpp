@@ -5,7 +5,7 @@
 #include <cstdio>
 
 bool CGame::StartBossSkip() {
-    ZPlayerVitals &player = m_level.GetPlayerVitals();
+    CBrother::Vitals &player = m_level.GetPlayerVitals();
     if (m_bossSkipActive || m_suspended || m_match != nullptr || m_level.IsRescuePending() ||
         m_archive || m_horde || m_level.GetTutorialStep() >= 0 || player.dead ||
         m_level.IsCleared() || m_level.IsPaused() ||
@@ -32,7 +32,7 @@ bool CGame::StartBossSkip() {
 
 void CGame::AdvanceBossSkip() {
     if (!m_bossSkipActive) { return; }
-    ZPlayerVitals &player = m_level.GetPlayerVitals();
+    CBrother::Vitals &player = m_level.GetPlayerVitals();
     if (m_suspended || player.dead || m_level.IsRescuePending() || m_level.IsPaused() ||
         m_level.IsPowerupMovieActive()) {
         FinishBossSkip();
@@ -40,7 +40,7 @@ void CGame::AdvanceBossSkip() {
     }
     const auto frameStarted = std::chrono::steady_clock::now();
     const bool playerInvincible = player.invincible;
-    ZPlayerVitals *brother = m_level.GetBrotherVitals();
+    CBrother::Vitals *brother = m_level.GetBrotherVitals();
     bool brotherInvincible = false;
     if (brother != nullptr) { brotherInvincible = brother->invincible; brother->invincible = true; }
     player.invincible = true;
@@ -58,7 +58,7 @@ void CGame::AdvanceBossSkip() {
         if (step > 0 && now - frameStarted >= std::chrono::milliseconds(GameCheats::BossSkipFrameBudgetMs)) { break; }
         for (auto &actor : m_level.GetEnemies()) {
             CEnemy &enemy = *actor;
-            if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
+            if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, Collision::Player)) {
                 enemy.Damage(enemy.combat.health);
                 ++m_bossSkipDefeated;
             }

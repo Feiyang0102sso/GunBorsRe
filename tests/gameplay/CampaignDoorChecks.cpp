@@ -94,8 +94,8 @@ int CheckCampaignCache(CMap &map, CLevel &scene, CGame &session) {
         centerY = prop.y + centerY / vertices.size();
         scene.GetPlayer().x = centerX + 100;
         scene.GetPlayer().y = centerY;
-        ZCombatHit hit;
-        hit.owner = kPlayerCombatId;
+        Collision::Hit hit;
+        hit.owner = Collision::Player;
         hit.ownerType = 0;
         hit.damage = 100;
         const auto trace = scene.Trace(hit, centerX + 100, centerY, -200, 0, 0, {});
@@ -187,8 +187,8 @@ int CheckCampaignPortal(CMap &map, CLevel &scene, CGame &session) {
         for (const auto &actor : scene.GetEnemies()) {
             const auto &enemy = actor->combat;
             if (enemy.dead || enemy.removed) { continue; }
-            ZCombatHit hit;
-            hit.owner = kPlayerCombatId;
+            Collision::Hit hit;
+            hit.owner = Collision::Player;
             hit.ownerType = 0;
             hit.damage = 100000.0f;
             hit.splash = true;
@@ -241,8 +241,8 @@ static int CheckLaterRescue(CMap &map, CLevel &scene, CGame &session,
                     continue;
                 }
                 if (enemy.dead || enemy.removed) { continue; }
-                ZCombatHit hit;
-                hit.owner = kPlayerCombatId;
+                Collision::Hit hit;
+                hit.owner = Collision::Player;
                 hit.ownerType = 0;
                 hit.damage = 100000.0f;
                 hit.splash = true;
@@ -381,8 +381,8 @@ int CheckCampaignProgression(CMap &map, CLevel &scene, CGame &session, unsigned 
             }
             if (enemy.combat.dead || enemy.combat.removed) { continue; }
             if (mapIndex == 3 || mapIndex == 2) { finalEnemySeen = true; }
-            ZCombatHit hit;
-            hit.owner = kPlayerCombatId;
+            Collision::Hit hit;
+            hit.owner = Collision::Player;
             hit.ownerType = 0;
             hit.damage = 100000.0f;
             hit.part = 0;
@@ -438,8 +438,8 @@ int CheckCampaignTargets(CMap &map, CLevel &scene, CGame &session) {
     for (auto &actor : scene.GetEnemies()) {
         auto &enemy = *actor;
         if (enemy.combat.templateRef.packHash != CStringToKey("pack1") || enemy.combat.templateRef.localIndex != 16) { continue; }
-        ZCombatHit hit;
-        hit.owner = kPlayerCombatId;
+        Collision::Hit hit;
+        hit.owner = Collision::Player;
         hit.ownerType = 0;
         hit.damage = 1000;
         const auto trace = scene.Trace(hit, enemy.combat.x, enemy.combat.y + 140, 0, -280, 2, {});
@@ -463,8 +463,8 @@ int CheckCampaignTargets(CMap &map, CLevel &scene, CGame &session) {
         for (const auto &vertex : vertices) { centerX += vertex.x; centerY += vertex.y; }
         centerX = prop.x + centerX / vertices.size();
         centerY = prop.y + centerY / vertices.size();
-        ZCombatHit hit;
-        hit.owner = kPlayerCombatId;
+        Collision::Hit hit;
+        hit.owner = Collision::Player;
         hit.ownerType = 0;
         hit.damage = 1000;
         const auto trace = scene.Trace(hit, centerX, centerY + 100, 0, -200, 2, {});

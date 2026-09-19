@@ -5,7 +5,7 @@
 #define GUN_BROS_RE_ZHUDSTATE_H
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/ui/CDialogPopup.h"
-#include "gun_bros_re/gameplay/CInputPadMeter.h"
+#include "gun_bros_re/ui/CInputPadMeter.h"
 #include "gun_bros_re/ui/CMenuPopupPrompt.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "gun_bros_re/gameplay/level/CLevelIndicator.h"

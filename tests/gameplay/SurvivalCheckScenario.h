@@ -47,7 +47,7 @@ private:
     int OnHorde(SurvivalHordeFixture fixture);
     int OnCampaign(SurvivalCampaignFixture fixture);
     int OnPowerupCapture(SurvivalPowerupCaptureFixture fixture);
-    int OnLoopStarting(CLevel &scene, ZPlayerVitals &vitals);
+    int OnLoopStarting(CLevel &scene, CBrother::Vitals &vitals);
 
 private:
     const SurvivalDevelopment &m_development;

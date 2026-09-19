@@ -13,12 +13,12 @@ class CPowerUpSelector {
 public:
     CPowerUpSelector();
     CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
-        ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile,
-        ZCombatId owner = kPlayerCombatId);
+        CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile,
+        Collision::ObjectId owner = Collision::Player);
     /** Bind the selector's actor and inventory; UI and equipment share one catalog. */
     void BindPowerups(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
-        ZPlayerVitals &vitals, CLevel &level, CProfileManager &profile,
-        ZCombatId owner = kPlayerCombatId);
+        CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile,
+        Collision::ObjectId owner = Collision::Player);
     bool InitPowerups();
     void SetDeathmatch(CMPMatch *match) { m_match = match; }
     bool Select(unsigned index);
@@ -93,11 +93,11 @@ private:
     std::unique_ptr<ZHudResources> m_ownedResources;
     std::unique_ptr<CPowerup> m_powerup = std::make_unique<CPowerup>();
     CBrother *m_player = nullptr;
-    ZPlayerVitals *m_vitals = nullptr;
+    CBrother::Vitals *m_vitals = nullptr;
     CLevel *m_level = nullptr;
     CProfileManager *m_profile = nullptr;
     CMPMatch *m_match = nullptr;
-    ZCombatId m_owner = kPlayerCombatId;
+    Collision::ObjectId m_owner = Collision::Player;
     unsigned m_selected = 13;
     std::map<unsigned, int> m_cooldowns;
     std::vector<std::string> m_useMessages;

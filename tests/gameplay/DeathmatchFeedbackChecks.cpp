@@ -1,10 +1,10 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 /** Reproduce reported DM regressions through real BIG actors and rendering state. */
 #define NOMINMAX
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "engine/core/CStringToKey.h"
 #include <chrono>
@@ -27,20 +27,20 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     }
     const float waitingCameraX = fixture.loaded.GetCamera().GetX();
     const float waitingCameraY = fixture.loaded.GetCamera().GetY();
-    ZCombatHit incoming;
-    incoming.owner = kBrotherCombatId; incoming.damage = fixture.vitals.maximum * 10;
+    Collision::Hit incoming;
+    incoming.owner = Collision::Brother; incoming.damage = fixture.vitals.maximum * 10;
     for (unsigned elapsed = 0; elapsed < 12000; elapsed += 16) {
         session.Update(16, 1, 1, true);
         if (fixture.loaded.GetCamera().GetX() != waitingCameraX || fixture.loaded.GetCamera().GetY() != waitingCameraY) {
             std::printf("[dm-entry-camera] camera moved during initial equipment selection\n");
             return 1;
         }
-        if (scene.ApplyHit(kPlayerCombatId, incoming) != ZHitResult::Ignored) { return 1; }
+        if (scene.ApplyHit(Collision::Player, incoming) != Collision::HitResult::Ignored) { return 1; }
     }
     float targetX = 0, targetY = 0;
     if (scene.GetPlayer().x != waitingX || scene.GetPlayer().y != waitingY || fixture.vitals.dead ||
         match.Score(0) != 0 || match.Score(1) != 0 || scene.TouchesPickup(waitingX, waitingY) ||
-        scene.GetBrotherTarget(kPlayerCombatId, targetX, targetY) || scene.Suicide()) { return 1; }
+        scene.GetBrotherTarget(Collision::Player, targetX, targetY) || scene.Suicide()) { return 1; }
     if (!scene.RespawnDeathmatch(1, true)) { return 1; }
     for (unsigned elapsed = 0; elapsed < 4000; elapsed += 16) {
         session.Update(16, 0, 0, false);
@@ -113,11 +113,11 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
         bot.x = prop.x - 30; bot.y = prop.y;
         const float beforePlayer = fixture.vitals.incomingDamage, beforeBot = bot.vitals.incomingDamage;
         scene.SetMatchShopping(0, true); scene.SetMatchShopping(1, true);
-        ZCombatHit trigger;
-        trigger.owner = kPlayerCombatId; trigger.projectile = 123;
+        Collision::Hit trigger;
+        trigger.owner = Collision::Player; trigger.projectile = 123;
         trigger.damage = prop.GetHealth(); trigger.applyArmorAttack = false;
-        const auto contact = scene.Trace(trigger, prop.x - 150, prop.y, 300, 0, 1, {kBrotherCombatId});
-        if (contact.target == 0 || scene.ApplyHit(contact.target, trigger) == ZHitResult::Ignored) { ++failures; }
+        const auto contact = scene.Trace(trigger, prop.x - 150, prop.y, 300, 0, 1, {Collision::Brother});
+        if (contact.target == 0 || scene.ApplyHit(contact.target, trigger) == Collision::HitResult::Ignored) { ++failures; }
         for (unsigned time = 0; time < 1000; time += 16) { session.Update(16, 0, 0, false); }
         const float receivedPlayer = fixture.vitals.incomingDamage - beforePlayer;
         const float receivedBot = bot.vitals.incomingDamage - beforeBot;
@@ -186,14 +186,14 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     turret.packHash = CStringToKey("pack5"); turret.localIndex = 19;
     profile.AddPowerup(turret, 2);
     if (!powerups.SelectResource(turret) || !powerups.UseSelected()) { ++failures; }
-    ZCombatId turretId = 0;
+    Collision::ObjectId turretId = 0;
     for (unsigned elapsed = 0; elapsed < 5000; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (const auto &actor : scene.GetEnemies()) {
             const auto &state = actor->combat;
             if (!state.turret || state.removed) { continue; }
             turretId = state.id;
-            if (state.targetId == kPlayerCombatId) {
+            if (state.targetId == Collision::Player) {
                 std::printf("[dm-feedback] turret targets its owner id=%llu\n", state.id);
                 ++failures;
                 elapsed = 5000;
@@ -203,10 +203,10 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     }
     if (turretId == 0) { std::printf("[dm-feedback] turret never spawned\n"); ++failures; }
     fixture.vitals.invincible = false;
-    ZCombatHit turretShot;
+    Collision::Hit turretShot;
     turretShot.owner = turretId; turretShot.ownerType = 1; turretShot.damage = 10;
     const float ownerHealth = fixture.vitals.health;
-    if (scene.ApplyHit(kPlayerCombatId, turretShot) != ZHitResult::Ignored || fixture.vitals.health != ownerHealth) { ++failures; }
+    if (scene.ApplyHit(Collision::Player, turretShot) != Collision::HitResult::Ignored || fixture.vitals.health != ownerHealth) { ++failures; }
     scene.Suicide();
     for (unsigned elapsed = 0; elapsed < 1500; elapsed += 16) { session.Update(16, 0, 0, false); }
     // Retail PLAYER DM death completes the burst without retaining body meshes.
@@ -234,7 +234,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
         if (cue.resource.packHash == CStringToKey("pack0_core") && cue.resource.localIndex == 8) { respawnEffect = true; }
     }
     if (!respawnEffect) { std::printf("[dm-feedback] missing respawn effect\n"); ++failures; }
-    if (player.ReceiveDamage(10) != ZHitResult::Ignored) { ++failures; }
+    if (player.ReceiveDamage(10) != Collision::HitResult::Ignored) { ++failures; }
     fixture.brotherModel.StartDeath();
     for (unsigned elapsed = 0; elapsed < 1500; elapsed += 16) { session.Update(16, 0, 0, false); }
     scene.UpdatePeerIndicator(16, bot.x + 1000, bot.y + 1000, 100, 100);
@@ -260,7 +260,7 @@ int CheckDeathmatchFeedback(SurvivalDeathFixture fixture, CMPMatch &match, CPowe
     while (!session.IsReadyForResults() && wrapUpMs < 10000) {
         session.Update(16, 1, 1, true);
         wrapUpMs += 16;
-        const bool burstActive = fixture.scene.HasActorBurst(kBrotherCombatId);
+        const bool burstActive = fixture.scene.HasActorBurst(Collision::Brother);
         if (burstActive && wrapUpMs >= 160 && !capturedBurst) {
             bool CaptureRescueEffect(SurvivalDeathFixture &, const char *);
             if (!CaptureRescueEffect(fixture, "deathmatch-final-burst.png")) { return 1; }

@@ -30,10 +30,10 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         rewardProbe.ResolveWaveReward(10);
         rewardProbe.ResolveWaveReward(100);
         if (rewardProbe.GetXplodium() != 2 || rewardProbe.GetPerfectWaves() != 2) { ++checkFailures; }
-        ZCombatHit wound;
+        Collision::Hit wound;
         wound.ownerType = 1;
         wound.damage = 0.25f;
-        rewardProbe.ApplyHit(kPlayerCombatId, wound);
+        rewardProbe.ApplyHit(Collision::Player, wound);
         rewardProbe.ResolveWaveReward(10);
         if (rewardProbe.GetLastWaveBonus() != 0 || rewardProbe.GetXplodium() != 2 ||
             rewardProbe.GetPerfectWaves() != 2 || rewardProbe.GetClearedWaves() != 3) { ++checkFailures; }
@@ -122,13 +122,13 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
             if (target == nullptr) { ++checkFailures; break; }
             const unsigned experience = static_cast<unsigned>(std::ceil(target->data->experienceReward * player.GetArmorMultiplier(3)));
             if (death == 0) { expectedExperience = experience; }
-            ZCombatHit hit;
-            hit.owner = kPlayerCombatId;
-            if (death == 2) { hit.owner = kBrotherCombatId; }
+            Collision::Hit hit;
+            hit.owner = Collision::Player;
+            if (death == 2) { hit.owner = Collision::Brother; }
             hit.ownerType = 0;
             hit.damage = 1000000;
             hit.applyArmorAttack = false;
-            const ZCombatId targetId = target->combat.id;
+            const Collision::ObjectId targetId = target->combat.id;
             for (unsigned tick = 0; tick < 300 && !target->deathReported; ++tick) {
                 rewardProbe.ApplyHit(targetId, hit);
                 rewardProbe.Update(16, 0, 0, false);
@@ -151,8 +151,8 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         rewardProbe.SetTextView(400, 100, 2, 1.5f);
         CEnemy *xpTarget = rewardProbe.Spawn(0, 600, 350);
         if (xpTarget == nullptr) { return 1; }
-        ZCombatHit xpHit;
-        xpHit.owner = kPlayerCombatId;
+        Collision::Hit xpHit;
+        xpHit.owner = Collision::Player;
         xpHit.ownerType = 0;
         xpHit.damage = 1000000;
         xpHit.applyArmorAttack = false;

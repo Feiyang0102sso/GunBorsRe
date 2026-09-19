@@ -9,7 +9,11 @@ struct CSpritePlayer::DrawData {
 
 bool CSpritePlayer::Init(CSpriteGlu &glu, std::uint8_t archetypeIndex, std::uint8_t animation) {
     const auto *archetype = glu.GetArchetype(archetypeIndex);
-    if (archetype == nullptr || animation >= archetype->GetAnimationCount()) { return false; }
+    if (archetype == nullptr || archetype->GetAnimationCount() == 0) { return false; }
+    // Original SetAnimation :58861, also used by beam source/end players.
+    if (animation >= archetype->GetAnimationCount()) {
+        animation = static_cast<std::uint8_t>(archetype->GetAnimationCount() - 1);
+    }
     const auto &steps = archetype->GetAnimation(animation).steps;
     if (steps.empty()) { return false; }
     auto data = std::make_shared<DrawData>();

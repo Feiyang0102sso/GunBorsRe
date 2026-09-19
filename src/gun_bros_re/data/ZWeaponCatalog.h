@@ -5,7 +5,7 @@
 #define GUN_BROS_RE_ZWEAPONCATALOG_H
 
 #include "gun_bros_re/data/ZPackTables.h"
-#include "gun_bros_re/gameplay/CGun.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/platform/ZWindow.h"
 #include <string>
 #include <vector>

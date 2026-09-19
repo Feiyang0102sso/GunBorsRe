@@ -13,6 +13,9 @@ int RunCoverScaleStudy(const std::string &bigDirectory);
 int RunMapTurretChecks(const std::string &bigDirectory);
 int RunMapResourceChecks(const std::string &bigDirectory);
 int RunBigVersionCheck();
+int RunGameplayOwnershipCheck();
+int RunHavenCollisionCheck(const std::string &bigDirectory, bool artillery, bool disableFlock = false);
+int RunHavenMuzzleCheck(const std::string &bigDirectory);
 int RunOriginalAssetSampleCheck(const std::string &bigDirectory);
 int wmain(int argc, wchar_t **argv) {
     auto sampleBigDirectory = Paths::Root() / Paths::BigDirectory;
@@ -22,6 +25,22 @@ int wmain(int argc, wchar_t **argv) {
         if (std::wstring(argv[index]) == L"--big") { sampleBigDirectory = Paths::Resolve(argv[index + 1]); }
     }
     for (int index = 1; index < argc; ++index) {
+        if (std::wstring(argv[index]) == L"--haven-collision-check" || std::wstring(argv[index]) == L"--haven-artillery-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunHavenCollisionCheck(sampleBigDirectory.u8string(), std::wstring(argv[index]) == L"--haven-artillery-check");
+        }
+        if (std::wstring(argv[index]) == L"--haven-muzzle-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunHavenMuzzleCheck(sampleBigDirectory.u8string());
+        }
+        if (std::wstring(argv[index]) == L"--haven-artillery-no-flock-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunHavenCollisionCheck(sampleBigDirectory.u8string(), true, true);
+        }
+        if (std::wstring(argv[index]) == L"--gameplay-ownership-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunGameplayOwnershipCheck();
+        }
         if (std::wstring(argv[index]) == L"--deathmatch-data-check") {
             ZAudioPlayer::SetMuted(true);
             return RunDeathmatchDataCheck(sampleBigDirectory.u8string());

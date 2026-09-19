@@ -1,5 +1,6 @@
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
+#include "gun_bros_re/debug/Capture.h"
 using namespace MapDetail;
 
 int CheckSurvivalBoss(SurvivalBossFixture fixture) {
@@ -45,13 +46,13 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         if (session.SkipToBoss() || session.GetLevel().GetBossIntroSerial() != introBeforeRepeat) { ++checkFailures; }
         CEnemy *boss = nullptr;
         for (auto &actor : scene.GetEnemies()) {
-            if (actor->CanReceiveProjectile(0, kPlayerCombatId)) { boss = actor.get(); }
+            if (actor->CanReceiveProjectile(0, Collision::Player)) { boss = actor.get(); }
         }
         if (session.GetLevel().GetBossIntroSerial() != 1 || boss == nullptr) {
             std::printf("[boss-check] %s missing scripted boss state=%d\n", packShortName.c_str(), session.GetLevel().GetStateId());
             return 1;
         }
-        const ZCombatId bossId = boss->combat.id;
+        const Collision::ObjectId bossId = boss->combat.id;
         CCamera &camera = loaded.GetCamera();
         // Compare the real camera with the original target operation at the
         // same authored bounds. This also permits legitimate edge clamping.
@@ -79,6 +80,45 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         std::printf("[boss-check] intro-ms=%d state=%u mode=%u move=%d shoot=%d\n", introElapsed,
             boss->GetStateId(), camera.GetMode(), session.GetLevel().CanPlayerMove(), session.GetLevel().CanPlayerShoot());
 
+        if (packShortName == "pack7") {
+            // Follow the actual ENEMY/LEVEL attack exports; do not spawn BULLET104 here.
+            bool sawBeam = false;
+            for (int elapsed = 0; elapsed < 90000 && !sawBeam; elapsed += 16) {
+                session.Update(16, 0, 0, false);
+                for (const auto &item : scene.GetBulletRenderItems()) {
+                    const CBullet &bullet = *item.bullet;
+                    if (bullet.removed || !bullet.beam || bullet.owner != bossId) { continue; }
+                    sawBeam = true;
+                    const auto &ref = bullet.data->GetSpriteRef();
+                    std::printf("[boss-live-beam-check] elapsed=%d bullet=%08x:%u sprite=%u/%u body=%d caps=%d/%d group=%d length=%.1f\n",
+                        elapsed, bullet.source.resource.packHash, bullet.source.resource.localIndex,
+                        ref.archetype, ref.animation, bullet.animation, bullet.beamSourceAnimation,
+                        bullet.beamEndAnimation, item.group, bullet.length);
+                    if (bullet.animation != ref.animation || item.group != 5) { ++checkFailures; }
+                    break;
+                }
+            }
+            if (!sawBeam) { ++checkFailures; }
+            if (sawBeam) {
+                int width, height;
+                window.GetDrawableSize(width, height);
+                ZQuadBatch batch;
+                if (!batch.Create(program)) { return 1; }
+                float mvp[kMatrix4dElements];
+                Matrix4dOrthoTopLeft(static_cast<float>(width), static_cast<float>(height), kMapDepthRange, mvp);
+                boss = scene.Find(bossId);
+                if (boss == nullptr) { return 1; }
+                Matrix4dTranslate(mvp, width * 0.5f - boss->combat.x, height * 0.5f - boss->combat.y);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                loaded.DrawBackground(batch, true, false);
+                batch.Draw(program, mvp);
+                CRenderQueue::Draw(loaded, batch, program, mvp, true, &scene, nullptr, 0, width);
+                scene.Draw(mvp, nullptr, kLevelCameraScale, true);
+                if (!Capture::SaveFrame(window, TestOutput::Path("haven-boss-live-beam.png"))) { return 1; }
+            }
+            std::printf("[boss-live-beam-check] observed=%d failures=%u\n", sawBeam, checkFailures);
+        }
+
         GameObjectRef grenade;
         grenade.packHash = toc.GetPack(toc.GetPackIndexFromName("pack5"))->GetPackHash();
         const unsigned grenadeOrdinals[] = {90, 93, 94};
@@ -92,8 +132,8 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
         CEnemy &enemy = *boss;
         const unsigned initialParts = enemy.GetPartCount();
         const float initialHealth = enemy.combat.health;
-        ZCombatHit hit;
-        hit.owner = kPlayerCombatId;
+        Collision::Hit hit;
+        hit.owner = Collision::Player;
         hit.ownerType = 0;
         hit.damage = grenadeTemplates[0].GetBaseDamage();
         hit.flags = grenadeTemplates[0].GetFlags();
@@ -138,7 +178,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             for (unsigned number = 0; number < throws; ++number) {
                 blastEnemy.combat.x = 600;
                 blastEnemy.combat.y = 450;
-                if (blastScene.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0) == 0) { return 1; }
+                if (blastScene.SpawnProjectile(grenade, 600, 450, 0, 0, 0, Collision::Player, 0) == 0) { return 1; }
                 float matrix[16];
                 blastScene.PlayerMatrix(matrix);
                 for (int elapsed = 0; elapsed < 4000; elapsed += 16) {
@@ -198,7 +238,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
             // Compare authored health tiers and REV multipliers at the actual
             // production shortcut, including the first wave of REV10.
             for (const auto &actor : scene.GetEnemies()) {
-                if (actor->mapPlaced || !actor->CanReceiveProjectile(0, kPlayerCombatId)) { continue; }
+                if (actor->mapPlaced || !actor->CanReceiveProjectile(0, Collision::Player)) { continue; }
                 const auto &combat = actor->combat;
                 float baseHealth = 100;
                 const int realWave = wave % 50;
@@ -239,7 +279,7 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                         blastEnemy.Update(16);
                     }
                     const float before = blastEnemy.combat.health;
-                    blastScene.SpawnProjectile(grenade, 600, 450, 0, 0, 0, kPlayerCombatId, 0);
+                    blastScene.SpawnProjectile(grenade, 600, 450, 0, 0, 0, Collision::Player, 0);
                     float matrix[16];
                     blastScene.PlayerMatrix(matrix);
                     for (int time = 0; time < 4000; time += 16) {

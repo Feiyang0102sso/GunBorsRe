@@ -1,15 +1,15 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Exercise knockback sound and AI weapon swaps through production scene updates. */
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "tests/Checks.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 using namespace MapDetail;
 
 namespace {
 /** Reproduce player input entering an actual BIG enemy's body circle. */
 unsigned CheckEnemyMovement(CLevel &scene, const CCollisionData &collision,
-    CBrother &player, ZPlayerVitals &vitals) {
+    CBrother &player, CBrother::Vitals &vitals) {
     scene.Reset();
     CEnemy *actor = scene.Spawn(0, 450, 550);
     if (actor == nullptr) { return 1; }
@@ -44,10 +44,10 @@ unsigned CheckEnemyMovement(CLevel &scene, const CCollisionData &collision,
         blocked, escaped, inward, outward);
     // Red damage feedback alone must not grant body immunity.
     scene.GetPlayer().x = startX;
-    ZCombatHit ranged;
+    Collision::Hit ranged;
     ranged.ownerType = 1;
     ranged.damage = 1;
-    scene.ApplyHit(kPlayerCombatId, ranged);
+    scene.ApplyHit(Collision::Player, ranged);
     scene.Update(16, 1, 0, false);
     if (std::abs(scene.GetPlayer().x - startX) > 0.001f || player.CanPassEnemies()) { ++failures; }
     // CollisionMode and live membership, not targeting or the debug HP switch.
@@ -109,7 +109,7 @@ unsigned CheckMeleeEscape(CLevel &scene, CBrother &player, std::size_t entry) {
 
 /** Lock down the original's nonstandard CircleCircle numerical branches. */
 unsigned CheckOriginalCircleCircle() {
-    using CombatGeometry::CircleCircle;
+    using Collision::CircleCircle;
     float fraction = -1;
     unsigned failures = 0;
     if (!CircleCircle({0, 0}, {1, 0}, 1, {1, 0}, {1, 0}, 1, fraction) || fraction != 0) { ++failures; }
@@ -165,7 +165,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
         if (expectedPose.empty() || *uploaded != expectedPose || !GLCheckErrors("raw brother preview")) { return 1; }
         std::printf("[brother-preview-check] raw-body=1 attachment=1 pose-upload=1\n");
     }
-    ZPlayerVitals vitals;
+    CBrother::Vitals vitals;
     vitals.maximum = 100;
     vitals.invincible = false;
     vitals.Reset();
@@ -186,7 +186,7 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     failures += CheckOriginalCircleCircle();
     failures += CheckEnemyMovement(scene, wallMap.GetResources().collisionScene, player, vitals);
     // A barrel's native 10 can apply zero damage and still knock the player back.
-    ZCombatHit blast;
+    Collision::Hit blast;
     blast.ownerType = 1;
     blast.x = scene.GetPlayer().x - 20;
     blast.y = scene.GetPlayer().y;
@@ -200,12 +200,12 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
 
     scene.Reset();
     // Ordinary ranged damage must not acquire the knockback vocal animation.
-    ZCombatHit ranged;
+    Collision::Hit ranged;
     ranged.ownerType = 1;
     ranged.projectile = 123;
     ranged.damage = 1;
     const auto beforeRanged = scene.GetSoundCueCount();
-    scene.ApplyHit(kPlayerCombatId, ranged);
+    scene.ApplyHit(Collision::Player, ranged);
     for (int elapsed = 0; elapsed < 768; elapsed += 16) { scene.Update(16, 0, 0, false); }
     const auto rangedSounds = scene.GetSoundCueCount() - beforeRanged;
     if (rangedSounds != 0 || vitals.health != 99) { ++failures; }

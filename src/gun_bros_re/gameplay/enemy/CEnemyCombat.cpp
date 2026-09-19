@@ -23,7 +23,7 @@ void CEnemy::ConfigureTemplate(float radius, bool targetable,
     combat.collision = collision;
 }
 
-bool CEnemy::CanReceiveProjectile(int ownerType, ZCombatId owner) const {
+bool CEnemy::CanReceiveProjectile(int ownerType, Collision::ObjectId owner) const {
     if (combat.dead || combat.removed || combat.health <= 0 || owner == combat.id) {
         return false;
     }
@@ -38,13 +38,13 @@ bool CEnemy::CanReceiveProjectile(int ownerType, ZCombatId owner) const {
     return true;
 }
 
-ZHitResult CEnemy::ReceiveHit(const ZCombatHit &hit) {
+Collision::HitResult CEnemy::ReceiveHit(const Collision::Hit &hit) {
     if (!CanReceiveProjectile(hit.ownerType, hit.owner)) {
-        return ZHitResult::Ignored;
+        return Collision::HitResult::Ignored;
     }
     combat.pendingHit = hit;
     combat.collisionPending = true;
-    combat.collisionResult = ZHitResult::Pending;
+    combat.collisionResult = Collision::HitResult::Pending;
     combat.variables[2] = static_cast<std::int16_t>(hit.part);
     combat.variables[3] = 256;
     combat.variables[4] = 0;
@@ -78,12 +78,12 @@ void CEnemy::ResolvePendingHit(bool apply) {
             m_parts[part].hitFlash = 1;
         }
         Damage(combat.pendingHit.damage * static_cast<float>(combat.variables[3]) / 256.0f);
-        combat.collisionResult = ZHitResult::Hit;
+        combat.collisionResult = Collision::HitResult::Hit;
         if (combat.dead) {
-            combat.collisionResult = ZHitResult::Killed;
+            combat.collisionResult = Collision::HitResult::Killed;
         }
     } else {
-        combat.collisionResult = ZHitResult::Ignored;
+        combat.collisionResult = Collision::HitResult::Ignored;
     }
     CEnemy::Action action;
     action.kind = CEnemy::Action::Kind::CollisionResolved;

@@ -49,7 +49,7 @@ bool CLevel::SwapBrotherWeapon() {
     if (IsDeathmatch()) { return FinishMatchWeaponSwap(1); }
     if (m_brotherScript == nullptr || m_brotherModel == nullptr || m_brother->vitals.dead) { return true; }
     const unsigned next = 1 - m_brotherWeaponSlot;
-    RetireOwner(kBrotherCombatId);
+    RetireOwner(Collision::Brother);
     // CBrother native 3 changes the gun while the same body/script continues
     // the swap sequence. Reuse the two stable banks used by the local player.
     if (m_brotherModel->uiOtherWeapon == nullptr) {
@@ -89,16 +89,16 @@ void CLevel::BrotherMatrix(float *matrix) const {
     MeshCameraBuildGameMatrix(identity, m_brother->x, m_brother->y, scale, m_brother->facing, matrix);
 }
 
-ZCombatId CLevel::FindBrotherTarget(float x, float y, float radius) {
+Collision::ObjectId CLevel::FindBrotherTarget(float x, float y, float radius) {
     if (IsDeathmatch()) {
-        if (!IsMatchSpawnPending(0) && !m_vitals->dead && std::hypot(x - m_actor.x, y - m_actor.y) <= radius && HasLineOfFire(x, y, m_actor.x, m_actor.y)) { return kPlayerCombatId; }
+        if (!IsMatchSpawnPending(0) && !m_vitals->dead && std::hypot(x - m_actor.x, y - m_actor.y) <= radius && HasLineOfFire(x, y, m_actor.x, m_actor.y)) { return Collision::Player; }
         return 0;
     }
-    ZCombatId nearest = 0;
+    Collision::ObjectId nearest = 0;
     for (const auto &actor : m_objects.GetEnemies()) {
         float targetX = 0;
         float targetY = 0;
-        const ZCombatId id = actor->combat.id;
+        const Collision::ObjectId id = actor->combat.id;
         if (!GetBrotherTarget(id, targetX, targetY)) { continue; }
         const float distance = std::hypot(targetX - x, targetY - y);
         if (distance < radius) { radius = distance; nearest = id; }
@@ -106,13 +106,13 @@ ZCombatId CLevel::FindBrotherTarget(float x, float y, float radius) {
     return nearest;
 }
 
-bool CLevel::GetBrotherTarget(ZCombatId id, float &x, float &y) {
-    if (IsDeathmatch() && id == kPlayerCombatId && !IsMatchSpawnPending(0) && !m_vitals->dead) { x = m_actor.x; y = m_actor.y; return true; }
+bool CLevel::GetBrotherTarget(Collision::ObjectId id, float &x, float &y) {
+    if (IsDeathmatch() && id == Collision::Player && !IsMatchSpawnPending(0) && !m_vitals->dead) { x = m_actor.x; y = m_actor.y; return true; }
     CEnemy *actor = Find(id);
     if (actor == nullptr) { return false; }
     const CEnemy &enemy = *actor;
     if (!enemy.combat.enabled || !enemy.combat.targetable ||
-        !enemy.CanReceiveProjectile(0, kBrotherCombatId)) { return false; }
+        !enemy.CanReceiveProjectile(0, Collision::Brother)) { return false; }
     x = enemy.combat.x;
     y = enemy.combat.y;
     return true;
@@ -142,14 +142,14 @@ bool CLevel::GetBrotherWaypoint(float x, float y, float targetX, float targetY,
 }
 
 
-bool CLevel::Anchor(ZCombatId id, int part, int node, float &x, float &y, float &z, float &direction) {
-    if (id == kPlayerCombatId && IsMatchSpawnPending(0)) { return false; }
-    if (id == kBrotherCombatId && IsMatchSpawnPending(1)) { return false; }
-    if (id == kPlayerCombatId && part < 0) {
+bool CLevel::Anchor(Collision::ObjectId id, int part, int node, float &x, float &y, float &z, float &direction) {
+    if (id == Collision::Player && IsMatchSpawnPending(0)) { return false; }
+    if (id == Collision::Brother && IsMatchSpawnPending(1)) { return false; }
+    if (id == Collision::Player && part < 0) {
         x = m_actor.x; y = m_actor.y; z = 0; direction = m_actor.facing - 90;
         return !m_vitals->dead;
     }
-    if (id == kBrotherCombatId && m_brotherModel != nullptr) {
+    if (id == Collision::Brother && m_brotherModel != nullptr) {
         if (part < 0) {
             x = m_brother->x; y = m_brother->y; z = 0; direction = m_brother->facing - 90;
             return !m_brother->vitals.dead;
@@ -189,15 +189,15 @@ bool CLevel::Anchor(ZCombatId id, int part, int node, float &x, float &y, float 
 }
 
 
-bool CLevel::ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float &angle) {
+bool CLevel::ParticleAnchor(Collision::ObjectId actor, float &x, float &y, float &z, float &angle) {
     // CBrother::GetParticleEffectAnchor :134152 returns position and zero
     // rotation even while dying. Respawn explicitly detaches the previous life.
-    if (actor == kPlayerCombatId) {
+    if (actor == Collision::Player) {
         if (IsMatchSpawnPending(0)) { return false; }
         x = m_actor.x; y = m_actor.y; z = 0; angle = 0;
         return true;
     }
-    if (actor == kBrotherCombatId && m_brother != nullptr) {
+    if (actor == Collision::Brother && m_brother != nullptr) {
         if (IsMatchSpawnPending(1)) { return false; }
         x = m_brother->x; y = m_brother->y; z = 0; angle = 0;
         return true;
@@ -205,7 +205,7 @@ bool CLevel::ParticleAnchor(ZCombatId actor, float &x, float &y, float &z, float
     return Anchor(actor, -1, -1, x, y, z, angle);
 }
 
-bool CLevel::LinkedParticleAnchor(ZCombatId id, int node, float &x, float &y, float &z, float &angle) {
+bool CLevel::LinkedParticleAnchor(Collision::ObjectId id, int node, float &x, float &y, float &z, float &angle) {
     auto *actor = Find(id);
     if (actor == nullptr) { return false; }
     const auto &state = actor->combat;

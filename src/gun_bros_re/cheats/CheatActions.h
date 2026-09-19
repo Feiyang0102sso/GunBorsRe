@@ -1,4 +1,5 @@
 #pragma once
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -10,7 +11,6 @@ class CChallengeManager;
 class CLevel;
 class CGame;
 class CPowerUpSelector;
-struct ZPlayerVitals;
 struct CGameFlow;
 namespace MenuDetail { struct ZMenuState; }
 
@@ -21,7 +21,7 @@ struct CombatCheatResult {
     bool challengesUpdated = false;
     bool botShop = false, botPowerup = false;
 };
-bool ApplyCombatCheat(const std::string &command, CLevel &scene, ZPlayerVitals &vitals,
+bool ApplyCombatCheat(const std::string &command, CLevel &scene, CBrother::Vitals &vitals,
     CPowerUpSelector &powerups, CGame &session, CGameFlow *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
 bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZMenuState &state,

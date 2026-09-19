@@ -5,9 +5,9 @@
 #include "gun_bros_re/gameplay/map/CMapResources.h"
 #include "engine/core/ZMatrix4d.h"
 class CLevel;
+class CBullet;
 class CRenderQueue {
 public:
-    static void DrawBackground(const CMap &map, ZQuadBatch &batch);
     static void Draw(CMap &loaded, ZQuadBatch &batch, const ZShaderProgram &program,
                 const float *mapMvp, bool showProps = true, CLevel *scene = nullptr,
                 CBrother *brotherModel = nullptr, float brotherY = 0, int viewportWidth = 1);
@@ -18,6 +18,7 @@ private:
         const CProp *prop = nullptr;
         CBrother *player = nullptr;
         CEnemy *enemy = nullptr;
+        CBullet *bullet = nullptr;
         CParticleSystem::RenderItem particle;
         float matrix[kMatrix4dElements] = {};
     };

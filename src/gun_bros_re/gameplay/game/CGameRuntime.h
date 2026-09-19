@@ -8,23 +8,23 @@
 #include "gun_bros_re/gameplay/map/CMapResources.h"
 #include "gun_bros_re/gameplay/map/CCameraDrawing.h"
 #include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/gameplay/CBGM.h"
+#include "gun_bros_re/gameplay/audio/CBGM.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "engine/graphics/ZMarkerBatch.h"
 #include "engine/graphics/ZQuadBatch.h"
 #include "engine/graphics/ZShaderProgram.h"
 #include "engine/core/ZMatrix4d.h"
-#include "gun_bros_re/ZHostSettings.h"
-#include "gun_bros_re/gameplay/game/ZGameObserver.h"
-#include "gun_bros_re/gameplay/game/ZLiveShopSession.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
-#include "gun_bros_re/ZLocalOnlineServices.h"
+#include "gun_bros_re/host/ZHostSettings.h"
+#include "gun_bros_re/host/ZGameObserver.h"
+#include "gun_bros_re/gameplay/multiplayer/ZLiveShopSession.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalBotFriend.h"
+#include "gun_bros_re/host/ZLocalOnlineServices.h"
 
 struct CGame::Session {
     const CGame::Launch &launch;
-    ZPlayerVitals &vitals;
+    CBrother::Vitals &vitals;
     ZWindow &window;
     ZShaderProgram &program;
     ZQuadBatch &batch;

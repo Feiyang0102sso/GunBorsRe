@@ -1,5 +1,5 @@
 #include "gameplay/SurvivalPilot.h"
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
 using namespace MapDetail;
@@ -187,7 +187,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                             const float originalX = enemy.combat.x;
                             const float originalY = enemy.combat.y;
                             const float healthBefore = enemy.combat.health;
-                            const ZCombatId enemyId = enemy.combat.id;
+                            const Collision::ObjectId enemyId = enemy.combat.id;
                             unsigned barrels = 0;
                             for (CProp &prop : loaded.GetResources().props) {
                                 if (!prop.active || !prop.HasScript() || prop.GetHealth() <= 0 ||

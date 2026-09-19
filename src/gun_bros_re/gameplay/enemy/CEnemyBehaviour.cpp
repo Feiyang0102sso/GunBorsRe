@@ -31,7 +31,7 @@ float CEnemy::AngleDifference(float from, float to) {
     return difference;
 }
 
-void CEnemy::SetTarget(ZCombatId id, float x, float y, bool alive) {
+void CEnemy::SetTarget(Collision::ObjectId id, float x, float y, bool alive) {
     combat.targetId = id;
     combat.targetX = x;
     combat.targetY = y;

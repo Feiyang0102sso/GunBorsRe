@@ -25,7 +25,7 @@ int CGame::Session::Run() {
     menuTicks = previous;
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    std::printf("[game] input ready (bindings: gameplay/game/ZGameKeys.h)\n");
+    std::printf("[game] input ready (bindings: host/ZGameKeys.h)\n");
     if (const int result = Notify(ZGameObserver::Stage::LoopStarting); result >= 0) { return result; }
     while (window.PumpEvents()) {
         if (const int result = Notify(ZGameObserver::FramePhase::Starting); result >= 0) { return result; }

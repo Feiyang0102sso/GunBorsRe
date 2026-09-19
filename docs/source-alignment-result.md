@@ -2,6 +2,8 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+2026-09-19 gameplay 全目录更新：根目录 32 个源码文件全部归位；原 23 个 Z 文件中 6 个合并删除、7 个迁至 host／Viewer、10 个留在 multiplayer，新增 `multiplayer/bot/ZBotSettings.h` 统一 Bot 策略配置。弹体恢复共同 group／Y 排序、追踪角速度和直接命中击退，脚本随机恢复原算法并共享关卡上下文。Haven 玩家激光遮挡有动态修复证据；Quadcaptain 串珠已核对真实发射链，原始动画 1 仍产生串珠，不冒充已修复。完整归属、统计口径、测试及边界见 [本轮结果](gameplay-optimization-result.md)。本段覆盖下文旧目录和包装状态。
+
 2026-09-18 游戏会话更新：本批源码归入 `gameplay/game/`，八个旧 `ZSurvival*` 文件全部移除。会话资源与各阶段归 `CGame`，跨局进度归 `CGameFlow`；只保留键位、统一宿主观察入口、本地商店同步三个必要 Z 文件。测试配置、自动驾驶、性能实验、CSV 与截图编排归 `tests/`。游戏输入采用动作分派，G、N/M 不再是游戏快捷键，Viewer 目录选枪留在 Viewer。证据与验收见 [游戏会话职责归位](game-responsibility-migration.md)，本段覆盖下文旧会话文件状态。
 
 2026-09-18 地图更新：地图相关实现集中在 `gameplay/map/`，移除原九个 `ZMap*` 文件及 `ZPropWorld.h`，只保留一个 Viewer 专属 `ZMapViewer.h`。`CMap` 直接持有资源，`CProp` 统一脚本与三播放器，道具调度归 `CLevel::Props`，绘制归 `CMap`／`CLayerTile`／`CProp`／`CRenderQueue`。正式加载不再遍历匹配关卡脚本；Viewer 状态预览执行原 Flow。Movie 图层保留引用和位置，当前样本没有此层，绘制仍为明确的未实现分支。映射与验收见 [地图职责归位](map-responsibility-migration.md)；本段覆盖后文旧地图包装与路径。

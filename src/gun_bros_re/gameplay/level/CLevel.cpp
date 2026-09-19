@@ -6,12 +6,11 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 
 #include "gun_bros_re/gameplay/game/CGame.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/map/CLevelProps.h"
-#include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 
@@ -669,7 +668,7 @@ void CLevel::AddMatchScore(unsigned points, unsigned streak) {
 
 void CLevel::CreditWeaponProgress(const GameObjectRef &weapon,
     unsigned experience, unsigned masteryLimit) {
-    for (ZWeaponCombatProgress &entry : m_weaponProgress) {
+    for (CGun::Progress &entry : m_weaponProgress) {
         if (entry.resource.packHash == weapon.packHash &&
             entry.resource.localIndex == weapon.localIndex) {
             entry.experience += experience;
@@ -984,7 +983,7 @@ bool CLevel::GetIndicatorTarget(std::uint64_t key, float &x, float &y) const {
     if ((key >> 32) == 1) {
         return GetPickupIndicatorTarget(static_cast<unsigned>(key), x, y);
     }
-    const CEnemy *actor = Find(static_cast<ZCombatId>(key));
+    const CEnemy *actor = Find(static_cast<Collision::ObjectId>(key));
     if (actor == nullptr || actor->combat.dead || actor->combat.removed) { return false; }
     x = actor->combat.x;
     y = actor->combat.y;
@@ -1029,7 +1028,7 @@ void CLevel::UpdateMapInteractions(float previousX, float previousY) {
         int group = -1;
         for (const ZCollisionEdge &edge : geometry.GetEdges()) {
             if (!edge.enabled) { continue; }
-            const float fraction = CombatGeometry::EdgeFraction(previousX, previousY,
+            const float fraction = Collision::EdgeFraction(previousX, previousY,
                 GetPlayer().x - previousX, GetPlayer().y - previousY,
                 geometry.GetVertices()[edge.firstVertex], geometry.GetVertices()[edge.secondVertex],
                 kBrotherTriggerRadius);

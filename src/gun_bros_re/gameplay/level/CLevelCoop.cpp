@@ -20,7 +20,7 @@ void CLevel::UpdatePeerIndicator(unsigned deltaMs, float left, float top, float 
         if (!m_peerIndicatorVisible || m_peerIndicator.type != type || m_peerIndicator.fade >= 0) { m_peerIndicator = {}; }
         m_peerIndicator.type = type;
         m_peerIndicator.x = m_brother->x; m_peerIndicator.y = m_brother->y;
-        m_peerIndicator.targetKey = kBrotherCombatId;
+        m_peerIndicator.targetKey = Collision::Brother;
         m_peerIndicatorVisible = true;
     } else if (m_peerIndicatorVisible) { m_peerIndicator.FadeOut(); }
     if (m_peerIndicatorVisible) {

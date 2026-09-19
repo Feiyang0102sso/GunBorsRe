@@ -5,7 +5,7 @@
 #define GUN_BROS_RE_CGAME_H
 
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/map/CLevelProps.h"
 #include <chrono>
@@ -16,6 +16,7 @@ struct CGameFlow;
 /** Coordinates one active CLevel and the HUD/session state around it. */
 class CGame {
   public:
+    static std::int16_t *VariableResolver(ZGameScriptObject &host, std::uint8_t variable);
     struct Launch;
     struct Session; // Desktop session storage; not an original ARM memory layout.
     static int Run(const Launch &launch);

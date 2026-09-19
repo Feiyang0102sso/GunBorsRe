@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/ZGameScriptObject.h"
+#include "gun_bros_re/host/ZGameScriptObject.h"
 /**
  * @file CBrother.h
  * @brief The player template: a script, a model set, and a shadow sprite.
@@ -30,13 +30,13 @@
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "engine/graphics/CMoveSetMesh.h"
-#include "gun_bros_re/gameplay/CGun.h"
-#include "gun_bros_re/gameplay/ZCombatTypes.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "engine/graphics/CMoveSetMeshController.h"
 #include "gun_bros_re/effects/CParticleEffectPlayer.h"
 #include <array>
 #include <map>
-#include "gun_bros_re/gameplay/CArmor.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/data/ZPackTables.h"
 class ZShaderProgram;
 // CGameSpriteGluRef lives here, next to its first user
@@ -46,6 +46,39 @@ class CPowerUpSelector;
 
 class CBrother : public ZGameScriptObject {
 public:
+    /** The actor owns health across equipment changes. Legacy harnesses start invincible. */
+    struct Vitals {
+        float maximum = 0;
+        float health = 0;
+        float lastDamage = 0;
+        float incomingDamage = 0;
+        float flash = 0;
+        int stunMs = 0;
+        bool invincible = true;
+        // Viewer-only unlimited health keeps the original nonfatal damage event.
+        bool unlimitedHealth = false;
+        bool dead = false;
+        // The original Flow native 1 reports death only after its mesh sequence.
+        bool deathAnimationComplete = false;
+        bool inputHidden = false;
+        unsigned hits = 0;
+        unsigned deaths = 0;
+
+        void Reset() {
+            health = maximum;
+            lastDamage = 0;
+            incomingDamage = 0;
+            flash = 0;
+            stunMs = 0;
+            dead = false;
+            deathAnimationComplete = false;
+            inputHidden = false;
+            hits = 0;
+            deaths = 0;
+        }
+    };
+
+
     /** Original six strengthening players share the brother's 25-slot pool.
      * Stable actor state survives this port's interchangeable weapon banks.
      */
@@ -72,6 +105,8 @@ public:
         GameObjectRef effects[6];
         std::shared_ptr<PowerupParticles> particles;
     };
+    /** Project the animated weapon node through the actor world matrix. */
+    bool ProjectMuzzle(const float *matrix, int hand, int node, float &x, float &y, float &z);
     class Template {
     public:
         Template();
@@ -218,11 +253,11 @@ public:
     void ClearArmor();
     float GetArmorMultiplier(std::uint32_t attribute) const;
     const CScript &GetScript() const { return m_script; }
-    ZPlayerVitals *GetVitals() const { return m_vitals; }
+    CBrother::Vitals *GetVitals() const { return m_vitals; }
     void ClearScript();
 
     bool UsePowerup(CPowerUpSelector &selector, bool fromSelector = false);
-    void SetVitals(ZPlayerVitals *vitals) { m_vitals = vitals; }
+    void SetVitals(CBrother::Vitals *vitals) { m_vitals = vitals; }
     std::shared_ptr<PowerupParticles> GetPowerupParticles() const { return m_powerupParticles; }
     void StartShield(const GameObjectRef &effect, int durationMs);
     void StartAutoFire(const GameObjectRef &effect, int durationSeconds);
@@ -248,7 +283,7 @@ public:
     /** CBrother constructor :139098; wall resolution uses a separate half radius. */
     float GetRadius() const { return 22.0f; }
     bool CanShoot() const { return m_spawned && m_variables[0] != 0; }
-    ZHitResult ReceiveDamage(float damage);
+    Collision::HitResult ReceiveDamage(float damage);
     /** CBrother::SetForce :137709 starts export 4, including its authored sound. */
     bool BeginKnockback(int durationMs);
     /** Sample the original force envelope before advancing this frame's timers. */
@@ -318,7 +353,7 @@ private:
     bool m_weaponSwapRequested = false;
     int m_knockbackMs = 0;
     int m_knockbackDurationMs = 0;
-    ZPlayerVitals *m_vitals = nullptr;
+    CBrother::Vitals *m_vitals = nullptr;
     void RestorePowerupEffects();
     std::shared_ptr<PowerupParticles> m_powerupParticles;
     void PowerupEffect(const GameObjectRef &effect, int slot, bool active);

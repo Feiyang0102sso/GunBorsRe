@@ -2,8 +2,8 @@
 class CResTOCManager;
 class ZPackTables;
 class CLevel;
-class CBrother;
-struct ZPlayerVitals;
+#include "gun_bros_re/gameplay/brother/CBrother.h"
+#include "gun_bros_re/gameplay/brother/CBrother.h"
 
 unsigned CheckPowerupRuntime(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
-    CBrother &player, ZPlayerVitals &vitals);
+    CBrother &player, CBrother::Vitals &vitals);

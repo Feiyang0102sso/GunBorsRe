@@ -1,8 +1,8 @@
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 /** Exercise Haven's placed turret models and authored indicator scripts. */
 #include "TestOutput.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
-#include "gun_bros_re/gameplay/map/ZMapViewer.h"
+#include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "tests/TestOutput.h"
 using namespace MapDetail;
@@ -83,7 +83,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_BLEND);
         glDisable(GL_DEPTH_TEST);
-        loaded.DrawBackground(batch, true, true, false);
+        loaded.DrawBackground(batch, true, false);
         batch.Draw(program, mvp);
         CRenderQueue::Draw(loaded, batch, program, mvp, true);
         if (!Capture::SaveFrame(window, TestOutput::Path("turret-state-" + std::to_string(state) + ".png"))) { return 1; }
@@ -108,7 +108,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     // Run the real game prop host: message 0 advances both original indicator scripts.
     ZPackTables tables(toc);
     CBrother player;
-    ZPlayerVitals vitals;
+    CBrother::Vitals vitals;
     std::vector<CEnemy::Template> catalog;
     CLevel scene(toc, tables, program);
     scene.BindCombat(catalog, player, vitals, 1.0f);

@@ -42,13 +42,13 @@ public:
     bool PreloadEnemies(const RequirementList &requirements, const CScript &levelScript);
     CEnemy *SpawnEnemy(std::size_t entry, float x, float y, bool forcePool = false);
     CEnemy *GetNearbyEnemy(std::size_t entry, float centerX, float centerY);
-    CEnemy *FindEnemy(ZCombatId id);
+    CEnemy *FindEnemy(Collision::ObjectId id);
     std::size_t GetAliveEnemyCount() const;
 
     void QueueEnemy(const GameObjectRef &resource, float x, float y,
-        int objectId, bool forcePool, ZCombatId summoner);
+        int objectId, bool forcePool, Collision::ObjectId summoner);
     std::vector<CEnemy *> FinishEnemySpawns();
-    ZCombatId GetSummoner(ZCombatId owner) const;
+    Collision::ObjectId GetSummoner(Collision::ObjectId owner) const;
     void ReleaseEnemy(std::size_t index);
 
     std::vector<std::unique_ptr<CEnemy>> &GetEnemies() { return m_enemies; }
@@ -65,7 +65,7 @@ private:
         float y = 0;
         int objectId = -1;
         bool forcePool = false;
-        ZCombatId summoner = 0;
+        Collision::ObjectId summoner = 0;
     };
 
     ZPackTables *m_tables = nullptr;
@@ -77,8 +77,8 @@ private:
     std::vector<std::unique_ptr<CEnemy>> m_enemies;
     std::vector<std::unique_ptr<CPickup>> m_pickups;
     std::vector<PendingEnemy> m_pendingEnemies;
-    std::map<ZCombatId, ZCombatId> m_summoners;
-    ZCombatId m_nextId = 2;
+    std::map<Collision::ObjectId, Collision::ObjectId> m_summoners;
+    Collision::ObjectId m_nextId = 2;
     unsigned m_spawnCount = 0;
     unsigned m_invalidSpawnCount = 0;
 };

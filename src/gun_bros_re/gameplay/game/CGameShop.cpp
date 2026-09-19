@@ -133,7 +133,7 @@ int CGame::Session::UpdateShop() {
         if (!liveShop.Active() && !powerups.GetPowerup().IsPresentationActive() &&
             !peerPowerups.GetPowerup().IsPresentationActive()) {
             for (unsigned peer = 0; peer < 2; ++peer) {
-                const ZPlayerVitals *down = &vitals;
+                const CBrother::Vitals *down = &vitals;
                 if (peer == 1) { down = &brother.vitals; }
                 if (scene.NeedsDeathChoice(peer) && down->deathAnimationComplete) {
                     if (OpenShop(peer, true)) { deathShop = true; }

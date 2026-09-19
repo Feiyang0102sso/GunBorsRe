@@ -19,7 +19,7 @@
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
 
@@ -32,11 +32,11 @@
 #include "engine/platform/ZWindow.h"
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
-#include "gun_bros_re/gameplay/CArmor.h"
-#include "gun_bros_re/gameplay/CBullet.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
-#include "gun_bros_re/gameplay/CGun.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshAnimationController.h"
 #include "engine/graphics/CMeshCamera.h"
@@ -316,11 +316,10 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         effects.Update(*character, modelToWorld, 0, static_cast<int>(elapsedMs));
         float screenMvp[kMatrix4dElements];
         Matrix4dOrthoTopLeft(static_cast<float>(drawableWidth), static_cast<float>(drawableHeight), 1000.0f, screenMvp);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, ZWeaponDrawPass::BehindPlayer);
         glEnable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         character->Draw(program, base);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, ZWeaponDrawPass::InFrontOfPlayer);
+        effects.Draw(screenMvp, worldToScreen, 1.0f, true);
 
         if (!controls.Draw()) { return 1; }
 

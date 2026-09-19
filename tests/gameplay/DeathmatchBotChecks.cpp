@@ -1,7 +1,7 @@
-#include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
 /** Hard DM uses real PvP rules and Flow with virtual inventory; Easy stays limited. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include "engine/core/CStringToKey.h"
 
 int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
@@ -13,7 +13,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
     const auto previousInventory = profile.powerups;
     profile.powerups.clear();
     // Run the same real inventory/cooldown checks for both unlimited difficulties.
-    for (const auto difficulty : {CMPMatch::BotLevel::Normal, CMPMatch::BotLevel::Hard}) {
+    for (const auto difficulty : {ZBotSettings::Difficulty::Normal, ZBotSettings::Difficulty::Hard}) {
         match.SetBotLevel(difficulty);
         session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
         if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
@@ -43,7 +43,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             }
             if (rule == nullptr) { continue; }
             bool legal = !rule->IsExcludedFromGameType(2) && entry.data.field112 == 0;
-            if (difficulty == CMPMatch::BotLevel::Normal) {
+            if (difficulty == ZBotSettings::Difficulty::Normal) {
                 const auto id = entry.resource.localIndex;
                 legal = legal && entry.resource.packHash == CStringToKey("pack5") && (id == 1 || id == 8 || id == 9 || id == 13);
             }
@@ -86,14 +86,14 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             }
             for (unsigned elapsed = 0; elapsed < 1000; elapsed += 16) { session.Update(16, 0, 0, false); }
         }
-        if (usedOther != (difficulty == CMPMatch::BotLevel::Hard) || !profile.powerups.empty() ||
+        if (usedOther != (difficulty == ZBotSettings::Difficulty::Hard) || !profile.powerups.empty() ||
             powerups.failures != 0 || match.CanShop(1) || match.EnterShop(1)) { return 1; }
         // Changing a DM rule cannot grant stock when the same peer host runs Live.
         powerups.SetDeathmatch(nullptr);
         if (!powerups.SelectResource(grenade) || powerups.GetCount() != 0 || powerups.UseSelected()) { return 1; }
         powerups.SetDeathmatch(&match);
-        match.SetBotLevel(CMPMatch::BotLevel::Easy);
-        bot.Configure(42, *chosen[0], *chosen[1], CMPMatch::BotLevel::Easy);
+        match.SetBotLevel(ZBotSettings::Difficulty::Easy);
+        bot.Configure(42, *chosen[0], *chosen[1], ZBotSettings::Difficulty::Easy);
         session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
         if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true) ||
             !powerups.SelectResource(grenade) || powerups.GetCount() != 0 || powerups.UseSelected()) { return 1; }
@@ -121,7 +121,7 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         for (unsigned elapsed = 0; elapsed < 10000 && !session.IsReadyForResults(); elapsed += 16) {
             session.Update(16, 1, 1, true);
             if (session.IsDeathmatchFading() && scenario < 2 &&
-                (!fixture.vitals.deathAnimationComplete || fixture.scene.HasActorBurst(kPlayerCombatId))) { return 1; }
+                (!fixture.vitals.deathAnimationComplete || fixture.scene.HasActorBurst(Collision::Player))) { return 1; }
         }
         if (!session.IsReadyForResults() || score0 != match.Score(0) || score1 != match.Score(1) ||
             (scenario == 1 && (!bot.vitals.deathAnimationComplete || match.GetResult() != CMPMatch::Result::Draw))) { return 1; }

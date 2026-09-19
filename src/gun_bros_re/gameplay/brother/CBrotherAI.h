@@ -13,8 +13,8 @@ public:
     struct Threat { float x, y, radius; };
     virtual std::vector<Threat> GetBrotherThreats() const { return {}; }
     virtual bool CanBrotherWalk(float x, float y, float destinationX, float destinationY) const { return true; }
-    virtual ZCombatId FindBrotherTarget(float x, float y, float radius) = 0;
-    virtual bool GetBrotherTarget(ZCombatId id, float &x, float &y) = 0;
+    virtual Collision::ObjectId FindBrotherTarget(float x, float y, float radius) = 0;
+    virtual bool GetBrotherTarget(Collision::ObjectId id, float &x, float &y) = 0;
     virtual bool GetBrotherWaypoint(float x, float y, float targetX, float targetY,
         float &waypointX, float &waypointY) = 0;
     virtual void ResolveBrotherForce(float previousX, float previousY, float &x, float &y) = 0;
@@ -38,8 +38,8 @@ public:
     float previousX = 0;
     float previousY = 0;
     float facing = 0;
-    ZPlayerVitals vitals;
-    virtual ZCombatId GetTarget() const { return m_target; }
+    CBrother::Vitals vitals;
+    virtual Collision::ObjectId GetTarget() const { return m_target; }
     virtual bool IsMoving() const { return m_moving; }
     virtual unsigned GetTargetCount() const { return m_targetCount; }
     bool TakeWeaponSwapRequest() { const bool requested = m_weaponSwapRequested; m_weaponSwapRequested = false; return requested; }
@@ -51,7 +51,7 @@ private:
     int Random(int minimum, int maximum);
     void UpdateTarget(int deltaMs, ZBrotherAIWorld &world, bool &shooting);
     std::mt19937 m_random{0xB6400};
-    ZCombatId m_target = 0;
+    Collision::ObjectId m_target = 0;
     int m_findDelay = 0;
     int m_fireDelay = 0;
     float m_aimError = 0;

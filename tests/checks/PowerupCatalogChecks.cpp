@@ -5,7 +5,7 @@
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include "engine/core/CStringToKey.h"
-#include "gun_bros_re/gameplay/CBullet.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/gameplay/enemy/CTargetingController.h"
 #include <algorithm>
 #include <filesystem>

@@ -2,7 +2,7 @@
 /** Exercise local matchmaking, original match HUD, results and replay input. */
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/gameplay/CMPMatch.h"
+#include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "TestOutput.h"
 
 int CheckDeathmatchMenus(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile) {

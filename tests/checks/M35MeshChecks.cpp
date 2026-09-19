@@ -39,7 +39,7 @@
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/ZCombatGeometry.h"
+#include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
 
@@ -52,11 +52,11 @@
 #include "engine/platform/ZWindow.h"
 #include "engine/platform/ZGLLoader.h"
 #include "engine/glu/script/CScript.h"
-#include "gun_bros_re/gameplay/CArmor.h"
-#include "gun_bros_re/gameplay/CBullet.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/data/CGameAssetRef.h"
 #include "gun_bros_re/data/CGameObjectPack.h"
-#include "gun_bros_re/gameplay/CGun.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshAnimationController.h"
 #include "engine/graphics/CMeshCamera.h"
@@ -77,26 +77,26 @@ using namespace MeshPreviewDetail;
 #include "ParticleRuntimeChecks.h"
 
 /** A target beside the muzzle ray reproduces invisible wide-beam obstruction. */
-class WeaponRayCheckWorld : public ZProjectileWorld {
+class WeaponRayCheckWorld : public CBullet::World {
 public:
     bool moveAnchor = false;
     unsigned beamContacts = 0;
     float targetOffset = 50;
     float targetDistance = 100;
     std::vector<float> splashDamage;
-    ZCombatTrace Trace(const ZCombatHit &hit, float x, float y, float dx, float dy,
-        float radius, const std::vector<ZCombatId> &skip) override {
+    Collision::Trace Trace(const Collision::Hit &hit, float x, float y, float dx, float dy,
+        float radius, const std::vector<Collision::ObjectId> &skip) override {
         if ((hit.flags & 0x100) == 0 || !skip.empty()) { return {}; }
-        const float fraction = CombatGeometry::CircleFraction(x, y, dx, dy, x + targetOffset, y - targetDistance, 10 + radius);
+        const float fraction = Collision::CircleFraction(x, y, dx, dy, x + targetOffset, y - targetDistance, 10 + radius);
         if (fraction > 1) { return {}; }
         ++beamContacts;
         return {99, fraction};
     }
-    ZHitResult ApplyHit(ZCombatId, const ZCombatHit &) override { return ZHitResult::Hit; }
-    void Splash(const ZCombatHit &hit, float, float, float, int) override { splashDamage.push_back(hit.damage); }
-    void SpawnFromProjectile(const GameObjectRef &, const ZCombatHit &) override {}
-    bool FindTarget(const ZCombatHit &, float, float &, float &) override { return false; }
-    bool Anchor(ZCombatId, int, int, float &x, float &y, float &z, float &direction) override {
+    Collision::HitResult ApplyHit(Collision::ObjectId, const Collision::Hit &) override { return Collision::HitResult::Hit; }
+    void Splash(const Collision::Hit &hit, float, float, float, int) override { splashDamage.push_back(hit.damage); }
+    void SpawnFromProjectile(const GameObjectRef &, const Collision::Hit &) override {}
+    Collision::ObjectId FindSeekTarget(const Collision::Hit &, float) override { return Collision::NoObject; }
+    bool Anchor(Collision::ObjectId, int, int, float &x, float &y, float &z, float &direction) override {
         if (!moveAnchor) { return false; }
         x = 300; y = 400; z = 0; direction = 73;
         return true;
@@ -160,7 +160,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         2, 0, 0, 0, 0, 0, 100, 0, 0, 0,
         32, 3, 0, 0, 100, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0
     };
-    ZWeaponCollision impactScene;
+    CCollisionData::Scene impactScene;
     CArrayInputStream wallStream(wallBytes);
     if (!impactScene.walls.Load(wallStream)) { return 1; }
     impactScene.terrain = impactScene.walls;
@@ -203,7 +203,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
                 player.weapon->TakeCues();
                 const std::int16_t fire[] = {0, 0, 0, 0, factor};
                 player.weapon->FunctionResolver(1, fire, 5);
-                effects.EmitBrother(player, modelToScene, 0, kPlayerCombatId);
+                effects.EmitBrother(player, modelToScene, 0, Collision::Player);
                 const auto before = effects.GetProjectileStates();
                 effects.Update(player, modelToScene, 0, 100);
                 const auto after = effects.GetProjectileStates();
@@ -333,10 +333,9 @@ int RunWeaponCheck(const std::string &bigDirectory) {
             glEnable(GL_DEPTH_TEST);
             float modelMvp[kMatrix4dElements];
             Matrix4dMultiply(sceneMvp, modelToScene, modelMvp);
-            effects.Draw(sceneMvp, nullptr, 1.0f, ZWeaponDrawPass::BehindPlayer);
             glEnable(GL_DEPTH_TEST);
             player.Draw(program, modelMvp);
-            effects.Draw(sceneMvp, nullptr, 1.0f, ZWeaponDrawPass::InFrontOfPlayer);
+            effects.Draw(sceneMvp, nullptr, 1.0f, true);
             if (glGetError() != GL_NO_ERROR) { return 1; }
         }
         const std::size_t emitted = effects.GetShotCount() - before;
@@ -582,6 +581,18 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 sample.first, sample.second, shot.beam, shot.animation, shot.length,
                 effects.GetDrawnBeamQuadCount(), effects.GetDrawnLightningQuadCount());
             if (shot.beam) {
+                // Original SetAnimation :58861 clamps a cap past the last slot.
+                CSpriteGlu glu;
+                if (!glu.Init(*toc.GetPack(toc.GetPackIndexFromHash(sprite.packHash)))) { return 1; }
+                const auto *archetype = glu.GetArchetype(sprite.archetype);
+                if (archetype == nullptr || archetype->GetAnimationCount() == 0) { return 1; }
+                ZSpriteRenderer renderer(toc, program);
+                auto &cap = renderer.Animation(sprite.packHash, sprite.archetype, sprite.animation + 2);
+                if (cap.frames.empty()) { ++failures; }
+                auto &clamped = renderer.Animation(sprite.packHash, sprite.archetype, archetype->GetAnimationCount());
+                if (clamped.frames.empty()) { ++failures; }
+                std::printf("[beam-cap-check] archetype=%u animation-count=%u requested-end=%u frames=%zu failures=%u\n",
+                    sprite.archetype, archetype->GetAnimationCount(), sprite.animation + 2, cap.frames.size(), failures);
                 const int sourceAnimation = static_cast<std::uint8_t>(sprite.animation + 1);
                 const int endAnimation = static_cast<std::uint8_t>(sprite.animation + 2);
                 if (shot.animation != sprite.animation || shot.beamSourceAnimation != sourceAnimation ||

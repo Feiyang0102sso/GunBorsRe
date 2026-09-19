@@ -29,7 +29,7 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {
             peakUpdateUs = std::max(peakUpdateUs, static_cast<long long>(updateUs));
             for (auto &actor : scene.GetEnemies()) {
                 auto &enemy = *actor;
-                if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, kPlayerCombatId)) {
+                if (!actor->mapPlaced && enemy.CanReceiveProjectile(0, Collision::Player)) {
                     enemy.Damage(enemy.combat.health);
                 }
             }
@@ -78,7 +78,7 @@ int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {
     for (unsigned elapsed = 0; elapsed < 10000 && victim == nullptr; elapsed += 16) {
         session.Update(16, 0, 0, false);
         for (auto &actor : scene.GetEnemies()) {
-            if (!actor->mapPlaced && actor->CanReceiveProjectile(0, kPlayerCombatId)) { victim = actor.get(); break; }
+            if (!actor->mapPlaced && actor->CanReceiveProjectile(0, Collision::Player)) { victim = actor.get(); break; }
         }
     }
     if (victim == nullptr) { return 1; }

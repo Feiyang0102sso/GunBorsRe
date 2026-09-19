@@ -7,11 +7,11 @@ class TargetingProbeWorld : public ZBrotherAIWorld {
 public:
     float targetX = 100;
     bool available = true;
-    ZCombatId FindBrotherTarget(float x, float y, float radius) override {
+    Collision::ObjectId FindBrotherTarget(float x, float y, float radius) override {
         if (available && std::hypot(targetX - x, y) < radius) { return 42; }
         return 0;
     }
-    bool GetBrotherTarget(ZCombatId id, float &x, float &y) override {
+    bool GetBrotherTarget(Collision::ObjectId id, float &x, float &y) override {
         if (!available || id != 42) { return false; }
         x = targetX;
         y = 0;

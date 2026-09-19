@@ -68,11 +68,11 @@ int CheckArena(ArenaScene &ready) {
     const int stunnedState = player.GetStateId();
     vitals.unlimitedHealth = true;
     const float lethalDamage = vitals.maximum * 100;
-    const ZHitResult unlimitedResult = player.ReceiveDamage(lethalDamage);
+    const Collision::HitResult unlimitedResult = player.ReceiveDamage(lethalDamage);
     std::printf("[arena-check] unlimited result=%d hp=%.1f/%.1f dead=%d hits=%u incoming=%.1f flash=%.1f states=%d/%d/%d\n",
         static_cast<int>(unlimitedResult), vitals.health, vitals.maximum, vitals.dead,
         vitals.hits, vitals.incomingDamage, vitals.flash, stunnedState, hurtState, player.GetStateId());
-    if (unlimitedResult != ZHitResult::Hit || vitals.health != vitals.maximum || vitals.dead ||
+    if (unlimitedResult != Collision::HitResult::Hit || vitals.health != vitals.maximum || vitals.dead ||
         vitals.hits != 1 || vitals.incomingDamage != lethalDamage || vitals.flash != 1 ||
         hurtState == stunnedState || player.GetStateId() != hurtState) {
         std::printf("[arena-check] FAIL unlimited health damage feedback\n");
@@ -89,7 +89,7 @@ int CheckArena(ArenaScene &ready) {
         if (!Equip(tables, playerData, weapons[0], player, program)) { return 1; }
         CEnemy *actor = scene.Spawn(i, 600, 340);
         if (actor == nullptr) { ++failures; continue; }
-        const ZCombatId id = actor->combat.id;
+        const Collision::ObjectId id = actor->combat.id;
         const float initialHealth = actor->combat.health;
         const int allegiance = actor->combat.variables[16];
         const int targetType = actor->combat.targetType;
@@ -114,17 +114,17 @@ int CheckArena(ArenaScene &ready) {
                 i, enemy.GetStateId(), enemy.combat.behaviour, enemy.combat.triggerDistance,
                 enemy.combat.variables[12], enemy.combat.variables[13], enemy.combat.variables[17], vitals.incomingDamage);
             travel = std::hypot(enemy.combat.x - 600, enemy.combat.y - 340);
-            ZCombatHit hit;
-            hit.owner = kPlayerCombatId;
+            Collision::Hit hit;
+            hit.owner = Collision::Player;
             hit.ownerType = 0;
             hit.damage = 1;
             hit.part = 0;
             hit.x = enemy.combat.x;
             hit.y = enemy.combat.y + 10;
             const float before = enemy.combat.health;
-            const ZHitResult result = enemy.ReceiveHit(hit);
+            const Collision::HitResult result = enemy.ReceiveHit(hit);
             enemy.Update(16);
-            if (allegiance == 1 && (result != ZHitResult::Ignored || enemy.combat.health != before)) { ++failures; }
+            if (allegiance == 1 && (result != Collision::HitResult::Ignored || enemy.combat.health != before)) { ++failures; }
             hitCount = enemy.combat.hitCount;
             if (enemy.combat.enabled && !enemy.combat.dead) {
                 enemy.Damage(enemy.combat.health + 100);
@@ -167,17 +167,17 @@ int CheckArena(ArenaScene &ready) {
     float matrix[16];
     scene.PlayerMatrix(matrix);
     // A segment crosses the complete target in one update.
-    scene.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, kPlayerCombatId, 0);
+    scene.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, Collision::Player, 0);
     scene.Update(player, matrix, 0, 16);
     if (enemy.combat.health >= 10000 || enemy.combat.hitCount != 1) {
         std::printf("[arena-check] FAIL swept projectile\n"); ++failures;
     }
     const float afterHit = enemy.combat.health;
-    scene.SpawnProjectile(bullet, 100, 700, 0, -90, 45000, kPlayerCombatId, 0);
+    scene.SpawnProjectile(bullet, 100, 700, 0, -90, 45000, Collision::Player, 0);
     scene.Update(player, matrix, 0, 16);
     if (enemy.combat.health != afterHit) { std::printf("[arena-check] FAIL miss\n"); ++failures; }
     enemy.combat.variables[16] = 1;
-    scene.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, kPlayerCombatId, 0);
+    scene.SpawnProjectile(bullet, 600, 700, 0, -90, 45000, Collision::Player, 0);
     scene.Update(player, matrix, 0, 16);
     if (enemy.combat.health != afterHit) { std::printf("[arena-check] FAIL friendly fire\n"); ++failures; }
     // Invincibility logs incoming damage. Equipment must preserve health.
@@ -227,8 +227,8 @@ int CheckArena(ArenaScene &ready) {
     second = scene.Spawn(0, 500, 240);
     if (first == nullptr || second == nullptr) { ++failures; }
     else {
-        const ZCombatId ally = first->combat.id;
-        const ZCombatId hostile = second->combat.id;
+        const Collision::ObjectId ally = first->combat.id;
+        const Collision::ObjectId hostile = second->combat.id;
         const std::size_t shots = scene.GetShotCount();
         bool selectedHostile = false;
         for (int tick = 0; tick < 300; ++tick) {
@@ -299,7 +299,7 @@ int CheckArena(ArenaScene &ready) {
             player.ActiveWeapon().SetShooting(true);
             player.ActiveWeapon().TakeCues();
             scene.PlayerMatrix(matrix);
-            scene.SpawnProjectile(weapons[firstBeam].data.GetBulletRef(), 600, 600, 0, -90, 1, kPlayerCombatId, 0);
+            scene.SpawnProjectile(weapons[firstBeam].data.GetBulletRef(), 600, 600, 0, -90, 1, Collision::Player, 0);
             for (int time = 0; time < 960; time += steps[run]) { scene.Update(player, matrix, 0, steps[run]); }
             damage[run] = 10000 - actor->combat.health;
         }
@@ -330,10 +330,10 @@ int CheckArena(ArenaScene &ready) {
     vitals.maximum = 100;
     vitals.Reset();
     vitals.invincible = false;
-    ZCombatHit armorHit;
+    Collision::Hit armorHit;
     armorHit.ownerType = 1;
     armorHit.damage = 10;
-    scene.ApplyHit(kPlayerCombatId, armorHit);
+    scene.ApplyHit(Collision::Player, armorHit);
     const float armoredIncoming = vitals.lastDamage;
     if (std::abs(vitals.health - 91.4f) > 0.001f) {
         ++failures;
@@ -344,7 +344,7 @@ int CheckArena(ArenaScene &ready) {
     }
     actor->combat.health = 100;
     actor->combat.maxHealth = 100;
-    armorHit.owner = kPlayerCombatId;
+    armorHit.owner = Collision::Player;
     armorHit.ownerType = 0;
     scene.ApplyHit(actor->combat.id, armorHit);
     const float armoredOutgoing = 100 - actor->combat.health;

@@ -1,7 +1,7 @@
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
-#include "gun_bros_re/gameplay/brother/bot/ZLocalBotFriend.h"
+#include "gun_bros_re/gameplay/multiplayer/bot/ZLocalBotFriend.h"
 // CGame::OnWaveCleared :76192 / UpdatePostGameStats :75868 orchestrate these writes.
 // Payloads continue through saves/save_payloads.bt and the existing profile clients.
 bool CGameFlow::UpdatePlayerProgress(const CPlayerProgress &progress, const CLevel &level,
