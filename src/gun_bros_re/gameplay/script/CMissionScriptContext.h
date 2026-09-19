@@ -9,7 +9,7 @@
 #ifndef GUN_BROS_RE_CMISSIONSCRIPTCONTEXT_H
 #define GUN_BROS_RE_CMISSIONSCRIPTCONTEXT_H
 #include "engine/glu/script/CScriptInterpreter.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <cstdio>
 
 class CMissionScriptContext : public ZGameScriptObject {

@@ -273,7 +273,7 @@ public:
 };
 // Page callback implementations.
 
-bool IsMissionLocked(const CProfileManager &profile, const Mission &mission, const ZPlanetMissionInfo &info) {
+bool IsMissionLocked(const CProfileManager &profile, const Mission &mission, const MenuDetail::CMenuMission::MissionInfo &info) {
     if (!mission.script.IsPresent()) { return false; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
@@ -424,7 +424,7 @@ bool CMenuMissionInfo::Draw(ZMenuSurface &view, CMenuSystem &state, const CProfi
 
 /** Returns true only after an unlocked wave/horde is explicitly launched. */
 
-const ZWeaponEntry *FindMasteryWeapon(const std::vector<ZWeaponEntry> &weapons, const GameObjectRef &ref) {
+const CGun::Entry *FindMasteryWeapon(const std::vector<CGun::Entry> &weapons, const GameObjectRef &ref) {
     for (const auto &entry : weapons) {
         if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) { return &entry; }
     }

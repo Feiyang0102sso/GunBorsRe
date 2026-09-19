@@ -21,11 +21,11 @@
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/graphics/ZPNG.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 
 #include <cstdio>
 
-static bool LoadEnemyConfigs(ZPackTables &tables, const CEnemy::Template &entry,
+static bool LoadEnemyConfigs(CGunBros &tables, const CEnemy::Template &entry,
     bool createBuffers, const ZShaderProgram *program,
     std::vector<std::shared_ptr<CEnemy::ModelConfig>> &configs, CEnemy::ResourceCache *cache) {
     configs.clear();
@@ -92,7 +92,7 @@ static bool LoadEnemyConfigs(ZPackTables &tables, const CEnemy::Template &entry,
     return true;
 }
 
-bool CEnemy::Preload(ZPackTables &tables, const CEnemy::Template &entry,
+bool CEnemy::Preload(CGunBros &tables, const CEnemy::Template &entry,
     const ZShaderProgram &program, CEnemy::ResourceCache &cache) {
     std::vector<std::shared_ptr<CEnemy::ModelConfig>> configs;
     if (!LoadEnemyConfigs(tables, entry, true, &program, configs, &cache)) { return false; }
@@ -100,7 +100,7 @@ bool CEnemy::Preload(ZPackTables &tables, const CEnemy::Template &entry,
     return true;
 }
 
-bool CEnemy::Bind(ZPackTables &tables, const Template &entry,
+bool CEnemy::Bind(CGunBros &tables, const Template &entry,
     bool createBuffers, const ZShaderProgram *program, ResourceCache *cache) {
     data = &entry;
     if (!LoadEnemyConfigs(tables, entry, createBuffers, program, configs, cache)) { return false; }

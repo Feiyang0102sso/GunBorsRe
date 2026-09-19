@@ -31,12 +31,14 @@
 
 #ifndef GUN_BROS_RE_GUN_BROS_CARMOR_H
 #define GUN_BROS_RE_GUN_BROS_CARMOR_H
+#include "gun_bros_re/application/CGunBros.h"
+#include <string>
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"  // kNoAssetId
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 
 #include <cstdint>
 #include <memory>
@@ -51,15 +53,19 @@ constexpr std::uint32_t kArmorVariantCount = 2;
 constexpr std::uint32_t kArmorSlotCount = 4;
 constexpr std::uint32_t kArmorAttributeCount = 5;
 
-class ZPackTables;
+class CGunBros;
 class ZShaderProgram;
 
 class CArmor : public ZGameScriptObject {
 public:
+    /** Host listing snapshot; parsed object ownership remains in the pack. */
+    struct Entry;
+    static bool LoadEntries(CResTOCManager &toc, CGunBros &tables, std::vector<Entry> &entries);
     class Template {
     public:
         Template();
 
+        static const Template *Load(CResTOCManager &toc, CGunBros &tables, const GameObjectRef &ref);
         bool Init(CArrayInputStream &stream);
 
         const CGameAssetRef &GetMeshRef(std::uint32_t variant) const {
@@ -107,7 +113,7 @@ public:
     CArmor &operator=(const CArmor &) = delete;
     const Template &GetTemplate() const { return m_templateData; }
     /** Load the original BIG mesh/atlas references, then bind the owned template. */
-    bool Load(ZPackTables &tables, const Template &data, const ZShaderProgram &program);
+    bool Load(CGunBros &tables, const Template &data, const ZShaderProgram &program);
 
     /** Bind stable template data, then run original OnEquip (export 0). */
     void Bind(const Template &data);
@@ -124,4 +130,10 @@ private:
     std::int16_t m_attributes[kArmorAttributeCount] = {};
 };
 
+struct CArmor::Entry {
+    std::uint32_t packHash = 0;
+    std::uint32_t ordinal = 0;
+    CArmor::Template data;
+    std::string owner;
+};
 #endif  // GUN_BROS_RE_GUN_BROS_CARMOR_H

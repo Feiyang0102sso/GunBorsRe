@@ -1,3 +1,4 @@
+#include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 #include "engine/graphics/CMeshCamera.h"
@@ -158,12 +159,12 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
     }
     ZAudioPlayer audio;
     CMap loaded;
-    ZPackTables weaponTables(tocManager);
-    std::vector<ZWeaponEntry> weapons;
+    CGunBros weaponTables(tocManager);
+    std::vector<CGun::Entry> weapons;
     std::size_t weaponSlot = weaponIndex;
     std::unique_ptr<CLevel> weaponEffects;
     if (gameView) {
-        if (!LoadWeaponCatalog(tocManager, weaponTables, weapons)) { return 1; }
+        if (!CGun::LoadEntries(tocManager, weaponTables, weapons)) { return 1; }
         if (weaponSlot >= weapons.size()) { weaponSlot = 0; }
         weaponEffects.reset(new CLevel(tocManager, weaponTables, program, loaded.GetResources().particlePool));
     }

@@ -6,7 +6,7 @@
 #define GUN_BROS_RE_CGAMEFLOW_H
 #include "gun_bros_re/gameplay/enemy/CEnemyCasualty.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/multiplayer/ZMultiplayerStatistics.h"
 #include <map>

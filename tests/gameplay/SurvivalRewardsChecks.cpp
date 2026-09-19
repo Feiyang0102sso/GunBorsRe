@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
@@ -67,7 +68,7 @@ int CheckSurvivalRewards(SurvivalRewardsFixture fixture) {
         pickupProgress.Bind(progressData);
         rewardProbe.SetPlayerProgress(&pickupProgress);
         CRefinementManager::Template pickupRefinement;
-        if (!LoadRefinementTemplate(toc, tables, pickupRefinement)) { return 1; }
+        if (!CRefinementManager::Template::Load(toc, tables, pickupRefinement)) { return 1; }
         CProfileManager pickupProfile;
         pickupProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), pickupRefinement);
         if (!rewardProbe.InitPickups(toc, tables, program, &pickupProfile)) { return 1; }

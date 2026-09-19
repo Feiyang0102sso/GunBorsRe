@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/debug/Capture.h"
 /** @file CInputPad.cpp
  * @brief CInputPad::Base::Bind (:88320) binds meters to regions 0/1 and guns to 2/3.
@@ -8,7 +9,7 @@
 #include "gun_bros_re/ui/content/CMenuDataProvider.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/host/ZHostSettings.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -22,7 +23,7 @@
 int RunOriginalDialogCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     ZWindow window;
     if (!window.Open("Gun Bros", 1024, 768)) { return 1; }
     CInputPad hud;
@@ -43,7 +44,7 @@ int RunOriginalDialogCheck(const std::string &bigDirectory) {
             CGameAssetRef ref;
             ref.packHash = resource.packHash;
             ref.assetId = resource.resourceId;
-            const auto text = ReadGameString(toc, ref);
+            const auto text = tables.ReadString(ref);
             if (text.empty()) {
                 // LEVEL resource 6 is not consumed by its ShowDialog call.
                 // Keep the unresolved reference visible; do not create text.
@@ -97,14 +98,14 @@ int RunOriginalPauseCheck(const std::string &bigDirectory) {
     ZWindow window;
     if (!window.Open("Gun Bros - Original Pause Check", 1600, 1200)) { return 1; }
     CInputPad hud;
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     if (!hud.Init(toc, tables)) { return 1; }
     CProfileManager profile;
     const auto directory = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("pause-profile-" + std::to_string(window.GetTicksMs()));
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, profile, directory, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, directory, TestOutput::Fixtures())) { return 1; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
@@ -189,7 +190,7 @@ int RunOriginalPauseCheck(const std::string &bigDirectory) {
     }
     if (!returned || !profile.SaveToDisk(directory)) { ++failures; }
     CProfileManager reloaded;
-    if (!LoadProfile(toc, tables, reloaded, directory) || reloaded.soundEnabled != profile.soundEnabled ||
+    if (!(reloaded).LoadNative(toc, tables, directory) || reloaded.soundEnabled != profile.soundEnabled ||
         reloaded.musicEnabled != profile.musicEnabled || reloaded.options.DockedSticks() != profile.options.DockedSticks() ||
         reloaded.coins != state.coins || reloaded.warbucks != state.warbucks) { ++failures; }
     std::printf("[pause-check] native-hits=%u help-items=14 back=%d preference-reload=3 failures=%u\n", hits, returned, failures);
@@ -210,7 +211,7 @@ int RunOriginalHudCheck(const std::string &bigDirectory) {
     if (meter.GetDrawValue() != 0.75f || meter.GetHighlight() != 0) { ++failures; }
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     ZWindow window;
     if (!window.Open("Gun Bros - Original HUD Check", 1600, 1200)) { return 1; }
     CInputPad hud;

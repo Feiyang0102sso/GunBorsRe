@@ -7,7 +7,7 @@ int CheckSurvivalPowerupInventory(SurvivalPowerupInventoryFixture fixture);
 
 int CheckSurvivalDeath(SurvivalDeathFixture fixture);
 int CheckLocalLive(SurvivalDeathFixture fixture, CInputPad *hud);
-int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
+int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, CGunBros &tables,
     CPowerUpSelector &playerPowerups, CPowerUpSelector &peerPowerups, CProfileManager &peerProfile);
 
 int CheckSurvivalBoss(SurvivalBossFixture fixture);

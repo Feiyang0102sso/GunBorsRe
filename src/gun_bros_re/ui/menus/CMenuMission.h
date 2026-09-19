@@ -1,12 +1,30 @@
 #pragma once
-#include "gun_bros_re/ui/host/ZMenuTypes.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/mission/Planet.h"
+#include "gun_bros_re/data/mission/Mission.h"
+#include "gun_bros_re/gameplay/script/CMissionScriptContext.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 
 namespace MenuDetail {
 class CMenuSystem;
 class ZMenuSurface;
 class CMenuMission {
 public:
+    struct MissionInfo {
+        std::string title, description, requirements, overview;
+        std::vector<CMissionScriptContext::Requirement> prerequisites;
+        int requiredLevel = 0;
+        unsigned waveCount = 0;
+        GameObjectRef map;
+    };
+
+    struct PlanetEntry {
+        GameObjectRef resource;
+        Planet data;
+        std::vector<Mission> missions;
+        std::vector<MissionInfo> missionInfo;
+    };
+
+    static bool LoadPlanets(CResTOCManager &toc, CGunBros &tables, std::vector<PlanetEntry> &result);
     class Presentation;
     bool Draw(ZMenuSurface &view, CMenuSystem &state, const CProfileManager &profile);
 

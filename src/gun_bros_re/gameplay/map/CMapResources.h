@@ -16,7 +16,7 @@
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include <array>
 #include <map>
 #include <memory>

@@ -21,7 +21,7 @@
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "engine/glu/script/ScriptResolver.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "gun_bros_re/gameplay/enemy/CEnemySpawner.h"
 #include "gun_bros_re/gameplay/enemy/CEnemyCasualty.h"
 #include "gun_bros_re/gameplay/level/CLevelIndicator.h"
@@ -33,13 +33,14 @@
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/multiplayer/ZMultiplayerStatistics.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/effects/ZParticleResources.h"
 #include "gun_bros_re/gameplay/audio/ZCombatAudio.h"
 #include "gun_bros_re/effects/ZEffectColors.h"
 #include "gun_bros_re/effects/CEffectLayer.h"
 #include "gun_bros_re/effects/CParticleSystem.h"
 #include "engine/glu/sprite/ZSpriteRenderer.h"
-#include "gun_bros_re/data/CChallengeManager.h"
+#include "gun_bros_re/data/profile/CChallengeManager.h"
 
 #include <cmath>
 #include <cstdint>
@@ -51,14 +52,14 @@ class CMPMatch;
 class CProfileManager;
 class CPowerup;
 class CPowerUpSelector;
-struct ZPowerupEntry;
+
 
 constexpr float kArenaWidth = 1200;
 constexpr float kArenaHeight = 900;
 constexpr float kArenaPlayerCollisionRadius = 24;
 
 /** The first level's unarmoured health, read from PLAYER_PROGRESS. */
-bool LoadInitialPlayerHealth(CResTOCManager &toc, ZPackTables &tables, float &health);
+bool LoadInitialPlayerHealth(CResTOCManager &toc, CGunBros &tables, float &health);
 
 // The CLevel functions implemented so far, all of which only touch the map.
 // Reference: :117497 (setCameraLayer), :117508 (setCollisionLayer),
@@ -111,7 +112,7 @@ public:
     };
 
     CLevel();
-    CLevel(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+    CLevel(CResTOCManager &toc, CGunBros &tables, const ZShaderProgram &program,
         std::shared_ptr<CParticlePool> particlePool = nullptr, std::shared_ptr<CParticleSystem> mapParticles = nullptr);
     ~CLevel();
     /** Windows audio adaptation: coalesce identical one-shots within one tick. */
@@ -189,7 +190,7 @@ public:
         int objectId = 0;
         unsigned peer = 0;
     };
-    bool InitPickups(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+    bool InitPickups(CResTOCManager &toc, CGunBros &tables, const ZShaderProgram &program,
         CProfileManager *profile = nullptr);
     void ResetPickups();
     bool SpawnPickupAt(const GameObjectRef &pickup, float x, float y, int objectId = 0) override;
@@ -208,7 +209,7 @@ public:
         if (owner == Collision::Brother) { m_peerPowerups = powerup; }
         else { m_powerups = powerup; }
     }
-    bool UsePowerup(CPowerUpSelector &selector, const ZPowerupEntry &entry, bool fromSelector, bool decrement);
+    bool UsePowerup(CPowerUpSelector &selector, const CPowerup::Entry &entry, bool fromSelector, bool decrement);
     void UpdatePowerup(CPowerup &powerup, int deltaMs);
     void ResetPowerup(CPowerup &powerup);
     void SetMatch(CMPMatch *match) {
@@ -233,7 +234,7 @@ public:
     void SetLocalLive(bool enabled) { m_localLive = enabled; }
     bool IsLocalLive() const { return m_localLive; }
     bool IsDeathmatch() const { return m_match != nullptr; }
-    void SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons);
+    void SetDeathmatch(CMPMatch *match, const std::vector<CGun::Entry> *weapons);
     bool StartDeathmatch();
     bool IsMatchSpawnPending(unsigned peer) const;
     void UpdateDeathmatch(unsigned deltaMs);
@@ -562,7 +563,7 @@ private:
     void ApplyBrotherForce(Collision::ObjectId target, float x, float y, int durationMs);
 
     CPlayer m_actor;
-    const std::vector<ZWeaponEntry> *m_matchWeapons = nullptr;
+    const std::vector<CGun::Entry> *m_matchWeapons = nullptr;
     unsigned m_auxiliaryMs[2]{};
     unsigned m_matchSlots[2]{};
     bool m_matchShopping[2]{};
@@ -599,7 +600,7 @@ private:
     float m_textViewY = 0;
     float m_textScaleX = 1;
     float m_textScaleY = 1;
-    ZPackTables *m_tables = nullptr;
+    CGunBros *m_tables = nullptr;
     const ZShaderProgram *m_program = nullptr;
     CLevelObjectPool m_objects;
     CBrother *m_playerModel = nullptr;

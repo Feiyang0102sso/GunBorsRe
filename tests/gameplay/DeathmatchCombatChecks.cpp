@@ -6,8 +6,8 @@
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/ui/hud/CPowerUpSelector.h"
-#include "gun_bros_re/data/ZPlanetCatalog.h"
-#include "gun_bros_re/data/ZMissionCatalog.h"
+#include "gun_bros_re/ui/menus/CMenuMission.h"
+#include "gun_bros_re/data/mission/Mission.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
@@ -16,15 +16,15 @@
 int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
     CResTOCManager toc;
     if (!toc.Init(directory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZPlanetEntry> planets;
-    if (!LoadPlanetCatalog(toc, tables, planets)) { return 1; }
+    CGunBros tables(toc);
+    std::vector<MenuDetail::CMenuMission::PlanetEntry> planets;
+    if (!MenuDetail::CMenuMission::LoadPlanets(toc, tables, planets)) { return 1; }
     CProfileManager source;
-    if (!LoadProfile(toc, tables, source, TestOutput::Path("deathmatch-profile"), TestOutput::Fixtures())) { return 1; }
-    int CheckDeathmatchMenus(CResTOCManager &, ZPackTables &, CProfileManager &);
+    if (!(source).LoadNative(toc, tables, TestOutput::Path("deathmatch-profile"), TestOutput::Fixtures())) { return 1; }
+    int CheckDeathmatchMenus(CResTOCManager &, CGunBros &, CProfileManager &);
     if (CheckDeathmatchMenus(toc, tables, source) != 0) { return 1; }
     for (unsigned index = 0; index < 5; ++index) {
-        ZMissionEntry mission;
+        Mission::Entry mission;
         mission.resource = planets[index].data.object12;
         std::vector<std::uint8_t> bytes;
         if (!tables.ReadSectionResource(mission.resource.packHash, ZGameSection::Mission, mission.resource.localIndex, bytes)) { return 1; }
@@ -193,7 +193,7 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerU
         if (!CGame::SaveProgress(&context, savedProgress, session.GetLevel(), accountedOre)) { return 1; }
     }
     CProfileManager reloaded = context.profile;
-    if (!ReloadProfile(reloaded, context.savePath) || reloaded.statistics[37] != previousKills + match.Score(0) ||
+    if (!(reloaded).ReloadNative(context.savePath) || reloaded.statistics[37] != previousKills + match.Score(0) ||
         reloaded.experience != scene.GetExperience() || reloaded.clearedWaves != previousWaves || scene.GetScore() == 0) { return 1; }
     for (unsigned slot = 0; slot < 2; ++slot) {
         if (reloaded.configuration.guns[slot].packHash != previousGuns[slot].packHash ||

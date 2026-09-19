@@ -3,7 +3,7 @@
 #include "gun_bros_re/ui/system/CMenuSystem.h"
 #include "gun_bros_re/ui/menus/CMenuStoreOption.h"
 namespace MenuDetail {
-const ZStoreEntry *FindWeaponStore(const std::vector<ZStoreEntry> &store, const GameObjectRef &ref) {
+const CStoreItem::Entry *FindWeaponStore(const std::vector<CStoreItem::Entry> &store, const GameObjectRef &ref) {
     for (const auto &entry : store) {
         if (entry.data.type > 6) { continue; }
         for (const auto &object : entry.data.objects) {
@@ -21,7 +21,7 @@ void CloseMastery(CMenuSystem &state) {
 }
 /** How far into GLU_MOVIE_WEAPON_UPGRADE_MASTERY the meter stands for this
  * much experience. The movie's chapters are the three cells. */
-unsigned MasteryMeterTime(ZMenuSurface &view, const ZWeaponEntry &weapon, unsigned experience) {
+unsigned MasteryMeterTime(ZMenuSurface &view, const CGun::Entry &weapon, unsigned experience) {
     const unsigned meter = view.movies.Ordinal("GLU_MOVIE_WEAPON_UPGRADE_MASTERY");
     CMovie *movie = view.movies.GetMovie(meter);
     if (movie == nullptr) { return 0; }
@@ -82,10 +82,10 @@ void DrawUpgradeStats(ZMenuSurface &view, const ZMovieRegion &area, const CStore
 /** The original popup advances its own movie and stars through six states.
  * All geometry, fonts, item values, chapter times and art are read from BIG. */
 bool DrawMastery(ZMenuSurface &view, CMenuSystem &state, CProfileManager &profile, CResTOCManager &toc,
-    ZPackTables &tables, const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
+    CGunBros &tables, const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
     const std::filesystem::path &savePath, CPlayerProgress *headerProgress ) {
-    const ZWeaponEntry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
-    const ZStoreEntry *item = FindWeaponStore(store, state.masteryWeapon);
+    const CGun::Entry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
+    const CStoreItem::Entry *item = FindWeaponStore(store, state.masteryWeapon);
     if (weapon == nullptr || item == nullptr) { CloseMastery(state); return true; }
     const unsigned popup = view.movies.Ordinal("GLU_MOVIE_UPGRADE_POPUP");
     const unsigned stars = view.movies.Ordinal("GLU_MOVIE_WEAPON_UPGRADE_MASTERY");
@@ -120,12 +120,12 @@ bool DrawMastery(ZMenuSurface &view, CMenuSystem &state, CProfileManager &profil
     }
     if (!view.movies.Draw(popup, state.masteryPopup.MovieTime())) { return false; }
     bool buyPressed = false, closePressed = false, swapPressed = false;
-    const ZWeaponEntry *other = nullptr;
+    const CGun::Entry *other = nullptr;
     // ShowForGuns :394113 prepares both distinct equipped guns below gold.
     // The same popup and swap action are used from the store and the refinery.
     for (const GameObjectRef &gun : profile.configuration.guns) {
         if (SameObject(gun, state.masteryWeapon)) { continue; }
-        const ZWeaponEntry *candidate = FindMasteryWeapon(weapons, gun);
+        const CGun::Entry *candidate = FindMasteryWeapon(weapons, gun);
         if (candidate != nullptr && candidate->data.GetMasteryLevel(profile.GetWeaponExperience(gun)) < kMaxMasteryLevel &&
             FindWeaponStore(store, gun) != nullptr) { other = candidate; break; }
     }

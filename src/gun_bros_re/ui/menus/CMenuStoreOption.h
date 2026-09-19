@@ -20,12 +20,12 @@ public:
     };
     /** Shared compact/expanded store status, distinct from the preview slot. */
     enum class Action { None, Purchase, Upgrade, Focus };
-    static bool DrawCompact(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-        CProfileManager &profile, const ZStoreEntry &item, const std::vector<ZWeaponEntry> &weapons,
+    static bool DrawCompact(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+        CProfileManager &profile, const CStoreItem::Entry &item, const std::vector<CGun::Entry> &weapons,
         unsigned slotKind, unsigned shopBox, const Face &face, bool cardEnabled, bool actionEnabled,
         CMenuMovieButton &button, Action &result);
-    bool Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-        CProfileManager &profile, const ZStoreEntry &item, const std::vector<ZWeaponEntry> &weapons,
+    bool Draw(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+        CProfileManager &profile, const CStoreItem::Entry &item, const std::vector<CGun::Entry> &weapons,
         unsigned slot, const Face &face, CMenuMovieButton &actionButton, Action &action);
     /** Focus/UnFocus :181356/:181402 reverse chapter 1; Update :181486 uses 4x.
      * Keep a closing card modal until its last frame, so a click cannot buy the card
@@ -108,7 +108,7 @@ void DrawCardPrice(ZMenuSurface &view, const CStoreItem &item, const ZMovieRegio
 
 /** Category caption under the icon, from the weapon or armour catalogue. */
 // CreateItemCategoryString :157413 indexes IDS_SHOP_SORT3 + STORE.category.
-std::string StoreItemKind(ZMenuSurface &view, const ZStoreEntry &item);
+std::string StoreItemKind(ZMenuSurface &view, const CStoreItem::Entry &item);
 
 /** The three cell upgrade meter. CMenuStore::Load pulls sprite character 26
  * for exactly this movie, so the store shares the upgrade popup's artwork. */
@@ -139,7 +139,7 @@ void DrawStoreTemplate(ZMenuSurface &view, const std::string &text, const ZMovie
  * Child time is derived from CGun mastery XP and that movie's chapter lengths. */
 bool StoreMasteryTarget(const CMovie &movie, const CGun::Template &weapon, unsigned experience, unsigned &target);
 
-bool DrawMasteryMeter(ZMenuSurface &view, const ZWeaponEntry &weapon, unsigned experience,
+bool DrawMasteryMeter(ZMenuSurface &view, const CGun::Entry &weapon, unsigned experience,
     const ZMovieRegion &area, unsigned elapsed);
 
 /** Powerups use their own child movie; row locations and visibility live in BIG.
@@ -157,8 +157,8 @@ void DrawStoreQuantity(ZMenuSurface &view, const CProfileManager &profile, const
 /** Currency entries have no object references and no cost string. The original
  * LevelCallback :180839 therefore places BUY/CONVERT in the bottom right.
  * Focus :181402 requires a cost string, so these cards do not expand. */
-bool DrawCurrencyCard(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-    const ZStoreEntry &item, unsigned index, unsigned movie, const CMenuStoreOption::Face &face,
+bool DrawCurrencyCard(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+    const CStoreItem::Entry &item, unsigned index, unsigned movie, const CMenuStoreOption::Face &face,
     bool enabled, CMenuSystem &state, CProfileManager &profile, const std::filesystem::path &savePath);
 
 }

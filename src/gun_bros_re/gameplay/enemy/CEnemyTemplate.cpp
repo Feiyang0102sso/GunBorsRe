@@ -9,7 +9,7 @@
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 
 #include <cstdio>
 
@@ -23,7 +23,7 @@ CEnemy::Template::Template()
       flag117(0),
       radius116(0) {}
 
-bool CEnemy::Template::Load(ZPackTables &tables, std::uint32_t packHash,
+bool CEnemy::Template::Load(CGunBros &tables, std::uint32_t packHash,
     std::uint32_t ordinal, const std::string &owner) {
     std::vector<std::uint8_t> payload;
     if (!tables.ReadSectionResource(packHash, ZGameSection::Enemy, ordinal,
@@ -74,7 +74,7 @@ bool CEnemy::Template::Init(CArrayInputStream &stream) {
     return true;
 }
 
-bool CEnemy::Template::LoadCatalog(CResTOCManager &toc, ZPackTables &tables,
+bool CEnemy::Template::LoadCatalog(CResTOCManager &toc, CGunBros &tables,
     std::vector<CEnemy::Template> &entries) {
     entries.clear();
     bool complete = true;

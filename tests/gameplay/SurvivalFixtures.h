@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #pragma once
 // Test-only borrowed views, assembled by SurvivalCheckScenario.
 #include "gun_bros_re/gameplay/game/CGameRuntime.h"
@@ -7,7 +8,7 @@ struct SurvivalRewardsFixture {
     unsigned & checkFailures;
     bool check;
     CResTOCManager & toc;
-    ZPackTables & tables;
+    CGunBros & tables;
     std::vector<CEnemy::Template> & enemies;
     CBrother::Vitals & vitals;
     CPlayerProgress::Template & progressData;
@@ -49,7 +50,7 @@ struct SurvivalBossFixture {
     const std::string & packShortName;
     bool bossStudy;
     CResTOCManager & toc;
-    ZPackTables & tables;
+    CGunBros & tables;
     std::vector<CEnemy::Template> & enemies;
     CBrother::Vitals & vitals;
     ZWindow & window;
@@ -68,8 +69,8 @@ struct SurvivalFeedbackFixture {
     std::string & capturePath;
     bool feedbackStudy;
     CResTOCManager & toc;
-    ZPackTables & tables;
-    std::vector<ZWeaponEntry> & weapons;
+    CGunBros & tables;
+    std::vector<CGun::Entry> & weapons;
     std::vector<CEnemy::Template> & enemies;
     CBrother::Vitals & vitals;
     CInputPad & survivalHud;
@@ -128,8 +129,8 @@ struct SurvivalTutorialFixture {
     std::string & capturePath;
     bool check;
     CGameFlow * gameContext;
-    ZPackTables & tables;
-    std::vector<ZWeaponEntry> & weapons;
+    CGunBros & tables;
+    std::vector<CGun::Entry> & weapons;
     CBrother::Vitals & vitals;
     CPlayerProgress & progress;
     ZShaderProgram & program;
@@ -157,10 +158,10 @@ struct SurvivalWavesFixture {
     CGameFlow * gameContext;
     bool withBrother;
     bool powerupStudy;
-    const ZMissionEntry * archiveMission;
+    const Mission::Entry * archiveMission;
     CResTOCManager & toc;
-    ZPackTables & tables;
-    std::vector<ZWeaponEntry> & weapons;
+    CGunBros & tables;
+    std::vector<CGun::Entry> & weapons;
     std::vector<CEnemy::Template> & enemies;
     CBrother::Vitals & vitals;
     CPlayerProgress & progress;
@@ -200,7 +201,7 @@ struct SurvivalCampaignFixture {
     const std::string & packShortName;
     unsigned mapIndex;
     bool check;
-    const ZMissionEntry * archiveMission;
+    const Mission::Entry * archiveMission;
     CBrother::Vitals & vitals;
     CMap & loaded;
     CLevel & scene;
@@ -224,7 +225,7 @@ struct SurvivalSceneFixture {
     bool localLive;
     bool deathStudy;
     CResTOCManager & toc;
-    ZPackTables & tables;
+    CGunBros & tables;
     CBrother::Vitals & vitals;
     ZWindow & window;
     ZShaderProgram & program;

@@ -483,7 +483,7 @@ namespace MapDetail {
 
 inline void LoadPlacedEnemies(CResTOCManager &tocManager, const ZShaderProgram &program,
                        CMap &loaded) {
-    ZPackTables tables(tocManager);
+    CGunBros tables(tocManager);
     unsigned failed = 0;
 
     for (std::uint32_t layer = 0; layer < loaded.GetObjectLayerCount();

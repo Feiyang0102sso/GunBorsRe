@@ -1,6 +1,6 @@
 #pragma once
 #include "gun_bros_re/ui/host/ZMenuTypes.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 
 namespace MenuDetail {
@@ -8,9 +8,9 @@ class CMenuSystem;
 class ZMenuSurface;
 class CMenuPostGame {
 public:
-    void Refresh(CMenuSystem &state, const CGameFlow &context, const std::vector<ZWeaponEntry> &weapons);
+    void Refresh(CMenuSystem &state, const CGameFlow &context, const std::vector<CGun::Entry> &weapons);
 
-    bool Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, ZPackTables &tables,
+    bool Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, CGunBros &tables,
         const CProfileManager &profile);
 
     float livePosition = 0;

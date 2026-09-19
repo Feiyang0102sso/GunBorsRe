@@ -5,7 +5,7 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include <cmath>
 #include <limits>
 
@@ -29,7 +29,7 @@ bool CLevel::IsMatchSpawnPending(unsigned peer) const {
     return !m_brotherModel->HasSpawned();
 }
 
-void CLevel::SetDeathmatch(CMPMatch *match, const std::vector<ZWeaponEntry> *weapons) {
+void CLevel::SetDeathmatch(CMPMatch *match, const std::vector<CGun::Entry> *weapons) {
     m_match = match; m_matchWeapons = weapons;
 }
 GameObjectRef CLevel::ActiveMatchGun(unsigned peer) const {

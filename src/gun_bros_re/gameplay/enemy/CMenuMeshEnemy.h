@@ -8,7 +8,7 @@
 
 class CMenuMeshEnemy {
 public:
-    bool Bind(ZPackTables &tables, CResTOCManager &toc, const GameObjectRef &resource,
+    bool Bind(CGunBros &tables, CResTOCManager &toc, const GameObjectRef &resource,
         const ZShaderProgram &program);
     void Update(std::uint64_t clock);
     bool Draw(const ZShaderProgram &program, float x, float y, float width,

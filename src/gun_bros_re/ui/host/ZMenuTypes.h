@@ -1,9 +1,9 @@
 #pragma once
 /** Shared resource types and desktop canvas units; no page state. */
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/data/ZPlanetCatalog.h"
-#include "gun_bros_re/data/ZMissionCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/ui/menus/CMenuMission.h"
+#include "gun_bros_re/data/mission/Mission.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include <algorithm>
 #include <cmath>

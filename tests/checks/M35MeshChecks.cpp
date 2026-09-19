@@ -34,11 +34,11 @@
 #include "TestOutput.h"
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
@@ -54,8 +54,8 @@
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshAnimationController.h"
@@ -105,10 +105,10 @@ public:
 int RunWeaponCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZWeaponEntry> weapons;
+    CGunBros tables(toc);
+    std::vector<CGun::Entry> weapons;
     CBrother::Template playerTemplate;
-    if (!LoadWeaponCatalog(toc, tables, weapons) ||
+    if (!CGun::LoadEntries(toc, tables, weapons) ||
         !playerTemplate.Load(toc, tables)) { return 1; }
 
     // Test the input mapping independently of each category's catalogue size.
@@ -137,8 +137,8 @@ int RunWeaponCheck(const std::string &bigDirectory) {
     emitter.animationMask = 0x20;
     if (emitter.SelectAnimation(0.5f) != 5) { return 1; }
     // Validate the actual STORE join, not hand-selected resource ordinals.
-    std::vector<ZStoreEntry> storeEntries;
-    if (!LoadStoreCatalog(toc, tables, storeEntries)) { return 1; }
+    std::vector<CStoreItem::Entry> storeEntries;
+    if (!CStoreItem::LoadEntries(toc, tables, storeEntries)) { return 1; }
     for (const auto &store : storeEntries) {
         if (store.data.objects.size() != 1 || store.data.objects.front().type != 6) { continue; }
         const auto &reference = store.data.objects.front().object;
@@ -168,7 +168,7 @@ int RunWeaponCheck(const std::string &bigDirectory) {
         if (!window.PumpEvents()) { return 1; }
         effects.Clear();
         CBrother player;
-        const ZWeaponEntry &entry = weapons[i];
+        const CGun::Entry &entry = weapons[i];
         if (!player.BuildBody(tables, playerTemplate.GetMoveSet()) ||
             !player.EquipWeapon(tables, playerTemplate.GetScript(), entry.data, entry.owner) ||
             !player.CreateBuffers(program)) { return 1; }
@@ -382,10 +382,10 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
     if (!CheckParticleRuntime()) { return 1; }
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZWeaponEntry> weapons;
+    CGunBros tables(toc);
+    std::vector<CGun::Entry> weapons;
     CBrother::Template playerTemplate;
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !playerTemplate.Load(toc, tables)) { return 1; }
+    if (!CGun::LoadEntries(toc, tables, weapons) || !playerTemplate.Load(toc, tables)) { return 1; }
     ZWindow window;
     if (!window.Open("Weapon effect verification", 800, 600)) { return 1; }
     glViewport(0, 0, 800, 600);

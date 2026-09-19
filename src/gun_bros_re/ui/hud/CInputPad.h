@@ -10,8 +10,8 @@ public:
     CPowerUpSelector &PowerupSelector() { return m_selector; }
     void BrowseRemoteShop(unsigned selection) { m_selector.BrowseRemoteShop(selection); }
     bool BackFromSelectorPrompt() { return m_selector.BackFromSelectorPrompt(); }
-    void ReportSelectorPurchase(ZPurchaseResult result, const ZInputPadState &state) { m_selector.ReportSelectorPurchase(result, state); }
-    const ZStoreEntry *SelectedItem() const { return m_selector.SelectedItem(); }
+    void ReportSelectorPurchase(CProfileManager::PurchaseResult result, const ZInputPadState &state) { m_selector.ReportSelectorPurchase(result, state); }
+    const CStoreItem::Entry *SelectedItem() const { return m_selector.SelectedItem(); }
     bool ConfigureDeathmatch(const std::vector<GameObjectRef> &stores) { return m_selector.ConfigureDeathmatch(stores); }
     void ResetSelector(bool startOnGuns = false) { m_selector.ResetSelector(startOnGuns); }
     unsigned MatchSelectionSlot() const { return m_selector.MatchSelectionSlot(); }
@@ -20,7 +20,7 @@ public:
     void UpdateDialog(unsigned deltaMs) { m_dialog.Update(deltaMs); }
     void ClearDialog(bool immediate) { m_dialog.Clear(immediate); }
     bool IsDialogDone() const { return m_dialog.IsDone(); }
-    bool Init(CResTOCManager &toc, ZPackTables &tables);
+    bool Init(CResTOCManager &toc, CGunBros &tables);
     void SetChallenges(const CChallengeManager *challenges) { m_challenges = challenges; }
     bool HasChallenges() const;
     bool IsChallengeHeld() const { return m_challengeHeld; }
@@ -85,7 +85,7 @@ private:
     unsigned m_challengeTime = 0, m_challengeRows = 0;
     CDialogPopup m_dialog;
     struct Button;
-    friend int CheckDeathmatchMenus(CResTOCManager &, ZPackTables &, CProfileManager &);
+    friend int CheckDeathmatchMenus(CResTOCManager &, CGunBros &, CProfileManager &);
     friend int RunOriginalHudCheck(const std::string &bigDirectory);
     friend int RunOriginalDialogCheck(const std::string &bigDirectory);
     friend int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory);

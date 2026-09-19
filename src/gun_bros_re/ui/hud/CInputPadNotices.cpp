@@ -6,7 +6,7 @@
 #include "gun_bros_re/ui/content/CMenuDataProvider.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/host/ZHostSettings.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"

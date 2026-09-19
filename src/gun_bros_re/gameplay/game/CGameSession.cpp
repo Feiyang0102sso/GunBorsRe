@@ -18,7 +18,7 @@ int CGame::Session::Run() {
     leftPowerup = powerups.GetEquipped(0);
     rightPowerup = powerups.GetEquipped(1);
     lastSavedTutorialStep = session.GetLevel().GetTutorialStep();
-    if (launch.deathmatch && !LoadStoreCatalog(toc, tables, matchStore)) { return 1; }
+    if (launch.deathmatch && !CStoreItem::LoadEntries(toc, tables, matchStore)) { return 1; }
     if (launch.deathmatch && !survivalHud.ConfigureDeathmatch(matches[launch.matchIndex].data.stores)) { return 1; }
     if (const int result = Notify(ZGameObserver::FramePhase::Begin); result >= 0) { return result; }
     previous = window.GetTicksMs();

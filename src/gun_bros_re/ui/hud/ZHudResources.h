@@ -5,9 +5,9 @@
 struct ZHudResources {
     CResTOCManager *m_toc = nullptr;
     mutable ZMovieRenderer m_movies;
-    ZPackTables *m_tables = nullptr;
-    std::vector<ZStoreEntry> m_store;
-    std::vector<ZPowerupEntry> m_powerups;
+    CGunBros *m_tables = nullptr;
+    std::vector<CStoreItem::Entry> m_store;
+    std::vector<CPowerup::Entry> m_powerups;
     std::map<std::uint32_t, std::unique_ptr<ZMovieRenderer>> m_powerupRenderers;
     std::map<std::uint64_t, std::unique_ptr<ZTexture>> m_icons;
     void Icon(unsigned type, const GameObjectRef &object, const ZMovieRegion &region);

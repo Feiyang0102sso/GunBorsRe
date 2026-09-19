@@ -3,7 +3,7 @@
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include <cstdio>
 
-bool CLevel::InitPickups(CResTOCManager &toc, ZPackTables &tables,
+bool CLevel::InitPickups(CResTOCManager &toc, CGunBros &tables,
     const ZShaderProgram &program, CProfileManager *profile) {
     ResetPickups();
     m_pickupBatch.reset();

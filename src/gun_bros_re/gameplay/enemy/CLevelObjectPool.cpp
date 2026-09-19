@@ -23,11 +23,11 @@ constexpr std::size_t kEnemyPoolCapacity = 100;
 constexpr std::size_t kPickupPoolCapacity = 20; // GetPickup :145637 compares the free index to 19.
 }
 
-CLevelObjectPool::CLevelObjectPool(ZPackTables &tables, const ZShaderProgram &program,
+CLevelObjectPool::CLevelObjectPool(CGunBros &tables, const ZShaderProgram &program,
     const std::vector<CEnemy::Template> &catalog)
     : m_tables(&tables), m_program(&program), m_catalog(&catalog) {}
 
-void CLevelObjectPool::BindRuntime(ZPackTables &tables, const ZShaderProgram &program,
+void CLevelObjectPool::BindRuntime(CGunBros &tables, const ZShaderProgram &program,
     const std::vector<CEnemy::Template> &catalog) {
     m_tables = &tables;
     m_program = &program;

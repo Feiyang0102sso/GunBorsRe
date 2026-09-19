@@ -40,9 +40,9 @@ namespace MenuDetail {
 class CMenuSystem;
 class ZMenuSurface;
 
-const ZWeaponEntry *FindMasteryWeapon(const std::vector<ZWeaponEntry> &weapons, const GameObjectRef &ref);
+const CGun::Entry *FindMasteryWeapon(const std::vector<CGun::Entry> &weapons, const GameObjectRef &ref);
 
-const ZStoreEntry *FindWeaponStore(const std::vector<ZStoreEntry> &store, const GameObjectRef &ref);
+const CStoreItem::Entry *FindWeaponStore(const std::vector<CStoreItem::Entry> &store, const GameObjectRef &ref);
 
 // GLU_MOVIE_UPGRADE_POPUP regions, in the order the movie declares them:
 // portrait, close, meter, CURRENT and NEXT headers, the two stat columns, the
@@ -68,7 +68,7 @@ void CloseMastery(CMenuSystem &state);
 
 /** How far into GLU_MOVIE_WEAPON_UPGRADE_MASTERY the meter stands for this
  * much experience. The movie's chapters are the three cells. */
-unsigned MasteryMeterTime(ZMenuSurface &view, const ZWeaponEntry &weapon, unsigned experience);
+unsigned MasteryMeterTime(ZMenuSurface &view, const CGun::Entry &weapon, unsigned experience);
 
 /** Bind CMenuMovieButton's original region 1 graphic/label and region 0 hit box. */
 bool DrawUpgradeButton(ZMenuSurface &view, unsigned index, const ZMovieRegion &area,
@@ -84,7 +84,7 @@ void DrawUpgradeStats(ZMenuSurface &view, const ZMovieRegion &area, const CStore
 /** The original popup advances its own movie and stars through six states.
  * All geometry, fonts, item values, chapter times and art are read from BIG. */
 bool DrawMastery(ZMenuSurface &view, CMenuSystem &state, CProfileManager &profile, CResTOCManager &toc,
-    ZPackTables &tables, const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
+    CGunBros &tables, const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
     const std::filesystem::path &savePath, CPlayerProgress *headerProgress = nullptr);
 
 }

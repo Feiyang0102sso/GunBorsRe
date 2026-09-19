@@ -3,7 +3,7 @@
  * The BIG samples contain no Movie layer. Keep its reference and signed
  * position intact; do not silently discard an unverified rendering branch.
  */
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 class CLayerMovie {
 public:
     bool Init(CArrayInputStream &stream);

@@ -10,7 +10,7 @@
 bool CBrother::UsePowerup(CPowerUpSelector &selector, bool fromSelector) {
     if (selector.m_match != nullptr && selector.m_match->GetResult() != CMPMatch::Result::Playing) { return false; }
     if (selector.m_powerup->IsActive()) { return false; }
-    const ZPowerupEntry *entry = selector.GetSelected();
+    const CPowerup::Entry *entry = selector.GetSelected();
     if (entry == nullptr || !selector.IsSupported(*entry) || selector.GetCount() == 0 || !selector.m_player->weapon) { return false; }
     if (!HasSpawned()) { return false; }
     if (selector.m_match != nullptr && selector.m_cooldowns[entry->resource.localIndex] > 0) { return false; }

@@ -4,17 +4,19 @@
  */
 #ifndef GUN_BROS_RE_CPOWERUP_H
 #define GUN_BROS_RE_CPOWERUP_H
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/application/CGunBros.h"
+#include <string>
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include <array>
 #include <memory>
 
 class CResTOCManager;
-class ZPackTables;
+class CGunBros;
 class CLevel;
 class CPowerUpSelector;
-struct ZPowerupEntry;
+
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 class CLevel;
 
@@ -39,8 +41,11 @@ struct ZPowerupStatus {
 
 class CPowerup : public ZGameScriptObject {
 public:
+    /** Host listing snapshot; parsed object ownership remains in the pack. */
+    struct Entry;
+    static bool LoadEntries(CResTOCManager &toc, CGunBros &tables, std::vector<Entry> &entries);
     CPowerup();
-    CPowerup(CResTOCManager &toc, ZPackTables &tables, CLevel &scene);
+    CPowerup(CResTOCManager &toc, CGunBros &tables, CLevel &scene);
     ~CPowerup();
     struct Template {
         CGameAssetRef name;
@@ -52,6 +57,7 @@ public:
         std::uint8_t field112 = 0;
         GameObjectRef effect;
         std::uint8_t field124 = 0;
+        static const Template *Load(CResTOCManager &toc, CGunBros &tables, const GameObjectRef &ref);
         bool Init(CArrayInputStream &stream);
     };
     void Bind(const Template &data, const ZPowerupStatus &status = {});
@@ -76,7 +82,7 @@ public:
      * The presentation constructor binds desktop drawing resources; the default
      * constructor keeps template queries and script-only execution independent.
      */
-    bool Start(const ZPowerupEntry &entry, bool fromSelector = false, unsigned stock = 1);
+    bool Start(const CPowerup::Entry &entry, bool fromSelector = false, unsigned stock = 1);
     /** Stable model ownership survives replacement of its current weapon bank. */
     void BindActor(CBrother &player, CBrother::Vitals &vitals);
     void SetOwner(Collision::ObjectId owner);
@@ -119,5 +125,11 @@ private:
     int m_timerMs = 0;
     bool m_done = false;
     unsigned m_unsupported = 0;
+};
+struct CPowerup::Entry {
+    GameObjectRef resource;
+    CPowerup::Template data;
+    std::string name;
+    std::string owner;
 };
 #endif

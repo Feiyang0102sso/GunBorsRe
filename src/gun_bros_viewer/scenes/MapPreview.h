@@ -43,7 +43,7 @@ int RunMapList(const std::string &bigDirectory);
 
 /** Retail survival on the same terrain renderer; research viewers stay separate. */
 struct CGameFlow;
-struct ZMissionEntry;
+#include "gun_bros_re/data/mission/Mission.h"
 // RunSurvival is declared in runtime/MapScene.h; no game caller needs this harness.
 
 #endif  // GUN_BROS_VIEWER_MAPPREVIEW_H

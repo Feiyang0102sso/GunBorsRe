@@ -2,7 +2,7 @@
  * Byte layout follows entries/common.bt and flow_bytecode.bt; never game data.
  */
 #include "gameplay/PowerupRuntimeChecks.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include <algorithm>
 #include <cstdio>
@@ -15,7 +15,7 @@ void Block(Bytes &bytes, const Bytes &code) {
     bytes.insert(bytes.end(), code.begin(), code.end());
 }
 
-bool MakeTimedPowerup(ZPowerupEntry &entry, bool unsupported = false) {
+bool MakeTimedPowerup(CPowerup::Entry &entry, bool unsupported = false) {
     entry.owner = "synthetic-timed-powerup";
     entry.resource.packHash = 0x53594E54;
     entry.resource.localIndex = 42;
@@ -41,10 +41,10 @@ bool MakeTimedPowerup(ZPowerupEntry &entry, bool unsupported = false) {
 }
 }
 
-unsigned CheckPowerupRuntime(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
+unsigned CheckPowerupRuntime(CResTOCManager &toc, CGunBros &tables, CLevel &scene,
     CBrother &player, CBrother::Vitals &vitals) {
-    ZPowerupEntry timed;
-    ZPowerupEntry unsupported;
+    CPowerup::Entry timed;
+    CPowerup::Entry unsupported;
     if (!MakeTimedPowerup(timed) || !MakeTimedPowerup(unsupported, true)) { return 1; }
     CPowerup powerup(toc, tables, scene);
     powerup.BindActor(player, vitals);

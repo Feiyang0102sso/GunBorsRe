@@ -1,7 +1,7 @@
 /** Host roster configuration. Native profiles retain earned progress separately. */
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalBotFriend.h"
-#include "gun_bros_re/data/CPlayerProgress.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include "engine/core/CStringToKey.h"
 #include <charconv>
 #include <fstream>
@@ -18,7 +18,7 @@ bool Number(const std::string &text, unsigned &value) {
     const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
     return result.ec == std::errc() && result.ptr == text.data() + text.size();
 }
-bool Reference(CResTOCManager &toc, ZPackTables &tables, const std::string &value, ZGameSection section, GameObjectRef &ref) {
+bool Reference(CResTOCManager &toc, CGunBros &tables, const std::string &value, ZGameSection section, GameObjectRef &ref) {
     if (value == "none" && section == ZGameSection::Armor) { ref = {}; return true; }
     const auto separator = value.find(':');
     if (separator == std::string::npos) { return false; }
@@ -32,7 +32,7 @@ bool Reference(CResTOCManager &toc, ZPackTables &tables, const std::string &valu
     std::vector<std::uint8_t> bytes;
     return tables.ReadSectionResource(ref.packHash, section, index, bytes);
 }
-std::string ReferenceText(ZPackTables &tables, const GameObjectRef &ref) {
+std::string ReferenceText(CGunBros &tables, const GameObjectRef &ref) {
     if (ref.IsNull()) { return "none"; }
     return tables.GetPackName(ref.packHash) + ":" + std::to_string(ref.localIndex);
 }
@@ -58,7 +58,7 @@ ZLocalBotFriend *ZLocalBotRoster::MatchSelected() const {
     return At(m_selected - 1);
 }
 
-bool ZLocalBotRoster::Load(CResTOCManager &toc, ZPackTables &tables, const std::filesystem::path &playerPath, CProfileManager &player) {
+bool ZLocalBotRoster::Load(CResTOCManager &toc, CGunBros &tables, const std::filesystem::path &playerPath, CProfileManager &player) {
     auto root = playerPath;
     if (root.extension() == ".dat") { root = root.parent_path(); }
     std::filesystem::create_directories(root);

@@ -6,7 +6,7 @@
 #include "engine/core/ZMatrix4d.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/platform/ZGLLoader.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
@@ -33,10 +33,10 @@ public:
 int RunMineCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZWeaponEntry> weapons;
+    CGunBros tables(toc);
+    std::vector<CGun::Entry> weapons;
     CBrother::Template playerTemplate;
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !playerTemplate.Load(toc, tables)) { return 1; }
+    if (!CGun::LoadEntries(toc, tables, weapons) || !playerTemplate.Load(toc, tables)) { return 1; }
     ZWindow window;
     if (!window.Open("Mine diagnostic", 800, 600)) { return 1; }
     ZShaderProgram program;

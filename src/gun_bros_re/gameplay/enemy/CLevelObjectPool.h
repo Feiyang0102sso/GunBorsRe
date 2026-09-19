@@ -26,9 +26,9 @@ class CLevel;
 class CLevelObjectPool {
 public:
     CLevelObjectPool() = default;
-    CLevelObjectPool(ZPackTables &tables, const ZShaderProgram &program,
+    CLevelObjectPool(CGunBros &tables, const ZShaderProgram &program,
         const std::vector<CEnemy::Template> &catalog);
-    void BindRuntime(ZPackTables &tables, const ZShaderProgram &program,
+    void BindRuntime(CGunBros &tables, const ZShaderProgram &program,
         const std::vector<CEnemy::Template> &catalog);
 
     void SetLevel(CLevel *level) { m_level = level; }
@@ -68,7 +68,7 @@ private:
         Collision::ObjectId summoner = 0;
     };
 
-    ZPackTables *m_tables = nullptr;
+    CGunBros *m_tables = nullptr;
     const ZShaderProgram *m_program = nullptr;
     const std::vector<CEnemy::Template> *m_catalog = nullptr;
     CLevel *m_level = nullptr;

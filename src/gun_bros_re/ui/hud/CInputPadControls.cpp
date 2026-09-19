@@ -6,7 +6,7 @@
 #include "gun_bros_re/ui/content/CMenuDataProvider.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/host/ZHostSettings.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -128,13 +128,13 @@ bool CInputPad::DrawPowerup(const ZInputPadState &state, unsigned slot, float x,
     const GameObjectRef *object = &state.leftPowerup;
     unsigned count = state.leftCount;
     if (slot == 1) { object = &state.rightPowerup; count = state.rightCount; }
-    const ZPowerupEntry *powerup = nullptr;
+    const CPowerup::Entry *powerup = nullptr;
     for (const auto &entry : m_resources.m_powerups) {
         if (entry.resource.packHash == object->packHash && entry.resource.localIndex == object->localIndex) { powerup = &entry; break; }
     }
     class PowerupCallback : public ZMovieRegionCallback {
     public:
-        PowerupCallback(CInputPad &owner, const ZPowerupEntry *item, unsigned quantity, const ZInputPadState &snapshot) : hud(owner), powerup(item), count(quantity), state(snapshot) {}
+        PowerupCallback(CInputPad &owner, const CPowerup::Entry *item, unsigned quantity, const ZInputPadState &snapshot) : hud(owner), powerup(item), count(quantity), state(snapshot) {}
         bool DrawMovieRegion(const ZMovieRegion &region) override {
             // Original binding: region1 = count, region2 = alternate input icon.
             if (powerup == nullptr) { return true; }
@@ -164,7 +164,7 @@ bool CInputPad::DrawPowerup(const ZInputPadState &state, unsigned slot, float x,
             return true;
         }
         CInputPad &hud;
-        const ZPowerupEntry *powerup;
+        const CPowerup::Entry *powerup;
         unsigned count;
         const ZInputPadState &state;
     } callback(*this, powerup, count, state);

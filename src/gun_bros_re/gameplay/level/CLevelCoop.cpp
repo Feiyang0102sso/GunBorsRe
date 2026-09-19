@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include <cmath>
 
 void CLevel::UpdatePeerIndicator(unsigned deltaMs, float left, float top, float width, float height) {

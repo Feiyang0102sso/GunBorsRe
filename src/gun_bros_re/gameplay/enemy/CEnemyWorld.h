@@ -5,7 +5,7 @@
  * not a recovered original class; C prefix is the requested project convention.
  */
 #pragma once
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "gun_bros_re/gameplay/map/CLayerObject.h"
 /** The level world decides which spawn nodes are free and owns the actors. */
 class CEnemyWorld {

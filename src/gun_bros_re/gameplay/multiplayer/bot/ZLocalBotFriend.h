@@ -2,11 +2,11 @@
  * See tests/live-friend-save-research.md; never manufacture NGS credentials A.
  */
 #pragma once
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 class ZLocalBotFriend {
 public:
     static constexpr const char *Identity = "windows-test-bot-1";
-    bool Load(CResTOCManager &toc, ZPackTables &tables, const std::filesystem::path &playerPath, const CProfileManager *seed = nullptr);
+    bool Load(CResTOCManager &toc, CGunBros &tables, const std::filesystem::path &playerPath, const CProfileManager *seed = nullptr);
     bool Save() const;
     bool Select(bool active);
     std::string identity = Identity;
@@ -21,7 +21,7 @@ private:
 /** Editable Windows peer definitions; equipment values remain BIG references. */
 class ZLocalBotRoster {
 public:
-    bool Load(CResTOCManager &toc, ZPackTables &tables, const std::filesystem::path &playerPath, CProfileManager &player);
+    bool Load(CResTOCManager &toc, CGunBros &tables, const std::filesystem::path &playerPath, CProfileManager &player);
     bool Select(unsigned index); // Zero selects the original default brother.
     ZLocalBotFriend *At(unsigned index) const;
     ZLocalBotFriend *MatchSelected() const;

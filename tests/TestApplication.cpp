@@ -1,3 +1,4 @@
+#include "tests/research/MissionStudyInternal.h"
 #include "ui/GameMenuStudy.h"
 #include "TestApplication.h"
 #include "checks/ArenaChecks.h"
@@ -31,21 +32,21 @@
 #include "gun_bros_viewer/scenes/EnemyPreview.h"
 #include "gun_bros_viewer/scenes/ArenaPreview.h"
 #include "tests/checks/M5LevelFlow.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/ui/host/ZGameFrontEnd.h"
 #include "tests/checks/PropCatalog.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/data/ZMissionCatalog.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
+#include "gun_bros_re/data/mission/Mission.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "engine/platform/ZAudioPlayer.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "tests/research/MovieStudy.h"
 #include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/host/ZHostSettings.h"
-#include "gun_bros_re/data/CDailyBonusTracking.h"
+#include "gun_bros_re/data/profile/CDailyBonusTracking.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -678,7 +679,7 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     }
     // Retail startup now enters the game; the historical menu above is explicit.
     if (modeArgumentCount == 0 || researchMenu) { PrintTestUsage(); return 0; }
-    ZBigVersion bigVersion = ZBigVersion::Unknown;
+    CGameObjectPack::BigVersion bigVersion = CGameObjectPack::BigVersion::Unknown;
     if (inspectBigVersion || (!introStudy && !checkMedia)) {
         if (!DetectViewerBigVersion(bigDirectory, bigVersion, inspectBigVersion)) { return 1; }
     }

@@ -5,7 +5,7 @@
 #include <cstdio>
 
 namespace {
-unsigned CheckEnemyNodeAndSpawn(CResTOCManager &toc, ZPackTables &tables,
+unsigned CheckEnemyNodeAndSpawn(CResTOCManager &toc, CGunBros &tables,
     CLevel &scene, const CEnemy::Template &entry) {
     CLevel::Template levelTemplate;
     GameObjectRef expectedResource;
@@ -72,7 +72,7 @@ unsigned CheckEnemyNodeAndSpawn(CResTOCManager &toc, ZPackTables &tables,
 }
 }
 
-unsigned CheckEnemyResources(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
+unsigned CheckEnemyResources(CResTOCManager &toc, CGunBros &tables, CLevel &scene,
     const CEnemy::Template &entry, const ZShaderProgram &program) {
     unsigned failures = 0;
     CEnemy::ResourceCache cache;

@@ -6,8 +6,8 @@
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/ui/CMenuSplashData.inc"
 #include "engine/graphics/CKeysetResource.h"
-#include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/data/CPlayerProgress.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 
 enum class ZLoadingMode { Solo, Live, Deathmatch };
 

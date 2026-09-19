@@ -1,3 +1,5 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_re/ui/menus/CMenuPostGameOption.h"
@@ -15,8 +17,8 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 #include "TestOutput.h"
@@ -70,22 +72,22 @@ static bool CheckUnselectedTabArtwork(ZMenuSurface &view, const char *table) {
 int RunPostGameMenuCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZPlanetEntry> planets;
-    std::vector<ZWeaponEntry> weapons;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadPlanetCatalog(toc, tables, planets) ||
-        !LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
+    std::vector<MenuDetail::CMenuMission::PlanetEntry> planets;
+    std::vector<CGun::Entry> weapons;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !MenuDetail::CMenuMission::LoadPlanets(toc, tables, planets) ||
+        !CGun::LoadEntries(toc, tables, weapons)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("postgame-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     unsigned tested = 0;
     for (unsigned type : {1u, 2u}) {
         for (unsigned index = 0; index < planets.size(); ++index) {
             const auto &planet = planets[index];
             if (planet.missions.empty() || planet.missions[0].type != type) { continue; }
-            ZMissionEntry mission;
+            Mission::Entry mission;
             mission.resource = planet.data.missions[0];
             mission.data = planet.missions[0];
             mission.title = planet.missionInfo[0].title;
@@ -93,7 +95,7 @@ int RunPostGameMenuCheck(const std::string &bigDirectory) {
             context.mission = mission.resource;
             context.missionLevel = mission.data.level;
             if (type == 2) { context.hordeStart = 0; }
-            const ZMissionEntry *archiveMission = nullptr;
+            const Mission::Entry *archiveMission = nullptr;
             if (type == 2) { archiveMission = &mission; }
             const auto &map = planet.missionInfo[0].map;
             if (RunSurvivalStudy(bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, {}, 0,
@@ -201,16 +203,16 @@ int RunPostGameMenuCheck(const std::string &bigDirectory) {
 int RunGreetingCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
+    std::vector<CStoreItem::Entry> store;
     CDailyBonusTracking daily;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store) ||
         !daily.Load(toc, tables)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("greeting-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     const auto first = static_cast<std::uint32_t>(CurrentSeconds());
     // Explicit fixture: a new daily cycle, preserving the real inventory/wallet.
     profile.dailyLastLaunchSeconds = first;
@@ -270,7 +272,7 @@ int RunGreetingCheck(const std::string &bigDirectory) {
     }
     CProfileManager reloaded;
     reloaded.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, reloaded, path, {}) || reloaded.dailyLastCommit != 7 ||
+    if (!(reloaded).LoadNative(toc, tables, path, {}) || reloaded.dailyLastCommit != 7 ||
         reloaded.coins != profile.coins || reloaded.warbucks != profile.warbucks) { return 1; }
     const auto seconds = first + 9 * 86400;
     daily.RefreshUsageData(reloaded, seconds);
@@ -280,24 +282,24 @@ int RunGreetingCheck(const std::string &bigDirectory) {
         !daily.CommitBonus(reloaded, seconds, store) || !reloaded.SaveToDisk(path)) { return 1; }
     CProfileManager finalProfile;
     finalProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, finalProfile, path, {}) || finalProfile.dailyLastCommit != 2 ||
+    if (!(finalProfile).LoadNative(toc, tables, path, {}) || finalProfile.dailyLastCommit != 2 ||
         daily.IsBonusAvailable(finalProfile, seconds) || view.movies.Failures() != 0 || glGetError() != 0) { return 1; }
     std::printf("[greeting-check] original-buttons=7 no-award-on-show=7 exit-only=7 reverse=7 duplicate=7 cycle=7 gap=1 cht=1 native-reload=2 failures=0\n");
     return 0;
 }
 
 /** Run the actual shell through collection, header entrance and one cold store wipe. */
-int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &probe,
+int CheckRefineryStoreTransition(CResTOCManager &toc, CGunBros &tables, ZMenuSurface &probe,
     const CRefinementManager::Template &refinement, unsigned previousCategory) {
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("refinery-store-transition/profile-") + std::to_string(previousCategory));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     // Isolated ready-to-collect fixture; the shell still owns the click and transfer.
     profile.xplodium = 250;
     if (!profile.refinery.BeginRefinement(6, 6, profile.xplodium, profile.xplodium, CurrentSeconds())) { return 1; }
@@ -375,7 +377,7 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZMenu
             TestOutput::Path("refinery-store-transition/active-gun-") + std::to_string(slot + 1) + ".png",
             nullptr, true, &probe.window) != -2 || state.store.shopGunSlot != slot || profile.activeWeaponSlot != slot) { return 1; }
         CProfileManager restored;
-        if (!LoadProfile(toc, tables, restored, path) || restored.activeWeaponSlot != slot) { return 1; }
+        if (!(restored).LoadNative(toc, tables, path) || restored.activeWeaponSlot != slot) { return 1; }
         std::printf("[store-return-slot-check] active=%u store=%u saved=%u failures=0\n",
             slot, state.store.shopGunSlot, restored.activeWeaponSlot);
     }
@@ -404,7 +406,7 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZMenu
         TestOutput::Path("refinery-store-transition/store-swap.png"), &swapActions, true, &probe.window) != -2 ||
         profile.activeWeaponSlot != 0 || state.store.shopGunSlot != 0) { return 1; }
     CProfileManager swapped;
-    if (!LoadProfile(toc, tables, swapped, path) || swapped.activeWeaponSlot != 0) { return 1; }
+    if (!(swapped).LoadNative(toc, tables, path) || swapped.activeWeaponSlot != 0) { return 1; }
     std::printf("[store-return-slot-check] real-button swap=1-to-0 saved=0 failures=0\n");
     return 0;
 }
@@ -412,13 +414,13 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZMenu
 int RunRefineryMenuCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("refinery-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
@@ -510,13 +512,13 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
         view.refineryEffects.RefineryParticleCount(6) == 0 || !state.refinery.DrawOverlay(view, state) ||
         !profile.SaveToDisk(path) || !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-transfer.png"))) { return 1; }
     CProfileManager restored;
-    if (!LoadProfile(toc, tables, restored, path) || restored.xplodium != 250 || restored.coins != coins) { return 1; }
+    if (!(restored).LoadNative(toc, tables, path) || restored.xplodium != 250 || restored.coins != coins) { return 1; }
     view.clock += 188;
     view.Begin();
     if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTransfer != -1 ||
         profile.xplodium != 0 || profile.coins != coins || profile.refinery.slots[6].state != 3 ||
         !state.refinementRequired) { return 1; }
-    if (!ReloadProfile(restored, path) || restored.refinery.slots[6].state != 3 || restored.xplodium != 0) { return 1; }
+    if (!(restored).ReloadNative(path) || restored.refinery.slots[6].state != 3 || restored.xplodium != 0) { return 1; }
     const CMovie *fill = view.movies.GetMovie(view.movies.Ordinal("GLU_MOVIE_BUCKET_FILL"));
     if (fill == nullptr) { return 1; }
     view.clock += fill->duration;
@@ -539,7 +541,7 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     view.Begin();
     if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || profile.coins != coins + yield ||
         state.refinementRequired || profile.refinery.slots[6].state != 1 || profile.warbucks != warbucks ||
-        !ReloadProfile(restored, path) || restored.coins != profile.coins || restored.refinery.slots[6].state != 1) { return 1; }
+        !(restored).ReloadNative(path) || restored.coins != profile.coins || restored.refinery.slots[6].state != 1) { return 1; }
     if (state.stack.page != 3) {
         std::printf("[refinery-check] collection must wait for navigation: expected page=3 actual=%u\n", state.stack.page);
         return 1;
@@ -591,10 +593,10 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
 int RunNavigationBarCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CProfileManager profile;
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("header-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
@@ -667,10 +669,10 @@ int RunNavigationBarCheck(const std::string &bigDirectory) {
 int RunMissionMenuCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CProfileManager profile;
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("mission-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
@@ -767,7 +769,7 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
         }
     }
     CProfileManager fresh;
-    if (!LoadProfile(toc, tables, fresh, path / "fresh")) { return 1; }
+    if (!(fresh).LoadNative(toc, tables, path / "fresh")) { return 1; }
     for (const auto &planet : view.planets.planetEntries) {
         for (unsigned index = 0; index < planet.missions.size(); ++index) {
             const auto &mission = planet.missions[index];
@@ -787,14 +789,14 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
 int RunPlanetMenuCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("planet-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
@@ -902,14 +904,14 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
 int RunSocialOfflineCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("social-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     const auto originalCoins = profile.coins;
     const auto originalBucks = profile.warbucks;
     // Make every legacy condition pass, then prove the native boundary blocks it.
@@ -970,7 +972,7 @@ int RunSocialOfflineCheck(const std::string &bigDirectory) {
     }
     GameHostSettings().isConnected = false;
     if (profile.coins != originalCoins || profile.warbucks != originalBucks || !profile.SaveToDisk(path) ||
-        !ReloadProfile(profile, path) || profile.coins != originalCoins || profile.warbucks != originalBucks) { return 1; }
+        !(profile).ReloadNative(path) || profile.coins != originalCoins || profile.warbucks != originalBucks) { return 1; }
     std::printf("[social-check] native-no-legacy-reward wallet-reload failures=0\n");
     return RunLocalOnlineCheck(bigDirectory);
 }
@@ -978,14 +980,14 @@ int RunSocialOfflineCheck(const std::string &bigDirectory) {
 int RunOptionsCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("options-check-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
@@ -1120,17 +1122,17 @@ int RunGameMenuCheck(const std::string &bigDirectory) {
 int RunPromotionCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store) ||
+        !CGun::LoadEntries(toc, tables, weapons) || !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const std::filesystem::path path = TestOutput::Path("ui-restoration-promotion-profile");
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.animateNavigation = false;
@@ -1164,7 +1166,7 @@ int RunPromotionCheck(const std::string &bigDirectory) {
         if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state)) { return 1; }
         CPlayerProgress::Template progressTemplate;
         CPlayerProgress progress;
-        if (!LoadPlayerProgress(toc, tables, progressTemplate)) { return 1; }
+        if (!CPlayerProgress::Template::Load(toc, tables, progressTemplate)) { return 1; }
         progress.Bind(progressTemplate); progress.SetExperience(profile.experience);
         if (view.navigation.Draw(view, profile, progress, 2) == -3 || !state.promotion.Draw(view.movies) ||
             !state.promotion.IsReady() || state.promotion.Hits().size() != 3) { return 1; }
@@ -1204,7 +1206,7 @@ int RunPromotionCheck(const std::string &bigDirectory) {
 int RunLoadingWipeCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     ZWindow window;
     if (!window.Open("Gun Bros", 1600, 1200)) { return 1; }
     ZMovieRenderer movies;
@@ -1212,9 +1214,9 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
     if (!movies.Init(core, core)) { return 1; }
     CRefinementManager::Template refinement;
     CProfileManager profile;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     profile.Reset(core.GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, profile, TestOutput::Path("ui-restoration-loading-profile"), TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, TestOutput::Path("ui-restoration-loading-profile"), TestOutput::Fixtures())) { return 1; }
     unsigned count = 1, failures = 0;
     for (unsigned index = 0; index < count; ++index) {
         CMenuSplash splash;
@@ -1260,12 +1262,12 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
         std::printf("[loading-wipe-check] frame=%u time=%u duration=%u old-pixels=%u new-pixels=%u failures=%u\n",
             frame, wipe.Time(), duration, red, blue, failures);
     }
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
     CPlayerProgress::Template progress;
-    if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor) || !LoadPlayerProgress(toc, tables, progress)) { return 1; }
+    if (!CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor) || !CPlayerProgress::Template::Load(toc, tables, progress)) { return 1; }
     const auto header = movies.Ordinal("GLU_MOVIE_HEADER");
     unsigned headerStart = 0, headerEnd = 0;
     if (!movies.GetMovie(header)->GetChapterRange(2, headerStart, headerEnd)) { return 1; }
@@ -1361,18 +1363,18 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
 int RunPostGamePresentationCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CPlayerProgress::Template progress;
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
-        !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CPlayerProgress::Template::Load(toc, tables, progress) || !CRefinementManager::Template::Load(toc, tables, refinement) ||
+        !CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     CProfileManager profile;
     const auto path = std::filesystem::path(TestOutput::Path("postgame-presentation")) / std::to_string(GetTickCount64());
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZWindow window;
     if (!window.Open("Postgame presentation verification", 1600, 1200)) { return 1; }
     ZMenuSurface view(&window);
@@ -1434,7 +1436,7 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
         input.ReadUInt8();
         CGameAssetRef nameRef;
         nameRef.Init(input);
-        const std::string name = ReadGameString(toc, nameRef);
+        const std::string name = tables.ReadString(nameRef);
         if (name.find("Zom") != 0 && name.find("ZOM") != 0 && name != "CUTTLES" && name != "Cuttles") { continue; }
         CEnemyCasualty casualty;
         casualty.resource.packHash = entry.packHash;

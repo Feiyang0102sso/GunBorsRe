@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 /** CGame session host implementation; original ownership follows game.cpp.
  * SDL/GL submission and borrowed desktop resources are host adaptations.
  */
@@ -5,8 +6,8 @@
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/ui/host/ZLoadingScreen.h"
-#include "gun_bros_re/data/ZProfileStorage.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/gameplay/map/CLayerObjectPlayers.h"
 #include "engine/core/CStringToKey.h"
 #include <ctime>
@@ -30,12 +31,12 @@ int CGame::Run(const Launch &launch) {
     if (!toc.Init(bigDirectory, kArtSetXga) || !toc.Bind()) { return 1; }
     const int packIndex = toc.GetPackIndexFromName(packShortName.c_str());
     if (packIndex < 0) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     if (!tables.HasLatestBigVersion()) {
         std::printf("[survival] BigVersion 1 required; older formats are supported for resource viewing only\n");
         return 1;
     }
-    std::vector<ZWeaponEntry> weapons;
+    std::vector<CGun::Entry> weapons;
     std::vector<CMPMatch::Entry> matches;
     CMPMatch match;
     CPlayerConfiguration matchConfiguration;
@@ -44,7 +45,7 @@ int CGame::Run(const Launch &launch) {
     vitals.invincible = false;
     CPlayerProgress::Template progressData;
     CPlayerProgress progress;
-    if (!LoadPlayerProgress(toc, tables, progressData)) { return 1; }
+    if (!CPlayerProgress::Template::Load(toc, tables, progressData)) { return 1; }
     progress.Bind(progressData);
     if (gameContext != nullptr) {
         progress.SetExperience(gameContext->profile.experience);
@@ -85,7 +86,7 @@ int CGame::Run(const Launch &launch) {
     ZLoadingScreen loading(window, loadingMovies, tables, loadingProfile, true, false, &music, launch.localLive,
                            launch.deathmatch);
     if (!loading.IsValid()) { return 1; }
-    if (!LoadWeaponCatalog(toc, tables, weapons) || !CEnemy::Template::LoadCatalog(toc, tables, enemies) ||
+    if (!CGun::LoadEntries(toc, tables, weapons) || !CEnemy::Template::LoadCatalog(toc, tables, enemies) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) {
         return 1;
     }
@@ -157,19 +158,19 @@ int CGame::Run(const Launch &launch) {
     }
     if (!EquipControlledPlayer(tables, loaded, program, weapons[weaponSlot])) { return 1; }
     if (armorIndex >= 0) {
-        std::vector<ZArmorEntry> armors;
-        if (!LoadArmorCatalog(toc, tables, armors) || armorIndex >= static_cast<int>(armors.size()) ||
+        std::vector<CArmor::Entry> armors;
+        if (!CArmor::LoadEntries(toc, tables, armors) || armorIndex >= static_cast<int>(armors.size()) ||
             !player.EquipArmor(tables, armors[armorIndex].data, program)) {
             return 1;
         }
     }
     if (gameContext != nullptr) {
-        std::vector<ZArmorEntry> armors;
-        if (!LoadArmorCatalog(toc, tables, armors)) { return 1; }
+        std::vector<CArmor::Entry> armors;
+        if (!CArmor::LoadEntries(toc, tables, armors)) { return 1; }
         for (const GameObjectRef &ref : gameContext->profile.configuration.armor) {
             if (ref.IsNull()) { continue; }
             bool found = false;
-            for (const ZArmorEntry &entry : armors) {
+            for (const CArmor::Entry &entry : armors) {
                 if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) {
                     if (!player.EquipArmor(tables, entry.data, program)) { return 1; }
                     found = true;
@@ -219,7 +220,7 @@ int CGame::Run(const Launch &launch) {
     if (launch.deathmatch) {
         if (launch.botFriend != nullptr) { brotherConfiguration = launch.botFriend->profile.configuration; }
         const auto selection = ZLocalPVPBot::ChooseLoadout(matches[launch.matchIndex], weapons, matchSeed);
-        const ZWeaponEntry *chosen[2]{};
+        const CGun::Entry *chosen[2]{};
         for (unsigned slot = 0; slot < 2; ++slot) {
             brotherConfiguration.guns[slot] = matches[launch.matchIndex].guns[selection[slot]];
             for (const auto &weapon : weapons) {
@@ -277,8 +278,8 @@ int CGame::Run(const Launch &launch) {
             if (!armor.Init(input) || !brotherModel.EquipArmor(tables, armor, program)) { return 1; }
         }
         scene.SetBrother(&brotherModel, &brother);
-        const ZWeaponEntry *rifle = nullptr;
-        for (const ZWeaponEntry &entry : weapons) {
+        const CGun::Entry *rifle = nullptr;
+        for (const CGun::Entry &entry : weapons) {
             if (entry.packHash == brotherConfiguration.guns[1].packHash &&
                 entry.ordinal == brotherConfiguration.guns[1].localIndex) {
                 rifle = &entry;

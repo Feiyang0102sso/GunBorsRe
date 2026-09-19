@@ -1,30 +1,34 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 /** @file ZStoreCatalog.cpp
  * @brief Parse and validate progression and all store records independently.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/data/Planet.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/data/mission/Planet.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include "Checks.h"
 
-unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &data);
+unsigned CheckCheatActions(CResTOCManager &toc, CGunBros &tables, const CPlayerProgress::Template &data);
+
+unsigned CheckGameObjectCache(CResTOCManager &toc);
 
 int RunProgressCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CPlayerProgress::Template data;
-    std::vector<ZStoreEntry> catalog;
-    if (!LoadPlayerProgress(toc, tables, data) || !LoadStoreCatalog(toc, tables, catalog)) { return 1; }
+    std::vector<CStoreItem::Entry> catalog;
+    if (!CPlayerProgress::Template::Load(toc, tables, data) || !CStoreItem::LoadEntries(toc, tables, catalog)) { return 1; }
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("progress-check.txt"));
     std::ofstream storeReport(TestOutput::Path("store-check.txt"));
     if (!report || !storeReport) { return 1; }
-    int failures = 0;
+    int failures = CheckGameObjectCache(toc);
     failures += CheckCheatActions(toc, tables, data);
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         CResPackTOC *pack = toc.GetPack(packIndex);
@@ -35,13 +39,13 @@ int RunProgressCheck(const std::string &bigDirectory) {
             CArrayInputStream stream(payload);
             Planet planet;
             if (!planet.Init(stream) || stream.Available() != 0) { ++failures; continue; }
-            report << "planet=" << pack->GetShortName() << ':' << index << " name=" << ReadGameString(toc, planet.name)
+            report << "planet=" << pack->GetShortName() << ':' << index << " name=" << tables.ReadString(planet.name)
                 << " large=" << tables.GetPackName(planet.largeImage.packHash) << ':' << unsigned(planet.largeImage.archetype)
                 << ':' << unsigned(planet.largeImage.animation) << " missions=" << planet.missions.size() << '\n';
         }
     }
     CRefinementManager::Template refinementData;
-    if (!LoadRefinementTemplate(toc, tables, refinementData)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinementData)) { return 1; }
     CRefinementManager refinery;
     refinery.Bind(refinementData);
     for (unsigned index = 0; index < kRefinementSlotCount; ++index) {
@@ -71,7 +75,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
     bool testedPurchase = false;
     // User regression: a consumable-containing, one-time package must never
     // charge again. Select by the original flag, not by a translated name.
-    for (const ZStoreEntry &entry : catalog) {
+    for (const CStoreItem::Entry &entry : catalog) {
         if (entry.data.singlePurchase == 0) { continue; }
         CProfileManager packageBuyer;
         packageBuyer.Reset(coreHash, refinementData);
@@ -80,20 +84,20 @@ int RunProgressCheck(const std::string &bigDirectory) {
         const auto first = packageBuyer.AcquireItem(entry.data, data.GetMaximumLevel());
         const auto balance = packageBuyer.warbucks;
         const auto second = packageBuyer.AcquireItem(entry.data, data.GetMaximumLevel());
-        const bool passed = first == ZPurchaseResult::Purchased && second == ZPurchaseResult::Owned && packageBuyer.warbucks == balance;
+        const bool passed = first == CProfileManager::PurchaseResult::Purchased && second == CProfileManager::PurchaseResult::Owned && packageBuyer.warbucks == balance;
         std::printf("[package-once-check] resource=%u:%u first=%u second=%u unchanged-balance=%d passed=%d\n",
             entry.ref.packHash, entry.ref.localIndex, unsigned(first), unsigned(second), packageBuyer.warbucks == balance, passed);
         if (!passed) { ++failures; }
     }
-    for (const ZStoreEntry &entry : catalog) {
+    for (const CStoreItem::Entry &entry : catalog) {
         if (entry.name != "Mad Dogs") { continue; }
         const CStoreItem &item = entry.data;
         profile.coins = item.commonPrice - 1;
-        if (profile.AcquireItem(item, 1) != ZPurchaseResult::InsufficientCoins ||
+        if (profile.AcquireItem(item, 1) != CProfileManager::PurchaseResult::InsufficientCoins ||
             profile.coins != item.commonPrice - 1) { ++failures; }
         profile.coins = item.commonPrice;
-        if (profile.AcquireItem(item, 1) != ZPurchaseResult::Purchased || profile.coins != 0 ||
-            profile.AcquireItem(item, 1) != ZPurchaseResult::Owned) { ++failures; }
+        if (profile.AcquireItem(item, 1) != CProfileManager::PurchaseResult::Purchased || profile.coins != 0 ||
+            profile.AcquireItem(item, 1) != CProfileManager::PurchaseResult::Owned) { ++failures; }
         profile.configuration.guns[1] = item.objects[0].object;
         testedPurchase = true;
     }
@@ -101,15 +105,15 @@ int RunProgressCheck(const std::string &bigDirectory) {
     CProfileManager consumableBuyer;
     consumableBuyer.Reset(coreHash, refinementData);
     bool testedBundle = false;
-    for (const ZStoreEntry &entry : catalog) {
+    for (const CStoreItem::Entry &entry : catalog) {
         if (entry.name != "F.R.A.G. Grenade" || entry.data.objects.size() != 10) { continue; }
         const auto &ref = entry.data.objects[0].object;
         consumableBuyer.warbucks = entry.data.rarePrice - 1;
-        if (consumableBuyer.AcquireItem(entry.data, 1) != ZPurchaseResult::InsufficientWarbucks ||
+        if (consumableBuyer.AcquireItem(entry.data, 1) != CProfileManager::PurchaseResult::InsufficientWarbucks ||
             consumableBuyer.GetPowerupCount(ref) != 0) { ++failures; }
         consumableBuyer.warbucks = entry.data.rarePrice * 2;
-        if (consumableBuyer.AcquireItem(entry.data, 1) != ZPurchaseResult::Purchased ||
-            consumableBuyer.AcquireItem(entry.data, 1) != ZPurchaseResult::Purchased ||
+        if (consumableBuyer.AcquireItem(entry.data, 1) != CProfileManager::PurchaseResult::Purchased ||
+            consumableBuyer.AcquireItem(entry.data, 1) != CProfileManager::PurchaseResult::Purchased ||
             consumableBuyer.GetPowerupCount(ref) != 20 || consumableBuyer.warbucks != 0 ||
             !consumableBuyer.ConsumePowerup(ref) || consumableBuyer.GetPowerupCount(ref) != 19 ||
             consumableBuyer.ConsumePowerup(ref, 20)) { ++failures; }
@@ -171,7 +175,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
             << " health=" << data.health[level] << '\n';
     }
     unsigned references = 0;
-    for (const ZStoreEntry &entry : catalog) {
+    for (const CStoreItem::Entry &entry : catalog) {
         const CStoreItem &item = entry.data;
         storeReport << entry.owner << " name=" << std::quoted(entry.name) << " type=" << unsigned(item.type)
             << " flags=" << unsigned(item.flags) << " level=" << item.requiredLevel
@@ -196,7 +200,7 @@ int RunProgressCheck(const std::string &bigDirectory) {
         // Asset slots also carry the display strings; naming them needs the
         // actual text, not a guess about which index holds the description.
         for (unsigned asset = 0; asset < 6; ++asset) {
-            std::string text = ReadGameString(toc, item.assets[asset]);
+            std::string text = tables.ReadString(item.assets[asset]);
             for (char &letter : text) {
                 if (letter == '\n' || letter == '\r') { letter = ' '; }
             }

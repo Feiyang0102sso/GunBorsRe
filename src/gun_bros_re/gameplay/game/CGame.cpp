@@ -5,18 +5,19 @@
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/ui/hud/CInputPad.h"
-#include "gun_bros_re/data/Mission.h"
+#include "gun_bros_re/data/mission/Mission.h"
 #include <cstdio>
 
 CGame::CGame(CLevel &level, CMap &map, const std::vector<CEnemy::Template> &catalog) : m_level(level), m_map(map) {
     m_level.AttachRuntime(*this, catalog);
 }
 
-bool CGame::Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
+bool CGame::Load(CResTOCManager &toc, CGunBros &tables, std::uint32_t mapPack, unsigned mapIndex,
                  const GameObjectRef *selectedLevel, bool archive) {
     m_archive = archive;
     m_level.SetArchive(archive);
     m_toc = &toc;
+    m_resources = &tables;
     GameObjectRef requested;
     if (selectedLevel != nullptr) { requested = *selectedLevel; }
     // Original Mission -> LEVEL -> TILELAYER chain, never script-size heuristics.
@@ -156,7 +157,7 @@ void CGame::UpdateDialog(int deltaMs) {
         if (m_dialogHud != nullptr) { m_dialogHud->ClearDialog(true); }
         CGameAssetRef resource;
         if (m_toc != nullptr && m_level.GetStringResource(m_level.GetDialogResource(), resource)) {
-            m_dialogText = ReadGameString(*m_toc, resource);
+            m_dialogText = m_resources->ReadString(resource);
             std::printf("[campaign-dialog] %s\n", m_dialogText.c_str());
             if (m_dialogHud != nullptr) {
                 m_dialogBound =

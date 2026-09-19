@@ -1,6 +1,7 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #pragma once
 #include "gun_bros_re/ui/host/ZMenuTypes.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "engine/glu/sprite/CSpritePlayer.h"
 
 namespace MenuDetail {

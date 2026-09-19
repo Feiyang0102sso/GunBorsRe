@@ -35,9 +35,9 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
     if (!batch.Create(program) || !cover.Create(program)) { return 1; }
     unsigned failures = 0;
     unsigned occludedPixels = 0;
-    ZPackTables tables(toc);
-    std::vector<ZWeaponEntry> weapons;
-    if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
+    CGunBros tables(toc);
+    std::vector<CGun::Entry> weapons;
+    if (!CGun::LoadEntries(toc, tables, weapons)) { return 1; }
     const char *packs[] = {"pack2", "pack7", "pack9", "pack12"};
     const unsigned maps[] = {7, 6, 0, 0};
     for (unsigned map = 0; map < 4; ++map) {
@@ -142,7 +142,7 @@ int RunMapOcclusionCheck(const std::string &bigDirectory) {
         if (map == 1) {
             // Reproduce the reported Haven beam crossing real foreground art.
             // Use the gun's BIG bullet reference and native group; never force group 5.
-            const ZWeaponEntry *laser = nullptr;
+            const CGun::Entry *laser = nullptr;
             for (const auto &weapon : weapons) {
                 if (weapon.name == "Infinity Laser") { laser = &weapon; break; }
             }

@@ -1,4 +1,5 @@
 #pragma once
+#include "gun_bros_re/ui/host/ZMenuTypes.h"
 #include "gun_bros_re/ui/menus/CMenuMission.h"
 #include "engine/graphics/ZQuadBatch.h"
 namespace MenuDetail {
@@ -7,9 +8,9 @@ namespace MenuDetail {
 class CMenuMission::Presentation {
 public:
     explicit Presentation(ZMovieRenderer &renderer) : movies(renderer) {}
-    bool Load(CResTOCManager &toc, ZPackTables &tables, ZShaderProgram &image, ZShaderProgram &text);
+    bool Load(CResTOCManager &toc, CGunBros &tables, ZShaderProgram &image, ZShaderProgram &text);
     std::vector<std::string> names, descriptions;
-    std::vector<ZPlanetEntry> planetEntries;
+    std::vector<MenuDetail::CMenuMission::PlanetEntry> planetEntries;
 
     int PlanetForMapSlot(unsigned slot) const {
         for (unsigned index = 0; index < planetEntries.size(); ++index) {

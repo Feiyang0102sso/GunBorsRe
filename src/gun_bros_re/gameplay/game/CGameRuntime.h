@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #pragma once
 /** CGame's desktop session storage and stage implementation.
  * References borrow the resources created by CGame::Run; they outlive this session.
@@ -9,7 +10,7 @@
 #include "gun_bros_re/gameplay/map/CCameraDrawing.h"
 #include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"
-#include "gun_bros_re/data/ZMissionCatalog.h"
+#include "gun_bros_re/data/mission/Mission.h"
 #include "engine/graphics/ZMarkerBatch.h"
 #include "engine/graphics/ZQuadBatch.h"
 #include "engine/graphics/ZShaderProgram.h"
@@ -38,9 +39,9 @@ struct CGame::Session {
     float startY;
     float startFacing;
     CResTOCManager &toc;
-    ZPackTables &tables;
+    CGunBros &tables;
     std::vector<CEnemy::Template> &enemies;
-    std::vector<ZWeaponEntry> &weapons;
+    std::vector<CGun::Entry> &weapons;
     CInputPad &survivalHud;
     CLevel::Props &props;
     bool withBrother;
@@ -73,7 +74,7 @@ struct CGame::Session {
     CGameFlow *gameContext = launch.gameContext;
     const std::string &packShortName = launch.packShortName;
     unsigned mapIndex = launch.mapIndex;
-    const ZMissionEntry *archiveMission = launch.archiveMission;
+    const Mission::Entry *archiveMission = launch.archiveMission;
     bool showCollisions = options.showCollisions;
     unsigned runtimeFailures = 0;
     bool paused = false;
@@ -88,7 +89,7 @@ struct CGame::Session {
     ZLiveShopSession liveShop, botShop;
     unsigned deathShopSerial = UINT32_MAX;
     bool matchShopCounted = false, matchShopPurchased = false;
-    std::vector<ZStoreEntry> matchStore;
+    std::vector<CStoreItem::Entry> matchStore;
     bool deathShop = false;
     std::string brotherName;
     GameObjectRef leftPowerup = powerups.GetEquipped(0);

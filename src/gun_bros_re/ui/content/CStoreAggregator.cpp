@@ -1,9 +1,10 @@
+#include "gun_bros_re/data/store/CStoreItemOverride.h"
 #include "gun_bros_re/ui/host/ZMenuTypes.h"
 #include "gun_bros_re/ui/content/CStoreAggregator.h"
 namespace MenuDetail {
 
-bool CStoreAggregator::MatchesEquipmentSlot(const ZStoreEntry &entry, unsigned slot,
-    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armors) {
+bool CStoreAggregator::MatchesEquipmentSlot(const CStoreItem::Entry &entry, unsigned slot,
+    const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armors) {
     if (slot == 5) {
         if (entry.data.objects.empty() || entry.data.type >= 14) { return false; }
         // Zero-price consumable records are reward payloads (e.g. Bro-op
@@ -19,14 +20,15 @@ bool CStoreAggregator::MatchesEquipmentSlot(const ZStoreEntry &entry, unsigned s
     const GameObjectTypeRef &ref = entry.data.objects[0];
     if (slot < 2) {
         if (ref.type != 6) { return false; }
-        for (const ZWeaponEntry &weapon : weapons) {
+        for (const CGun::Entry &weapon : weapons) {
             if (weapon.packHash == ref.object.packHash && weapon.ordinal == ref.object.localIndex) {
-                return !weapon.visualOnly && weapon.hasStoreEntry;
+                // Original InitFilteredList selects authored STORE entries, not inferred firing capability.
+                return weapon.hasStoreEntry;
             }
         }
     } else {
         if (ref.type != 2) { return false; }
-        for (const ZArmorEntry &armor : armors) {
+        for (const CArmor::Entry &armor : armors) {
             if (armor.packHash == ref.object.packHash && armor.ordinal == ref.object.localIndex) {
                 return armor.data.GetSlot() == kArmorSlots[slot];
             }
@@ -59,8 +61,8 @@ bool CStoreAggregator::OwnsBundle(const CProfileManager &profile, const CStoreIt
     return !item.objects.empty();
 }
 
-const ZWeaponEntry *CStoreAggregator::FindWeaponEntry(const std::vector<ZWeaponEntry> &weapons, const GameObjectRef &ref) {
-    for (const ZWeaponEntry &weapon : weapons) {
+const CGun::Entry *CStoreAggregator::FindWeaponEntry(const std::vector<CGun::Entry> &weapons, const GameObjectRef &ref) {
+    for (const CGun::Entry &weapon : weapons) {
         if (weapon.packHash == ref.packHash && weapon.ordinal == ref.localIndex) { return &weapon; }
     }
     return nullptr;
@@ -69,7 +71,7 @@ const ZWeaponEntry *CStoreAggregator::FindWeaponEntry(const std::vector<ZWeaponE
 /** CStoreAggregator::EquipItem :156082 and SetGun/SetArmor :171658.
  * Granting inventory and equipping it are separate original menu actions.
  */
-bool CStoreAggregator::EquipStoreItem(CProfileManager &profile, const CStoreItem &item, const std::vector<ZArmorEntry> &armors) {
+bool CStoreAggregator::EquipStoreItem(CProfileManager &profile, const CStoreItem &item, const std::vector<CArmor::Entry> &armors) {
     CPlayerConfiguration configuration = profile.configuration;
     unsigned gunCount = 0;
     for (const GameObjectTypeRef &object : item.objects) {
@@ -83,8 +85,8 @@ bool CStoreAggregator::EquipStoreItem(CProfileManager &profile, const CStoreItem
                 if (SameObject(part, object.object)) { alreadyEquipped = true; }
             }
             if (alreadyEquipped) { continue; }
-            const ZArmorEntry *part = nullptr;
-            for (const ZArmorEntry &entry : armors) {
+            const CArmor::Entry *part = nullptr;
+            for (const CArmor::Entry &entry : armors) {
                 if (entry.packHash == object.object.packHash && entry.ordinal == object.object.localIndex) { part = &entry; break; }
             }
             if (part == nullptr || part->data.GetSlot() >= configuration.armor.size()) {
@@ -168,9 +170,9 @@ bool MatchesFilter(const CStoreItem &item, const CProfileManager &profile,
     return include;
 }
 }
-void CStoreAggregator::InitFilteredList(const std::vector<ZStoreEntry> &store,
-    const CProfileManager &profile, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armors, unsigned shopCategory, unsigned shopGunSlot,
+void CStoreAggregator::InitFilteredList(const std::vector<CStoreItem::Entry> &store,
+    const CProfileManager &profile, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armors, unsigned shopCategory, unsigned shopGunSlot,
     unsigned shopFilter, bool filterAll, unsigned shopExclusionFilter, std::vector<unsigned> &items,
     std::vector<unsigned> &itemSlots) {
     items.clear();
@@ -193,7 +195,7 @@ void CStoreAggregator::InitFilteredList(const std::vector<ZStoreEntry> &store,
     // Correction: OverrideItem :233074 makes owned negative-order gear visible.
     std::vector<std::pair<int, unsigned>> ordered;
     for (unsigned index = 0; index < store.size(); ++index) {
-        const int order = GetStoreDisplayOrder(store[index].data, profile);
+        const int order = CStoreItemOverride::GetDisplayOrder(store[index].data, profile);
         if (order < 0 || store[index].data.value242 == 1 || store[index].data.singlePurchase != 0) { continue; }
         ordered.push_back({order, index});
     }
@@ -226,5 +228,31 @@ void CStoreAggregator::InitFilteredList(const std::vector<ZStoreEntry> &store,
         items.push_back(index);
         itemSlots.push_back(slot);
     }
+}
+}
+
+namespace MenuDetail {
+int CStoreAggregator::FindCurrencyOffer(const std::vector<CStoreItem::Entry> &catalog, unsigned currency, unsigned missing) {
+    // CStoreAggregator::CacheLowestAppropriateIAPItem :155786 scans pack/store
+    // order, requires the IAP flag and excludes conversions. No authored prices
+    // or selected product IDs are copied into the host.
+    int adequate = -1, largest = -1;
+    unsigned adequateAmount = 0, largestAmount = 0;
+    for (unsigned index = 0; index < catalog.size(); ++index) {
+        const CStoreItem &item = catalog[index].data;
+        if (item.value32 != 1 || item.type == 16) { continue; }
+        unsigned amount = item.commonPrice;
+        if (currency == 1) { amount = item.rarePrice; }
+        if (amount >= missing && (adequateAmount == 0 || amount < adequateAmount)) {
+            adequate = static_cast<int>(index);
+            adequateAmount = amount;
+        }
+        if (largestAmount == 0 || amount > largestAmount) {
+            largest = static_cast<int>(index);
+            largestAmount = amount;
+        }
+    }
+    if (adequate >= 0) { return adequate; }
+    return largest;
 }
 }

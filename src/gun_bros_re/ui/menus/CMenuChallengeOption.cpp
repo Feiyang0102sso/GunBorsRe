@@ -28,7 +28,7 @@ public:
         bool details, unsigned index) : view(view), state(state), profile(profile), details(details), index(index) {}
 
     bool Icon(const CGameAssetRef &asset, const ZMovieRegion &region, bool alignRight = false, float *renderedWidth = nullptr) {
-        ZStoreEntry icon;
+        CStoreItem::Entry icon;
         icon.data.assets[1] = asset;
         return view.Icon(*profile.nativeArchive->toc, *profile.nativeArchive->tables, icon,
             region.x, region.y, region.width, region.height, region.alpha, false, true, alignRight, renderedWidth);

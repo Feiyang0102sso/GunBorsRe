@@ -1,17 +1,18 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/debug/Capture.h"
 /** BRO-OPS regression with real templates, Movies and a disposable native save. */
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/ui/hud/CInputPad.h"
 #include "TestOutput.h"
 
-int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &source) {
+int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables, const CProfileManager &source) {
     CProfileManager profile = source;
     // Leave room for the actual consumable reward in this disposable profile.
     profile.powerups.clear();
     CChallengeManager manager;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZStoreEntry> store;
-    if (!manager.Load(toc, tables) || !LoadWeaponCatalog(toc, tables, weapons) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
+    std::vector<CGun::Entry> weapons;
+    std::vector<CStoreItem::Entry> store;
+    if (!manager.Load(toc, tables) || !CGun::LoadEntries(toc, tables, weapons) || !CStoreItem::LoadEntries(toc, tables, store)) { return 1; }
     unsigned day = 25000;
     unsigned selected = 0;
     bool found = false;
@@ -142,7 +143,7 @@ int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, co
     const auto directory = std::filesystem::path(TestOutput::Path("bro-ops"));
     if (!profile.SaveToDisk(directory)) { return 1; }
     CProfileManager reloaded;
-    if (!LoadProfile(toc, tables, reloaded, directory) || !manager.Bind(toc, tables, reloaded, seconds)) { return 1; }
+    if (!(reloaded).LoadNative(toc, tables, directory) || !manager.Bind(toc, tables, reloaded, seconds)) { return 1; }
     unsigned duplicate = 0;
     if (!manager.AwardAvailableRewards(reloaded, store, duplicate) || duplicate || reloaded.coins != profile.coins || reloaded.warbucks != profile.warbucks) { return 1; }
     // The same real content is drawn in the held and automatic overlays.
@@ -177,8 +178,8 @@ int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, co
     if (!hud.TakeInterstitialCompletion() || hud.HasInterstitial()) { return 1; }
     CProfileManager menuProfile = completedProfile;
     CRefinementManager::Template refinement;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CArmor::Entry> armor;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     CMenuSystem menu;
     menu.stack.page = 5;
     std::vector<ZMenuInputFrame> frames(4);

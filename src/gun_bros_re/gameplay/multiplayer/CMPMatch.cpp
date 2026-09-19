@@ -1,5 +1,5 @@
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
-#include "gun_bros_re/data/CStoreItem.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -23,7 +23,7 @@ bool CMPMatch::Template::Init(CArrayInputStream &stream) {
     return !stream.Overran();
 }
 
-bool LoadMPMatches(CResTOCManager &toc, ZPackTables &tables, std::vector<CMPMatch::Entry> &entries) {
+bool LoadMPMatches(CResTOCManager &toc, CGunBros &tables, std::vector<CMPMatch::Entry> &entries) {
     entries.clear();
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto hash = toc.GetPack(packIndex)->GetPackHash();

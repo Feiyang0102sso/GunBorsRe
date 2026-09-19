@@ -28,7 +28,7 @@
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/glu/script/CScript.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
@@ -37,7 +37,7 @@
 #include <array>
 #include <map>
 #include "gun_bros_re/gameplay/armor/CArmor.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 class ZShaderProgram;
 // CGameSpriteGluRef lives here, next to its first user
 // Historical location above; now declared in original gameAssetRef module.
@@ -117,7 +117,7 @@ public:
          *
          * @return false when no pack carries a readable one.
          */
-        bool Load(CResTOCManager &toc, ZPackTables &tables);
+        bool Load(CResTOCManager &toc, CGunBros &tables);
         const std::string &GetOwner() const { return m_owner; }
 
         bool Init(CArrayInputStream &stream);
@@ -191,7 +191,7 @@ public:
      *
      * @return false when the set has fewer than the two configs a player needs.
      */
-    bool BuildBody(ZPackTables &tables, const CMoveSetMesh &moveSet);
+    bool BuildBody(CGunBros &tables, const CMoveSetMesh &moveSet);
 
     /** Compose a muzzle in the same raw coordinate space as Draw. */
     bool GetMuzzle(int hand, int node, ZMeshBoneTransform &out);
@@ -239,16 +239,16 @@ public:
     const std::vector<float> *GetTorsoPose() const;
 
     /** Equip the actual template, including its player move overrides and scripts. */
-    bool EquipWeapon(ZPackTables &tables, const CScript &playerScript,
+    bool EquipWeapon(CGunBros &tables, const CScript &playerScript,
         const CGun::Template &weapon, const std::string &owner);
     /** Load the second UI gun from BIG; the primary brother remains the sole host. */
-    bool PrepareSecondaryWeapon(ZPackTables &tables, const CGun::Template &weapon,
+    bool PrepareSecondaryWeapon(CGunBros &tables, const CGun::Template &weapon,
         const std::string &owner);
     void SelectWeapon(bool primary);
-    bool SelectCachedWeapon(ZPackTables &tables, const CGun::Template &data,
+    bool SelectCachedWeapon(CGunBros &tables, const CGun::Template &data,
         const std::string &owner, std::uint64_t key, const ZShaderProgram &program);
     /** Replace only the template's own armour slot; other equipment stays equipped. */
-    bool EquipArmor(ZPackTables &tables, const CArmor::Template &data,
+    bool EquipArmor(CGunBros &tables, const CArmor::Template &data,
         const ZShaderProgram &program);
     void ClearArmor();
     float GetArmorMultiplier(std::uint32_t attribute) const;

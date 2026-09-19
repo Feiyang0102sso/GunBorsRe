@@ -1,14 +1,14 @@
 #pragma once
 #include "gun_bros_re/ui/host/ZMenuTypes.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 
 namespace MenuDetail {
 class CMenuSystem;
 class ZMenuSurface;
 class CMenuGreeting {
 public:
-    bool Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, ZPackTables &tables,
-        CProfileManager &profile, const CDailyBonusTracking &daily, const std::vector<ZStoreEntry> &store,
+    bool Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, CGunBros &tables,
+        CProfileManager &profile, const CDailyBonusTracking &daily, const std::vector<CStoreItem::Entry> &store,
         CPlayerProgress &progress, const std::filesystem::path &savePath, std::int64_t seconds);
 
     bool greetingBound = false, greetingExitRequested = false, greetingClosing = false;

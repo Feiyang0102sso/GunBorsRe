@@ -5,7 +5,7 @@
 
 #include "gun_bros_re/gameplay/map/CProp.h"
 
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 
 #include <cstdio>
 #include <cmath>

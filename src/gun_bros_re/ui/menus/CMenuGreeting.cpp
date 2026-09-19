@@ -8,7 +8,7 @@
 namespace MenuDetail {
 class ZGreetingCallbacks : public ZMovieRegionCallback {
 public:
-    ZGreetingCallbacks(ZMenuSurface &menu, CMenuSystem &state, CResTOCManager &toc, ZPackTables &tables,
+    ZGreetingCallbacks(ZMenuSurface &menu, CMenuSystem &state, CResTOCManager &toc, CGunBros &tables,
         const CDailyBonusTracking &daily, const CProfileManager &profile, bool interactive) :
         view(menu), state(state), toc(toc), tables(tables), daily(daily), profile(profile), interactive(interactive) {}
     bool DrawMovieRegion(const ZMovieRegion &region) override {
@@ -46,7 +46,7 @@ public:
             const unsigned index = region.index - 9;
             if (index >= daily.prizes.size()) { return false; }
             const auto &prize = daily.prizes[index];
-            ZStoreEntry icon;
+            CStoreItem::Entry icon;
             icon.data.assets[1] = prize.image;
             if (!view.Icon(toc, tables, icon, region.x, region.y, region.width, region.height,
                 region.alpha, false, true)) { return false; }
@@ -69,15 +69,15 @@ public:
     ZMenuSurface &view;
     CMenuSystem &state;
     CResTOCManager &toc;
-    ZPackTables &tables;
+    CGunBros &tables;
     const CDailyBonusTracking &daily;
     const CProfileManager &profile;
     bool interactive;
 };
 // Page callback implementations.
 
-bool CMenuGreeting::Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, ZPackTables &tables,
-    CProfileManager &profile, const CDailyBonusTracking &daily, const std::vector<ZStoreEntry> &store,
+bool CMenuGreeting::Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, CGunBros &tables,
+    CProfileManager &profile, const CDailyBonusTracking &daily, const std::vector<CStoreItem::Entry> &store,
     CPlayerProgress &progress, const std::filesystem::path &savePath, std::int64_t seconds) {
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_WELCOME_NEW");
     const auto *movie = view.movies.GetMovie(ordinal);

@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #pragma once
 /** Desktop caller adapter for resource observation and ordinary frame input.
  * No test selection, assertion, screenshot path or performance policy lives here.
@@ -25,7 +26,7 @@ class ZGameObserver {
     enum class Stage { Bound, Ready, LoopStarting, WorldDrawn };
     struct Resources {
         CResTOCManager &toc;
-        ZPackTables &tables;
+        CGunBros &tables;
         std::vector<CEnemy::Template> &enemies;
         CBrother::Vitals &vitals;
         CPlayerProgress::Template &progressData;

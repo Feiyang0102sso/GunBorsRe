@@ -33,11 +33,11 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
@@ -53,8 +53,8 @@
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshAnimationController.h"
@@ -224,7 +224,7 @@ bool ReadTemplate(CResPackTOC &pack, CGameObjectPack &objectPack,
                   std::vector<std::uint8_t> &payload);
 
 /** Player templates: parsed whole, so their leftover count means something. */
-void WalkPlayers(CResPackTOC &pack, ZPackTables &tables, int packIndex,
+void WalkPlayers(CResPackTOC &pack, CGunBros &tables, int packIndex,
                  IMeshPairSink &sink);
 
 /**
@@ -236,19 +236,19 @@ void WalkPlayers(CResPackTOC &pack, ZPackTables &tables, int packIndex,
  * therefore cannot check for leftover bytes. A survey shortcut, not a CEnemy
  * port: that class stays unwritten until its own milestone.
  */
-void WalkEnemies(CResPackTOC &pack, ZPackTables &tables, int packIndex,
+void WalkEnemies(CResPackTOC &pack, CGunBros &tables, int packIndex,
                  IMeshPairSink &sink);
 
 /** Gun templates: a move set at the end, plus the weapon's own model. */
-void WalkGuns(CResPackTOC &pack, ZPackTables &tables, int packIndex,
+void WalkGuns(CResPackTOC &pack, CGunBros &tables, int packIndex,
               IMeshPairSink &sink);
 
 /** Bullet templates: a pair of asset refs, and most name neither. */
-void WalkBullets(CResPackTOC &pack, ZPackTables &tables, int packIndex,
+void WalkBullets(CResPackTOC &pack, CGunBros &tables, int packIndex,
                  IMeshPairSink &sink);
 
 /** Armour templates: one model per brother, either of which may be absent. */
-void WalkArmor(CResPackTOC &pack, ZPackTables &tables, int packIndex,
+void WalkArmor(CResPackTOC &pack, CGunBros &tables, int packIndex,
                IMeshPairSink &sink);
 
 /**
@@ -260,7 +260,7 @@ void WalkArmor(CResPackTOC &pack, ZPackTables &tables, int packIndex,
  * CMoveSetMesh::LoadMesh (:123157) and three GetResId(0x1E, ...) call sites
  * are the whole list.
  */
-void WalkMeshPairs(CResTOCManager &tocManager, ZPackTables &tables,
+void WalkMeshPairs(CResTOCManager &tocManager, CGunBros &tables,
                    IMeshPairSink &sink);
 
 // ---------------------------------------------------------------------------
@@ -274,7 +274,7 @@ void ReadPngSize(const std::vector<std::uint8_t> &payload, std::uint32_t &width,
 /** Resolves each pair and prints what it landed on. */
 class ReportingSink : public IMeshPairSink {
 public:
-    explicit ReportingSink(ZPackTables &tables) : m_tables(tables) {}
+    explicit ReportingSink(CGunBros &tables) : m_tables(tables) {}
 
     void OnPair(const MeshPair &pair) override {
         m_pairs++;
@@ -367,7 +367,7 @@ public:
     }
 
 private:
-    ZPackTables &m_tables;
+    CGunBros &m_tables;
     std::string m_lastOwner;
     unsigned m_pairs = 0;
     unsigned m_meshFailures = 0;
@@ -382,7 +382,7 @@ private:
  * The last column is section 31's size; the rest are the template types that
  * point into it.
  */
-void PrintTemplateCounts(CResTOCManager &tocManager, ZPackTables &tables);
+void PrintTemplateCounts(CResTOCManager &tocManager, CGunBros &tables);
 
 // ---------------------------------------------------------------------------
 // The viewer
@@ -443,7 +443,7 @@ public:
     }
 
     /** Add unreferenced raw resources too; no invented atlas relationship. */
-    void AddRawMeshes(CResTOCManager &toc, ZPackTables &tables) {
+    void AddRawMeshes(CResTOCManager &toc, CGunBros &tables) {
         for (std::uint32_t packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
             CResPackTOC *pack = toc.GetPack(static_cast<int>(packIndex));
             const auto count = tables.GetObjectPack(packIndex).GetSectionSpan(ZGameSection::Mesh);
@@ -533,7 +533,7 @@ void WarmUp(LoadedModel &model, std::uint32_t advanceMs);
 void ReportMove(const CatalogEntry &entry, const LoadedModel &model);
 
 /** Fetch and decode one catalogue entry. */
-bool LoadModel(ZPackTables &tables, const CatalogEntry &entry, LoadedModel &out);
+bool LoadModel(CGunBros &tables, const CatalogEntry &entry, LoadedModel &out);
 
 /** How the model is standing: the engine's own two orientations, plus drag. */
 struct Turntable {
@@ -635,7 +635,7 @@ private:
 };
 
 /** Assemble the player, with one of the catalogue's guns in his hand. */
-bool BuildViewerCharacter(ZPackTables &tables, const CharacterSink &catalog,
+bool BuildViewerCharacter(CGunBros &tables, const CharacterSink &catalog,
                           std::size_t gunSlot, ZBrotherPreview &out);
 
 }

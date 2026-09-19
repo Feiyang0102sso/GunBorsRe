@@ -1,7 +1,7 @@
 #pragma once
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/enemy/CTargetingController.h"
-#include "gun_bros_re/data/CPlayerProgress.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 
 class CCollisionData;
 class CLevelObjectPool;
@@ -26,7 +26,7 @@ public:
     void ResetXplodiumRemainder() { m_xplodiumRemainder = 0; }
     void AddHealth(unsigned amount);
     /** CollectItem :101094. The profile argument selects the desktop local peer. */
-    unsigned CollectItem(ZPackTables &tables, const GameObjectRef &ref, CProfileManager *profile);
+    unsigned CollectItem(CGunBros &tables, const GameObjectRef &ref, CProfileManager *profile);
     /** Bind the map and original level-object collection used by Move. */
     void BindLevel(CMap &map, const CCollisionData &collision,
         CLevelObjectPool &objects, float collisionRadius);

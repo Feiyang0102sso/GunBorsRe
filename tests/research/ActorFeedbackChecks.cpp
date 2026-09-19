@@ -130,15 +130,15 @@ int RunActorFeedbackCheck(const std::string &bigDirectory) {
     if (!window.Open("Actor feedback check", 640, 480)) { return 1; }
     ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CBrother::Template playerData;
-    std::vector<ZWeaponEntry> weapons;
+    std::vector<CGun::Entry> weapons;
     std::vector<CEnemy::Template> enemies;
-    if (!playerData.Load(toc, tables) || !LoadWeaponCatalog(toc, tables, weapons) ||
+    if (!playerData.Load(toc, tables) || !CGun::LoadEntries(toc, tables, weapons) ||
         !CEnemy::Template::LoadCatalog(toc, tables, enemies)) { return 1; }
-    const ZWeaponEntry *pistol = nullptr;
-    const ZWeaponEntry *rifle = nullptr;
-    for (const ZWeaponEntry &weapon : weapons) {
+    const CGun::Entry *pistol = nullptr;
+    const CGun::Entry *rifle = nullptr;
+    for (const CGun::Entry &weapon : weapons) {
         if (weapon.packHash == toc.GetPack(toc.GetCorePackIndex())->GetPackHash() && weapon.ordinal == 0) { pistol = &weapon; }
         if (weapon.packHash == CStringToKey("pack5") && weapon.ordinal == 4) { rifle = &weapon; }
     }

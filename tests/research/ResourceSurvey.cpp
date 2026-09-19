@@ -12,8 +12,8 @@
 #include "tests/research/ResourceSurvey.h"
 
 #include "engine/core/CStringToKey.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 

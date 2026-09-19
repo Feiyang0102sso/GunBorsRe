@@ -1,3 +1,5 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 /** Host cheat actions shared by the menu and survival entry points. */
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
@@ -14,13 +16,13 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/ui/hud/CPowerUpSelector.h"
-#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include <ctime>
 
 namespace GameCheats {
@@ -40,7 +42,7 @@ bool ApplyRefineryCheat(const std::string &command, CProfileManager &profile, st
     if (!profile.nativeArchive) { return false; }
     CRefinementManager::Template data;
     auto &archive = *profile.nativeArchive;
-    if (!LoadRefinementTemplate(*archive.toc, *archive.tables, data)) { return false; }
+    if (!CRefinementManager::Template::Load(*archive.toc, *archive.tables, data)) { return false; }
     bool unlock = false;
     for (unsigned index = 0; index < data.minutes.size(); ++index) {
         if (data.minutes[index] != 0 && profile.refinery.slots[index].state == 0) { unlock = true; }

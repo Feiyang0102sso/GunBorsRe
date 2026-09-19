@@ -1,9 +1,9 @@
 #include "gun_bros_re/gameplay/armor/CArmorDrawing.h"
-#include "gun_bros_re/data/ZMeshAssets.h"
+#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include "engine/graphics/ZPNG.h"
 #include "engine/platform/ZGLLoader.h"
 
-bool CArmor::Load(ZPackTables &tables, const Template &data, const ZShaderProgram &program) {
+bool CArmor::Load(CGunBros &tables, const Template &data, const ZShaderProgram &program) {
     if (data.GetSlot() >= kArmorSlotCount) {
         return false;
     }

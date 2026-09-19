@@ -1,12 +1,12 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/brother/CPlayer.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include "gun_bros_re/gameplay/enemy/CLevelObjectPool.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
-#include "gun_bros_re/data/CFriendPowerManager.h"
+#include "gun_bros_re/data/profile/CFriendPowerManager.h"
 #include <algorithm>
 #include <cmath>
 
@@ -157,7 +157,7 @@ void CPlayer::Update(int deltaMs, float moveX, float moveY, bool shoot,
     if (moveActor) { Move(); }
 }
 
-unsigned CPlayer::CollectItem(ZPackTables &tables, const GameObjectRef &ref, CProfileManager *profile) {
+unsigned CPlayer::CollectItem(CGunBros &tables, const GameObjectRef &ref, CProfileManager *profile) {
     if (profile == nullptr) { return 0; }
     unsigned failures = 0;
     std::vector<std::uint8_t> payload;

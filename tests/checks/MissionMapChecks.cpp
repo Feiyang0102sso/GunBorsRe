@@ -1,4 +1,4 @@
-#include "gun_bros_re/data/ZMissionCatalogInternal.h"
+#include "tests/research/MissionStudyInternal.h"
 
 namespace MissionCatalogDetail {
 unsigned CheckMissionMap(const CLevel::Template &data, CMap &map, std::ofstream &report) {

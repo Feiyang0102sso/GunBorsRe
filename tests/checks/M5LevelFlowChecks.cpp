@@ -6,7 +6,7 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -26,7 +26,7 @@ public:
         return count;
     }
 };
-unsigned CheckSpawnBudget(const CLevel::Template &data, CMap &map, ZPackTables &tables) {
+unsigned CheckSpawnBudget(const CLevel::Template &data, CMap &map, CGunBros &tables) {
     CLevel level;
     LevelFlowWorld world(level, tables, map);
     level.Bind(data, map, &world, 49);
@@ -66,7 +66,7 @@ int RunLevelFlowCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
         return 1;
     }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("level-flow-check.csv"));
     if (!report) {

@@ -3,7 +3,7 @@
  */
 #include "TestOutput.h"
 #include "tests/checks/PropCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/gameplay/map/CProp.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include <cstdio>
@@ -14,7 +14,7 @@
 int RunPropCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("prop-check.txt"));
     unsigned failures = 0, templates = 0, scripts = 0, moves = 0, actions = 0;

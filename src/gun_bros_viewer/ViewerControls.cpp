@@ -1,6 +1,6 @@
 /** Windows host UI only: cached system-font text, with no game UI resource data. */
 #include "gun_bros_viewer/ViewerControls.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/core/ZPaths.h"
 #define NOMINMAX
@@ -467,7 +467,7 @@ bool ViewerControls::Draw() {
     return true;
 }
 
-std::size_t SelectWeaponKey(const std::vector<ZWeaponEntry> &weapons,
+std::size_t SelectWeaponKey(const std::vector<CGun::Entry> &weapons,
                             std::size_t current, ZKeyCode key) {
     if (weapons.empty()) { return current; }
     const int categoryKey = static_cast<int>(key) - static_cast<int>(ZKeyCode::Digit1);
@@ -486,4 +486,30 @@ std::size_t SelectWeaponKey(const std::vector<ZWeaponEntry> &weapons,
         }
     }
     return current;
+}
+
+#include "gun_bros_viewer/ViewerControls.h"
+namespace {
+constexpr const char *kCategoryNames[] = {"pistol", "rifle", "shotgun", "spread", "heavy", "special", "laser"};
+}
+const char *WeaponCategoryName(int category) {
+    if (category < 0 || category >= kWeaponCategoryCount) { return "unclassified"; }
+    return kCategoryNames[category];
+}
+std::string WeaponSelectionLabel(const std::vector<CGun::Entry> &weapons,
+                                 std::size_t current) {
+    const CGun::Entry &weapon = weapons[current];
+    int position = 0;
+    int count = 0;
+    for (std::size_t i = 0; i < weapons.size(); ++i) {
+        if (weapons[i].category == weapon.category) {
+            ++count;
+            if (i == current) { position = count; }
+        }
+    }
+    std::string label = std::string(WeaponCategoryName(weapon.category)) + " " +
+        std::to_string(position) + "/" + std::to_string(count) + " | " + weapon.name;
+    if (weapon.visualOnly) { label += " [visual only: no firing data]"; }
+    if (!weapon.hasStoreEntry) { label += " [no single-item STORE reference]"; }
+    return label;
 }

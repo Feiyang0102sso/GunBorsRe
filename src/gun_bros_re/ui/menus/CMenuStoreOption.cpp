@@ -7,8 +7,8 @@
 #include "gun_bros_re/ui/controls/CTextBox.h"
 namespace MenuDetail {
 
-bool CMenuStoreOption::DrawCompact(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-    CProfileManager &profile, const ZStoreEntry &item, const std::vector<ZWeaponEntry> &weapons,
+bool CMenuStoreOption::DrawCompact(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+    CProfileManager &profile, const CStoreItem::Entry &item, const std::vector<CGun::Entry> &weapons,
     unsigned slotKind, unsigned shopBox, const Face &face, bool cardEnabled, bool actionEnabled,
     CMenuMovieButton &button, Action &result) {
     result = Action::None;
@@ -47,16 +47,16 @@ bool CMenuStoreOption::DrawCompact(ZMenuSurface &view, CResTOCManager &toc, ZPac
     if (!owned || slotKind == 5) { DrawCardPrice(view, item.data, price, face.alpha); }
     // The folded card prints the record's own power template. Bundles
     // leave it empty and put their promo line in the stat template.
-    const ZWeaponEntry *cardWeapon = CStoreAggregator::FindWeaponEntry(weapons, ref.object);
+    const CGun::Entry *cardWeapon = CStoreAggregator::FindWeaponEntry(weapons, ref.object);
     unsigned cardMastery = 0;
     if (cardWeapon != nullptr) { cardMastery = cardWeapon->data.GetMasteryLevel(profile.GetWeaponExperience(ref.object)); }
-    std::string rightTemplate = ReadGameString(toc, item.data.assets[5]);
-    if (rightTemplate.empty()) { rightTemplate = ReadGameString(toc, item.data.assets[4]); }
+    std::string rightTemplate = tables.ReadString(item.data.assets[5]);
+    if (rightTemplate.empty()) { rightTemplate = tables.ReadString(item.data.assets[4]); }
     if (!rightTemplate.empty()) {
         ZMovieRegion templateArea = right;
         templateArea.alpha *= face.alpha;
         DrawStoreTemplate(view, rightTemplate, templateArea,
-            StoreStatValues(item.data, cardMastery), !ReadGameString(toc, item.data.assets[5]).empty());
+            StoreStatValues(item.data, cardMastery), !tables.ReadString(item.data.assets[5]).empty());
     }
     ZMovieRegion quantity;
     if (CardRegion(view, shopBox, kCardBadgeRegion, face, quantity)) {
@@ -181,7 +181,7 @@ void DrawCardPrice(ZMenuSurface &view, const CStoreItem &item, const ZMovieRegio
     view.movies.Text(text, row.x + row.width - view.movies.TextWidth(text, 0), row.y, 0, 1, 0, alpha);
 }
 
-std::string StoreItemKind(ZMenuSurface &view, const ZStoreEntry &item) {
+std::string StoreItemKind(ZMenuSurface &view, const CStoreItem::Entry &item) {
     if (item.data.type > 15) { return {}; }
     return view.movies.NamedString("IDS_SHOP_SORT3", item.data.type);
 }
@@ -247,7 +247,7 @@ bool StoreMasteryTarget(const CMovie &movie, const CGun::Template &weapon, unsig
     return true;
 }
 
-bool DrawMasteryMeter(ZMenuSurface &view, const ZWeaponEntry &weapon, unsigned experience,
+bool DrawMasteryMeter(ZMenuSurface &view, const CGun::Entry &weapon, unsigned experience,
     const ZMovieRegion &area, unsigned elapsed) {
     if (area.alpha <= 0) { return true; }
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_MASTERY");
@@ -375,8 +375,8 @@ bool CMenuStoreOption::Update(std::uint64_t clock, const CMovie &movie) {
 /** Currency entries have no object references and no cost string. The original
  * LevelCallback :180839 therefore places BUY/CONVERT in the bottom right.
  * Focus :181402 requires a cost string, so these cards do not expand. */
-bool DrawCurrencyCard(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-    const ZStoreEntry &item, unsigned index, unsigned movie, const CMenuStoreOption::Face &face,
+bool DrawCurrencyCard(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+    const CStoreItem::Entry &item, unsigned index, unsigned movie, const CMenuStoreOption::Face &face,
     bool enabled, CMenuSystem &state, CProfileManager &profile, const std::filesystem::path &savePath) {
     ZMovieRegion name, icon, kind, price;
     if (!CardRegion(view, movie, kCardNameRegion, face, name) ||
@@ -405,21 +405,21 @@ bool DrawCurrencyCard(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tabl
             // not a retail payment timer. Product ID and amounts stay in BIG.
             state.BeginOfflineIAP(static_cast<int>(index), view.clock, item.productId);
             std::printf("[offline-iap] pending product=%s common=%u rare=%u\n",
-                ReadGameString(toc, item.data.assets[0]).c_str(), item.data.commonPrice, item.data.rarePrice);
+                tables.ReadString(item.data.assets[0]).c_str(), item.data.commonPrice, item.data.rarePrice);
         } else {
-            const ZPurchaseResult result = profile.AcquireCurrency(item.data);
-            if (result == ZPurchaseResult::InsufficientWarbucks) {
+            const CProfileManager::PurchaseResult result = profile.AcquireCurrency(item.data);
+            if (result == CProfileManager::PurchaseResult::InsufficientWarbucks) {
                 state.feedback.Clear();
                 state.ShowStorePrompt("MDS_STORE_PROMPT_MOMONEY_CONV", false, true);
             }
-            if (result == ZPurchaseResult::Purchased && !profile.SaveToDisk(savePath)) { return false; }
+            if (result == CProfileManager::PurchaseResult::Purchased && !profile.SaveToDisk(savePath)) { return false; }
         }
     }
     return true;
 }
 
-bool CMenuStoreOption::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-    CProfileManager &profile, const ZStoreEntry &item, const std::vector<ZWeaponEntry> &weapons,
+bool CMenuStoreOption::Draw(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+    CProfileManager &profile, const CStoreItem::Entry &item, const std::vector<CGun::Entry> &weapons,
     unsigned slot, const Face &face, CMenuMovieButton &actionButton, Action &actionResult) {
     actionResult = Action::None;
     const auto &ref = item.data.objects[0];
@@ -440,7 +440,7 @@ bool CMenuStoreOption::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables
         view.movies.Draw(shopBox, face.time, face.x, face.y);
         // Object ordinals are local to their type; an ARMOR can share a GUN's
         // pack/index without being that weapon (CanBeUpgraded :156746).
-        const ZWeaponEntry *weapon = nullptr;
+        const CGun::Entry *weapon = nullptr;
         if (ref.type == 6) { weapon = CStoreAggregator::FindWeaponEntry(weapons, ref.object); }
         unsigned mastery = 0;
         if (weapon != nullptr) { mastery = weapon->data.GetMasteryLevel(profile.GetWeaponExperience(ref.object)); }
@@ -470,15 +470,15 @@ bool CMenuStoreOption::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables
             if (!owned || slot == 5) { DrawCardPrice(view, item.data, region, region.alpha); }
         }
         if (CardRegion(view, shopBox, kCardRightRegion, face, region)) {
-            std::string properties = ReadGameString(toc, item.data.assets[5]);
+            std::string properties = tables.ReadString(item.data.assets[5]);
             const bool centered = !properties.empty();
-            if (properties.empty()) { properties = ReadGameString(toc, item.data.assets[4]); }
+            if (properties.empty()) { properties = tables.ReadString(item.data.assets[4]); }
             DrawStoreTemplate(view, properties, region, values, centered, finalStats.width);
         }
         if (CardRegion(view, shopBox, kCardStatsRegion, face, region)) {
             // ARMOR uses precisely the same STORE text as GUNS; do not invent a
             // DEFENSE/ATTACK/SPEED/XP/XPLODIUM list from equipment script values.
-            DrawStoreTemplate(view, ReadGameString(toc, item.data.assets[4]), region, values, false, finalStats.width);
+            DrawStoreTemplate(view, tables.ReadString(item.data.assets[4]), region, values, false, finalStats.width);
         }
         if (CardRegion(view, shopBox, kCardUpgradeRegion, face, region)) {
             if (ref.type == 6 && weapon != nullptr &&
@@ -486,7 +486,7 @@ bool CMenuStoreOption::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables
             if (ref.type == 17 && !DrawPowerupCompatibility(view, item.data, region, elapsed)) { return false; }
         }
         if (CardRegion(view, shopBox, kCardDescriptionRegion, face, region)) {
-            DrawStoreTemplate(view, ReadGameString(toc, item.data.assets[3]), region, values, false, finalDescription.width);
+            DrawStoreTemplate(view, tables.ReadString(item.data.assets[3]), region, values, false, finalDescription.width);
         }
         if (CardRegion(view, shopBox, kCardActionRegion, face, region) && region.alpha > 0) {
             const bool interactive = !shopDetailClosing && shopDetailTime == cardEnd;

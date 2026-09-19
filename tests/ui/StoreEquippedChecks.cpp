@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 /** Check the actual action plate pixels, not only inventory after a click. */
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/debug/Capture.h"
@@ -29,14 +30,14 @@ unsigned ActionPlatePixels(ZMenuSurface &view, const ZMovieRegion &area,
 int RunStoreEquippedCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
+    CGunBros tables(toc);
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
     CRefinementManager::Template refinement;
-    if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor) || !LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
-    const ZStoreEntry *gunItem = nullptr, *armorItem = nullptr;
+    if (!CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor) || !CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
+    const CStoreItem::Entry *gunItem = nullptr, *armorItem = nullptr;
     unsigned armorSlot = 0;
     for (const auto &item : store) {
         if (item.data.objects.size() != 1 || item.data.singlePurchase != 0) { continue; }
@@ -73,7 +74,7 @@ int RunStoreEquippedCheck(const std::string &bigDirectory) {
     };
     unsigned failures = 0;
     for (const auto &scenario : scenarios) {
-        const ZStoreEntry *item = gunItem;
+        const CStoreItem::Entry *item = gunItem;
         unsigned slot = 0;
         if (scenario.armor) { item = armorItem; slot = armorSlot; }
         const auto &object = item->data.objects[0];

@@ -7,7 +7,7 @@
 #include "gun_bros_re/gameplay/game/CGame.h"
 class ZWindow;
 struct CGameFlow;
-struct ZMissionEntry;
+#include "gun_bros_re/data/mission/Mission.h"
 struct DebugMapSelection;
 class ZLocalBotFriend;
 class ZGameObserver;
@@ -22,7 +22,7 @@ struct CGame::Launch {
     unsigned startWave = 0;
     CGameFlow *gameContext = nullptr;
     bool withBrother = false;
-    const ZMissionEntry *archiveMission = nullptr;
+    const Mission::Entry *archiveMission = nullptr;
     ZWindow *window = nullptr;
     DebugMapSelection *debugSelection = nullptr;
     const DebugMapSelection *debugMap = nullptr;

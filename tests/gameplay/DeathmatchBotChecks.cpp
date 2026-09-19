@@ -4,7 +4,7 @@
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include "engine/core/CStringToKey.h"
 
-int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
+int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &toc, CGunBros &tables,
     CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile) {
     std::uint32_t powerupChoice = 0;
     auto &session = fixture.session;
@@ -18,12 +18,12 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
         session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
         if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
         fixture.vitals.invincible = true; bot.vitals.invincible = true;
-        std::vector<ZPowerupEntry> catalog;
-        std::vector<ZStoreEntry> store;
-        std::vector<ZWeaponEntry> weapons;
-        if (!LoadPowerupCatalog(toc, tables, catalog) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
-        if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
-        const ZWeaponEntry *chosen[2]{};
+        std::vector<CPowerup::Entry> catalog;
+        std::vector<CStoreItem::Entry> store;
+        std::vector<CGun::Entry> weapons;
+        if (!CPowerup::LoadEntries(toc, tables, catalog) || !CStoreItem::LoadEntries(toc, tables, store)) { return 1; }
+        if (!CGun::LoadEntries(toc, tables, weapons)) { return 1; }
+        const CGun::Entry *chosen[2]{};
         for (unsigned slot = 0; slot < 2; ++slot) {
             const auto &gun = scene.MatchGun(1, slot);
             for (const auto &weapon : weapons) {

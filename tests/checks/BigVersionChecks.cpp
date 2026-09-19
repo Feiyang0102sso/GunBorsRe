@@ -4,7 +4,7 @@
  */
 #include "TestOutput.h"
 #include "engine/core/CStringToKey.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_viewer/scenes/ResourceInfo.h"
 #include <cstdio>
 #include <fstream>
@@ -116,12 +116,12 @@ bool MakeFixture(const std::filesystem::path &directory, unsigned types, unsigne
     return WriteBytes(directory / (fullName + ".big"), big) && WriteBytes(directory / tocName, toc);
 }
 
-bool CheckValid(const std::filesystem::path &directory, ZBigVersion expected) {
-    ZBigVersion detected = ZBigVersion::Unknown;
+bool CheckValid(const std::filesystem::path &directory, CGameObjectPack::BigVersion expected) {
+    CGameObjectPack::BigVersion detected = CGameObjectPack::BigVersion::Unknown;
     if (!DetectViewerBigVersion(directory.u8string(), detected) || detected != expected) { return false; }
     CResTOCManager toc;
     if (!toc.InitAuto(directory.u8string()) || !toc.Bind()) { return false; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CGameObjectPack &objects = tables.GetObjectPack(0);
     CResPackTOC &pack = *toc.GetPack(0);
     const ZGameSection media[] = {ZGameSection::Png, ZGameSection::Wav, ZGameSection::Mesh};
@@ -138,10 +138,10 @@ bool CheckValid(const std::filesystem::path &directory, ZBigVersion expected) {
     CGameAssetRef stringRef;
     stringRef.packHash = pack.GetPackHash();
     stringRef.assetId = 0;
-    if (objects.GetStringHandle(0) != kStringHandle || ReadGameString(toc, stringRef) != "Hello") { return false; }
+    if (objects.GetStringHandle(0) != kStringHandle || tables.ReadString(stringRef) != "Hello") { return false; }
     stringRef.assetId = 1;
-    if (!ReadGameString(toc, stringRef).empty()) { return false; }
-    return tables.HasLatestBigVersion() == (expected == ZBigVersion::V1);
+    if (!tables.ReadString(stringRef).empty()) { return false; }
+    return tables.HasLatestBigVersion() == (expected == CGameObjectPack::BigVersion::V1);
 }
 }
 
@@ -152,14 +152,14 @@ int RunBigVersionCheck() {
     for (unsigned index = 0; index < 3; ++index) {
         const auto directory = root / ("format-" + std::to_string(index + 1));
         if (!MakeFixture(directory, types[index], types[index] + 5, false) ||
-            !CheckValid(directory, static_cast<ZBigVersion>(index + 1))) { ++failures; }
+            !CheckValid(directory, static_cast<CGameObjectPack::BigVersion>(index + 1))) { ++failures; }
     }
     const auto plain = root / "plain";
-    if (!MakeFixture(plain, 26, 31, true) || !CheckValid(plain, ZBigVersion::V3)) { ++failures; }
+    if (!MakeFixture(plain, 26, 31, true) || !CheckValid(plain, CGameObjectPack::BigVersion::V3)) { ++failures; }
     const auto invalid = root / "invalid";
-    ZBigVersion detected = ZBigVersion::V1;
+    CGameObjectPack::BigVersion detected = CGameObjectPack::BigVersion::V1;
     if (!MakeFixture(invalid, 27, 33, false) || DetectViewerBigVersion(invalid.u8string(), detected) ||
-        detected != ZBigVersion::Unknown) { ++failures; }
+        detected != CGameObjectPack::BigVersion::Unknown) { ++failures; }
     if (!MakeFixture(invalid, 28, 33, false, "pack0_core", true) ||
         DetectViewerBigVersion(invalid.u8string(), detected)) { ++failures; }
     if (!MakeFixture(invalid, 28, 33, false, "pack0_core", false, true) ||

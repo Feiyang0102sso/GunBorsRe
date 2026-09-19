@@ -1,6 +1,6 @@
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalBotFriend.h"
 // CGame::OnWaveCleared :76192 / UpdatePostGameStats :75868 orchestrate these writes.
 // Payloads continue through saves/save_payloads.bt and the existing profile clients.
@@ -49,8 +49,8 @@ bool CGameFlow::UpdatePlayerProgress(const CPlayerProgress &progress, const CLev
     accountedXplodium = level.GetXplodium();
     if (hordeStart >= 0) {
         if (profile.nativeArchive) {
-            if (!RecordMissionWaves(profile, missionLevel, wave, level.GetWavePerfectResults())) { return false; }
-            if (missionEnded && !RecordMissionScore(profile, mission, level.GetScore())) { return false; }
+            if (!(profile).RecordMissionWaves(missionLevel, wave, level.GetWavePerfectResults())) { return false; }
+            if (missionEnded && !(profile).RecordMissionScore(mission, level.GetScore())) { return false; }
         }
         const unsigned index = static_cast<unsigned>(hordeStart);
         profile.hordeBestKills[index] = std::max(profile.hordeBestKills[index], level.GetTotalKills());

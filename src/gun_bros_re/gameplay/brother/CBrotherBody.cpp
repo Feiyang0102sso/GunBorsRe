@@ -6,10 +6,10 @@
 #include "gun_bros_re/gameplay/brother/CBrotherDrawing.h"
 
 
-#include "gun_bros_re/data/ZMeshAssets.h"
+#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include <cstdio>
 
-bool CBrother::BuildBody(ZPackTables &tables, const CMoveSetMesh &moves) {
+bool CBrother::BuildBody(CGunBros &tables, const CMoveSetMesh &moves) {
     ClearScript();
     ClearArmor();
     uiActiveWeapon = nullptr;

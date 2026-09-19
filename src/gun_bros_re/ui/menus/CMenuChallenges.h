@@ -1,5 +1,5 @@
 #pragma once
-#include "gun_bros_re/data/CChallengeManager.h"
+#include "gun_bros_re/data/profile/CChallengeManager.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 namespace MenuDetail {
 class ZMenuSurface;

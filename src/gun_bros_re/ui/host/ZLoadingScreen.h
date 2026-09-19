@@ -4,16 +4,16 @@
 #define GUN_BROS_RE_ZLOADINGSCREEN_H
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/ui/menus/CMenuSplash.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/platform/ZWindow.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"
 #include <thread>
 #include <chrono>
 
-class ZLoadingScreen : public ZPackLoadProgress {
+class ZLoadingScreen : public CGunBros::LoadProgress {
 public:
-    ZLoadingScreen(ZWindow &window, ZMovieRenderer &movies, ZPackTables &tables, const CProfileManager *profile = nullptr, bool enteringGame = false, bool startup = false, CBGM *music = nullptr, bool multiplayer = false, bool deathmatch = false)
+    ZLoadingScreen(ZWindow &window, ZMovieRenderer &movies, CGunBros &tables, const CProfileManager *profile = nullptr, bool enteringGame = false, bool startup = false, CBGM *music = nullptr, bool multiplayer = false, bool deathmatch = false)
         : m_window(window), m_tables(tables), m_movies(movies), m_startup(startup), m_music(music) {
         m_start = window.GetTicksMs();
         if (startup) {
@@ -97,7 +97,7 @@ private:
         return m_valid && captured;
     }
     ZWindow &m_window;
-    ZPackTables &m_tables;
+    CGunBros &m_tables;
     ZMovieRenderer &m_movies;
     ZTexture m_title;
     bool m_startup = false;

@@ -1,3 +1,7 @@
+#include "gun_bros_re/ui/content/CStoreAggregator.h"
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
+#include "gun_bros_re/data/store/CStoreItemOverride.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_re/ui/host/ZMenuSession.h"
@@ -13,17 +17,17 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 #include "TestOutput.h"
 #include "ui/MenuChecks.h"
 using namespace MenuDetail;
 namespace {
-bool DrawAndCheckPlayer(MenuDetail::ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
-    const CProfileManager &profile, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armors, unsigned slot, const GameObjectTypeRef *previewItem,
+bool DrawAndCheckPlayer(MenuDetail::ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables,
+    const CProfileManager &profile, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armors, unsigned slot, const GameObjectTypeRef *previewItem,
     const ZMovieRegion *storePanel, float spin = 0) {
     if (!view.playerPreview.Draw(view, toc, tables, profile, weapons, armors, slot, previewItem, storePanel, spin)) { return false; }
     int width = 0, height = 0;
@@ -58,10 +62,10 @@ bool DrawAndCheckPlayer(MenuDetail::ZMenuSurface &view, CResTOCManager &toc, ZPa
 
 /** Exercise real card resources and the same renderer/input path as --game.
  * All money, XP, mutated templates and profile writes below are test fixtures. */
-int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile,
+int CheckStoreCards(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile,
     const CPlayerProgress::Template &progress, const CRefinementManager::Template &refinement,
-    const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armor) {
+    const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armor) {
     if (CheckStoreFiltering(toc, refinement, store, weapons, armor) != 0) { return 1; }
     ZMenuInputFrame cardClick, purchaseClick, previewClick;
     unsigned start = 0, end = 0;
@@ -72,7 +76,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         const CMovie *mastery = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_MASTERY"));
         if (mastery == nullptr) { return 1; }
         unsigned masteryCases = 0;
-        for (const ZWeaponEntry &weapon : weapons) {
+        for (const CGun::Entry &weapon : weapons) {
             GameObjectRef weaponRef;
             weaponRef.packHash = weapon.packHash;
             weaponRef.localIndex = weapon.ordinal;
@@ -129,7 +133,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             CProfileManager modelProfile = profile;
             modelProfile.playerBrother = brother;
             std::array<bool, kWeaponCategoryCount> checked{};
-            for (const ZWeaponEntry &weapon : weapons) {
+            for (const CGun::Entry &weapon : weapons) {
                 if (!weapon.hasStoreEntry || weapon.visualOnly || weapon.category < 0 || weapon.category >= kWeaponCategoryCount || checked[weapon.category]) { continue; }
                 GameObjectRef ref;
                 ref.packHash = weapon.packHash;
@@ -146,7 +150,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         // Imported equipment catches UI states absent from the simple fixtures.
         CProfileManager savedProfile = profile;
         const auto savedPath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("model-native-" + std::to_string(GetTickCount64()));
-        if (!LoadProfile(toc, tables, savedProfile, savedPath, TestOutput::Fixtures())) { return 1; }
+        if (!(savedProfile).LoadNative(toc, tables, savedPath, TestOutput::Fixtures())) { return 1; }
         for (unsigned slot = 0; slot < 2; ++slot) {
             for (unsigned phase = 0; phase < 2; ++phase) {
                 probe.Begin();
@@ -197,7 +201,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             savedProfile.activeWeaponSlot = targetSlot;
             if (!savedProfile.SaveToDisk(savedPath)) { return 1; }
             CProfileManager restored;
-            if (!LoadProfile(toc, tables, restored, savedPath, savedPath / "absent-source") || restored.activeWeaponSlot != targetSlot) { return 1; }
+            if (!(restored).LoadNative(toc, tables, savedPath, savedPath / "absent-source") || restored.activeWeaponSlot != targetSlot) { return 1; }
             probe.Begin();
             if (!DrawAndCheckPlayer(probe, toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
             if (!Capture::SaveFrame(probe.window, TestOutput::Path("ui-original-2026-09-09/native-model-swapped-") + std::to_string(exchange) + ".png")) { return 1; }
@@ -324,9 +328,9 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             if (mixed[0].runs[index].font != expectedFonts[index]) { return 1; }
         }
         unsigned templates = 0;
-        for (const ZStoreEntry &entry : store) {
+        for (const CStoreItem::Entry &entry : store) {
             for (unsigned field = 3; field <= 5; ++field) {
-                const std::string original = ReadGameString(toc, entry.data.assets[field]);
+                const std::string original = tables.ReadString(entry.data.assets[field]);
                 if (original.empty()) { continue; }
                 ++templates;
                 const std::string expanded = SubstituteStoreStats(original, StoreStatValues(entry.data, 0));
@@ -337,7 +341,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             }
         }
         // Mutate an in-memory STORE value, then verify the display consumes it.
-        for (const ZStoreEntry &entry : store) {
+        for (const CStoreItem::Entry &entry : store) {
             if (entry.data.statGroups[1].empty()) { continue; }
             CStoreItem changedItem = entry.data;
             changedItem.statGroups[1][0] = 12345;
@@ -382,7 +386,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         if (!opening.store.focused.shopDetailOpen || opening.store.focused.shopDetailTime != start + 240 || !opened.store.focused.shopDetailOpen ||
             opened.store.focused.shopDetailTime != end || !closing.store.focused.shopDetailClosing || closing.store.focused.shopDetailTime != end - 240 ||
             closed.store.focused.shopDetailOpen || opened.selectedItem < 0) { return 1; }
-        const ZStoreEntry &entry = store[opened.selectedItem];
+        const CStoreItem::Entry &entry = store[opened.selectedItem];
         if (category != 0) {
             CProfileManager buyer = profile;
             buyer.coins = 2ull * entry.data.commonPrice;
@@ -429,8 +433,8 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             std::printf("[store-card-check] category=%s expanded-purchase preview reload failures=0\n", categories[category]);
         }
         std::printf("[store-card-check] category=%s item=%s folded=%s expanded=%s screenshots=5 failures=0\n",
-            categories[category], entry.name.c_str(), ReadGameString(toc, entry.data.assets[5]).c_str(),
-            ReadGameString(toc, entry.data.assets[4]).c_str());
+            categories[category], entry.name.c_str(), tables.ReadString(entry.data.assets[5]).c_str(),
+            tables.ReadString(entry.data.assets[4]).c_str());
     }
     if (profile.coins != before.coins || profile.warbucks != before.warbucks || profile.inventory.size() != before.inventory.size()) { return 1; }
     for (unsigned slot = 0; slot < 5; ++slot) {
@@ -442,7 +446,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     const auto nativeSwapPath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("store-native-click-" + std::to_string(GetTickCount64()));
     CProfileManager nativeSwapProfile;
-    if (!LoadProfile(toc, tables, nativeSwapProfile, nativeSwapPath, TestOutput::Fixtures())) { return 1; }
+    if (!(nativeSwapProfile).LoadNative(toc, tables, nativeSwapPath, TestOutput::Fixtures())) { return 1; }
     const unsigned originalSlot = nativeSwapProfile.activeWeaponSlot;
     ZMenuInputFrame nativeSwapClick;
     unsigned showDuration = 0, pressDuration = 0;
@@ -478,8 +482,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     if (ShowGameMenu(toc, tables, nativeSwapProfile, progress, refinement, store, weapons, armor,
         nativeSwapState, nativeSwapPath, TestOutput::Path("ui-original-2026-09-09/native-store-swap-click.png"), &nativeSwapActions) != -2) { return 1; }
     CProfileManager swapReloaded;
-    if (nativeSwapProfile.activeWeaponSlot != 1 - originalSlot || !LoadProfile(toc, tables, swapReloaded,
-        nativeSwapPath, nativeSwapPath / "absent-source") || swapReloaded.activeWeaponSlot != 1 - originalSlot) { return 1; }
+    if (nativeSwapProfile.activeWeaponSlot != 1 - originalSlot || !(swapReloaded).LoadNative(toc, tables, nativeSwapPath, nativeSwapPath / "absent-source") || swapReloaded.activeWeaponSlot != 1 - originalSlot) { return 1; }
     std::printf("[store-card-check] native real-button filtered-GUNS authored-press player-Flow active-slot=%u saved-reload=1 failures=0\n", swapReloaded.activeWeaponSlot);
     // Visual research fixture only: IMG_0800's silver/blue rifle may be the
     // catalog's Infinity Laser. Do not replace the real account's loadout or
@@ -489,11 +492,11 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     // No rifle/laser matched IMG_0800. Include every original category: visual
     // appearance is not reliable evidence of the STORE classification.
     if (TestOutput::referenceGallery) {
-    for (const ZWeaponEntry &weapon : weapons) {
+    for (const CGun::Entry &weapon : weapons) {
         const std::string referenceKey = std::to_string(weapon.packHash) + "-" + std::to_string(weapon.ordinal);
         const auto referencePath = nativeSwapPath / "reference-gun-fixture" / referenceKey;
         CProfileManager reference;
-        if (!LoadProfile(toc, tables, reference, referencePath, TestOutput::Fixtures())) { return 1; }
+        if (!(reference).LoadNative(toc, tables, referencePath, TestOutput::Fixtures())) { return 1; }
         reference.configuration.guns[reference.activeWeaponSlot].packHash = weapon.packHash;
         reference.configuration.guns[reference.activeWeaponSlot].localIndex = static_cast<std::uint8_t>(weapon.ordinal);
         CMenuSystem referenceState;
@@ -512,19 +515,19 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
 int RunUpgradePopupCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
-        !LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store) ||
+        !CGun::LoadEntries(toc, tables, weapons)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     CMenuSystem state;
     state.stack.page = 26;
     state.masteryWeapon = profile.configuration.guns[0];
-    const ZWeaponEntry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
-    const ZStoreEntry *item = FindWeaponStore(store, state.masteryWeapon);
+    const CGun::Entry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
+    const CStoreItem::Entry *item = FindWeaponStore(store, state.masteryWeapon);
     if (weapon == nullptr || item == nullptr || item->data.statGroups[7].size() < 2) { return 1; }
     const unsigned threshold = weapon->data.GetMasteryThreshold(0);
     const unsigned initialXP = threshold / 2;
@@ -651,14 +654,14 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     poorProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto fundsPath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("upgrade-funds-native-" + std::to_string(GetTickCount64()));
-    if (!LoadProfile(toc, tables, poorProfile, fundsPath, TestOutput::Fixtures())) { return 1; }
+    if (!(poorProfile).LoadNative(toc, tables, fundsPath, TestOutput::Fixtures())) { return 1; }
     poorProfile.warbucks = 0;
     poorProfile.weaponMastery.clear();
     CMenuSystem fundsState;
     fundsState.stack.page = 26;
     fundsState.masteryWeapon = state.masteryWeapon;
     const unsigned price = static_cast<unsigned>(item->data.statGroups[7][1]);
-    const int offer = FindCurrencyOffer(store, 1, price);
+    const int offer = MenuDetail::CStoreAggregator::FindCurrencyOffer(store, 1, price);
     if (offer < 0 || store[offer].data.rarePrice < price) { return 1; }
     const CMovie *prompt = view.movies.GetMovie(view.movies.Ordinal("GLU_MOVIE_POPUP"));
     if (prompt == nullptr) { return 1; }
@@ -702,7 +705,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     std::printf("[upgrade-funds-check] original-prompt dismiss offer wait retry-upgrade native-reload failures=0\n");
     poorProfile.configuration.guns[0] = state.masteryWeapon;
     const GameObjectRef secondGun = poorProfile.configuration.guns[1];
-    const ZWeaponEntry *secondWeapon = FindMasteryWeapon(weapons, secondGun);
+    const CGun::Entry *secondWeapon = FindMasteryWeapon(weapons, secondGun);
     std::printf("[upgrade-swap-check] second=%u:%u found=%u same=%u store=%u\n", secondGun.packHash, secondGun.localIndex,
         secondWeapon != nullptr, SameObject(secondGun, state.masteryWeapon), FindWeaponStore(store, secondGun) != nullptr);
     if (secondWeapon == nullptr || SameObject(secondGun, state.masteryWeapon)) { return 1; }
@@ -789,9 +792,9 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
 }
 
 /** Real bank card/input/prompt path, with native saves and isolated fixtures. */
-int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &progress,
-    const CRefinementManager::Template &refinement, const std::vector<ZStoreEntry> &store,
-    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armor) {
+int CheckBank(CResTOCManager &toc, CGunBros &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<CStoreItem::Entry> &store,
+    const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armor) {
     struct ConnectionRestore {
         bool previous = GameHostSettings().isConnected;
         ~ConnectionRestore() { GameHostSettings().isConnected = previous; }
@@ -846,7 +849,7 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
         CProfileManager profile;
         profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
         const auto path = root / std::to_string(phase);
-        if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+        if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
         CMenuSystem state;
         state.stack.page = 2;
         state.store.shopCategory = 3;
@@ -857,7 +860,7 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
         if (phase == 4 || phase == 7 || phase == 8) { profile.coins = 0; profile.warbucks = 0; }
         const auto coins = profile.coins;
         const auto bucks = profile.warbucks;
-        std::vector<ZStoreEntry> fixture = store;
+        std::vector<CStoreItem::Entry> fixture = store;
         unsigned first = static_cast<unsigned>(fixture.size());
         if (phase >= 9) {
             first = currencies[phase - 9].second;
@@ -918,14 +921,14 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
 }
 
 /** Focused regression for the user's splash, package and clipped badge report. */
-int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &progress,
-    const CRefinementManager::Template &refinement, const std::vector<ZStoreEntry> &store,
-    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armor) {
+int CheckUiFeedback(CResTOCManager &toc, CGunBros &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<CStoreItem::Entry> &store,
+    const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armor) {
     const auto root = std::filesystem::path(TestOutput::Path("ui-feedback-2026-09-09"));
     const auto save = root / ("profile-" + std::to_string(GetTickCount64()));
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, profile, save, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, save, TestOutput::Fixtures())) { return 1; }
     {
         ZMenuSurface view;
         if (!view.Open(toc, tables)) { return 1; }
@@ -965,7 +968,7 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
         std::printf("[ui-feedback-check] splash-phase=%u page=%u wait blink click original-entry failures=0\n", phase, state.stack.page);
     }
     profile.firstLaunch = false;
-    const ZStoreEntry *package = nullptr;
+    const CStoreItem::Entry *package = nullptr;
     unsigned packageIndex = 0;
     for (unsigned index = 0; index < store.size(); ++index) {
         if (store[index].data.singlePurchase != 0) { package = &store[index]; packageIndex = index; break; }
@@ -1006,7 +1009,7 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
             // A disk reload in the same session must retain OWNED. Reset models
             // a new process before applying the original purchased-item override.
             profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-            if (!LoadProfile(toc, tables, profile, save) || !profile.IsPackagePurchased(package->ref)) { return 1; }
+            if (!(profile).LoadNative(toc, tables, save) || !profile.IsPackagePurchased(package->ref)) { return 1; }
         }
         std::printf("[ui-feedback-check] store-phase=%u category=%u selected=%d package-purchased=%u failures=0\n",
             phase, state.store.shopCategory, state.selectedItem, profile.IsPackagePurchased(package->ref));
@@ -1018,15 +1021,15 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
 int RunPackagePurchaseCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
-    const ZStoreEntry *package = nullptr;
-    for (const ZStoreEntry &entry : store) {
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store) ||
+        !CGun::LoadEntries(toc, tables, weapons) || !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
+    const CStoreItem::Entry *package = nullptr;
+    for (const CStoreItem::Entry &entry : store) {
         if (entry.data.singlePurchase != 0) { package = &entry; break; }
     }
     if (package == nullptr) { return 1; }
@@ -1058,7 +1061,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         CProfileManager profile;
         profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
         const auto save = root / std::to_string(mode);
-        if (!LoadProfile(toc, tables, profile, save, root / "absent-source")) { return 1; }
+        if (!(profile).LoadNative(toc, tables, save, root / "absent-source")) { return 1; }
         profile.coins = package->data.commonPrice;
         profile.warbucks = package->data.rarePrice;
         profile.activeWeaponSlot = mode;
@@ -1104,14 +1107,14 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
                 ++gunIndex;
             }
             if (object.type != 2) { continue; }
-            for (const ZArmorEntry &part : armor) {
+            for (const CArmor::Entry &part : armor) {
                 if (part.packHash == object.object.packHash && part.ordinal == object.object.localIndex &&
                     !SameObject(profile.configuration.armor[part.data.GetSlot()], object.object)) { ++failures; }
             }
-            for (const ZStoreEntry &entry : store) {
+            for (const CStoreItem::Entry &entry : store) {
                 if (entry.data.objects.size() == 1 && entry.data.objects[0].type == 2 &&
                     SameObject(entry.data.objects[0].object, object.object) && entry.data.displayOrder < 0) {
-                    if (GetStoreDisplayOrder(entry.data, profile) < 0) { ++failures; }
+                    if (CStoreItemOverride::GetDisplayOrder(entry.data, profile) < 0) { ++failures; }
                     ++restoredRows;
                 }
             }
@@ -1125,7 +1128,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         if (mode == 0) { view.InjectTap(foldedBuy); }
         else { view.InjectTap(expandedBuy); }
         if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
-        if (profile.AcquireItem(package->data, package->data.requiredLevel) != ZPurchaseResult::Owned ||
+        if (profile.AcquireItem(package->data, package->data.requiredLevel) != CProfileManager::PurchaseResult::Owned ||
             profile.coins != coins || profile.warbucks != warbucks || profile.inventory.size() != inventory) { ++failures; }
         // Re-entering categories must preserve the session's OWNED card.
         for (unsigned category : {1u, 2u, 0u}) {
@@ -1141,7 +1144,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         if (!profile.LoadFromDisk(save) || profile.IsPackageHidden(package->ref)) { ++failures; }
         CProfileManager restarted;
         restarted.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-        if (!LoadProfile(toc, tables, restarted, save, root / "absent-source") ||
+        if (!(restarted).LoadNative(toc, tables, save, root / "absent-source") ||
             !restarted.IsPackageHidden(package->ref)) { return 1; }
         for (unsigned slot = 0; slot < acquiredConfiguration.guns.size(); ++slot) {
             if (!SameObject(restarted.configuration.guns[slot], acquiredConfiguration.guns[slot])) { ++failures; }
@@ -1171,7 +1174,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
             const auto &item = store[index].data;
             if (item.objects.size() != 1 || item.objects[0].type != 2 || item.value242 == 1 ||
                 !restarted.Owns(2, item.objects[0].object)) { continue; }
-            const int order = GetStoreDisplayOrder(item, restarted);
+            const int order = CStoreItemOverride::GetDisplayOrder(item, restarted);
             if (order >= 0) { ownedArmor.push_back({order, index}); }
         }
         std::sort(ownedArmor.begin(), ownedArmor.end());
@@ -1221,15 +1224,15 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
 int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool bankOnly, bool feedbackOnly) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CPlayerProgress::Template progress;
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
-        !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CPlayerProgress::Template::Load(toc, tables, progress) || !CRefinementManager::Template::Load(toc, tables, refinement) ||
+        !CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     if (bankOnly) { return CheckBank(toc, tables, progress, refinement, store, weapons, armor); }
@@ -1321,15 +1324,15 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
 int RunDualWeaponCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    CGunBros tables(toc);
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     const auto path = std::filesystem::path(TestOutput::Path("dual-weapon-check")) / std::to_string(GetTickCount64());
     CProfileManager profile;
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     std::vector<unsigned> entries;
     for (unsigned index = 0; index < store.size() && entries.size() < 3; ++index) {
         const auto &item = store[index].data;
@@ -1410,7 +1413,7 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
             }
         }
         CProfileManager restored;
-        if (!LoadProfile(toc, tables, restored, path, path / "absent-source")) { return 1; }
+        if (!(restored).LoadNative(toc, tables, path, path / "absent-source")) { return 1; }
         for (unsigned slot = 0; slot < 2; ++slot) {
             if (!SameObject(profile.configuration.guns[slot], restored.configuration.guns[slot])) { ++failures; }
         }

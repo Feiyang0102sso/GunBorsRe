@@ -14,14 +14,14 @@ constexpr float Radians = 3.14159265f / 180;
 constexpr int DecisionMs = 220, ReactionMs = 240, MemoryMs = 3500;
 constexpr int PowerupDecisionMs = 500; // Host input cadence; BIG owns item cooldowns.
 constexpr float InputSpeed = 220; // CPlayer movement adapter, shared with CombatScene.
-float PreferredRange(const ZWeaponEntry &weapon) {
+float PreferredRange(const CGun::Entry &weapon) {
     // Tactical preferences derived from the resource's original category.
     if (weapon.category == 2) { return 150; }
     if (weapon.category == 3 || weapon.category == 4) { return 300; }
     return 230;
 }
 }
-const ZStoreEntry *ZLocalPVPBot::ChoosePurchase(const std::vector<ZStoreEntry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life) {
+const CStoreItem::Entry *ZLocalPVPBot::ChoosePurchase(const std::vector<CStoreItem::Entry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life) {
     if (life.dead) { return nullptr; }
     GameObjectRef ref; ref.packHash = CStringToKey("pack5");
     unsigned healthCount = life.healthPacks;
@@ -51,7 +51,7 @@ void ZLocalPVPBot::PrintNavigation() const {
     std::printf("[deathmatch-bot] tactic=%u goal=%.1f,%.1f route=%zu movement=%.2f,%.2f\n", static_cast<unsigned>(m_tactic), m_goalX, m_goalY, m_route.size(), m_moveX, m_moveY);
     if (!m_route.empty()) { std::printf("[deathmatch-bot] next=%.1f,%.1f\n", m_route.front().x, m_route.front().y); }
 }
-std::array<unsigned, 2> ZLocalPVPBot::ChooseLoadout(const CMPMatch::Entry &match, const std::vector<ZWeaponEntry> &weapons, unsigned seed) {
+std::array<unsigned, 2> ZLocalPVPBot::ChooseLoadout(const CMPMatch::Entry &match, const std::vector<CGun::Entry> &weapons, unsigned seed) {
     std::mt19937 random(seed);
     const unsigned first = std::uniform_int_distribution<unsigned>(0, static_cast<unsigned>(match.guns.size() - 1))(random);
     int firstCategory = -1;
@@ -67,7 +67,7 @@ std::array<unsigned, 2> ZLocalPVPBot::ChooseLoadout(const CMPMatch::Entry &match
     }
     return {first, second};
 }
-void ZLocalPVPBot::Configure(unsigned seed, const ZWeaponEntry &first, const ZWeaponEntry &second, ZBotSettings::Difficulty level) {
+void ZLocalPVPBot::Configure(unsigned seed, const CGun::Entry &first, const CGun::Entry &second, ZBotSettings::Difficulty level) {
     m_level = level;
     m_random.seed(seed);
     m_ranges[0] = PreferredRange(first); m_ranges[1] = PreferredRange(second);
@@ -201,7 +201,7 @@ void ZLocalPVPBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world
     else if (m_moving) { facing = std::atan2(m_moveY, m_moveX) / Radians + 90; }
     brother.SetInput(m_moving, fire);
 }
-bool ZLocalPVPBot::AllowsPowerup(const CPowerUpSelector &selector, const ZPowerupEntry &entry) {
+bool ZLocalPVPBot::AllowsPowerup(const CPowerUpSelector &selector, const CPowerup::Entry &entry) {
     if (selector.m_match == nullptr || selector.m_owner != Collision::Brother) { return true; }
     // Hard removes the host's item/life budget, never retail STORE mode rules.
     if (selector.m_match->HasHardBot()) { return selector.m_match->CanUse(1, false) && entry.data.field112 == 0; }

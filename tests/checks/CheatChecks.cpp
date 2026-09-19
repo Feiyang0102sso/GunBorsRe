@@ -1,3 +1,5 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 /** Verify desktop cheats through the menu, combat and native save consumers. */
 #include "gun_bros_re/ui/host/ZMenuSession.h"
 #include "gun_bros_re/ui/menus/CMenuStoreOption.h"
@@ -12,22 +14,22 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
-#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "TestOutput.h"
 #include <SDL3/SDL.h>
 
-unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
+unsigned CheckCheatActions(CResTOCManager &toc, CGunBros &tables,
     const CPlayerProgress::Template &data) {
     unsigned failures = 0;
     CProfileManager profile;
-    if (!CreateTransientProfile(toc, tables, profile)) { return 1; }
+    if (!(profile).CreateTransient(toc, tables)) { return 1; }
     ZWindow window;
     if (!window.Open("Cheat action checks", 320, 240)) { return 1; }
     GameCheats::Bind();
@@ -64,10 +66,10 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     }
     if (profile.coins != initialCoins + 500000 || profile.warbucks != initialWarbucks + 500 || progress.GetLevel() != 2) { ++failures; }
     for (unsigned cleared : profile.clearedWaves) { if (cleared != 500) { ++failures; } }
-    if (!ReloadProfile(profile, savePath) || profile.experience != progress.GetExperience()) { ++failures; }
+    if (!(profile).ReloadNative(savePath) || profile.experience != progress.GetExperience()) { ++failures; }
     if (profile.xplodium != initialXplodium + GameCheats::XplodiumAmount) { ++failures; }
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
         if (profile.refinery.slots[slot].state != 1) { ++failures; }
     }
@@ -88,7 +90,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
             SDL_PushEvent(&event);
         }
         if (!window.PumpEvents() || !ProcessMenuCheats(window, profile, menu, daily, savePath, data, progress) ||
-            !ReloadProfile(profile, savePath)) { return 1; }
+            !(profile).ReloadNative(savePath)) { return 1; }
         if (menu.refinery.refineryCancelTransfer != (toggle == 0) || profile.xplodium != initialXplodium + GameCheats::XplodiumAmount) { ++failures; }
     }
     menu.refinery.refineryTransfer = -1;
@@ -129,7 +131,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     }
     const auto refineryCoins = profile.coins;
     if (!ApplyCombatCheat(GameCheats::AdvanceRefinery, scene, vitals, powerups, session, &context, result, data, progress) ||
-        !ReloadProfile(profile, savePath)) { return 1; }
+        !(profile).ReloadNative(savePath)) { return 1; }
     for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
         const auto &record = profile.refinery.slots[slot];
         if (refinement.minutes[slot] == 0) { if (record.state != 1) { ++failures; } continue; }
@@ -144,14 +146,14 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     }
     const auto beforeLock = profile.xplodium;
     if (!ApplyCombatCheat(GameCheats::ToggleRefineryLocks, scene, vitals, powerups, session, &context, result, data, progress) ||
-        !ReloadProfile(profile, savePath) || profile.xplodium != beforeLock + returnedOre || profile.coins != refineryCoins) { return 1; }
+        !(profile).ReloadNative(savePath) || profile.xplodium != beforeLock + returnedOre || profile.coins != refineryCoins) { return 1; }
     for (unsigned slot = 0; slot < refinement.minutes.size(); ++slot) {
         if (refinement.minutes[slot] != 0 &&
             (profile.refinery.slots[slot].state != 0 || profile.refinery.slots[slot].amount)) { ++failures; }
         if (refinement.minutes[slot] == 0 && profile.refinery.slots[slot].state != 1) { ++failures; }
     }
     if (!ApplyCombatCheat(GameCheats::Xplodium, scene, vitals, powerups, session, &context, result, data, progress) ||
-        !ReloadProfile(profile, savePath) || profile.xplodium != beforeLock + returnedOre + GameCheats::XplodiumAmount) { return 1; }
+        !(profile).ReloadNative(savePath) || profile.xplodium != beforeLock + returnedOre + GameCheats::XplodiumAmount) { return 1; }
     std::printf("[cheat-check] refinery skip-24h=1 long-interval=1 lock-refund=1 ore=1 reload=1 failures=%u\n", failures);
     if (!ApplyCombatCheat(GameCheats::LevelUp, scene, vitals, powerups, session, &context, result, data, progress) ||
         progress.GetLevel() != 3 || std::abs(vitals.health / vitals.maximum - 0.5f) > 0.001f) { ++failures; }
@@ -161,9 +163,9 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     const auto maximumExperience = progress.GetExperience();
     if (!ApplyCombatCheat(GameCheats::LevelUp, scene, vitals, powerups, session, &context, result, data, progress) ||
         progress.GetExperience() != maximumExperience) { ++failures; }
-    if (!ReloadProfile(profile, savePath) || profile.experience != maximumExperience) { ++failures; }
+    if (!(profile).ReloadNative(savePath) || profile.experience != maximumExperience) { ++failures; }
     if (!ApplyCombatCheat(GameCheats::UpdateChallenges, scene, vitals, powerups, session, &context, result, data, progress) ||
-        !result.challengesUpdated || !ReloadProfile(profile, savePath) ||
+        !result.challengesUpdated || !(profile).ReloadNative(savePath) ||
         !restoredChallenges.Bind(toc, tables, profile, 0)) { return 1; }
     if (restoredChallenges.cycleDay != initialChallengeDay + 3 ||
         profile.dailyLastLaunchSeconds != initialDailyLaunch || profile.dailyConsecutiveSeconds != initialDailySeconds) { ++failures; }

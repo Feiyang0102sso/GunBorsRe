@@ -2,9 +2,9 @@
  * @brief Validate full records, level/map references and original objective text.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ZMissionCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/data/MissionObjective.h"
+#include "gun_bros_re/data/mission/Mission.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
+#include "gun_bros_re/data/mission/MissionObjective.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/game/CGameSession.h"
@@ -14,24 +14,24 @@
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
-#include "gun_bros_re/data/ZMissionCatalogInternal.h"
+#include "tests/research/MissionStudyInternal.h"
 using namespace MissionCatalogDetail;
 #include "Checks.h"
 
 int RunMissionCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZMissionEntry> catalog;
-    if (!LoadMissionCatalog(toc, tables, catalog)) { return 1; }
+    CGunBros tables(toc);
+    std::vector<Mission::Entry> catalog;
+    if (!Mission::LoadEntries(toc, tables, catalog)) { return 1; }
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("mission-check.txt"));
     unsigned failures = 0, objectives = 0;
-    for (const ZMissionEntry &entry : catalog) {
+    for (const Mission::Entry &entry : catalog) {
         const Mission &mission = entry.data;
         report << entry.owner << " title=" << std::quoted(entry.title) << " type=" << mission.type
             << " fields=" << mission.value64 << ',' << mission.value66 << " objectives=" << mission.objectives.size()
-            << " description=" << std::quoted(ReadGameString(toc, mission.description)) << '\n';
+            << " description=" << std::quoted(tables.ReadString(mission.description)) << '\n';
         std::vector<std::uint8_t> payload;
         if (!tables.ReadSectionResource(mission.level.packHash, ZGameSection::Level, mission.level.localIndex, payload)) { ++failures; continue; }
         CArrayInputStream levelStream(payload);
@@ -55,8 +55,8 @@ int RunMissionCheck(const std::string &bigDirectory) {
             if (!objective.Init(objectiveStream) || objectiveStream.Available() != 0) { ++failures; continue; }
             report << " objective=" << tables.GetPackName(ref.packHash) << ':' << unsigned(ref.localIndex)
                 << " type=" << objective.type << " fields=" << objective.value32 << ',' << objective.value36
-                << " title=" << std::quoted(ReadGameString(toc, objective.title))
-                << " description=" << std::quoted(ReadGameString(toc, objective.description)) << '\n';
+                << " title=" << std::quoted(tables.ReadString(objective.title))
+                << " description=" << std::quoted(tables.ReadString(objective.description)) << '\n';
         }
     }
     std::printf("[mission-check] missions=%zu objectives=%u failures=%u\n", catalog.size(), objectives, failures);

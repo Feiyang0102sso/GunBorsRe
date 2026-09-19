@@ -1,12 +1,12 @@
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalBotFriend.h"
 #include <fstream>
 
-bool ZLocalBotFriend::Load(CResTOCManager &toc, ZPackTables &tables, const std::filesystem::path &playerPath, const CProfileManager *seed) {
+bool ZLocalBotFriend::Load(CResTOCManager &toc, CGunBros &tables, const std::filesystem::path &playerPath, const CProfileManager *seed) {
     m_directory = playerPath / "local-friends" / identity;
     if (playerPath.extension() == ".dat") { m_directory = playerPath.parent_path() / "local-friends" / identity; }
     const bool exists = std::filesystem::exists(m_directory);
     // Original BIG templates create an independent peer account.
-    if (!LoadProfile(toc, tables, profile, m_directory)) { return false; }
+    if (!(profile).LoadNative(toc, tables, m_directory)) { return false; }
     if (!exists && seed != nullptr) {
         // Test-peer provisioning copies a loadout once, not a second game data
         // table. From here onward the two inventories/progress evolve independently.

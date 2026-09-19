@@ -1,3 +1,5 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/debug/DebugTutorial.h"
 #include "gun_bros_re/ui/host/ZGameFrontEndInternal.h"
@@ -8,7 +10,7 @@
 #include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
 #include "gun_bros_re/ui/host/ZLoadingScreen.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
-#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 using namespace MenuDetail;
 
@@ -41,16 +43,16 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
     ZWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     if (!tables.HasLatestBigVersion()) {
         std::printf("[game] BigVersion 1 required; older formats are supported for resource viewing only\n");
         return 1;
     }
     CPlayerProgress::Template progress;
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
     {
         ZWindow &loadingWindow = window;
         if (!loadingWindow.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
@@ -60,9 +62,9 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         if (!loadingMovies.Init(*core, *core)) { return 1; }
         ZLoadingScreen loading(loadingWindow, loadingMovies, tables, nullptr, false, screenshotPath.empty() || page == 14);
         if (!loading.IsValid()) { return 1; }
-        if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
-            !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-            !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+        if (!CPlayerProgress::Template::Load(toc, tables, progress) || !CRefinementManager::Template::Load(toc, tables, refinement) ||
+            !CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+            !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
         if (!loading.IsValid()) { return 1; }
         if (loading.Cancelled()) { return 0; }
     }
@@ -76,7 +78,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         std::printf("[game] explicit legacy research profile: %s\n", savePath.u8string().c_str());
         if (!profile.LoadFromDisk(savePath)) { return 1; }
     } else {
-        if (!LoadProfile(toc, tables, profile, savePath)) {
+        if (!(profile).LoadNative(toc, tables, savePath)) {
             std::printf("[game] native profile cannot be loaded; files preserved: %s\n", savePath.u8string().c_str());
             return 1;
         }
@@ -128,10 +130,10 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         if (choice == -2) { return 0; }
         if (choice < 0) { return !profile.SaveToDisk(savePath); }
         if (state.gameMode == 2 && choice < 5) {
-            std::vector<ZPlanetEntry> planets;
+            std::vector<MenuDetail::CMenuMission::PlanetEntry> planets;
             std::vector<CMPMatch::Entry> matches;
-            if (!LoadPlanetCatalog(toc, tables, planets) || static_cast<unsigned>(choice) >= planets.size() || !LoadMPMatches(toc, tables, matches)) { return 1; }
-            ZMissionEntry mission;
+            if (!MenuDetail::CMenuMission::LoadPlanets(toc, tables, planets) || static_cast<unsigned>(choice) >= planets.size() || !LoadMPMatches(toc, tables, matches)) { return 1; }
+            Mission::Entry mission;
             mission.resource = planets[choice].data.object12;
             std::vector<std::uint8_t> bytes;
             if (!tables.ReadSectionResource(mission.resource.packHash, ZGameSection::Mission, mission.resource.localIndex, bytes)) { return 1; }
@@ -215,12 +217,12 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         }
         if (choice == 4) {
             if (profile.nativeArchive) {
-                std::vector<ZPlanetEntry> planets;
-                if (!LoadPlanetCatalog(toc, tables, planets) || state.planet >= planets.size()) { return 1; }
+                std::vector<MenuDetail::CMenuMission::PlanetEntry> planets;
+                if (!MenuDetail::CMenuMission::LoadPlanets(toc, tables, planets) || state.planet >= planets.size()) { return 1; }
                 const auto &planet = planets[state.planet];
                 if (state.hordeStart >= planet.missions.size() ||
                     !SameObject(state.selectedMission, planet.data.missions[state.hordeStart])) { return 1; }
-                ZMissionEntry selected;
+                Mission::Entry selected;
                 selected.resource = state.selectedMission;
                 selected.data = planet.missions[state.hordeStart];
                 selected.title = planet.missionInfo[state.hordeStart].title;
@@ -236,11 +238,11 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 continue;
             }
             // Explicit legacy .dat study path retains its historical fixture.
-            std::vector<ZMissionEntry> missions;
-            if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
+            std::vector<Mission::Entry> missions;
+            if (!Mission::LoadEntries(toc, tables, missions)) { return 1; }
             const unsigned packHash = toc.GetPack(toc.GetPackIndexFromName("pack11"))->GetPackHash();
-            const ZMissionEntry *selected = nullptr;
-            for (const ZMissionEntry &mission : missions) {
+            const Mission::Entry *selected = nullptr;
+            for (const Mission::Entry &mission : missions) {
                 if (mission.resource.packHash == packHash && mission.resource.localIndex == state.hordeStart && mission.data.type == 2) { selected = &mission; break; }
             }
             if (selected == nullptr) { return 1; }
@@ -267,7 +269,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             // Explicit legacy research profiles retain their historical map fixture.
             // Correction: resolve the same authored retail chain without guessing packs.
             std::map<unsigned, GameObjectRef> levels;
-            if (!LoadRetailSurvivalLevels(toc, tables, levels) || choice < 0 ||
+            if (!Planet::LoadSurvivalLevels(toc, tables, levels) || choice < 0 ||
                 static_cast<std::size_t>(choice) >= levels.size()) { return 1; }
             auto selected = levels.begin();
             std::advance(selected, choice);

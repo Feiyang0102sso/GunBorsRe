@@ -1,9 +1,9 @@
 #include "gun_bros_re/gameplay/weapon/CGunDrawing.h"
-#include "gun_bros_re/data/ZMeshAssets.h"
+#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
 
 /** BIG resources belong to the gun; only CBrother binds the PLAYER script. */
-bool CGun::Load(ZPackTables &tables, const Template &data, const std::string &owner) {
+bool CGun::Load(CGunBros &tables, const Template &data, const std::string &owner) {
     m_drawing = std::make_unique<CGun::Drawing>();
     const CMoveSetMesh &moves = data.GetMoveSet();
     for (const ZMeshConfig &config : moves.GetMeshConfigs()) {

@@ -8,7 +8,7 @@
  * this[495] and CBrother::Draw multiplies it into the draw scale, exactly
  * where an enemy's template word 66 goes.
  */
-bool CBrother::Template::Load(CResTOCManager &tocManager, ZPackTables &tables) {
+bool CBrother::Template::Load(CResTOCManager &tocManager, CGunBros &tables) {
     for (std::uint32_t i = 0; i < tocManager.GetPackCount(); ++i) {
         CResPackTOC *pack = tocManager.GetPack(static_cast<int>(i));
         CGameObjectPack &objectPack = tables.GetObjectPack(static_cast<int>(i));

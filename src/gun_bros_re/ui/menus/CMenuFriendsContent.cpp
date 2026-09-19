@@ -38,7 +38,7 @@ public:
         ZSocialPart part, unsigned index = 0) : view(view), state(state), profile(profile), part(part), index(index) {}
 
     bool Icon(const CGameAssetRef &asset, const ZMovieRegion &region, bool alignRight = false, float *renderedWidth = nullptr) {
-        ZStoreEntry icon;
+        CStoreItem::Entry icon;
         icon.data.assets[1] = asset;
         return view.Icon(*profile.nativeArchive->toc, *profile.nativeArchive->tables, icon,
             region.x, region.y, region.width, region.height, region.alpha, false, true, alignRight, renderedWidth);
@@ -222,7 +222,7 @@ bool CMenuFriends::BindContent(ZMenuSurface &view, CMenuSystem &state, const CPr
     auto &toc = *profile.nativeArchive->toc;
     auto &tables = *profile.nativeArchive->tables;
     if (!social.contentBound) {
-        if (!LoadWeaponCatalog(toc, tables, social.weapons) || !LoadArmorCatalog(toc, tables, social.armors) ||
+        if (!CGun::LoadEntries(toc, tables, social.weapons) || !CArmor::LoadEntries(toc, tables, social.armors) ||
             !state.challenges.manager.Bind(toc, tables, profile, static_cast<unsigned>(CurrentSeconds()))) { return false; }
         // CGameFlow::Reset :77330 chooses the opposite brother. Configuration
         // Reset :171865 supplies core gun0 + pack5 gun4, and core armour 2/1/0.

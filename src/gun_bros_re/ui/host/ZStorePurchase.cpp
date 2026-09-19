@@ -1,3 +1,4 @@
+#include "gun_bros_re/ui/content/CStoreAggregator.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/ui/host/ZStoreRegionClip.h"
 #include "gun_bros_re/ui/host/ZMenuSurface.h"
@@ -29,7 +30,7 @@ bool StoreFailureText(ZMenuSurface &view, const CMenuSystem &state, std::string 
  * horizontal belt and expands the focused card in place. Item identity and
  * purchases still come directly from the BIG catalog. */
 
-void ShowStoreFundsPrompt(CMenuSystem &state, const std::vector<ZStoreEntry> &store,
+void ShowStoreFundsPrompt(CMenuSystem &state, const std::vector<CStoreItem::Entry> &store,
     const CProfileManager &profile, unsigned currency, unsigned price, bool inGame ) {
     state.ShowStorePrompt("MDS_STORE_PROMPT_MOMONEY", false, false);
     state.storePromptButtons = "MDS_BUTTON_STORE_INGAME_PROMPT";
@@ -40,13 +41,13 @@ void ShowStoreFundsPrompt(CMenuSystem &state, const std::vector<ZStoreEntry> &st
     if (currency == 1) { balance = profile.warbucks; }
     state.failedMissing = 0;
     if (price > balance) { state.failedMissing = static_cast<unsigned>(price - balance); }
-    state.currencyOffer = FindCurrencyOffer(store, currency, state.failedMissing);
+    state.currencyOffer = MenuDetail::CStoreAggregator::FindCurrencyOffer(store, currency, state.failedMissing);
     state.currencyOfferProduct.clear();
     if (state.currencyOffer >= 0) { state.currencyOfferProduct = store[state.currencyOffer].productId; }
 }
 
 bool CompleteOfflineIAP(std::uint64_t clock, CMenuSystem &state, CProfileManager &profile,
-    const std::vector<ZStoreEntry> &store, const std::filesystem::path &savePath) {
+    const std::vector<CStoreItem::Entry> &store, const std::filesystem::path &savePath) {
     if (!state.currencyPending) { return true; }
     int itemIndex = state.currencyItem;
     if (state.currencySimulated) {
@@ -82,13 +83,13 @@ bool CompleteOfflineIAP(std::uint64_t clock, CMenuSystem &state, CProfileManager
     }
     const auto previousCoins = profile.coins;
     const auto previousBucks = profile.warbucks;
-    const ZPurchaseResult result = profile.AcquireCurrency(store[itemIndex].data);
-    if (result == ZPurchaseResult::Purchased && !profile.SaveToDisk(savePath)) {
+    const CProfileManager::PurchaseResult result = profile.AcquireCurrency(store[itemIndex].data);
+    if (result == CProfileManager::PurchaseResult::Purchased && !profile.SaveToDisk(savePath)) {
         profile.coins = previousCoins;
         profile.warbucks = previousBucks;
         return false;
     }
-    if (result != ZPurchaseResult::Purchased) { state.ShowStorePrompt("MDS_STORE_PROMPT_UNAVAILABLE", false, true); }
+    if (result != CProfileManager::PurchaseResult::Purchased) { state.ShowStorePrompt("MDS_STORE_PROMPT_UNAVAILABLE", false, true); }
     std::printf("[offline-iap] completed result=%u simulated-validation=%u\n", static_cast<unsigned>(result), state.currencySimulated);
     return true;
 }

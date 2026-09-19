@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/ui/host/ZStoreRegionClip.h"
 #include "gun_bros_re/ui/host/ZMenuSurface.h"
@@ -248,8 +249,8 @@ public:
                     std::printf("[refinery] unlocked slot=%u coins=%u warbucks=%u\n", slot, data.commonPrice[slot], data.rarePrice[slot]);
                 } else {
                     // Original action74 opens the insufficient-funds prompt.
-                    std::vector<ZStoreEntry> store;
-                    if (!profile.nativeArchive || !LoadStoreCatalog(*profile.nativeArchive->toc, *profile.nativeArchive->tables, store)) { return false; }
+                    std::vector<CStoreItem::Entry> store;
+                    if (!profile.nativeArchive || !CStoreItem::LoadEntries(*profile.nativeArchive->toc, *profile.nativeArchive->tables, store)) { return false; }
                     unsigned currency = 0;
                     unsigned cost = data.commonPrice[slot];
                     if (cost == 0) { currency = 1; cost = data.rarePrice[slot]; }

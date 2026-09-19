@@ -1,10 +1,11 @@
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 /** @file CLevelRuntime.cpp
  * @brief CLevel player progression and runtime binding.
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -15,9 +16,9 @@ constexpr float kTextEffectRisePerSecond = 100;
 using Collision::CircleFraction;
 }
 
-bool LoadInitialPlayerHealth(CResTOCManager &toc, ZPackTables &tables, float &health) {
+bool LoadInitialPlayerHealth(CResTOCManager &toc, CGunBros &tables, float &health) {
     CPlayerProgress::Template progress;
-    if (!LoadPlayerProgress(toc, tables, progress)) { return false; }
+    if (!CPlayerProgress::Template::Load(toc, tables, progress)) { return false; }
     // Progress is indexed by the displayed level. Entry zero is a sentinel;
     // a new player starts at level one.
     health = static_cast<float>(progress.health[1]);

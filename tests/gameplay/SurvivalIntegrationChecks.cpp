@@ -9,9 +9,9 @@ int CheckSurvivalPowerupInventory(SurvivalPowerupInventoryFixture fixture) {
     auto & powerupStudy = fixture.powerupStudy;
 
     if (powerupStudy) {
-        ZPackTables tables(fixture.toc);
-        std::vector<ZStoreEntry> store;
-        if (!LoadStoreCatalog(fixture.toc, tables, store)) { return 1; }
+        CGunBros tables(fixture.toc);
+        std::vector<CStoreItem::Entry> store;
+        if (!CStoreItem::LoadEntries(fixture.toc, tables, store)) { return 1; }
         for (const auto &entry : store) {
             if (entry.data.type < 10 || entry.data.type > 13) { continue; }
             for (const auto &object : entry.data.objects) {

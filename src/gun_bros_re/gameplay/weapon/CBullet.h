@@ -40,7 +40,7 @@
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/sprite/CSpritePlayer.h"
-#include "gun_bros_re/data/CGameAssetRef.h"  // CGameSpriteGluRef
+#include "gun_bros_re/data/objects/CGameAssetRef.h"  // CGameSpriteGluRef
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/effects/CLightningArc.h"
@@ -105,7 +105,7 @@ public:
             ZMeshBuffer buffer;
         };
         Template();
-        bool Load(ZPackTables &tables, const ZShaderProgram &program, const GameObjectRef &resource);
+        bool Load(CGunBros &tables, const ZShaderProgram &program, const GameObjectRef &resource);
         const Mesh *GetMesh() const { return m_mesh.get(); }
 
         bool Init(CArrayInputStream &stream);

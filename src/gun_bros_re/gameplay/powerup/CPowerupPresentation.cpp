@@ -4,7 +4,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/powerup/CPowerup.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "engine/core/ZMatrix4d.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -20,10 +20,10 @@
  * Desktop rendering state belongs to the same CPowerup as its interpreter.
  */
 struct CPowerup::Presentation {
-    Presentation(CResTOCManager &source, ZPackTables &resources, CLevel &level)
+    Presentation(CResTOCManager &source, CGunBros &resources, CLevel &level)
         : toc(source), tables(resources), scene(level), particleResources(resources), audio(resources) {}
     CResTOCManager &toc;
-    ZPackTables &tables;
+    CGunBros &tables;
     CLevel &scene;
     ZShaderProgram program;
     ZParticleResources particleResources;
@@ -43,7 +43,7 @@ struct CPowerup::Presentation {
 };
 
 CPowerup::CPowerup() = default;
-CPowerup::CPowerup(CResTOCManager &toc, ZPackTables &tables, CLevel &scene)
+CPowerup::CPowerup(CResTOCManager &toc, CGunBros &tables, CLevel &scene)
     : m_presentation(std::make_unique<Presentation>(toc, tables, scene)) {}
 CPowerup::~CPowerup() = default;
 
@@ -68,7 +68,7 @@ bool CPowerup::IsSelectorFrameClosing() const {
     return m_selector != nullptr && m_selector->IsPowerupFrameClosing();
 }
 
-bool CPowerup::Start(const ZPowerupEntry &entry, bool fromSelector, unsigned stock) {
+bool CPowerup::Start(const CPowerup::Entry &entry, bool fromSelector, unsigned stock) {
     if (!m_presentation) {
         std::printf("[powerup] presentation is not bound\n");
         return false;

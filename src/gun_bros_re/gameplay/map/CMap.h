@@ -17,7 +17,7 @@
 #ifndef GUN_BROS_RE_GUN_BROS_CMAP_H
 #define GUN_BROS_RE_GUN_BROS_CMAP_H
 
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "gun_bros_re/gameplay/map/CCamera.h"
 #include "gun_bros_re/gameplay/map/CLayerCamera.h"
 #include "gun_bros_re/gameplay/map/CLayerMovie.h"

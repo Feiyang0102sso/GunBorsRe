@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
 /** Test-peer commands must not affect a real remote peer or the local account. */
 #include "gameplay/SurvivalChecks.h"
@@ -5,7 +6,7 @@
 #include "gun_bros_re/cheats/CheatConfig.h"
 #include "TestOutput.h"
 
-int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPackTables &tables,
+int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, CGunBros &tables,
     CPowerUpSelector &playerPowerups, CPowerUpSelector &peerPowerups, CProfileManager &peerProfile) {
     std::uint32_t powerupChoice = 0;
     auto &scene = fixture.scene;
@@ -43,8 +44,8 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPac
     for (unsigned elapsed = 0; elapsed < 15000 && peerPowerups.GetPowerup().IsPresentationActive(); elapsed += 16) { session.Update(16, 0, 0, false); }
     if (peerPowerups.GetPowerup().IsPresentationActive() || playerPowerups.consumed != playerConsumed || peerPowerups.failures != 0) { return 1; }
     session.Restart(fixture.startX, fixture.startY, fixture.startFacing);
-    std::vector<ZPowerupEntry> catalog;
-    if (!LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
+    std::vector<CPowerup::Entry> catalog;
+    if (!CPowerup::LoadEntries(toc, tables, catalog)) { return 1; }
     GameObjectRef revive;
     for (const auto &entry : catalog) {
         if (entry.data.field112 == 0) { continue; }

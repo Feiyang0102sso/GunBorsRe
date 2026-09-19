@@ -3,7 +3,7 @@
  * SpawnEnemy and levelObjectPool.cpp GetEnemy :145509. CLevel implementation.
  */
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/data/CFriendPowerManager.h"
+#include "gun_bros_re/data/profile/CFriendPowerManager.h"
 #include "engine/core/ZMatrix4d.h"
 #include <algorithm>
 #include <cmath>

@@ -1,12 +1,12 @@
 #define NOMINMAX
 #include "gun_bros_re/ui/hud/ZHudResources.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include <algorithm>
 #include <cmath>
 void ZHudResources::Icon(unsigned type, const GameObjectRef &object, const ZMovieRegion &region) {
     if (object.IsNull()) { return; }
     if (type == 17 && region.width < 60) {
-        for (const ZPowerupEntry &entry : m_powerups) {
+        for (const CPowerup::Entry &entry : m_powerups) {
             if (entry.resource.packHash != object.packHash || entry.resource.localIndex != object.localIndex) { continue; }
             const CGameSpriteGluRef &sprite = entry.data.sprite;
             m_powerupRenderers[sprite.packHash]->DrawSpriteFitted(sprite.archetype, sprite.animation, 0,
@@ -14,7 +14,7 @@ void ZHudResources::Icon(unsigned type, const GameObjectRef &object, const ZMovi
             return;
         }
     }
-    for (const ZStoreEntry &entry : m_store) {
+    for (const CStoreItem::Entry &entry : m_store) {
         // Bundle thumbnails depict several products; a single equipped icon
         // must resolve the matching single-product offer instead.
         bool singleProduct = true;

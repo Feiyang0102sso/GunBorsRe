@@ -1,7 +1,7 @@
 #pragma once
 #include "gun_bros_re/ui/host/ZMenuTypes.h"
 #include "gun_bros_re/ui/controls/ZMenuScrollMotion.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 
 namespace MenuDetail {
 class CMenuSystem;
@@ -18,8 +18,8 @@ public:
 
     bool DrawOffline(ZMenuSurface &view, CMenuSystem &state, bool hasCredentials);
 
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armors;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armors;
     CProfileManager defaultBrother;
     CGameAssetRef avatar;
     std::string brotherName;

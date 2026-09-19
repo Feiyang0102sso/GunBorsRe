@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 
-bool CLevel::UsePowerup(CPowerUpSelector &selector, const ZPowerupEntry &entry, bool fromSelector, bool decrement) {
+bool CLevel::UsePowerup(CPowerUpSelector &selector, const CPowerup::Entry &entry, bool fromSelector, bool decrement) {
     CPowerup &powerup = selector.GetPowerup();
     const unsigned previousFailures = powerup.failures;
     if (!powerup.Start(entry, fromSelector, selector.GetCount())) {

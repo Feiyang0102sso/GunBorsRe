@@ -7,7 +7,7 @@
 
 #include <cstdio>
 
-bool CBrother::EquipArmor(ZPackTables &tables, const CArmor::Template &data, const ZShaderProgram &program) {
+bool CBrother::EquipArmor(CGunBros &tables, const CArmor::Template &data, const ZShaderProgram &program) {
     if (data.GetSlot() >= kArmorSlotCount) { return false; }
     auto replacement = std::make_unique<CArmor>();
     if (!replacement->Load(tables, data, program)) { return false; }
@@ -34,7 +34,7 @@ float CBrother::GetArmorMultiplier(std::uint32_t attribute) const {
     return result;
 }
 
-bool CBrother::PrepareSecondaryWeapon(ZPackTables &tables, const CGun::Template &data, const std::string &owner) {
+bool CBrother::PrepareSecondaryWeapon(CGunBros &tables, const CGun::Template &data, const std::string &owner) {
     auto replacement = std::make_unique<CGun>();
     if (!replacement->Load(tables, data, owner)) { return false; }
     uiOtherWeapon = std::move(replacement);
@@ -49,7 +49,7 @@ void CBrother::SelectWeapon(bool primary) {
     uiActiveWeapon = active;
 }
 
-bool CBrother::EquipWeapon(ZPackTables &tables, const CScript &playerScript, const CGun::Template &data, const std::string &owner) {
+bool CBrother::EquipWeapon(CGunBros &tables, const CScript &playerScript, const CGun::Template &data, const std::string &owner) {
     auto replacement = std::make_unique<CGun>();
     if (!replacement->Load(tables, data, owner)) { return false; }
     const auto meshes = replacement->GetBodyMeshes();
@@ -67,7 +67,7 @@ bool CBrother::EquipWeapon(ZPackTables &tables, const CScript &playerScript, con
     return true;
 }
 
-bool CBrother::SelectCachedWeapon(ZPackTables &tables, const CGun::Template &data,
+bool CBrother::SelectCachedWeapon(CGunBros &tables, const CGun::Template &data,
     const std::string &owner, std::uint64_t key, const ZShaderProgram &program) {
     auto found = m_cachedWeapons.find(key);
     if (found == m_cachedWeapons.end()) {

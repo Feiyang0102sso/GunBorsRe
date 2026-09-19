@@ -7,7 +7,7 @@
 #ifndef GUN_BROS_RE_CENEMYSPAWNER_H
 #define GUN_BROS_RE_CENEMYSPAWNER_H
 
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <array>
 #include <vector>
 

@@ -43,10 +43,12 @@
 
 #ifndef GUN_BROS_RE_GUN_BROS_CGUN_H
 #define GUN_BROS_RE_GUN_BROS_CGUN_H
+#include "gun_bros_re/application/CGunBros.h"
+#include <string>
 
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/glu/script/CScript.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "engine/graphics/CMeshAnimationController.h"
@@ -56,6 +58,7 @@
 #include <vector>
 #include <memory>
 
+constexpr int kWeaponCategoryCount = 7; // Original gun/store categories 0..6.
 class CParticlePool;
 
 // Stat tables in a gun template, all read the same way.
@@ -93,11 +96,14 @@ struct ZGunCue {
     int forceMs = 0;
 };
 
-class ZPackTables;
+class CGunBros;
 class ZShaderProgram;
 
 class CGun : public ZGameScriptObject {
 public:
+    /** Host listing snapshot; parsed object ownership remains in the pack. */
+    struct Entry;
+    static bool LoadEntries(CResTOCManager &toc, CGunBros &tables, std::vector<Entry> &entries);
     struct Progress {
         GameObjectRef resource;
         unsigned experience = 0;
@@ -109,6 +115,7 @@ public:
     public:
         Template();
 
+        static const Template *Load(CResTOCManager &toc, CGunBros &tables, const GameObjectRef &ref);
         bool Init(CArrayInputStream &stream);
 
         const CScript &GetScript() const { return m_script; }
@@ -149,7 +156,7 @@ public:
     CGun(const CGun &) = delete;
     CGun &operator=(const CGun &) = delete;
     /** Load the original BIG mesh/atlas references, then bind the owned template. */
-    bool Load(ZPackTables &tables, const Template &data, const std::string &owner);
+    bool Load(CGunBros &tables, const Template &data, const std::string &owner);
     /** Mesh identities used by the brother's move controllers. */
     std::vector<const CMesh *> GetBodyMeshes() const;
     bool CreateBuffers(const ZShaderProgram &program);
@@ -210,4 +217,14 @@ private:
     float m_targetHeat;
 };
 
+struct CGun::Entry {
+    std::uint32_t packHash = 0;
+    std::uint32_t ordinal = 0;
+    CGun::Template data;
+    std::string name;
+    std::string owner;
+    int category = -1;
+    bool visualOnly = false;
+    bool hasStoreEntry = false; // Missing metadata does not prove an unused asset.
+};
 #endif  // GUN_BROS_RE_GUN_BROS_CGUN_H

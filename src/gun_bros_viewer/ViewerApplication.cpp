@@ -127,7 +127,7 @@ int RunViewerApplication(int argc, char **argv) {
     GameCheats::Bind();
     if (!GetViewerSettings().Load(configPath)) { return 1; }
     ZAudioPlayer::SetEffectsGain(GetViewerSettings().effectsVolume * 0.1f);
-    ZBigVersion version = ZBigVersion::Unknown;
+    CGameObjectPack::BigVersion version = CGameObjectPack::BigVersion::Unknown;
     if (!DetectViewerBigVersion(options.bigDirectory, version)) { return 1; }
     if (options.view != View::Menu) { return RunView(options); }
     for (;;) {

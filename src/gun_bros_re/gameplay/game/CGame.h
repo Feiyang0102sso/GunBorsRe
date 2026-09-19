@@ -23,7 +23,7 @@ class CGame {
     static bool SaveProgress(CGameFlow *flow, const CPlayerProgress &progress, const CLevel &level,
                              std::uint64_t &accountedXplodium, bool missionEnded = false);
     CGame(CLevel &level, CMap &map, const std::vector<CEnemy::Template> &catalog);
-    bool Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
+    bool Load(CResTOCManager &toc, CGunBros &tables, std::uint32_t mapPack, unsigned mapIndex,
               const GameObjectRef *selectedLevel = nullptr, bool archive = false);
     void Restart(float x, float y, float facingDegrees);
     void SetHorde(bool enabled) {
@@ -38,7 +38,7 @@ class CGame {
         m_level.SetMatch(match);
     }
     void SetDialogHud(CInputPad *hud) { m_dialogHud = hud; }
-    void SetChallenges(CChallengeManager *manager, CProfileManager *profile, const std::vector<ZWeaponEntry> *weapons) {
+    void SetChallenges(CChallengeManager *manager, CProfileManager *profile, const std::vector<CGun::Entry> *weapons) {
         m_challenges = manager;
         m_challengeProfile = profile;
         m_challengeWeapons = weapons;
@@ -100,7 +100,7 @@ class CGame {
     bool m_suspended = false;
     CChallengeManager *m_challenges = nullptr;
     CProfileManager *m_challengeProfile = nullptr;
-    const std::vector<ZWeaponEntry> *m_challengeWeapons = nullptr;
+    const std::vector<CGun::Entry> *m_challengeWeapons = nullptr;
     GameObjectRef m_levelReference;
     bool m_challengeSessionEnded = false;
     CLevel::Template m_template;
@@ -118,6 +118,7 @@ class CGame {
     std::uint32_t m_scriptRandomSeed = 0;
     bool m_hasScriptRandomSeed = false;
     CResTOCManager *m_toc = nullptr;
+    CGunBros *m_resources = nullptr; // Non-owning; the session resource owner outlives CGame.
     std::string m_dialogText;
     bool m_dialogBound = false;
     unsigned m_dialogSerial = 0;

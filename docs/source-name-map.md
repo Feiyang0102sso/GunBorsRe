@@ -1,5 +1,18 @@
 # 源码文件名映射
 
+## data 归位（2026-09-19）
+
+当前 `data/` 分为 `objects`、`store`、`mission`、`profile` 四个包，共 38 个源码文件。原 23 个 Z 文件中 21 个拆除，`ZMeshAssets.*` 两个迁至 `graphics/`，data 内不再保留 Z 文件。逐文件去向、原版依据、验收与还原边界见 [data 整体优化结果](data-optimization-result.md)，本节覆盖后文旧 data 路径。
+
+| 旧职责 | 当前归属 |
+|---|---|
+| ZPackTables、ZBigVersions、ZResourcePacks | `application/CGunBros.h`、`data/objects/CGunBrosResources.cpp`、`CGameObjectPack.*`；删除 engine 转发包装 |
+| 装备 Z Catalog | `gameplay/weapon/CGunResources.cpp`、`armor/CArmorResources.cpp`、`powerup/CPowerupResources.cpp`；Entry 归各类，模板归包持有 |
+| 商品 Z Catalog | `data/store/CStoreItemResources.cpp`、`CStoreItemOverride.*`、`ui/content/CStoreAggregator.*` |
+| 任务与星球 Z Catalog | `data/mission/MissionResources.cpp`、`Planet.*`、`ui/menus/CMenuMissionData.cpp`；研究声明归 tests |
+| 六个 ZProfile 导入／存储文件 | `data/profile/CProfileManager{Archive,Storage,Clients,Native}.*` 和各客户端 Storage.cpp；研究报告归 tests，Windows 文件适配归 `host/ZProfileFiles.*` |
+| 统一文本 | `CGunBros::ReadString`，通过所属 CGameObjectPack 解析并缓存 |
+
 ## UI 归位（2026-09-19）
 
 实际目录以本节和 [UI 重组结果](ui-optimization-result.md) 为准，后面的旧路径保留为历史索引。

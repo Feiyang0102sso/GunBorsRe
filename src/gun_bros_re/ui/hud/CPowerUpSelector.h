@@ -12,11 +12,11 @@ class CInputPad;
 class CPowerUpSelector {
 public:
     CPowerUpSelector();
-    CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
+    CPowerUpSelector(CResTOCManager &toc, CGunBros &tables, CBrother &player,
         CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile,
         Collision::ObjectId owner = Collision::Player);
     /** Bind the selector's actor and inventory; UI and equipment share one catalog. */
-    void BindPowerups(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
+    void BindPowerups(CResTOCManager &toc, CGunBros &tables, CBrother &player,
         CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile,
         Collision::ObjectId owner = Collision::Player);
     bool InitPowerups();
@@ -32,7 +32,7 @@ public:
     bool UseAfterDeathPowerup();
     CPowerup &GetPowerup() { return *m_powerup; }
     const CPowerup &GetPowerup() const { return *m_powerup; }
-    const ZPowerupEntry *GetSelected() const;
+    const CPowerup::Entry *GetSelected() const;
     unsigned GetCount() const;
     unsigned GetCount(unsigned localIndex) const;
     const std::map<unsigned, int> &Cooldowns() const { return m_cooldowns; }
@@ -55,18 +55,18 @@ public:
     void ScrollInput(const ZInputPadState &state, float wheel, float dragX);
     ZInputPadAction Pointer(const ZInputPadState &state, float x, float y, bool down, bool previousDown);
     bool FindActionRegion(ZInputPadAction action, ZMovieRegion &region) const;
-    bool DrawPowerupCooldown(const ZPowerupEntry &entry, int remaining, const ZMovieRegion &region, float scale = 0.5f);
+    bool DrawPowerupCooldown(const CPowerup::Entry &entry, int remaining, const ZMovieRegion &region, float scale = 0.5f);
     explicit CPowerUpSelector(ZHudResources &resources, CInputPad *inputPad = nullptr) : m_resources(resources), m_inputPad(inputPad) {}
     void BrowseRemoteShop(unsigned selection);
     bool BackFromSelectorPrompt();
-    void ReportSelectorPurchase(ZPurchaseResult result, const ZInputPadState &state);
-    const ZStoreEntry *SelectedItem() const;
+    void ReportSelectorPurchase(CProfileManager::PurchaseResult result, const ZInputPadState &state);
+    const CStoreItem::Entry *SelectedItem() const;
     bool ConfigureDeathmatch(const std::vector<GameObjectRef> &stores);
     void AdvanceMatchSelection();
     bool DrawMatchGuns(const ZInputPadState &state, const ZMovieRegion &area);
     bool DrawMatchTabs(const ZMovieRegion &area);
     bool DrawMatchGunCard(unsigned index, const ZMovieRegion &area);
-    bool DrawMatchGunIcon(const ZStoreEntry &entry, const ZMovieRegion &area);
+    bool DrawMatchGunIcon(const CStoreItem::Entry &entry, const ZMovieRegion &area);
     bool DrawSelector(const ZInputPadState &state);
     bool DrawSelectorPrompt();
     bool DrawSelectorItem(const ZInputPadState &state, unsigned index, const ZMovieRegion &area);
@@ -86,9 +86,9 @@ private:
     friend class CLevel;
     friend class ZLocalPVPBot;
     friend class ZLocalCoopBot;
-    bool IsSupported(const ZPowerupEntry &entry) const;
-    const CStoreItem *FindStoreItem(const ZPowerupEntry &entry) const;
-    bool ModeAllows(const ZPowerupEntry &entry) const;
+    bool IsSupported(const CPowerup::Entry &entry) const;
+    const CStoreItem *FindStoreItem(const CPowerup::Entry &entry) const;
+    bool ModeAllows(const CPowerup::Entry &entry) const;
     // Peer/research selectors load UI resources only for requested presentation.
     std::unique_ptr<ZHudResources> m_ownedResources;
     std::unique_ptr<CPowerup> m_powerup = std::make_unique<CPowerup>();
@@ -101,7 +101,7 @@ private:
     unsigned m_selected = 13;
     std::map<unsigned, int> m_cooldowns;
     std::vector<std::string> m_useMessages;
-    friend int CheckDeathmatchMenus(CResTOCManager &, ZPackTables &, CProfileManager &);
+    friend int CheckDeathmatchMenus(CResTOCManager &, CGunBros &, CProfileManager &);
     friend int RunOriginalHudCheck(const std::string &bigDirectory);
     friend int RunOriginalDialogCheck(const std::string &bigDirectory);
     friend int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory);

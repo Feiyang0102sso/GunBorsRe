@@ -6,7 +6,7 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -29,7 +29,7 @@ unsigned CheckCameraScale();
 /** A script test world: validate enemy resources, then finish them after 1s. */
 class LevelFlowWorld : public CEnemyWorld {
 public:
-    LevelFlowWorld(CLevel &level, ZPackTables &tables, CMap &map) : m_level(level), m_tables(tables), m_map(map) {}
+    LevelFlowWorld(CLevel &level, CGunBros &tables, CMap &map) : m_level(level), m_tables(tables), m_map(map) {}
     bool SpawnEnemy(const GameObjectRef &enemy, int layer, int node, int objectId) override {
         if (layer >= 0) {
             CLayerPathLink *path = m_map.GetPathLinkLayer(layer);
@@ -99,7 +99,7 @@ private:
         int ageMs = 0;
     };
     CLevel &m_level;
-    ZPackTables &m_tables;
+    CGunBros &m_tables;
     CMap &m_map;
     std::vector<Entry> m_enemies;
 };

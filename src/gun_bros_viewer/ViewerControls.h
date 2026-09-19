@@ -7,10 +7,10 @@
 #include "engine/graphics/ZQuadBatch.h"
 #include <memory>
 
-struct ZWeaponEntry;
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 
 /** Number keys select categories, N/M wrap within the selected category. */
-std::size_t SelectWeaponKey(const std::vector<ZWeaponEntry> &weapons,
+std::size_t SelectWeaponKey(const std::vector<CGun::Entry> &weapons,
                             std::size_t current, ZKeyCode key);
 
 class ViewerControls {
@@ -66,3 +66,7 @@ private:
     std::size_t m_nextLabel = 0;
     bool m_labelFailed = false;
 };
+
+/** Viewer-only archive category labels; never retail availability rules. */
+const char *WeaponCategoryName(int category);
+std::string WeaponSelectionLabel(const std::vector<CGun::Entry> &weapons, std::size_t current);

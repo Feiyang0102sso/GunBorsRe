@@ -32,7 +32,7 @@
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include "engine/graphics/CMoveSet.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "engine/glu/sprite/CSpritePlayer.h"
 #include <array>

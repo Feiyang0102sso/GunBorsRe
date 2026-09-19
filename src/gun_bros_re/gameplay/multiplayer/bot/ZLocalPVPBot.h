@@ -1,22 +1,23 @@
 /** Windows PvP input policy; all attacks execute the original CBrother/Flow. */
 #pragma once
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/gameplay/brother/CBrotherAI.h"
 #include "gun_bros_re/gameplay/collision/CCollisionData.h"
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 
 class CPowerUpSelector;
 class CLevel;
-struct ZPowerupEntry;
+
 class ZLocalPVPBot final : public CBrotherAI {
 public:
     enum class Tactic { Search, Fight, Supply, Cover, Dead };
-    void Configure(unsigned seed, const ZWeaponEntry &first, const ZWeaponEntry &second,
+    void Configure(unsigned seed, const CGun::Entry &first, const CGun::Entry &second,
         ZBotSettings::Difficulty level = ZBotSettings::Difficulty::Easy);
-    static std::array<unsigned, 2> ChooseLoadout(const CMPMatch::Entry &match, const std::vector<ZWeaponEntry> &weapons, unsigned seed);
-    static const ZStoreEntry *ChoosePurchase(const std::vector<ZStoreEntry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life);
+    static std::array<unsigned, 2> ChooseLoadout(const CMPMatch::Entry &match, const std::vector<CGun::Entry> &weapons, unsigned seed);
+    static const CStoreItem::Entry *ChoosePurchase(const std::vector<CStoreItem::Entry> &store, const CProfileManager &profile, unsigned level, const CMPMatch::Life &life);
     void Reset(float x, float y, float facing) override;
     void Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world, float playerX, float playerY, float speedMultiplier) override;
     Collision::ObjectId GetTarget() const override { return m_target; }
@@ -28,7 +29,7 @@ public:
     bool WantsHealth() const { return vitals.health < vitals.maximum * 0.65f; }
     bool WantsShop() const { return m_level == ZBotSettings::Difficulty::Easy && m_ageMs > 12000 && m_shopDelayMs == 0 && (!m_visible || m_tactic == Tactic::Cover); }
     void UsePowerups(CPowerUpSelector &powerups);
-    static bool AllowsPowerup(const CPowerUpSelector &selector, const ZPowerupEntry &entry);
+    static bool AllowsPowerup(const CPowerUpSelector &selector, const CPowerup::Entry &entry);
     static bool IsHealthPowerup(const GameObjectRef &resource);
     static bool IsGrenadePowerup(const GameObjectRef &resource);
     static bool HasUnlimitedInventory(const CPowerUpSelector &selector);

@@ -3,8 +3,8 @@
 
 namespace MenuDetail {
 
-    bool CMenuMeshPlayer::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &profile,
-        const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armors, unsigned slot,
+    bool CMenuMeshPlayer::Draw(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables, const CProfileManager &profile,
+        const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armors, unsigned slot,
         const GameObjectTypeRef *previewItem , const ZMovieRegion *storePanel , float spin ) {
         unsigned gunSlot = profile.activeWeaponSlot;
         if (slot < 2) { gunSlot = slot; }
@@ -30,16 +30,16 @@ namespace MenuDetail {
             auto candidate = std::make_unique<CBrother>();
             candidate->brotherIndex = profile.playerBrother;
             if (!candidate->BuildBody(tables, playerTemplate.GetMoveSet())) { return false; }
-            const ZWeaponEntry *gun = nullptr;
-            for (const ZWeaponEntry &entry : weapons) {
+            const CGun::Entry *gun = nullptr;
+            for (const CGun::Entry &entry : weapons) {
                 const auto &ref = configuration.guns[gunSlot];
                 if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) { gun = &entry; break; }
             }
             if (gun == nullptr || !candidate->EquipWeapon(tables, playerTemplate.GetScript(), gun->data, gun->owner)) { return false; }
             const GameObjectRef &otherRef = configuration.guns[1 - gunSlot];
             if (!otherRef.IsNull()) {
-                const ZWeaponEntry *otherGun = nullptr;
-                for (const ZWeaponEntry &entry : weapons) {
+                const CGun::Entry *otherGun = nullptr;
+                for (const CGun::Entry &entry : weapons) {
                     if (entry.packHash == otherRef.packHash && entry.ordinal == otherRef.localIndex) { otherGun = &entry; break; }
                 }
                 if (otherGun == nullptr || !candidate->PrepareSecondaryWeapon(tables, otherGun->data, otherGun->owner)) { return false; }
@@ -54,7 +54,7 @@ namespace MenuDetail {
             for (unsigned index = 0; index < kArmorSlotCount; ++index) {
                 const auto &ref = configuration.armor[index];
                 if (ref.IsNull()) { continue; }
-                for (const ZArmorEntry &entry : armors) {
+                for (const CArmor::Entry &entry : armors) {
                     if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) {
                         if (!candidate->EquipArmor(tables, entry.data, view.ImageProgram())) { return false; }
                         break;

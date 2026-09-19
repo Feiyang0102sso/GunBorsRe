@@ -9,9 +9,9 @@ class ZMenuSurface;
  * Original Update/Draw :169471/:169591; the surface supplies the GL context. */
 class CMenuMeshPlayer {
 public:
-    void Bind(ZPackTables &tables) { resourceTables = &tables; }
-    bool Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &profile,
-        const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armors, unsigned slot,
+    void Bind(CGunBros &tables) { resourceTables = &tables; }
+    bool Draw(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables, const CProfileManager &profile,
+        const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armors, unsigned slot,
         const GameObjectTypeRef *previewItem = nullptr, const ZMovieRegion *storePanel = nullptr, float spin = 0);
 
     const std::array<float, 16> &LastModelMatrix() const { return lastModelMatrix; }
@@ -39,6 +39,6 @@ private:
     bool previewSwapPending = false;
     bool previewSlotChanged = false;
     std::uint64_t previewTicks = 0;
-    ZPackTables *resourceTables = nullptr;
+    CGunBros *resourceTables = nullptr;
 };
 }

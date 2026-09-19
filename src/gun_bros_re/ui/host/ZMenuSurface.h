@@ -1,4 +1,6 @@
 #pragma once
+#include "engine/platform/ZWindow.h"
+#include "gun_bros_re/gameplay/enemy/CEnemyCasualty.h"
 #include "gun_bros_re/ui/menus/CMenuGameResourcesEffects.h"
 #include "gun_bros_re/ui/menus/CMenuPostGameOptionEffects.h"
 #include "gun_bros_re/ui/menus/CMenuMovieMultiplayerOverlayEffects.h"
@@ -31,7 +33,7 @@ public:
     /** Temporarily route this frame's click exclusively to a modal panel. */
     bool ExchangeClick(bool enabled) { const bool previous = clicked; clicked = enabled; return previous; }
     std::pair<float, float> Cursor() const { return {mouseX, mouseY}; }
-    bool Open(CResTOCManager &toc, ZPackTables &tables, const CProfileManager *profile = nullptr, bool startup = false, CBGM *music = nullptr);
+    bool Open(CResTOCManager &toc, CGunBros &tables, const CProfileManager *profile = nullptr, bool startup = false, CBGM *music = nullptr);
 
     void Begin();
 
@@ -79,12 +81,12 @@ public:
 
     // Historical explicit .dat research UI; native profiles use Header below.
 
-    bool Icon(CResTOCManager &toc, ZPackTables &tables, const ZStoreEntry &entry, float x, float y, float width,
+    bool Icon(CResTOCManager &toc, CGunBros &tables, const CStoreItem::Entry &entry, float x, float y, float width,
         float height, float alpha = 1, bool originalSize = false, bool fitHeight = false,
         bool alignRight = false, float *renderedWidth = nullptr);
 
     /** CEnemy::SpawnForUI assembles the original result-card model. */
-    bool DrawCasualty(ZPackTables &tables, CResTOCManager &toc, const CEnemyCasualty &casualty, float x,
+    bool DrawCasualty(CGunBros &tables, CResTOCManager &toc, const CEnemyCasualty &casualty, float x,
         const ZMovieRegion *originalRegion = nullptr);
 
     ZWindow ownedWindow;

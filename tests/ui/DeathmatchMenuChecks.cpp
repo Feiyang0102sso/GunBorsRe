@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/debug/Capture.h"
 /** Exercise local matchmaking, original match HUD, results and replay input. */
 #include "ui/MenuChecks.h"
@@ -5,7 +6,7 @@
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "TestOutput.h"
 
-int CheckDeathmatchMenus(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile) {
+int CheckDeathmatchMenus(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile) {
     ZMenuSurface view;
     if (!view.Open(toc, tables, &profile)) { return 1; }
     view.scripted = true; view.animateNavigation = false;
@@ -21,11 +22,11 @@ int CheckDeathmatchMenus(CResTOCManager &toc, ZPackTables &tables, CProfileManag
     if (!match.mode.Draw(view, match) || match.gameMode != 2) { return 1; }
     if (!BeginLocalMatch(match)) { return 1; }
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store) ||
+        !CGun::LoadEntries(toc, tables, weapons) || !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     std::vector<ZMenuInputFrame> waits(12, {-100, -100, 500});
     const int launch = ShowGameMenu(toc, tables, profile, profile.nativeArchive->progression, refinement,
         store, weapons, armor, match, TestOutput::Path("deathmatch-profile"),
@@ -117,8 +118,8 @@ int CheckDeathmatchMenus(CResTOCManager &toc, ZPackTables &tables, CProfileManag
     hud.ResetSelector();
     view.Begin();
     if (!hud.Draw(state) || hud.m_selector.m_matchGuns) { return 1; }
-    std::vector<ZPowerupEntry> powerups;
-    if (!LoadPowerupCatalog(toc, tables, powerups)) { return 1; }
+    std::vector<CPowerup::Entry> powerups;
+    if (!CPowerup::LoadEntries(toc, tables, powerups)) { return 1; }
     bool cooldownDrawn = false;
     for (const auto &entry : powerups) {
         std::printf("[dm-cooldown-data] powerup=%u name=%s seconds=%u\n", entry.resource.localIndex, entry.name.c_str(), entry.data.field124);

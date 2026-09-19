@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/debug/Capture.h"
 /** Real BIG Live presentation, local transport and independent friend persistence. */
 #include "ui/MenuChecks.h"
@@ -20,7 +21,7 @@ std::vector<std::uint8_t> ReadLiveListPixels(ZMenuSurface &view, ZMovieRegion re
     return pixels;
 }
 
-int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile, ZMenuSurface &view) {
+int CheckLocalRoster(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile, ZMenuSurface &view) {
     const auto root = std::filesystem::path(TestOutput::Path("roster"));
     CProfileManager player = profile;
     ZLocalBotFriend migrated;
@@ -90,15 +91,15 @@ int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &
     CProfileManager ordinary = profile;
     CProfileManager boosted = player;
     CDailyBonusTracking daily;
-    std::vector<ZStoreEntry> store;
-    if (!daily.Load(toc, tables) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    if (!daily.Load(toc, tables) || !CStoreItem::LoadEntries(toc, tables, store)) { return 1; }
     const auto day = ordinary.dailyLastLaunchSeconds + 172800u;
     const auto prizeIndex = daily.CalculateBonus(ordinary, day);
     if (!daily.CommitBonus(ordinary, day, store) || !daily.CommitBonus(boosted, day, store)) { return 1; }
     if (boosted.coins - ordinary.coins != daily.prizes[prizeIndex].coins * 20u / 100u ||
         boosted.warbucks != ordinary.warbucks || boosted.experience != ordinary.experience) { return 1; }
     CRefinementManager::Template refineryData;
-    if (!LoadRefinementTemplate(toc, tables, refineryData)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refineryData)) { return 1; }
     ordinary.refinery.Bind(refineryData);
     boosted.refinery.Bind(refineryData);
     ordinary.refinery.slots[0].state = 1;
@@ -166,7 +167,7 @@ int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &
     return 0;
 }
 
-int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile) {
+int CheckLiveMode(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile) {
     ZLiveShopSession shop;
     if (!shop.Request(1, 100) || shop.Request(0, 200) || shop.Visible(849) || !shop.Visible(850) ||
         shop.Remaining(850) != 10000 || shop.Close(0)) { return 1; }
@@ -286,11 +287,11 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     match.stack.page = 0;
     if (!BeginLocalMatch(match)) { return 1; }
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store) ||
+        !CGun::LoadEntries(toc, tables, weapons) || !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     std::vector<ZMenuInputFrame> waits(12, {-100, -100, 500});
     const int launch = ShowGameMenu(toc, tables, profile, profile.nativeArchive->progression, refinement,
         store, weapons, armor, match, root, TestOutput::Path("live-matching-failure.png"), &waits, false, &view.window);

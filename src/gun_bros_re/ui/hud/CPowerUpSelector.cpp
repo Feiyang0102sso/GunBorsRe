@@ -65,7 +65,7 @@ bool CPowerUpSelector::DrawSelectorItem(const ZInputPadState &state, unsigned in
     const unsigned storeIndex = m_selectorEntries[index];
     const auto &store = m_resources.m_store[storeIndex];
     const auto &reference = store.data.objects.front().object;
-    const ZPowerupEntry *powerup = nullptr;
+    const CPowerup::Entry *powerup = nullptr;
     for (const auto &item : m_resources.m_powerups) {
         if (item.resource.packHash == reference.packHash && item.resource.localIndex == reference.localIndex) { powerup = &item; break; }
     }
@@ -271,7 +271,7 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
         const auto *selected = SelectedItem();
         if (selected == nullptr) { return false; }
         const auto &reference = selected->data.objects.front().object;
-        const ZPowerupEntry *powerup = nullptr;
+        const CPowerup::Entry *powerup = nullptr;
         for (const auto &item : m_resources.m_powerups) {
             if (item.resource.packHash == reference.packHash && item.resource.localIndex == reference.localIndex) { powerup = &item; break; }
         }
@@ -290,7 +290,7 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
         const unsigned choiceTime = std::min(m_selectorChoiceTime, end);
         class Choices : public ZMovieRegionCallback {
         public:
-            Choices(CPowerUpSelector &owner, bool equipable, bool usable, const ZPowerupEntry &item, int cooldown)
+            Choices(CPowerUpSelector &owner, bool equipable, bool usable, const CPowerup::Entry &item, int cooldown)
                 : hud(owner), equip(equipable), use(usable), powerup(item), remaining(cooldown) {}
             bool DrawMovieRegion(const ZMovieRegion &area) override {
                 if (area.index == 0 || area.index == 1) {
@@ -329,7 +329,7 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
                 }
                 return true;
             }
-            CPowerUpSelector &hud; bool equip, use; const ZPowerupEntry &powerup; int remaining;
+            CPowerUpSelector &hud; bool equip, use; const CPowerup::Entry &powerup; int remaining;
         } choices(*this, equip, use, *powerup, remaining);
         if (!m_resources.m_movies.Draw(movie, choiceTime, 512, 384, 1024, 768, 0, 1, &choices)) { return false; }
         if (choiceTime >= end) {
@@ -344,13 +344,13 @@ bool CPowerUpSelector::DrawSelector(const ZInputPadState &state) {
     return DrawSelectorPrompt() && m_resources.m_movies.Failures() == 0;
 }
 
-void CPowerUpSelector::ReportSelectorPurchase(ZPurchaseResult result, const ZInputPadState &state) {
-    if (result == ZPurchaseResult::Purchased) { return; }
+void CPowerUpSelector::ReportSelectorPurchase(CProfileManager::PurchaseResult result, const ZInputPadState &state) {
+    if (result == CProfileManager::PurchaseResult::Purchased) { return; }
     m_selectorPrompt = CMenuPopupPrompt{};
     m_selectorPromptRequested = true;
     m_selectorPromptTable = "MDS_STORE_PROMPT_UNAVAILABLE";
     m_selectorPromptBody.clear();
-    m_selectorPromptFunds = result == ZPurchaseResult::InsufficientCoins || result == ZPurchaseResult::InsufficientWarbucks;
+    m_selectorPromptFunds = result == CProfileManager::PurchaseResult::InsufficientCoins || result == CProfileManager::PurchaseResult::InsufficientWarbucks;
     if (!m_selectorPromptFunds) { return; }
     m_selectorPromptTable = "MDS_STORE_PROMPT_MOMONEY_INGAME";
     const auto *entry = CMenuDataProvider::Find(m_selectorPromptTable, 0);
@@ -360,7 +360,7 @@ void CPowerUpSelector::ReportSelectorPurchase(ZPurchaseResult result, const ZInp
     const char *currency = "IDS_SHOP_COMMON";
     unsigned price = selected->data.commonPrice;
     std::uint64_t balance = state.coins;
-    if (result == ZPurchaseResult::InsufficientWarbucks) { currency = "IDS_SHOP_RARE"; price = selected->data.rarePrice; balance = state.warbucks; }
+    if (result == CProfileManager::PurchaseResult::InsufficientWarbucks) { currency = "IDS_SHOP_RARE"; price = selected->data.rarePrice; balance = state.warbucks; }
     unsigned missing = 0;
     if (price > balance) { missing = static_cast<unsigned>(price - balance); }
     // GetLastFailPurchaseInfo :156610 formats the total and missing amounts.
@@ -444,7 +444,7 @@ void CPowerUpSelector::BrowseRemoteShop(unsigned selection) {
     m_selectedItem = static_cast<int>(m_selectorEntries[index]);
 }
 
-const ZStoreEntry *CPowerUpSelector::SelectedItem() const {
+const CStoreItem::Entry *CPowerUpSelector::SelectedItem() const {
     if (m_selectedItem < 0 || m_selectedItem >= static_cast<int>(m_resources.m_store.size())) { return nullptr; }
     return &m_resources.m_store[m_selectedItem];
 }
@@ -456,7 +456,7 @@ bool CPowerUpSelector::BackFromSelectorPrompt() {
     return true;
 }
 
-bool CPowerUpSelector::DrawPowerupCooldown(const ZPowerupEntry &entry, int remaining, const ZMovieRegion &region, float scale) {
+bool CPowerUpSelector::DrawPowerupCooldown(const CPowerup::Entry &entry, int remaining, const ZMovieRegion &region, float scale) {
     // CPowerUpSelector::DrawCoolDownTimer :184092, CInputPad sprite 1:94.
     std::vector<unsigned> times;
     if (!m_resources.m_movies.SpriteFrameTimes(1, 94, times) || times.size() < 12 || entry.data.field124 == 0) { return false; }

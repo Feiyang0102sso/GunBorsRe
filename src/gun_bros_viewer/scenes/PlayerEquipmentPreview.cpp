@@ -1,3 +1,4 @@
+#include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
@@ -13,12 +14,12 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
@@ -34,8 +35,8 @@
 #include "engine/glu/script/CScript.h"
 #include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshAnimationController.h"
@@ -66,13 +67,13 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         return 1;
     }
 
-    ZPackTables tables(tocManager);
-    std::vector<ZWeaponEntry> weapons;
+    CGunBros tables(tocManager);
+    std::vector<CGun::Entry> weapons;
     CBrother::Template playerTemplate;
-    if (!LoadWeaponCatalog(tocManager, tables, weapons)) { return 1; }
+    if (!CGun::LoadEntries(tocManager, tables, weapons)) { return 1; }
 
-    std::vector<ZArmorEntry> armors;
-    if (armorIndex >= 0 && !LoadArmorCatalog(tocManager, tables, armors)) {
+    std::vector<CArmor::Entry> armors;
+    if (armorIndex >= 0 && !CArmor::LoadEntries(tocManager, tables, armors)) {
         return 1;
     }
     if (armorIndex >= static_cast<int>(armors.size()) && armorIndex >= 0) {

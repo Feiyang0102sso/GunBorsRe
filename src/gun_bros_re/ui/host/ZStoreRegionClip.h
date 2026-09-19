@@ -12,8 +12,8 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 

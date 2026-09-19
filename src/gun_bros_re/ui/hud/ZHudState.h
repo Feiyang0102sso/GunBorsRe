@@ -7,10 +7,10 @@
 #include "gun_bros_re/ui/controls/CDialogPopup.h"
 #include "gun_bros_re/ui/hud/CInputPadMeter.h"
 #include "gun_bros_re/ui/controls/CMenuPopupPrompt.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/gameplay/level/CLevelIndicator.h"
-#include "gun_bros_re/data/CProfileManager.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 
 enum class ZInputPadAction { None, Pause, Resume, Retry, Exit, Weapon1, Weapon2, UseItem, NextItem, Continue,
@@ -54,7 +54,7 @@ struct ZInputPadState {
     float moveX = 0, moveY = 0, aimX = 0, aimY = 0;
     GameObjectRef leftPowerup, rightPowerup;
     unsigned leftCount = 0, rightCount = 0;
-    std::vector<ZPowerupInventoryEntry> inventory;
+    std::vector<CProfileManager::PowerupInventoryEntry> inventory;
     std::string weapon, item, buffs, dialog, mission;
     int tutorialStep = -1;
     std::string brotherName;

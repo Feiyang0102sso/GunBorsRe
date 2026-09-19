@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 /** @file SurvivalCheckScenario.cpp
  * @brief Dispatch for the permanent survival checks.
  *
@@ -14,7 +15,7 @@
 // Declared where they are defined, in the deathmatch check translation units.
 int CheckDeathmatchCombat(SurvivalDeathFixture, CMPMatch &, CPowerUpSelector &, CProfileManager &, CGameFlow &);
 int CheckDeathmatchFeedback(SurvivalDeathFixture, CMPMatch &, CPowerUpSelector &, CProfileManager &);
-int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, ZPackTables &, CMPMatch &, CPowerUpSelector &,
+int CheckDeathmatchBotDifficulty(SurvivalDeathFixture, CResTOCManager &, CGunBros &, CMPMatch &, CPowerUpSelector &,
                                  CProfileManager &);
 
 SurvivalCheckScenario::SurvivalCheckScenario(const SurvivalDevelopment &development, ZGameObserver *frameDriver)
@@ -294,7 +295,7 @@ int SurvivalCheckScenario::OnStage(ZGameObserver::Stage phase, CGame::Session &s
 int SurvivalCheckScenario::AfterCapture(CGame::Session &state) {
     if (m_development.check && state.horde) {
         CRefinementManager::Template refinement;
-        if (!LoadRefinementTemplate(state.toc, state.tables, refinement)) { return 1; }
+        if (!CRefinementManager::Template::Load(state.toc, state.tables, refinement)) { return 1; }
         CProfileManager hordeProfile;
         hordeProfile.Reset(state.toc.GetPack(state.toc.GetCorePackIndex())->GetPackHash(), refinement);
         CGameFlow record{hordeProfile, TestOutput::Path("horde-progress-check.dat")};

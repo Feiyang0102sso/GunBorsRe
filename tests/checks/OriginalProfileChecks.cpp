@@ -1,12 +1,14 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gameplay/SurvivalStudy.h"
 /** @file ZProfileImport.cpp
  * @brief Native storage envelope and proven data layouts; source files stay read-only.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "engine/core/CCrc32.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/game/CGameSession.h"
@@ -15,16 +17,16 @@
 #include <fstream>
 #include <iomanip>
 #include <iterator>
-#include "gun_bros_re/data/ZProfileImportInternal.h"
+#include "tests/research/ProfileStudy.h"
 using namespace ProfileImportDetail;
 #include "Checks.h"
 
 int RunOriginalProfileCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CPlayerProgress::Template progressData;
-    if (!LoadPlayerProgress(toc, tables, progressData)) { return 1; }
+    if (!CPlayerProgress::Template::Load(toc, tables, progressData)) { return 1; }
     const std::filesystem::path source = TestOutput::Fixtures();
     const std::filesystem::path output = TestOutput::Path("original-saves");
     std::filesystem::create_directories(output);
@@ -38,8 +40,8 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
     if (paths.empty()) { std::printf("[original-save-check] no source records\n"); return 1; }
     unsigned failures = 0, crcMismatches = 0;
     for (const auto &path : paths) {
-        ZImportedDataStore record;
-        if (!ReadDataStore(path, record)) { ++failures; report << path.filename().string() << " invalid envelope\n"; continue; }
+        CProfileManager::Envelope record;
+        if (!CProfileManager::ReadEnvelope(path, record)) { ++failures; report << path.filename().string() << " invalid envelope\n"; continue; }
         if (!record.crcMatches) { ++crcMismatches; }
         const std::string name = path.filename().string();
         report << name << " version=" << record.version << " size-even-lower-bound=" << record.minimumSize
@@ -131,28 +133,30 @@ int RunOriginalProfileCheck(const std::string &bigDirectory) {
 int RunOriginalProfilePlayCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     profile.tutorialCompleted = true;
-    if (!ImportProfile(toc, tables, profile, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).ImportNative(toc, tables, TestOutput::Fixtures())) { return 1; }
+    profile.tutorialCompleted = true; // Research-only play entry, not imported save data.
     CProfileManager capCheck = profile;
     const GameObjectRef mainGun = profile.configuration.guns[0];
     const unsigned originalMastery = profile.GetWeaponExperience(mainGun);
     // Older template limits must not truncate imported progress on the next kill.
     capCheck.AddWeaponExperience(mainGun, 1, originalMastery - 1);
     if (capCheck.GetWeaponExperience(mainGun) != originalMastery) { return 1; }
-    const std::filesystem::path save = TestOutput::Path("original-profile-check.dat");
-    if (!profile.SaveToDisk(save)) { return 1; }
+    const std::filesystem::path save = TestOutput::Path("original-profile-native-check");
+    if (!profile.SaveNative(save)) { return 1; }
     CProfileManager restored;
     restored.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!restored.LoadFromDisk(save) || restored.experience != profile.experience ||
+    if (!restored.LoadNative(toc, tables, save) || restored.experience != profile.experience ||
         restored.configuration.guns[0].localIndex != 64 || restored.configuration.armor[0].localIndex != 178 ||
         restored.inventory.size() != 8 || restored.weaponMastery.size() != 4 ||
         restored.GetWeaponExperience(restored.configuration.guns[0]) < 800000) { return 1; }
     for (unsigned waves : restored.clearedWaves) { if (waves != 500) { return 1; } }
+    restored.tutorialCompleted = true;
     CGameFlow context{restored, save, 0};
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
     if (!restored.LoadFromDisk(save)) { return 1; }

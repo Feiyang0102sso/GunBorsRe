@@ -38,10 +38,10 @@ bool SameRef(const GameObjectRef &a, const GameObjectRef &b) {
     return a.packHash == b.packHash && a.localIndex == b.localIndex;
 }
 
-bool LoadRows(CResTOCManager &toc, ZPackTables &tables, std::vector<MapRow> &rows) {
-    std::vector<ZMissionEntry> missions;
+bool LoadRows(CResTOCManager &toc, CGunBros &tables, std::vector<MapRow> &rows) {
+    std::vector<Mission::Entry> missions;
     std::vector<LevelEntry> levels;
-    if (!LoadMissionCatalog(toc, tables, missions)) { return false; }
+    if (!Mission::LoadEntries(toc, tables, missions)) { return false; }
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto &pack = *toc.GetPack(packIndex);
         const unsigned count = tables.GetObjectPack(packIndex).GetObjectCount(ZGameSection::Level);
@@ -122,7 +122,7 @@ bool LoadRows(CResTOCManager &toc, ZPackTables &tables, std::vector<MapRow> &row
 }
 }
 
-bool ShowDebugMapPicker(CResTOCManager &toc, ZPackTables &tables, ZWindow &window, DebugMapSelection &selection,
+bool ShowDebugMapPicker(CResTOCManager &toc, CGunBros &tables, ZWindow &window, DebugMapSelection &selection,
     const std::string &message) {
     std::vector<MapRow> rows;
     if (!LoadRows(toc, tables, rows)) { return false; }
@@ -260,7 +260,7 @@ void RunDebugMaps(const std::string &bigDirectory, ZWindow &window, DebugMapSele
             }
             CResTOCManager toc;
             if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return; }
-            ZPackTables tables(toc);
+            CGunBros tables(toc);
             ShowDebugMapPicker(toc, tables, window, selection, message);
         }
     }

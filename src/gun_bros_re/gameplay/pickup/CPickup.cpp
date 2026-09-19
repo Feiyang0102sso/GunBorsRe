@@ -2,7 +2,7 @@
  * @brief Collection natives :99742. Rewards always address the human player.
  */
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include <cstdio>
 
 bool CPickup::Template::Init(CArrayInputStream &stream) {
@@ -16,7 +16,7 @@ bool CPickup::Template::Init(CArrayInputStream &stream) {
     return !stream.Overran();
 }
 
-bool CPickup::Template::Load(ZPackTables &tables, const GameObjectRef &resource) {
+bool CPickup::Template::Load(CGunBros &tables, const GameObjectRef &resource) {
     // Original pickup resources and collection-script verification.
     // Disk layout remains CPickup::Template::Init :99591 / pickup_template.bt.
     std::vector<std::uint8_t> payload;

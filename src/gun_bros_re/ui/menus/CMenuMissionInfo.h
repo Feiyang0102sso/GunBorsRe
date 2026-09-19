@@ -1,7 +1,7 @@
 #pragma once
 #include "gun_bros_re/ui/host/ZMenuTypes.h"
 #include "gun_bros_re/ui/controls/ZMenuScrollMotion.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 
 namespace MenuDetail {
 class CMenuSystem;
@@ -39,7 +39,7 @@ void MoveStarPoint(float &x, float &y, float targetX, float targetY, unsigned el
  * contain progress that has not reached the next disk checkpoint yet. */
 unsigned NativeMissionProgress(const CProfileManager &profile, const GameObjectRef &level);
 
-bool IsMissionLocked(const CProfileManager &profile, const Mission &mission, const ZPlanetMissionInfo &info);
+bool IsMissionLocked(const CProfileManager &profile, const Mission &mission, const MenuDetail::CMenuMission::MissionInfo &info);
 
 void DrawMissionText(ZMenuSurface &view, const ZMovieRegion &region, const std::string &text, unsigned font, bool centered = false);
 

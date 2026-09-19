@@ -10,7 +10,7 @@ bool DrawLivePostGameList(ZMenuSurface &view, CMenuSystem &state, const ZMovieRe
 
 class ZPostGameListCallbacks : public ZMovieRegionCallback {
 public:
-    ZPostGameListCallbacks(ZMenuSurface &menu, CMenuSystem &selection, CResTOCManager &manager, ZPackTables &resources)
+    ZPostGameListCallbacks(ZMenuSurface &menu, CMenuSystem &selection, CResTOCManager &manager, CGunBros &resources)
         : view(menu), state(selection), toc(manager), tables(resources) {}
     bool DrawMovieRegion(const ZMovieRegion &region) override {
         if (state.ContentPage() == 28) {
@@ -62,11 +62,11 @@ public:
     ZMenuSurface &view;
     CMenuSystem &state;
     CResTOCManager &toc;
-    ZPackTables &tables;
+    CGunBros &tables;
 };
 // Page callback implementations.
 
-void CMenuPostGame::Refresh(CMenuSystem &state, const CGameFlow &context, const std::vector<ZWeaponEntry> &weapons) {
+void CMenuPostGame::Refresh(CMenuSystem &state, const CGameFlow &context, const std::vector<CGun::Entry> &weapons) {
     state.result = context.result;
     state.postGame.liveReplay = false;
     state.postGame.liveReplayAt = 0;
@@ -86,7 +86,7 @@ void CMenuPostGame::Refresh(CMenuSystem &state, const CGameFlow &context, const 
     for (unsigned offset = 0; offset < context.profile.configuration.guns.size(); ++offset) {
         const unsigned slot = (activeSlot + offset) % context.profile.configuration.guns.size();
         const auto &ref = context.profile.configuration.guns[slot];
-        const ZWeaponEntry *weapon = FindMasteryWeapon(weapons, ref);
+        const CGun::Entry *weapon = FindMasteryWeapon(weapons, ref);
         if (weapon != nullptr && weapon->data.GetMasteryLevel(context.profile.GetWeaponExperience(ref)) < 3) {
             state.masteryWeapon = ref;
             if (context.profile.nativeArchive) { state.postGame.postGameUpgradePending = true; }
@@ -118,7 +118,7 @@ std::string PostGameFormat(ZMenuSurface &view, const char *name, const std::vect
 
 /** MENU_POST_GAME_WRAPUP VA0x403350, CMenuPostGame :164559..166204.
  * Native menu/provider logic below; layouts, fonts and artwork stay in BIG. */
-bool CMenuPostGame::Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, ZPackTables &tables,
+bool CMenuPostGame::Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager &toc, CGunBros &tables,
     const CProfileManager &profile) {
     const char *screen = "GLU_MOVIE_WRAPUP_SCREEN";
     if (state.result.live) { screen = "GLU_MOVIE_WRAPUP_SCREEN_MP"; }
@@ -195,7 +195,7 @@ bool CMenuPostGame::Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager 
     }
     class MainCallbacks : public ZMovieRegionCallback {
     public:
-        MainCallbacks(ZMenuSurface &menu, CMenuSystem &selection, CResTOCManager &manager, ZPackTables &resources, bool enabled)
+        MainCallbacks(ZMenuSurface &menu, CMenuSystem &selection, CResTOCManager &manager, CGunBros &resources, bool enabled)
             : view(menu), state(selection), toc(manager), tables(resources), interactive(enabled) {}
         bool DrawMovieRegion(const ZMovieRegion &region) override {
             if (region.index == 1) {
@@ -390,7 +390,7 @@ bool CMenuPostGame::Draw(ZMenuSurface &view, CMenuSystem &state, CResTOCManager 
         ZMenuSurface &view;
         CMenuSystem &state;
         CResTOCManager &toc;
-        ZPackTables &tables;
+        CGunBros &tables;
         bool interactive;
     } callback(view, state, toc, tables, ready);
     if (!view.movies.Draw(ordinal, state.postGame.postGameTime, 512, 384, kMenuWidth, kMenuHeight, 0, 1, &callback)) { return false; }

@@ -12,7 +12,7 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
     if (!window.Open("Prop combat check", 640, 480)) { return 1; }
     ZShaderProgram program;
     if (!program.Load(Paths::Shaders(), "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     std::vector<CEnemy::Template> enemies;
     if (!CEnemy::Template::LoadCatalog(toc, tables, enemies) || enemies.empty()) { return 1; }
     unsigned failures = 0;
@@ -110,9 +110,9 @@ int RunPropCombatCheck(const std::string &bigDirectory) {
         }
         if (entry.packName == "pack2") {
             CBrother::Template playerData;
-            std::vector<ZWeaponEntry> weapons;
+            std::vector<CGun::Entry> weapons;
             if (!playerData.Load(toc, tables) ||
-                !LoadWeaponCatalog(toc, tables, weapons) || weapons.empty()) { return 1; }
+                !CGun::LoadEntries(toc, tables, weapons) || weapons.empty()) { return 1; }
             if (!player.BuildBody(tables, playerData.GetMoveSet()) ||
                 !player.EquipWeapon(tables, playerData.GetScript(), weapons[0].data, "barrel chain check") ||
                 !player.CreateBuffers(program)) { return 1; }

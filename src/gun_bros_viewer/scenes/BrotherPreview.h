@@ -16,7 +16,7 @@ public:
      * CBrother::Draw picks bone 4 off the torso mesh for a one-handed weapon, and
      * the torso's bone list names bone 4 "gun".
      */
-    bool AttachGun(ZPackTables &tables, const std::string &owner,
+    bool AttachGun(CGunBros &tables, const std::string &owner,
         std::uint32_t meshPackHash, std::uint32_t meshOrdinal,
         std::uint32_t imagePackHash, std::uint32_t imageOrdinal);
     bool CreateBuffers(const ZShaderProgram &program);

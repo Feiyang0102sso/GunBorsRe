@@ -1,6 +1,6 @@
 /** BIG match validation and authoritative life budget regressions. */
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
-#include "gun_bros_re/data/ZPlanetCatalog.h"
+#include "gun_bros_re/ui/menus/CMenuMission.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include <cstdio>
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
@@ -9,7 +9,7 @@
 int RunDeathmatchDataCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     // Resolve the death-drop native actions from the original pickup scripts.
     for (unsigned index = 0; index < 2; ++index) {
         std::vector<std::uint8_t> bytes;
@@ -24,15 +24,15 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
             std::printf("[deathmatch-drop] pickup=%u action=%u amount=%d\n", index, static_cast<unsigned>(action.kind), action.amount);
         }
     }
-    std::vector<ZStoreEntry> store;
-    if (!LoadStoreCatalog(toc, tables, store)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    if (!CStoreItem::LoadEntries(toc, tables, store)) { return 1; }
     CProfileManager shopper;
     CMPMatch::Life life;
     if (ZLocalPVPBot::ChoosePurchase(store, shopper, 99, life) != nullptr) { return 1; }
     shopper.coins = 100000; shopper.warbucks = 100000;
     unsigned purchases = 0;
     while (const auto *item = ZLocalPVPBot::ChoosePurchase(store, shopper, 99, life)) {
-        if (++purchases > 4 || shopper.AcquireItem(item->data, 99) != ZPurchaseResult::Purchased) { return 1; }
+        if (++purchases > 4 || shopper.AcquireItem(item->data, 99) != CProfileManager::PurchaseResult::Purchased) { return 1; }
     }
     if (purchases != 4 || shopper.statistics[12] != 4) { return 1; }
     shopper.powerups.clear(); life.grenades = 2; life.healthPacks = 2;
@@ -101,8 +101,8 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
                 match.CanShop(1) || !match.CanUse(1, true)) { return 1; }
         }
     }
-    std::vector<ZPlanetEntry> planets;
-    if (!LoadPlanetCatalog(toc, tables, planets)) { return 1; }
+    std::vector<MenuDetail::CMenuMission::PlanetEntry> planets;
+    if (!MenuDetail::CMenuMission::LoadPlanets(toc, tables, planets)) { return 1; }
     for (const auto &planet : planets) {
         const auto &ref = planet.data.object12;
         if (ref.IsNull()) { continue; }
@@ -112,7 +112,7 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
         Mission mission;
         if (!mission.Init(stream) || stream.Available() != 0) { return 1; }
         std::printf("[deathmatch-check] planet=%s extra=%08x:%u type=%u value64=%u value66=%u level=%08x:%u\n",
-            ReadGameString(toc, planet.data.name).c_str(), ref.packHash, ref.localIndex, mission.type,
+            tables.ReadString(planet.data.name).c_str(), ref.packHash, ref.localIndex, mission.type,
             mission.value64, mission.value66, mission.level.packHash, mission.level.localIndex);
     }
     return 0;

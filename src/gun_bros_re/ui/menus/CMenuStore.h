@@ -3,7 +3,7 @@
 #include "gun_bros_re/ui/menus/CMenuStoreOption.h"
 #include "gun_bros_re/ui/menus/CMenuStoreOptionGroup.h"
 #include "gun_bros_re/ui/controls/ZMenuScrollMotion.h"
-#include "gun_bros_re/data/CProfileManager.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 
 namespace MenuDetail {
 class CMenuSystem;
@@ -14,9 +14,9 @@ public:
     /** The original store draws two cards per column (ItemCallback :178878) on a
      * horizontal belt and expands the focused card in place. Item identity and
      * purchases still come directly from the BIG catalog. */
-    bool Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile,
-        unsigned level, const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
-        const std::vector<ZArmorEntry> &armors, CMenuSystem &state, const std::filesystem::path &savePath);
+    bool Draw(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables, CProfileManager &profile,
+        unsigned level, const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
+        const std::vector<CArmor::Entry> &armors, CMenuSystem &state, const std::filesystem::path &savePath);
 
     unsigned shopCategory = 0;
     unsigned shopGunSlot = 0;

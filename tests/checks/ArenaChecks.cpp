@@ -1,10 +1,11 @@
+#include "engine/platform/ZWindow.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "TestOutput.h"
 #include "checks/ArenaChecks.h"
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
-unsigned CheckEnemyResources(CResTOCManager &toc, ZPackTables &tables, CLevel &scene,
+#include "gun_bros_re/data/store/CStoreItem.h"
+unsigned CheckEnemyResources(CResTOCManager &toc, CGunBros &tables, CLevel &scene,
     const CEnemy::Template &entry, const ZShaderProgram &program);
 namespace ArenaDetail {
 int CheckArena(ArenaScene &ready);
@@ -35,8 +36,8 @@ int CheckArena(ArenaScene &ready) {
     unsigned unused = 0;
     unsigned unsupported = 0;
     // The viewer uses BIG names, real throw animations and nonfatal damage.
-    if (ReadGameString(toc, catalog[0].name).empty()) { ++failures; }
-    std::array<ZPowerupEntry, 3> grenades;
+    if (tables.ReadString(catalog[0].name).empty()) { ++failures; }
+    std::array<CPowerup::Entry, 3> grenades;
     if (!LoadArenaGrenades(toc, tables, grenades)) { return 1; }
     for (const auto &grenade : grenades) {
         scene.Reset();
@@ -310,8 +311,8 @@ int CheckArena(ArenaScene &ready) {
     } else { std::printf("[arena-check] FAIL no beam tested\n"); ++failures; }
     // Use a known three-slot archive outfit, independently checked in the
     // original scripts: defense 4+8+2, attack 0+0+5, speed -1-3-3.
-    std::vector<ZArmorEntry> armorCatalog;
-    if (!LoadArmorCatalog(toc, tables, armorCatalog) || armorCatalog.size() <= 11) {
+    std::vector<CArmor::Entry> armorCatalog;
+    if (!CArmor::LoadEntries(toc, tables, armorCatalog) || armorCatalog.size() <= 11) {
         return 1;
     }
     scene.Reset();

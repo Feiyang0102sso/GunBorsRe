@@ -10,9 +10,9 @@ namespace MenuDetail {
 
 // Page callback implementations.
 
-bool CMenuStore::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile,
-    unsigned level, const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armors, CMenuSystem &state, const std::filesystem::path &savePath) {
+bool CMenuStore::Draw(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables, CProfileManager &profile,
+    unsigned level, const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armors, CMenuSystem &state, const std::filesystem::path &savePath) {
     const unsigned storeMenu = view.movies.Ordinal("GLU_MOVIE_STORE_MENU");
     const unsigned storeScroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
     const unsigned shopBox = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
@@ -122,7 +122,7 @@ bool CMenuStore::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tabl
                 }
                 continue;
             }
-            const ZStoreEntry &item = store[index];
+            const CStoreItem::Entry &item = store[index];
             if (item.data.type >= 14 && item.data.type <= 16) {
                 if (!DrawCurrencyCard(view, toc, tables, item, index, shopBox, face,
                     actionEnabled, state, profile, savePath)) { return false; }
@@ -232,7 +232,7 @@ bool CMenuStore::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tabl
     }
 
     if (state.store.focused.shopDetailOpen && state.selectedItem >= 0 && state.selectedItem < static_cast<int>(store.size())) {
-        const ZStoreEntry &item = store[state.selectedItem];
+        const CStoreItem::Entry &item = store[state.selectedItem];
         const GameObjectTypeRef &ref = item.data.objects[0];
         CMenuStoreOption::Face face;
         face.time = state.store.focused.shopDetailTime;
@@ -272,19 +272,19 @@ bool CMenuStore::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tabl
         }
     }
     if (purchaseIndex >= 0) {
-        const ZStoreEntry &item = store[purchaseIndex];
-        const ZPurchaseResult result = profile.AcquireItem(item.data, level);
+        const CStoreItem::Entry &item = store[purchaseIndex];
+        const CProfileManager::PurchaseResult result = profile.AcquireItem(item.data, level);
         // CMenuAction::DoAction 0x38 :94606 uses the original three-button
         // funds prompt. Successful purchases refresh the card without a toast.
-        if (result == ZPurchaseResult::InsufficientCoins) {
+        if (result == CProfileManager::PurchaseResult::InsufficientCoins) {
             ShowStoreFundsPrompt(state, store, profile, 0, item.data.commonPrice, false);
-        } else if (result == ZPurchaseResult::InsufficientWarbucks) {
+        } else if (result == CProfileManager::PurchaseResult::InsufficientWarbucks) {
             ShowStoreFundsPrompt(state, store, profile, 1, item.data.rarePrice, false);
         }
-        if (result == ZPurchaseResult::Purchased || result == ZPurchaseResult::Owned) {
+        if (result == CProfileManager::PurchaseResult::Purchased || result == CProfileManager::PurchaseResult::Owned) {
             if (purchaseSlot < 2) { profile.configuration.SetGun(purchaseSlot, item.data.objects[0].object); }
             else if (purchaseSlot < 5) { CStoreAggregator::Equipped(profile, purchaseSlot) = item.data.objects[0].object; }
-            if (item.data.singlePurchase != 0 && result == ZPurchaseResult::Purchased) {
+            if (item.data.singlePurchase != 0 && result == CProfileManager::PurchaseResult::Purchased) {
                 if (!CStoreAggregator::EquipStoreItem(profile, item.data, armors)) { return false; }
                 state.store.focused.shopPreview = false;
             }

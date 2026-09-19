@@ -1,3 +1,5 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gameplay/ProfilePlayDriver.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "ui/GameMenuStudy.h"
@@ -15,8 +17,8 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 #include "TestOutput.h"
@@ -32,9 +34,9 @@ using namespace MenuDetail;
 int RunTutorialPlayCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     CGameFlow context{profile, TestOutput::Path("tutorial-profile-check.dat"), 0};
@@ -50,7 +52,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     const auto nativePath = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("tutorial-native-" + std::to_string(GetTickCount64()));
     CProfileManager native;
     native.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, native, nativePath, nativePath / "absent-source")) { return 1; }
+    if (!(native).LoadNative(toc, tables, nativePath, nativePath / "absent-source")) { return 1; }
     native.firstLaunch = false;
     if (!native.SaveToDisk(nativePath)) { return 1; }
     const auto &level = native.nativeArchive->survivalLevels[0];
@@ -65,7 +67,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
         0, -1, "", 0, false, false, true, 2, 0, &nativeContext, true) != 0) { return 1; }
     if (!native.tutorialCompleted || native.tutorialSteps != 255) { return 1; }
     const auto earnedRifle = native.configuration.guns[1];
-    if (!LoadProfile(toc, tables, native, nativePath, nativePath / "absent-source") || native.firstLaunch ||
+    if (!(native).LoadNative(toc, tables, nativePath, nativePath / "absent-source") || native.firstLaunch ||
         !SameObject(native.configuration.guns[1], earnedRifle) || !native.Owns(6, earnedRifle)) { return 1; }
     // Tutorial steps are a host execution trace, not an invented original flag.
     std::printf("[tutorial-profile-check] native created-without-source original-HUD completed=1 steps=255 earned-rifle-restored=1\n");
@@ -113,11 +115,11 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     }
     std::printf("[tutorial-profile-check] debug escape=1 window-open=1 no-save=1 notice-phases=2\n");
     CPlayerProgress::Template progressData;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadPlayerProgress(toc, tables, progressData) || !LoadStoreCatalog(toc, tables, store) ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CPlayerProgress::Template::Load(toc, tables, progressData) || !CStoreItem::LoadEntries(toc, tables, store) ||
+        !CGun::LoadEntries(toc, tables, weapons) || !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     CMenuSystem menuState;
     menuState.resumeAfterDebugTutorial = true;
     SDL_Event replay{};
@@ -142,10 +144,10 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
 int RunProfilePlayCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZWeaponEntry> weapons;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
+    std::vector<CGun::Entry> weapons;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CGun::LoadEntries(toc, tables, weapons)) { return 1; }
     CProfileManager profile;
     const unsigned core = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();
     profile.Reset(core, refinement);
@@ -189,14 +191,14 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
 int RunPlayerSelectCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
+    if (!CRefinementManager::Template::Load(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("select-check-" + std::to_string(GetTickCount64()));
     // Missing source exercises native constructor defaults as requested.
-    if (!LoadProfile(toc, tables, profile, path, {})) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, {})) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
@@ -243,7 +245,7 @@ int RunPlayerSelectCheck(const std::string &bigDirectory) {
             if (mode != 0 && state.stack.page != 6) { return 1; }
             CProfileManager reloaded;
             reloaded.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-            if (!LoadProfile(toc, tables, reloaded, path, {}) || reloaded.playerBrother != brother ||
+            if (!(reloaded).LoadNative(toc, tables, path, {}) || reloaded.playerBrother != brother ||
                 reloaded.firstLaunch || reloaded.coins != coins || reloaded.warbucks != warbucks) { return 1; }
         }
     }
@@ -255,10 +257,10 @@ int RunPlayerSelectCheck(const std::string &bigDirectory) {
 int RunPlayInteractionCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CProfileManager profile;
     const auto path = std::filesystem::path(TestOutput::Path("play-interaction-check")) / std::to_string(GetTickCount64());
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
@@ -404,21 +406,21 @@ int RunPlayInteractionCheck(const std::string &bigDirectory) {
 int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CPlayerProgress::Template progress;
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    std::vector<ZWeaponEntry> weapons;
-    std::vector<ZArmorEntry> armor;
-    if (!LoadPlayerProgress(toc, tables, progress) || !LoadRefinementTemplate(toc, tables, refinement) ||
-        !LoadStoreCatalog(toc, tables, store) || !LoadWeaponCatalog(toc, tables, weapons) ||
-        !LoadArmorCatalog(toc, tables, armor)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    std::vector<CGun::Entry> weapons;
+    std::vector<CArmor::Entry> armor;
+    if (!CPlayerProgress::Template::Load(toc, tables, progress) || !CRefinementManager::Template::Load(toc, tables, refinement) ||
+        !CStoreItem::LoadEntries(toc, tables, store) || !CGun::LoadEntries(toc, tables, weapons) ||
+        !CArmor::LoadEntries(toc, tables, armor)) { return 1; }
     const auto savePath = std::filesystem::path(TestOutput::Path("audio-transitions")) / std::to_string(GetTickCount64());
     CProfileManager profile;
     // Match the front end: native saves restore slot state but do not bind
     // the BIG refinery template needed after the postgame -> refinery transition.
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    if (!LoadProfile(toc, tables, profile, savePath, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, savePath, TestOutput::Fixtures())) { return 1; }
     ZWindow window;
     if (!window.Open("Audio transition verification", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     unsigned failures = 0;

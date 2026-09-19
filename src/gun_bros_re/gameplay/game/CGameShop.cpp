@@ -93,7 +93,7 @@ int CGame::Session::UpdateShop() {
             // Shop decisions use the same catalog, price, balance and level checks as the player.
             while (const auto *item = ZLocalPVPBot::ChoosePurchase(matchStore, *peerProfile, peerProgress.GetLevel(),
                                                                    match.GetLife(1))) {
-                if (peerProfile->AcquireItem(item->data, peerProgress.GetLevel()) != ZPurchaseResult::Purchased) {
+                if (peerProfile->AcquireItem(item->data, peerProgress.GetLevel()) != CProfileManager::PurchaseResult::Purchased) {
                     break;
                 }
                 std::printf("[deathmatch] bot purchased powerup=%u\n", item->data.objects.front().object.localIndex);
@@ -150,7 +150,7 @@ int CGame::Session::UpdateShop() {
                 localBot->ShouldBuyShopItem(browsingMs,
                                             peerProfile->GetPowerupCount(item->data.objects.front().object))) {
                 const auto purchase = peerProfile->AcquireItem(item->data, peerProgress.GetLevel());
-                if (purchase == ZPurchaseResult::Purchased) {
+                if (purchase == CProfileManager::PurchaseResult::Purchased) {
                     std::printf("[local-live] peer purchased powerup=%u\n",
                                 item->data.objects.front().object.localIndex);
                     if (launch.botFriend != nullptr && !launch.botFriend->Save()) { return 1; }

@@ -43,7 +43,7 @@ int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packSho
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
     CGameFlow *gameContext, bool withBrother, bool powerupStudy,
-    const ZMissionEntry *archiveMission, bool performanceStudy, ZWindow *sharedWindow, bool feedbackStudy,
+    const Mission::Entry *archiveMission, bool performanceStudy, ZWindow *sharedWindow, bool feedbackStudy,
     bool bossStudy, bool deathStudy, ZGameObserver *frameDriver) {
 
     CGame::Launch launch{bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,

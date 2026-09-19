@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 /** Native category/ownership predicates exercised against real BIG records. */
 #include "gun_bros_re/ui/content/CStoreAggregator.h"
 #include "gun_bros_re/ui/system/CMenuSystem.h"
@@ -5,8 +6,8 @@
 using namespace MenuDetail;
 
 int CheckStoreFiltering(CResTOCManager &toc, const CRefinementManager::Template &refinement,
-    const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armor) {
+    const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armor) {
     const int pack = toc.GetPackIndexFromName("pack3");
     if (pack < 0) { return 1; }
     const unsigned coreHash = toc.GetPack(toc.GetCorePackIndex())->GetPackHash();

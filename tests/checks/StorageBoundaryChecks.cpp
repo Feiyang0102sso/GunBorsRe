@@ -1,4 +1,4 @@
-#include "gun_bros_re/data/ZProfileImportInternal.h"
+#include "tests/research/ProfileStudy.h"
 
 namespace ProfileImportDetail {
 unsigned CheckStorageBoundaries(const std::filesystem::path &source, const std::filesystem::path &output) {
@@ -24,9 +24,9 @@ unsigned CheckStorageBoundaries(const std::filesystem::path &source, const std::
         fixture.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
         fixture.close();
         if (!fixture) { ++failures; continue; }
-        ZImportedDataStore record;
+        CProfileManager::Envelope record;
         record.version = 123;
-        const bool loaded = ReadDataStore(path, record);
+        const bool loaded = CProfileManager::ReadEnvelope(path, record);
         if (test < 4 && (loaded || record.version != 123)) { ++failures; }
         if (test == 4 && (!loaded || record.crcMatches)) { ++failures; }
     }

@@ -1,3 +1,5 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 #pragma once
 #include "gun_bros_re/ui/host/ZMenuSession.h"
 #include "gun_bros_re/ui/menus/CMenuStoreOption.h"
@@ -12,8 +14,8 @@
 #include "gun_bros_re/ui/host/ZMenuWipe.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/cheats/CheatActions.h"
-#include "gun_bros_re/data/ZProfileImport.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 using namespace MenuDetail;
@@ -24,10 +26,10 @@ int RunProfilePlayCheck(const std::string &bigDirectory);
 
 /** Exercise real card resources and the same renderer/input path as --game.
  * All money, XP, mutated templates and profile writes below are test fixtures. */
-int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile,
+int CheckStoreCards(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile,
     const CPlayerProgress::Template &progress, const CRefinementManager::Template &refinement,
-    const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armor);
+    const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armor);
 
 /** Native save fixtures and real greeting callbacks; no original saves change. */
 int RunPostGameMenuCheck(const std::string &bigDirectory);
@@ -40,7 +42,7 @@ int RunRefineryMenuCheck(const std::string &bigDirectory);
 /** Advance the actual button Movie to action dispatch, checking no early transfer. */
 bool FinishRefineryClick(ZMenuSurface &view, CMenuSystem &state, CProfileManager &profile,
     const CRefinementManager::Template &data, const std::filesystem::path &path, std::int64_t now, unsigned slot);
-int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &view,
+int CheckOnlineRefinery(CResTOCManager &toc, CGunBros &tables, ZMenuSurface &view,
     const CRefinementManager::Template &data);
 
 int RunNavigationBarCheck(const std::string &bigDirectory);
@@ -60,14 +62,14 @@ int RunOptionsCheck(const std::string &bigDirectory);
 int RunUpgradePopupCheck(const std::string &bigDirectory);
 
 /** Real bank card/input/prompt path, with native saves and isolated fixtures. */
-int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &progress,
-    const CRefinementManager::Template &refinement, const std::vector<ZStoreEntry> &store,
-    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armor);
+int CheckBank(CResTOCManager &toc, CGunBros &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<CStoreItem::Entry> &store,
+    const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armor);
 
 /** Focused regression for the user's splash, package and clipped badge report. */
-int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::Template &progress,
-    const CRefinementManager::Template &refinement, const std::vector<ZStoreEntry> &store,
-    const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armor);
+int CheckUiFeedback(CResTOCManager &toc, CGunBros &tables, const CPlayerProgress::Template &progress,
+    const CRefinementManager::Template &refinement, const std::vector<CStoreItem::Entry> &store,
+    const std::vector<CGun::Entry> &weapons, const std::vector<CArmor::Entry> &armor);
 
 /** Fresh inventory and one live menu, including purchase from an expanded card. */
 int RunPackagePurchaseCheck(const std::string &bigDirectory);
@@ -123,8 +125,8 @@ int RunOriginalDialogCheck(const std::string &bigDirectory);
 */
 
 int CheckStoreFiltering(CResTOCManager &toc, const CRefinementManager::Template &refinement,
-    const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
-    const std::vector<ZArmorEntry> &armor);
+    const std::vector<CStoreItem::Entry> &store, const std::vector<CGun::Entry> &weapons,
+    const std::vector<CArmor::Entry> &armor);
 
 /** Complete the frame when a check drives a page without the host loop. */
 inline bool FinishMenuFrame(bool drawn, CMenuSystem &state) {

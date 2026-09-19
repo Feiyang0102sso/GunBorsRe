@@ -5,7 +5,7 @@
 #ifndef GUN_BROS_RE_COLLISION_H
 #define GUN_BROS_RE_COLLISION_H
 #include "gun_bros_re/gameplay/collision/CCollisionData.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <algorithm>
 #include <cmath>
 namespace Collision {

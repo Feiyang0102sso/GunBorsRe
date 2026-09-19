@@ -11,13 +11,13 @@
 CPowerUpSelector::CPowerUpSelector()
     : m_ownedResources(std::make_unique<ZHudResources>()), m_resources(*m_ownedResources) {}
 
-CPowerUpSelector::CPowerUpSelector(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
+CPowerUpSelector::CPowerUpSelector(CResTOCManager &toc, CGunBros &tables, CBrother &player,
     CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile, Collision::ObjectId owner)
     : CPowerUpSelector() {
     BindPowerups(toc, tables, player, vitals, level, profile, owner);
 }
 
-void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, CBrother &player,
+void CPowerUpSelector::BindPowerups(CResTOCManager &toc, CGunBros &tables, CBrother &player,
     CBrother::Vitals &vitals, CLevel &level, CProfileManager &profile, Collision::ObjectId owner) {
     m_resources.m_toc = &toc;
     m_resources.m_tables = &tables;
@@ -34,9 +34,9 @@ void CPowerUpSelector::BindPowerups(CResTOCManager &toc, ZPackTables &tables, CB
 
 bool CPowerUpSelector::InitPowerups() {
     if (m_resources.m_powerups.empty() &&
-        !LoadPowerupCatalog(*m_resources.m_toc, *m_resources.m_tables, m_resources.m_powerups)) { return false; }
+        !CPowerup::LoadEntries(*m_resources.m_toc, *m_resources.m_tables, m_resources.m_powerups)) { return false; }
     if (m_resources.m_store.empty() &&
-        !LoadStoreCatalog(*m_resources.m_toc, *m_resources.m_tables, m_resources.m_store)) { return false; }
+        !CStoreItem::LoadEntries(*m_resources.m_toc, *m_resources.m_tables, m_resources.m_store)) { return false; }
     // The retail selector is defined by dedicated STORE records. Validate their
     // POWERUP references instead of maintaining a second host-side ID list.
     for (const auto &store : m_resources.m_store) {
@@ -61,7 +61,7 @@ bool CPowerUpSelector::InitPowerups() {
     return true;
 }
 
-const CStoreItem *CPowerUpSelector::FindStoreItem(const ZPowerupEntry &entry) const {
+const CStoreItem *CPowerUpSelector::FindStoreItem(const CPowerup::Entry &entry) const {
     // Follow the same dedicated STORE -> POWERUP reference as the selector;
     // bundle contents do not define an individual powerup's mode restrictions.
     for (const auto &store : m_resources.m_store) {
@@ -74,7 +74,7 @@ const CStoreItem *CPowerUpSelector::FindStoreItem(const ZPowerupEntry &entry) co
     return nullptr;
 }
 
-bool CPowerUpSelector::ModeAllows(const ZPowerupEntry &entry) const {
+bool CPowerUpSelector::ModeAllows(const CPowerup::Entry &entry) const {
     const auto *store = FindStoreItem(entry);
     if (store == nullptr) { return false; }
     unsigned gameType = 0;
@@ -129,19 +129,19 @@ bool CPowerUpSelector::Equip(unsigned slot, const GameObjectRef &resource) {
     return false;
 }
 
-bool CPowerUpSelector::IsSupported(const ZPowerupEntry &entry) const {
+bool CPowerUpSelector::IsSupported(const CPowerup::Entry &entry) const {
     if (!ModeAllows(entry)) { return false; }
     if (!ZLocalPVPBot::AllowsPowerup(*this, entry)) { return false; }
     return true;
 }
 
-const ZPowerupEntry *CPowerUpSelector::GetSelected() const {
+const CPowerup::Entry *CPowerUpSelector::GetSelected() const {
     if (m_selected >= m_resources.m_powerups.size()) { return nullptr; }
     return &m_resources.m_powerups[m_selected];
 }
 
 unsigned CPowerUpSelector::GetCount() const {
-    const ZPowerupEntry *entry = GetSelected();
+    const CPowerup::Entry *entry = GetSelected();
     if (entry == nullptr) { return 0; }
     // A virtual charge avoids granting or persisting fake account inventory.
     if (ZLocalPVPBot::HasUnlimitedInventory(*this) && IsSupported(*entry)) { return 1; }
@@ -149,7 +149,7 @@ unsigned CPowerUpSelector::GetCount() const {
 }
 
 unsigned CPowerUpSelector::GetCount(unsigned localIndex) const {
-    for (const ZPowerupEntry &entry : m_resources.m_powerups) {
+    for (const CPowerup::Entry &entry : m_resources.m_powerups) {
         if (entry.resource.localIndex != localIndex) { continue; }
         if (ZLocalPVPBot::HasUnlimitedInventory(*this) && IsSupported(entry)) { return 1; }
         return m_profile->GetPowerupCount(entry.resource);

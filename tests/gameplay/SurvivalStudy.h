@@ -7,7 +7,7 @@ int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packSho
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
     CGameFlow *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
-    const ZMissionEntry *archiveMission = nullptr, bool performanceStudy = false, ZWindow *sharedWindow = nullptr, bool feedbackStudy = false,
+    const Mission::Entry *archiveMission = nullptr, bool performanceStudy = false, ZWindow *sharedWindow = nullptr, bool feedbackStudy = false,
     bool bossStudy = false, bool deathStudy = false, ZGameObserver *frameDriver = nullptr);
 /** Fatal-hit and SDL suicide regression on all four retail survival maps. */
 int RunPlayerDeathCheck(const std::string &bigDirectory);

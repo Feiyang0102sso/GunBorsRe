@@ -5,7 +5,7 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include <cmath>
 #include <cstdio>
 

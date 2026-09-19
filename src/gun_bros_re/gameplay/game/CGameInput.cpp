@@ -108,7 +108,7 @@ int CGame::Session::ProcessInput() {
     if (action == ZInputPadAction::OpenShop) { OpenShop(0); }
     if (action == ZInputPadAction::CloseShop) { CloseShop(); }
     if (action == ZInputPadAction::CancelItem) { itemChoice = false; }
-    const ZStoreEntry *shopItem = survivalHud.SelectedItem();
+    const CStoreItem::Entry *shopItem = survivalHud.SelectedItem();
     if (launch.deathmatch && shopItem != nullptr && action == ZInputPadAction::SelectMatchGun) {
         const auto &gun = shopItem->data.objects.front().object;
         if (!scene.SelectMatchGun(0, survivalHud.MatchSelectionSlot(), gun)) { return 1; }
@@ -117,8 +117,8 @@ int CGame::Session::ProcessInput() {
     if (shopItem != nullptr && (action == ZInputPadAction::BuyItem || action == ZInputPadAction::SelectItem)) {
         const GameObjectRef &resource = shopItem->data.objects.front().object;
         if (action == ZInputPadAction::BuyItem) {
-            const ZPurchaseResult result = pickupProfile->AcquireItem(shopItem->data, progress.GetLevel());
-            if (result == ZPurchaseResult::Purchased && gameContext != nullptr && !gameContext->SaveProfile()) {
+            const CProfileManager::PurchaseResult result = pickupProfile->AcquireItem(shopItem->data, progress.GetLevel());
+            if (result == CProfileManager::PurchaseResult::Purchased && gameContext != nullptr && !gameContext->SaveProfile()) {
                 return 1;
             }
             // CPowerUpSelector::OnPurchase :184861 updates quantity in place.

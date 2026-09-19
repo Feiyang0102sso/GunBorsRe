@@ -4,7 +4,7 @@
  * @brief Verify the entire wire payload and every real collection export.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "engine/graphics/CBitmapFont.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -17,7 +17,7 @@
 #include "Checks.h"
 
 /** Research enumeration only; template loading belongs to CPickup::Template. */
-std::vector<GameObjectRef> GetPickupCheckReferences(CResTOCManager &toc, ZPackTables &tables) {
+std::vector<GameObjectRef> GetPickupCheckReferences(CResTOCManager &toc, CGunBros &tables) {
     std::vector<GameObjectRef> references;
     for (unsigned packIndex = 0; packIndex < toc.GetPackCount(); ++packIndex) {
         const auto *pack = toc.GetPack(packIndex);
@@ -35,7 +35,7 @@ std::vector<GameObjectRef> GetPickupCheckReferences(CResTOCManager &toc, ZPackTa
 int RunPickupCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     const auto references = GetPickupCheckReferences(toc, tables);
     if (references.empty()) { return 1; }
     CPickup::Template poolTemplate;
@@ -67,7 +67,7 @@ int RunPickupCheck(const std::string &bigDirectory) {
         const auto actions = pickup.TakeActions();
         if (pickup.Collect() || !pickup.TakeActions().empty() || pickup.GetUnsupportedCount() != 0) { ++failures; }
         report << tables.GetPackName(resource.packHash) << " pickup " << unsigned(resource.localIndex)
-            << " name=" << std::quoted(ReadGameString(toc, data.name)) << " sprite="
+            << " name=" << std::quoted(tables.ReadString(data.name)) << " sprite="
             << std::hex << data.sprite.packHash << std::dec << ':' << unsigned(data.sprite.archetype)
             << ':' << unsigned(data.sprite.animation) << " items=" << data.items.size();
         if (!data.particleEffect.IsNull()) {
@@ -106,7 +106,7 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
     if (!window.Open("Gun Bros - Pickup Research", 1200, 900)) { return 1; }
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     ZShaderProgram program;
     const char *directory = Paths::Shaders().c_str();
     if (!program.Load(directory, "ogles_vs_mvp_tex0", "ogles_ps_tex0")) { return 1; }
@@ -126,7 +126,7 @@ int RunPickupRenderCheck(const std::string &bigDirectory) {
         const float y = 130 + (index / 3) * 165.0f;
         if (!effects.SpawnPickupAt(resource, x, y)) { return 1; }
         const std::string owner = tables.GetPackName(resource.packHash) + " pickup " + std::to_string(resource.localIndex);
-        const std::string name = ReadGameString(toc, data.name);
+        const std::string name = tables.ReadString(data.name);
         font.Draw(labels, owner, x - 100, y + 42, 0.6f);
         if (!name.empty()) { font.Draw(labels, name, x - 100, y + 62, 0.55f); }
     }

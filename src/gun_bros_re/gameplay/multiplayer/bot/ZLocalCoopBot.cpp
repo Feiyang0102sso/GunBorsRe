@@ -183,7 +183,7 @@ bool ZLocalCoopBot::UseAnyPowerup(CPowerUpSelector &selector, std::uint32_t &cho
 }
 
 bool ZLocalCoopBot::CanUseSelectedPowerup(const CPowerUpSelector &selector) {
-    const ZPowerupEntry *entry = selector.GetSelected();
+    const CPowerup::Entry *entry = selector.GetSelected();
     if (entry == nullptr || selector.m_vitals->dead || selector.m_level->IsRescuePending()) { return false; }
     bool airstrike = false, grenade = false;
     // POWERUP script resources: 253 denotes a Movie dependency. Retail

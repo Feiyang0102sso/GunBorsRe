@@ -1,16 +1,17 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "TestOutput.h"
-#include "gun_bros_re/data/CDailyBonusTracking.h"
+#include "gun_bros_re/data/profile/CDailyBonusTracking.h"
 #include <cstdio>
 #include "Checks.h"
 
 int RunDailyBonusCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
+    std::vector<CStoreItem::Entry> store;
     CDailyBonusTracking daily;
-    if (!daily.Load(toc, tables) || !LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
+    if (!daily.Load(toc, tables) || !CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     constexpr std::int64_t firstDay = 21000;

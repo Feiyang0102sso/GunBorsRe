@@ -9,7 +9,7 @@ namespace MenuDetail {
 /** Desktop resource lifetime only; menus own particle selection and playback. */
 class ZMenuParticleContext {
 public:
-    void Bind(CResTOCManager &archive, ZPackTables &tables, ZShaderProgram &program) {
+    void Bind(CResTOCManager &archive, CGunBros &tables, ZShaderProgram &program) {
         toc = &archive; source = &tables; shader = &program;
     }
     void Prepare() {
@@ -23,7 +23,7 @@ public:
     // CMenuSystem::Init :97381 supplies one shared pool to its menu players.
     std::shared_ptr<CParticlePool> pool = std::make_shared<CParticlePool>(200);
 private:
-    ZPackTables *source = nullptr;
+    CGunBros *source = nullptr;
     ZShaderProgram *shader = nullptr;
 };
 }

@@ -1,20 +1,20 @@
 #include "gun_bros_re/ui/menus/CMenuMissionPresentation.h"
 #include "engine/glu/sprite/CSpriteIterator.h"
 namespace MenuDetail {
-bool CMenuMission::Presentation::Load(CResTOCManager &toc, ZPackTables &tables,
+bool CMenuMission::Presentation::Load(CResTOCManager &toc, CGunBros &tables,
     ZShaderProgram &image, ZShaderProgram &text) {
     imageProgram = &image;
     textProgram = &text;
     if (!images.Create(image) || !markers.Create(text)) { return false; }
-        if (!LoadPlanetCatalog(toc, tables, planetEntries)) { return false; }
+        if (!MenuDetail::CMenuMission::LoadPlanets(toc, tables, planetEntries)) { return false; }
         names.resize(planetEntries.size());
         descriptions.resize(planetEntries.size());
         planetQuads.resize(planetEntries.size());
         planetThumbs.resize(planetEntries.size());
         for (unsigned index = 0; index < planetEntries.size(); ++index) {
             const Planet &planet = planetEntries[index].data;
-            names[index] = ReadGameString(toc, planet.name);
-            descriptions[index] = ReadGameString(toc, planet.description);
+            names[index] = tables.ReadString(planet.name);
+            descriptions[index] = tables.ReadString(planet.description);
             // Planet::CreateLargeImage :170099 uses the map sprite's pack.
             const int spritePack = toc.GetPackIndexFromHash(planet.thumbnail.packHash);
             if (spritePacks.count(spritePack) == 0) {

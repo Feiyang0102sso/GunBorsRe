@@ -1,10 +1,11 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/debug/Capture.h"
 /** Local service callbacks are exercised with actual BIG movies and save copies. */
 #include "ui/MenuChecks.h"
 #include "TestOutput.h"
 
-int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &source);
+int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, CGunBros &tables, const CProfileManager &source);
 
 namespace {
 struct RestoreConnection {
@@ -31,14 +32,14 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     GameHostSettings().isConnected = true;
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CRefinementManager::Template refinement;
-    std::vector<ZStoreEntry> store;
-    if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store)) { return 1; }
+    std::vector<CStoreItem::Entry> store;
+    if (!CRefinementManager::Template::Load(toc, tables, refinement) || !CStoreItem::LoadEntries(toc, tables, store)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("local-online")) / std::to_string(GetTickCount64());
-    if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, path, TestOutput::Fixtures())) { return 1; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
@@ -388,7 +389,7 @@ int RunLocalOnlineCheck(const std::string &bigDirectory) {
     if (!CompleteOfflineIAP(1000, purchase, profile, store, path) || profile.warbucks != startingBalance ||
         purchase.online.GetPurchaseState() != ZLocalOnlineServices::PurchaseState::Verifying) { return 1; }
     // Reordering the visible catalog must not redirect a completed transaction.
-    std::vector<ZStoreEntry> reordered = store;
+    std::vector<CStoreItem::Entry> reordered = store;
     std::reverse(reordered.begin(), reordered.end());
     if (!CompleteOfflineIAP(4000, purchase, profile, reordered, path) || purchase.currencyPending ||
         profile.warbucks != startingBalance + amount) { return 1; }

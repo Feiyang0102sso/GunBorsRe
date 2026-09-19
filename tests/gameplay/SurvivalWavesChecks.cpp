@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gameplay/SurvivalPilot.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalChecks.h"
@@ -7,11 +8,11 @@
 using namespace MapDetail;
 
 /** Exercise mode changes with real BIG items and isolated inventory. */
-static unsigned CheckPowerupModes(CResTOCManager &toc, ZPackTables &tables, CPowerUpSelector &powerups,
+static unsigned CheckPowerupModes(CResTOCManager &toc, CGunBros &tables, CPowerUpSelector &powerups,
     CProfileManager &profile, CLevel &scene) {
-    std::vector<ZStoreEntry> stores;
-    std::vector<ZPowerupEntry> catalog;
-    if (!LoadStoreCatalog(toc, tables, stores) || !LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
+    std::vector<CStoreItem::Entry> stores;
+    std::vector<CPowerup::Entry> catalog;
+    if (!CStoreItem::LoadEntries(toc, tables, stores) || !CPowerup::LoadEntries(toc, tables, catalog)) { return 1; }
     CMPMatch match;
     unsigned failures = 0;
     const bool wasLocalLive = scene.IsLocalLive();
@@ -21,7 +22,7 @@ static unsigned CheckPowerupModes(CResTOCManager &toc, ZPackTables &tables, CPow
             const auto &item = store.data;
             if (item.type < 10 || item.type > 13 || item.objects.empty() || item.objects.front().type != 17) { continue; }
             const auto &reference = item.objects.front().object;
-            const ZPowerupEntry *entry = nullptr;
+            const CPowerup::Entry *entry = nullptr;
             for (const auto &candidate : catalog) {
                 if (candidate.resource.packHash == reference.packHash && candidate.resource.localIndex == reference.localIndex) { entry = &candidate; break; }
             }
@@ -58,7 +59,7 @@ static unsigned CheckPowerupModes(CResTOCManager &toc, ZPackTables &tables, CPow
             for (unsigned slot = 0; slot < 2; ++slot) {
                 profile.configuration.powerups[slot] = reference.localIndex;
                 const auto replacement = powerups.GetEquipped(slot);
-                const ZPowerupEntry *defaultEntry = nullptr;
+                const CPowerup::Entry *defaultEntry = nullptr;
                 for (const auto &candidate : catalog) {
                     if (candidate.resource.packHash == replacement.packHash && candidate.resource.localIndex == replacement.localIndex) { defaultEntry = &candidate; break; }
                 }
@@ -129,7 +130,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         // This account is isolated even when the full-menu check owns a profile.
         CProfileManager consumableProbe;
         CRefinementManager::Template consumableRefinement;
-        if (!LoadRefinementTemplate(toc, tables, consumableRefinement)) { return 1; }
+        if (!CRefinementManager::Template::Load(toc, tables, consumableRefinement)) { return 1; }
         consumableProbe.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), consumableRefinement);
         CPowerUpSelector powerupProbe(toc, tables, player, vitals, scene, consumableProbe);
         if (!powerupProbe.InitPowerups()) { return 1; }
@@ -501,12 +502,12 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         // use an isolated copy, never the user's active profile or saves/.
         const auto equipDirectory = std::filesystem::path(TestOutput::Path("powerup-equip-check")) / std::to_string(window.GetTicksMs());
         CProfileManager equipProfile;
-        if (!LoadProfile(toc, tables, equipProfile, equipDirectory, TestOutput::Fixtures())) { return 1; }
+        if (!(equipProfile).LoadNative(toc, tables, equipDirectory, TestOutput::Fixtures())) { return 1; }
         CPowerUpSelector equipHost(toc, tables, player, vitals, scene, equipProfile);
         if (!equipHost.InitPowerups() || !equipHost.Equip(0, equippedLeft) || !equipHost.Equip(1, equippedRight) ||
             !equipProfile.SaveToDisk(equipDirectory)) { ++checkFailures; }
         CProfileManager reloadProfile;
-        if (!LoadProfile(toc, tables, reloadProfile, equipDirectory)) { return 1; }
+        if (!(reloadProfile).LoadNative(toc, tables, equipDirectory)) { return 1; }
         CPowerUpSelector reloadHost(toc, tables, player, vitals, scene, reloadProfile);
         if (!reloadHost.InitPowerups()) { return 1; }
         const GameObjectRef reloadLeft = reloadHost.GetEquipped(0);

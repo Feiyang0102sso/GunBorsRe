@@ -2,8 +2,8 @@
  * @brief Read authoritative records and enumerate original use actions.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "engine/core/CStringToKey.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
 #include "gun_bros_re/gameplay/enemy/CTargetingController.h"
@@ -17,13 +17,13 @@
 int RunPowerupCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZPowerupEntry> catalog;
-    if (!LoadPowerupCatalog(toc, tables, catalog)) { return 1; }
+    CGunBros tables(toc);
+    std::vector<CPowerup::Entry> catalog;
+    if (!CPowerup::LoadEntries(toc, tables, catalog)) { return 1; }
     std::filesystem::create_directories(TestOutput::Path(""));
     std::ofstream report(TestOutput::Path("powerup-check.txt"));
     unsigned failures = CheckTargetingController(), references = 0;
-    for (const ZPowerupEntry &entry : catalog) {
+    for (const CPowerup::Entry &entry : catalog) {
         report << entry.owner << ' ' << std::quoted(entry.name) << " fields=" << unsigned(entry.data.field28) << ','
             << unsigned(entry.data.field29) << ',' << unsigned(entry.data.field30) << ','
             << unsigned(entry.data.field112) << ',' << unsigned(entry.data.field124) << " query=";

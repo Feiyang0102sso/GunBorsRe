@@ -9,7 +9,7 @@
 
 namespace MenuDetail {
 
-    bool ZMenuSurface::Open(CResTOCManager &toc, ZPackTables &tables, const CProfileManager *profile , bool startup , CBGM *music ) {
+    bool ZMenuSurface::Open(CResTOCManager &toc, CGunBros &tables, const CProfileManager *profile , bool startup , CBGM *music ) {
         particles.Bind(toc, tables, imageProgram);
         playerPreview.Bind(tables);
         if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return false; }
@@ -93,7 +93,7 @@ namespace MenuDetail {
 
     // Historical explicit .dat research UI; native profiles use Header below.
 
-    bool ZMenuSurface::Icon(CResTOCManager &toc, ZPackTables &tables, const ZStoreEntry &entry, float x, float y, float width,
+    bool ZMenuSurface::Icon(CResTOCManager &toc, CGunBros &tables, const CStoreItem::Entry &entry, float x, float y, float width,
         float height, float alpha , bool originalSize , bool fitHeight, bool alignRight, float *renderedWidth ) {
         const CGameAssetRef &ref = entry.data.assets[1];
         if (ref.assetId < 0 || ref.IsNull()) { return false; }
@@ -131,7 +131,7 @@ namespace MenuDetail {
     }
 
     /** CEnemy::SpawnForUI assembles the original result-card model. */
-    bool ZMenuSurface::DrawCasualty(ZPackTables &tables, CResTOCManager &toc, const CEnemyCasualty &casualty, float x,
+    bool ZMenuSurface::DrawCasualty(CGunBros &tables, CResTOCManager &toc, const CEnemyCasualty &casualty, float x,
         const ZMovieRegion *originalRegion ) {
         const std::uint64_t key = (static_cast<std::uint64_t>(casualty.resource.packHash) << 8) | casualty.resource.localIndex;
         if (enemyPreviews.count(key) == 0) {

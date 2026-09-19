@@ -4,7 +4,7 @@
  */
 #ifndef GUN_BROS_RE_CPICKUP_H
 #define GUN_BROS_RE_CPICKUP_H
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"
 #include "engine/glu/sprite/CSpritePlayer.h"
 #include <memory>
@@ -12,7 +12,7 @@
 class CParticleEffect;
 class CParticleSystem;
 class ZQuadBatch;
-class ZPackTables;
+class CGunBros;
 
 struct ZPickupAction {
     enum class Kind { Xplodium, Experience, Health, Sound, StoreItem };
@@ -32,7 +32,7 @@ public:
         std::vector<GameObjectRef> items;
         bool Init(CArrayInputStream &stream);
         /** Read one BIG section-13 resource and verify its complete wire payload. */
-        bool Load(ZPackTables &tables, const GameObjectRef &resource);
+        bool Load(CGunBros &tables, const GameObjectRef &resource);
     };
     ~CPickup();
     void Bind(const Template &data);

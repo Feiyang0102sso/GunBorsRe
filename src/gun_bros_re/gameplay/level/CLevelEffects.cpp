@@ -101,7 +101,7 @@ void CLevel::AdvanceParticles(int deltaMs) {
     m_effectLayer.Update(deltaMs, m_effectRandom);
 }
 
-CLevel::CLevel(CResTOCManager &toc, ZPackTables &tables, const ZShaderProgram &program,
+CLevel::CLevel(CResTOCManager &toc, CGunBros &tables, const ZShaderProgram &program,
     std::shared_ptr<CParticlePool> particlePool, std::shared_ptr<CParticleSystem> mapParticles) : CLevel() {
     m_tables = &tables;
     m_program = &program;

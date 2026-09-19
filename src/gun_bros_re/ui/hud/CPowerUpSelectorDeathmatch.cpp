@@ -10,7 +10,7 @@
 #include "gun_bros_re/ui/menus/CMenuStoreOption.h"
 #include "gun_bros_re/ui/menus/CMenuUpgradePopup.h"
 #include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/graphics/ZPNG.h"
 #include <cmath>
 
@@ -32,7 +32,7 @@ bool CPowerUpSelector::ConfigureDeathmatch(const std::vector<GameObjectRef> &sto
     return !m_matchGunEntries.empty();
 }
 
-bool CPowerUpSelector::DrawMatchGunIcon(const ZStoreEntry &entry, const ZMovieRegion &area) {
+bool CPowerUpSelector::DrawMatchGunIcon(const CStoreItem::Entry &entry, const ZMovieRegion &area) {
     const auto &image = entry.data.assets[1];
     const std::uint64_t key = (static_cast<std::uint64_t>(image.packHash) << 32) | image.assetId;
     auto &icon = m_resources.m_icons[key];
@@ -53,7 +53,7 @@ bool CPowerUpSelector::DrawMatchGunCard(unsigned index, const ZMovieRegion &area
     const auto &entry = m_resources.m_store[m_matchGunEntries[index]];
     class Card : public ZMovieRegionCallback {
     public:
-        Card(CPowerUpSelector &owner, const ZStoreEntry &item) : hud(owner), entry(item) {}
+        Card(CPowerUpSelector &owner, const CStoreItem::Entry &item) : hud(owner), entry(item) {}
         bool DrawMovieRegion(const ZMovieRegion &region) override {
             if (region.index == 1) { return hud.DrawMatchGunIcon(entry, region); }
             std::string text = entry.name;
@@ -61,7 +61,7 @@ bool CPowerUpSelector::DrawMatchGunCard(unsigned index, const ZMovieRegion &area
             if (region.index == 2) {
                 // CMPMatch::CreateWeaponLoadOutDescString :396134 uses the
                 // compact STORE stat template (mem+100), at mastery zero.
-                const auto description = MenuDetail::SubstituteStoreStats(ReadGameString(*hud.m_resources.m_toc, entry.data.assets[5]), MenuDetail::StoreStatValues(entry.data, 0));
+                const auto description = MenuDetail::SubstituteStoreStats(hud.m_resources.m_tables->ReadString(entry.data.assets[5]), MenuDetail::StoreStatValues(entry.data, 0));
                 const auto lines = CTextBox::Format(hud.m_resources.m_movies, description, region.width, {1,1,1,1,0});
                 float y = region.y;
                 for (const auto &line : lines) {
@@ -73,7 +73,7 @@ bool CPowerUpSelector::DrawMatchGunCard(unsigned index, const ZMovieRegion &area
             return hud.m_resources.m_movies.Text(text, region.x + (region.width - hud.m_resources.m_movies.TextWidth(text, 1)) / 2,
                 region.y, 1, 1, 0, region.alpha);
         }
-        CPowerUpSelector &hud; const ZStoreEntry &entry;
+        CPowerUpSelector &hud; const CStoreItem::Entry &entry;
     } callback(*this, entry);
     if (!m_resources.m_movies.Draw(m_resources.m_movies.Ordinal("GLU_MOVIE_DEATHMATCH_GUN_CARD"), 0, area.x, area.y, 1024, 768, 0, area.alpha, &callback)) { return false; }
     m_selectorHits.push_back({area, ZInputPadAction::SelectMatchGun, static_cast<int>(m_matchGunEntries[index])});

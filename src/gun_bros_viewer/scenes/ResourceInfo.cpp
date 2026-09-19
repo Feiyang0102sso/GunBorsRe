@@ -1,18 +1,18 @@
 #include "gun_bros_viewer/scenes/ResourceInfo.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "engine/resources/CResTOCManager.h"
 #include <cstdio>
 
-bool DetectViewerBigVersion(const std::string &bigDirectory, ZBigVersion &version, bool detailed) {
-    version = ZBigVersion::Unknown;
+bool DetectViewerBigVersion(const std::string &bigDirectory, CGameObjectPack::BigVersion &version, bool detailed) {
+    version = CGameObjectPack::BigVersion::Unknown;
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return false; }
-    ZBigVersion detected = ZBigVersion::Unknown;
+    CGameObjectPack::BigVersion detected = CGameObjectPack::BigVersion::Unknown;
     for (unsigned index = 0; index < toc.GetPackCount(); ++index) {
         CResPackTOC &pack = *toc.GetPack(index);
         CGameObjectPack objects;
         if (!objects.Init(pack)) { return false; }
-        if (detected == ZBigVersion::Unknown) { detected = objects.GetBigVersion(); }
+        if (detected == CGameObjectPack::BigVersion::Unknown) { detected = objects.GetBigVersion(); }
         if (detected != objects.GetBigVersion()) {
             std::printf("[big-version] mixed formats: %s has BigVersion=%u, expected %u\n",
                 pack.GetShortName().c_str(), static_cast<unsigned>(objects.GetBigVersion()), static_cast<unsigned>(detected));
@@ -27,5 +27,5 @@ bool DetectViewerBigVersion(const std::string &bigDirectory, ZBigVersion &versio
     version = detected;
     std::printf("[big-version] auto selected BigVersion=%u packs=%u; format family only\n",
         static_cast<unsigned>(version), toc.GetPackCount());
-    return version != ZBigVersion::Unknown;
+    return version != CGameObjectPack::BigVersion::Unknown;
 }

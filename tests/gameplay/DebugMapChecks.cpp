@@ -9,11 +9,11 @@
 #include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 
-static int CheckWallWeaponResources(CResTOCManager &toc, ZPackTables &tables) {
+static int CheckWallWeaponResources(CResTOCManager &toc, CGunBros &tables) {
     // Enumerate actual gun-to-bullet dependencies; do not infer attributes
     // from weapon category, damage amount, or the projectile's appearance.
-    std::vector<ZWeaponEntry> weapons;
-    if (!LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
+    std::vector<CGun::Entry> weapons;
+    if (!CGun::LoadEntries(toc, tables, weapons)) { return 1; }
     for (const auto &weapon : weapons) {
         for (const auto &resource : weapon.data.GetScript().GetResources()) {
             if (resource.sectionOrType != 3) { continue; }
@@ -35,12 +35,12 @@ int RunDebugMapProfileCheck() {
     const std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     CResTOCManager toc;
     if (!toc.Init(big, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CProfileManager original;
     const std::filesystem::path copiedSave = TestOutput::Path("profile");
-    if (!LoadProfile(toc, tables, original, copiedSave, TestOutput::Fixtures())) { return 1; }
-    std::vector<ZMissionEntry> missions;
-    if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
+    if (!(original).LoadNative(toc, tables, copiedSave, TestOutput::Fixtures())) { return 1; }
+    std::vector<Mission::Entry> missions;
+    if (!Mission::LoadEntries(toc, tables, missions)) { return 1; }
     for (const auto &mission : missions) {
         if (tables.GetPackName(mission.resource.packHash) != "pack2" || mission.resource.localIndex != 14) { continue; }
         DebugMapSelection selected;
@@ -71,7 +71,7 @@ int RunDebugMapProfileCheck() {
     return 1;
 }
 
-int CheckDebugMapProfile(ZPackTables &tables, const CBrother &player,
+int CheckDebugMapProfile(CGunBros &tables, const CBrother &player,
     const CPlayerProgress &progress, CGameFlow &context, const CLevel &scene, const CLevel &level) {
     const auto &profile = context.profile;
     const auto &gun = profile.configuration.guns[profile.activeWeaponSlot];
@@ -108,10 +108,10 @@ int RunCampaignContentCheck() {
     const std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     CResTOCManager toc;
     if (!toc.Init(big, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     if (CheckWallWeaponResources(toc, tables) != 0) { return 1; }
-    std::vector<ZMissionEntry> missions;
-    if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
+    std::vector<Mission::Entry> missions;
+    if (!Mission::LoadEntries(toc, tables, missions)) { return 1; }
     for (const auto &mission : missions) {
         if (tables.GetPackName(mission.data.level.packHash) != "pack2") { continue; }
         std::printf("[campaign-mission] %s:%u -> LEVEL pack2:%u title=%s\n",

@@ -3,10 +3,10 @@
  * The BIG references remain the only source of sprite/model identity.
  */
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
-#include "gun_bros_re/data/ZMeshAssets.h"
+#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include <cstdio>
 
-bool CBullet::Template::Load(ZPackTables &tables, const ZShaderProgram &program, const GameObjectRef &ref) {
+bool CBullet::Template::Load(CGunBros &tables, const ZShaderProgram &program, const GameObjectRef &ref) {
     std::vector<std::uint8_t> payload;
     if (!tables.ReadSectionResource(ref.packHash, ZGameSection::Bullet, ref.localIndex, payload)) {
         std::printf("[bullet] missing template %08x:%u\n", ref.packHash, ref.localIndex);

@@ -56,7 +56,7 @@
 #include "engine/graphics/ZMeshBuffer.h"
 #include "engine/graphics/ZShaderProgram.h"
 #include "engine/graphics/ZTexture.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 
 #include <cstdint>
 #include <vector>
@@ -128,10 +128,10 @@ public:
         Template();
         bool Init(CArrayInputStream &stream);
         /** Read one ENEMY resource. `owner` is filled in for logging. */
-        bool Load(ZPackTables &tables, std::uint32_t packHash, std::uint32_t ordinal,
+        bool Load(CGunBros &tables, std::uint32_t packHash, std::uint32_t ordinal,
             const std::string &owner);
         /** Stable full ENEMY directory, including unused templates without scripts. */
-        static bool LoadCatalog(CResTOCManager &toc, ZPackTables &tables,
+        static bool LoadCatalog(CResTOCManager &toc, CGunBros &tables,
             std::vector<Template> &entries);
     };
 
@@ -181,10 +181,10 @@ public:
      * @param program Null when `createBuffers` is false, which is how a survey
      *        reads the meshes without a GL context.
      */
-    bool Bind(ZPackTables &tables, const Template &entry, bool createBuffers,
+    bool Bind(CGunBros &tables, const Template &entry, bool createBuffers,
         const ZShaderProgram *program, ResourceCache *cache = nullptr);
     /** Decode/upload authored configs without spawning or running enemy scripts. */
-    static bool Preload(ZPackTables &tables, const Template &entry,
+    static bool Preload(CGunBros &tables, const Template &entry,
         const ZShaderProgram &program, ResourceCache &cache);
     std::int32_t GetPartConfig(std::uint32_t partIndex) const;
     void Draw(const ZShaderProgram &program, const float *base);

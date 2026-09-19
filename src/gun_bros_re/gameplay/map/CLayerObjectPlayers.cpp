@@ -1,6 +1,6 @@
 #include "gun_bros_re/gameplay/map/CLayerObjectPlayers.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -26,7 +26,7 @@ namespace MapDetail {
  */
 void LoadPlacedPlayers(CResTOCManager &tocManager, const ZShaderProgram &program,
                        CMap &loaded) {
-    ZPackTables tables(tocManager);
+    CGunBros tables(tocManager);
 
     for (std::uint32_t layer = 0; layer < loaded.GetObjectLayerCount();
          ++layer) {
@@ -81,8 +81,8 @@ void LoadPlacedPlayers(CResTOCManager &tocManager, const ZShaderProgram &program
  * none; those remain valid viewers and simply ignore movement input.
  */
 /** Swap equipment only after every referenced asset has loaded. */
-bool EquipControlledPlayer(ZPackTables &tables, CMap &loaded,
-    const ZShaderProgram &program, const ZWeaponEntry &weapon) {
+bool EquipControlledPlayer(CGunBros &tables, CMap &loaded,
+    const ZShaderProgram &program, const CGun::Entry &weapon) {
     if (loaded.GetResources().players.empty()) { return true; }
     // CombatScene retains this actor's address. CBrother::EquipWeapon stages the
     // weapon atomically and preserves the body, vitals pointer and armour.

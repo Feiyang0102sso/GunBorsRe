@@ -1,3 +1,4 @@
+#include "engine/platform/ZWindow.h"
 #include "engine/graphics/ZShaderProgram.h"
 #include "engine/platform/ZGLLoader.h"
 #include "engine/graphics/CMeshCamera.h"
@@ -6,11 +7,11 @@
  * @brief Verify every armour script, model and texture from original archives.
  */
 #include "TestOutput.h"
-#include "gun_bros_re/data/ZArmorCatalog.h"
+#include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "engine/graphics/ZPNG.h"
 #include "engine/graphics/CMesh.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
-#include "gun_bros_re/data/ZWeaponCatalog.h"
+#include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "engine/core/ZMatrix4d.h"
 
 #include <cstdio>
@@ -23,9 +24,9 @@ int RunArmorCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
         return 1;
     }
-    ZPackTables tables(toc);
-    std::vector<ZArmorEntry> catalog;
-    if (!LoadArmorCatalog(toc, tables, catalog)) {
+    CGunBros tables(toc);
+    std::vector<CArmor::Entry> catalog;
+    if (!CArmor::LoadEntries(toc, tables, catalog)) {
         return 1;
     }
     std::filesystem::create_directories(TestOutput::Path(""));
@@ -37,7 +38,7 @@ int RunArmorCheck(const std::string &bigDirectory) {
     unsigned failures = 0;
     unsigned meshCount = 0;
     for (std::size_t index = 0; index < catalog.size(); ++index) {
-        const ZArmorEntry &entry = catalog[index];
+        const CArmor::Entry &entry = catalog[index];
         unsigned entryFailures = 0;
         CArmor equipped;
         equipped.Bind(entry.data);
@@ -109,11 +110,11 @@ int RunArmorRenderCheck(const std::string &bigDirectory) {
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) {
         return 1;
     }
-    ZPackTables tables(toc);
-    std::vector<ZArmorEntry> catalog;
-    std::vector<ZWeaponEntry> weapons;
+    CGunBros tables(toc);
+    std::vector<CArmor::Entry> catalog;
+    std::vector<CGun::Entry> weapons;
     CBrother::Template data;
-    if (!LoadArmorCatalog(toc, tables, catalog) || !LoadWeaponCatalog(toc, tables, weapons) ||
+    if (!CArmor::LoadEntries(toc, tables, catalog) || !CGun::LoadEntries(toc, tables, weapons) ||
         !data.Load(toc, tables)) {
         return 1;
     }

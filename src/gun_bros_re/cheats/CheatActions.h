@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
-#include "gun_bros_re/data/CPlayerProgress.h"
+#include "gun_bros_re/data/profile/CPlayerProgress.h"
 class ZWindow;
 class CProfileManager;
 class CDailyBonusTracking;

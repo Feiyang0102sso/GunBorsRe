@@ -29,13 +29,13 @@
 #include "engine/glu/script/CScript.h"
 #include "engine/glu/script/CScriptState.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
-#include "gun_bros_re/data/CGameAssetRef.h"
-#include "gun_bros_re/data/CGameObjectPack.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "engine/graphics/CMesh.h"
 #include "engine/graphics/CMeshCamera.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/resources/CResTOCManager.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 
 #include <cmath>
 #include <cstdio>
@@ -106,7 +106,7 @@ std::string OwnerLabel(const std::string &packName, std::uint32_t ordinal) {
 }
 
 /** Every enemy template in every pack, in the order the archives hand them over. */
-bool CollectEnemies(CResTOCManager &tocManager, ZPackTables &tables,
+bool CollectEnemies(CResTOCManager &tocManager, CGunBros &tables,
                     std::vector<EnemyTemplate> &out) {
     // Historical implementation notes; execution now delegates to the shared game model.
 // A move set names one pack for every model in it, and that is the
@@ -129,7 +129,7 @@ using LoadedConfig = CEnemy::ModelConfig;
  * queues every config before anything runs, because the script that picks
  * between them has not run yet.
  */
-bool LoadConfigs(ZPackTables &tables, const EnemyTemplate &entry,
+bool LoadConfigs(CGunBros &tables, const EnemyTemplate &entry,
                  std::vector<std::shared_ptr<LoadedConfig>> &out,
                  bool createBuffers, const ZShaderProgram *program) {
     CEnemy model;
@@ -361,7 +361,7 @@ std::int32_t PartConfigIndex(const LoadedEnemy &loaded, std::uint32_t partIndex)
  * The order matters and it is the original's: every config is loaded first,
  * then the script runs. A script picks between models that are already there.
  */
-bool BuildEnemy(ZPackTables &tables, const EnemyTemplate &entry,
+bool BuildEnemy(CGunBros &tables, const EnemyTemplate &entry,
                 const ZShaderProgram &program, LoadedEnemy &out) {
     // Historical implementation notes; execution now delegates to the shared game model.
 // Export 3 is the menu's, and for eighteen of the seventy-eight templates
@@ -712,7 +712,7 @@ int RunEnemySurvey(const std::string &bigDirectory) {
         return 1;
     }
 
-    ZPackTables tables(tocManager);
+    CGunBros tables(tocManager);
     std::vector<EnemyTemplate> enemies;
     if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
 
@@ -749,7 +749,7 @@ int RunEnemyAnimationSurvey(const std::string &bigDirectory) {
         return 1;
     }
 
-    ZPackTables tables(tocManager);
+    CGunBros tables(tocManager);
     std::vector<EnemyTemplate> enemies;
     if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
 
@@ -798,7 +798,7 @@ int RunEnemyPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         return 1;
     }
 
-    ZPackTables tables(tocManager);
+    CGunBros tables(tocManager);
     std::vector<EnemyTemplate> enemies;
     if (!CollectEnemies(tocManager, tables, enemies)) { return 1; }
     if (enemies.empty()) {

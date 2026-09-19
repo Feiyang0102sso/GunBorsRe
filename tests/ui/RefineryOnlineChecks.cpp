@@ -1,3 +1,4 @@
+#include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/debug/Capture.h"
 /** Exercise the original paid chambers through real Movie hit regions. */
@@ -27,7 +28,7 @@ bool FinishRefineryClick(ZMenuSurface &view, CMenuSystem &state, CProfileManager
         profile.xplodium == ore && profile.coins == coins;
 }
 
-int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &view,
+int CheckOnlineRefinery(CResTOCManager &toc, CGunBros &tables, ZMenuSurface &view,
     const CRefinementManager::Template &data) {
     struct RestoreSettings {
         ZMenuSurface &view;
@@ -38,7 +39,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &
     GameHostSettings().isConnected = true;
     view.animateNavigation = false;
     CProfileManager profile;
-    if (!CreateTransientProfile(toc, tables, profile)) { return 1; }
+    if (!(profile).CreateTransient(toc, tables)) { return 1; }
     profile.refinery.Bind(data);
     profile.coins = 0;
     profile.warbucks = 0;
@@ -86,7 +87,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &
     view.Begin();
     view.InjectTap({touch.x + touch.width / 2, touch.y + touch.height / 2});
     if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, data, path, now), state) || profile.refinery.slots[slot].state != 1 ||
-        profile.warbucks != data.rarePrice[slot] || !ReloadProfile(profile, path) ||
+        profile.warbucks != data.rarePrice[slot] || !(profile).ReloadNative(path) ||
         profile.refinery.slots[slot].state != 1) { return 1; }
     if (profile.refinery.UnlockSlot(slot, profile.coins, profile.warbucks) || profile.warbucks != data.rarePrice[slot]) { return 1; }
     view.Begin();
@@ -131,7 +132,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &
     view.clock += 1000;
     view.Begin();
     if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, data, path, middle), state) || !profile.SaveToDisk(path) ||
-        !Capture::SaveFrame(view.window, (path / "refining.png").string()) || !ReloadProfile(profile, path) ||
+        !Capture::SaveFrame(view.window, (path / "refining.png").string()) || !(profile).ReloadNative(path) ||
         profile.refinery.slots[slot].state != 2 || profile.refinery.slots[slot].finishTime != finish) { return 1; }
     const auto *fill = view.movies.GetMovie(view.movies.Ordinal("GLU_MOVIE_BUCKET_FILL"));
     if (!fill || state.refinery.refineryFillTime[slot] != fill->duration / 2) { return 1; }
@@ -191,7 +192,7 @@ int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &
     view.clock += 375;
     view.Begin();
     if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, data, path, finish), state) || profile.coins != yield ||
-        !ReloadProfile(profile, path) || profile.refinery.slots[slot].state != 1 || profile.coins != yield ||
+        !(profile).ReloadNative(path) || profile.refinery.slots[slot].state != 1 || profile.coins != yield ||
         profile.refinery.CollectResources(slot, profile.coins)) { return 1; }
     // Cheat unlock includes standard timed chambers; both instant first slots stay open.
     if (!GameCheats::ApplyRefineryCheat(GameCheats::ToggleRefineryLocks, profile, now)) { return 1; }

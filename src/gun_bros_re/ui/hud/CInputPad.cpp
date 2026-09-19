@@ -7,7 +7,7 @@
 #include "gun_bros_re/ui/content/CMenuDataProvider.h"
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/host/ZHostSettings.h"
-#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -16,13 +16,13 @@
 #include <cstdio>
 #include <sstream>
 
-bool CInputPad::Init(CResTOCManager &toc, ZPackTables &tables) {
+bool CInputPad::Init(CResTOCManager &toc, CGunBros &tables) {
     m_resources.m_tables = &tables;
     m_resources.m_toc = &toc;
     CResPackTOC &core = *toc.GetPack(toc.GetCorePackIndex());
-    if (!m_resources.m_movies.Init(core, core) || !LoadStoreCatalog(toc, tables, m_resources.m_store)) { return false; }
-    if (!LoadPowerupCatalog(toc, tables, m_resources.m_powerups)) { return false; }
-    for (const ZPowerupEntry &entry : m_resources.m_powerups) {
+    if (!m_resources.m_movies.Init(core, core) || !CStoreItem::LoadEntries(toc, tables, m_resources.m_store)) { return false; }
+    if (!CPowerup::LoadEntries(toc, tables, m_resources.m_powerups)) { return false; }
+    for (const CPowerup::Entry &entry : m_resources.m_powerups) {
         const unsigned hash = entry.data.sprite.packHash;
         if (m_resources.m_powerupRenderers.count(hash) != 0) { continue; }
         auto renderer = std::make_unique<ZMovieRenderer>();

@@ -11,8 +11,8 @@
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/map/CLevelProps.h"
-#include "gun_bros_re/data/CFriendPowerManager.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/profile/CFriendPowerManager.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 
 #include <cstdio>
 #include <algorithm>

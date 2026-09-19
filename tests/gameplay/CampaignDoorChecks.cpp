@@ -14,9 +14,9 @@ static int RunCampaignCheck(unsigned levelIndex, CampaignCheck check) {
     const std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     CResTOCManager toc;
     if (!toc.Init(big, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
-    std::vector<ZMissionEntry> missions;
-    if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
+    CGunBros tables(toc);
+    std::vector<Mission::Entry> missions;
+    if (!Mission::LoadEntries(toc, tables, missions)) { return 1; }
     for (const auto &mission : missions) {
         // Original pack2 Mission 14 -> LEVEL 3 enables object 5 on level start.
         if (tables.GetPackName(mission.resource.packHash) != "pack2" ||

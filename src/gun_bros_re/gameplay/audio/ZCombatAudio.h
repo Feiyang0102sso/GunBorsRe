@@ -6,7 +6,7 @@
  * Keep WAV coalescing, loop ownership and move-frame busy windows unchanged.
  */
 #include "engine/platform/ZAudioPlayer.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/audio/SoundEffect.h"
@@ -15,7 +15,7 @@
 
 class ZCombatAudio {
 public:
-    explicit ZCombatAudio(ZPackTables &resources) : tables(resources) {}
+    explicit ZCombatAudio(CGunBros &resources) : tables(resources) {}
     void PlayCue(const ZGunCue &cue, Collision::ObjectId actor = Collision::Player);
     void PlayWav(std::uint32_t packHash, int ordinal, bool loop = false,
         Collision::ObjectId actor = Collision::Player, bool moveSound = false);
@@ -28,7 +28,7 @@ public:
     unsigned GetVoiceCount() const { return audio.GetVoiceCount(); }
     std::size_t GetSoundCueCount() const { return soundCues; }
 private:
-    ZPackTables &tables;
+    CGunBros &tables;
     ZAudioPlayer audio;
     std::size_t soundCues = 0;
     std::set<std::uint64_t> frameSounds;

@@ -106,7 +106,7 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     preview.Update(16);
     if (!preview.Empty()) { ++failures; }
     // Run the real game prop host: message 0 advances both original indicator scripts.
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CBrother player;
     CBrother::Vitals vitals;
     std::vector<CEnemy::Template> catalog;

@@ -1,14 +1,14 @@
 /** Menu debug replay; original LEVEL Flow still controls every tutorial step. */
 #include "gun_bros_re/debug/DebugTutorial.h"
-#include "gun_bros_re/data/ZProfileStorage.h"
+#include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/data/ZPackTables.h"
+#include "gun_bros_re/application/CGunBros.h"
 #include <cstdio>
 
-bool PrepareDebugTutorial(CResTOCManager &toc, ZPackTables &tables, CGameFlow &context,
+bool PrepareDebugTutorial(CResTOCManager &toc, CGunBros &tables, CGameFlow &context,
     CGame::Launch &launch) {
-    if (!CreateTransientProfile(toc, tables, context.profile)) { return false; }
+    if (!(context.profile).CreateTransient(toc, tables)) { return false; }
     context.tutorial = true;
     context.debugTutorial = true;
     context.persistProgress = false;

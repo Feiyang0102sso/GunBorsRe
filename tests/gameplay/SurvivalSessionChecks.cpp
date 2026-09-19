@@ -1,5 +1,5 @@
 #include "gun_bros_re/gameplay/game/CGame.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>

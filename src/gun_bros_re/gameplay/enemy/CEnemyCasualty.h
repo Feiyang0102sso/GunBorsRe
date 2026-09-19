@@ -5,7 +5,7 @@
  * record (weapon/group/critical buckets remain in CChallengeManager).
  */
 #pragma once
-#include "gun_bros_re/data/CGameAssetRef.h"
+#include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <string>
 struct CEnemyCasualty {
     GameObjectRef resource;

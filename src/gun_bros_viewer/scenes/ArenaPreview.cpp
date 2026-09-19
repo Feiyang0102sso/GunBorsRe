@@ -1,15 +1,16 @@
+#include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
 #include "gun_bros_viewer/scenes/ArenaPreviewInternal.h"
 #include "gun_bros_viewer/scenes/ArenaTools.h"
-#include "gun_bros_re/data/ZStoreCatalog.h"
+#include "gun_bros_re/data/store/CStoreItem.h"
 #include "gun_bros_re/debug/CollisionOverlay.h"
 namespace ArenaDetail {
 constexpr float kRadians = 3.14159265f / 180;
 const char *const kShaders = Paths::Shaders().c_str();
 
-bool Equip(ZPackTables &tables, const CBrother::Template &data, const ZWeaponEntry &entry,
+bool Equip(CGunBros &tables, const CBrother::Template &data, const CGun::Entry &entry,
     CBrother &player, const ZShaderProgram &program) {
     // Arena weapon selection is not a respawn. Keep the same actor, health,
     // script timers and retained weapon meshes, as CBrother::SetUIGun does.
@@ -30,13 +31,13 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     bool fire, bool showCollisions, int armorIndex, ArenaSceneCallback onSceneReady) {
     CResTOCManager toc;
     if (!toc.InitAuto(bigDirectory) || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     std::vector<CEnemy::Template> catalog;
-    std::vector<ZWeaponEntry> weapons;
+    std::vector<CGun::Entry> weapons;
     CBrother::Template playerData;
     CBrother::Vitals vitals;
     if (!CEnemy::Template::LoadCatalog(toc, tables, catalog) || catalog.empty() ||
-        !LoadWeaponCatalog(toc, tables, weapons) || !playerData.Load(toc, tables) ||
+        !CGun::LoadEntries(toc, tables, weapons) || !playerData.Load(toc, tables) ||
         !LoadInitialPlayerHealth(toc, tables, vitals.maximum)) { return 1; }
     if (weapons.empty() || weaponIndex >= weapons.size() || enemyIndex >= catalog.size()) {
         std::printf("[arena] equipment or enemy index out of range\n"); return 1;
@@ -65,11 +66,11 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
         return onSceneReady(ready);
     }
 
-    std::array<ZPowerupEntry, 3> grenades;
+    std::array<CPowerup::Entry, 3> grenades;
     if (!LoadArenaGrenades(toc, tables, grenades)) { return 1; }
     std::vector<std::string> enemyNames;
     for (const auto &enemy : catalog) {
-        std::string name = ReadGameString(toc, enemy.name);
+        std::string name = tables.ReadString(enemy.name);
         if (name.empty()) { name = "UNKNOWN NAME"; }
         enemyNames.push_back(name);
     }
@@ -77,8 +78,8 @@ int RunArena(const std::string &bigDirectory, std::uint32_t enemyIndex,
     vitals.unlimitedHealth = true;
     ArenaCamera camera;
     if (armorIndex >= 0) {
-        std::vector<ZArmorEntry> armor;
-        if (!LoadArmorCatalog(toc, tables, armor) || armorIndex >= static_cast<int>(armor.size()) ||
+        std::vector<CArmor::Entry> armor;
+        if (!CArmor::LoadEntries(toc, tables, armor) || armorIndex >= static_cast<int>(armor.size()) ||
             !player.EquipArmor(tables, armor[armorIndex].data, program)) {
             return 1;
         }

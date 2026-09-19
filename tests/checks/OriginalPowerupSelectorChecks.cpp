@@ -18,7 +18,7 @@
 int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     ZWindow window;
     if (!window.Open("Gun Bros - Original Powerup Selector", 1600, 1200)) { return 1; }
     CInputPad hud;
@@ -28,7 +28,7 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
     }
     CProfileManager profile;
     const auto directory = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("selector-profile-" + std::to_string(window.GetTicksMs()));
-    if (!LoadProfile(toc, tables, profile, directory, TestOutput::Fixtures())) { return 1; }
+    if (!(profile).LoadNative(toc, tables, directory, TestOutput::Fixtures())) { return 1; }
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
@@ -114,7 +114,7 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
             const auto action = hud.Pointer(state, x, y, false);
             if (action != ZInputPadAction::BuyItem || hud.SelectedItem() != &hud.m_resources.m_store[storeIndex]) { ++failures; break; }
             const auto result = profile.AcquireItem(hud.SelectedItem()->data, progress.GetLevel());
-            if (result != ZPurchaseResult::Purchased) { std::printf("[selector-check] purchase rejected index=%u result=%u\n", index, unsigned(result)); ++failures; break; }
+            if (result != CProfileManager::PurchaseResult::Purchased) { std::printf("[selector-check] purchase rejected index=%u result=%u\n", index, unsigned(result)); ++failures; break; }
             ++purchases; bought = true; break;
         }
         if (!bought) { ++failures; }
@@ -149,16 +149,16 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
         }
         window.Present();
     }
-    if (!SaveProfile(profile, directory)) { ++failures; }
+    if (!(profile).SaveNative(directory)) { ++failures; }
     CProfileManager restored;
-    if (!LoadProfile(toc, tables, restored, directory) || restored.coins != profile.coins || restored.warbucks != profile.warbucks) { ++failures; }
+    if (!(restored).LoadNative(toc, tables, directory) || restored.coins != profile.coins || restored.warbucks != profile.warbucks) { ++failures; }
     for (unsigned index : hud.m_selector.m_selectorEntries) {
         const auto &reference = hud.m_resources.m_store[index].data.objects.front().object;
         if (restored.GetPowerupCount(reference) != profile.GetPowerupCount(reference)) { ++failures; }
     }
     state.itemChoice = false;
     state.coins = 0; state.warbucks = 0; // Failure input only; original profile stays untouched.
-    for (const auto result : {ZPurchaseResult::InsufficientCoins, ZPurchaseResult::InsufficientWarbucks, ZPurchaseResult::Unsupported}) {
+    for (const auto result : {CProfileManager::PurchaseResult::InsufficientCoins, CProfileManager::PurchaseResult::InsufficientWarbucks, CProfileManager::PurchaseResult::Unsupported}) {
         hud.ReportSelectorPurchase(result, state);
         if (!hud.m_selector.DrawSelector(state) || !hud.m_selector.m_selectorHits.empty() || !hud.m_selector.m_selectorPromptHits.empty()) { ++failures; }
         hud.AdvanceMenu(2000);
@@ -168,11 +168,11 @@ int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory) {
         if (!Capture::SaveFrame(window, TestOutput::Path("ui-original-2026-09-09/selector-prompt-") + std::to_string(unsigned(result)) + ".png")) { ++failures; }
         const auto hits = hud.m_selector.m_selectorPromptHits;
         for (const auto &hit : hits) {
-            if (result != ZPurchaseResult::Unsupported && hit.second != 71) { continue; }
+            if (result != CProfileManager::PurchaseResult::Unsupported && hit.second != 71) { continue; }
             const float x = hit.first.x + hit.first.width / 2, y = hit.first.y + hit.first.height / 2;
             hud.Pointer(state, x, y, false);
             hud.Pointer(state, x, y, true);
-            if (result != ZPurchaseResult::Unsupported) {
+            if (result != CProfileManager::PurchaseResult::Unsupported) {
                 if (std::strcmp(hud.m_selector.m_selectorPromptTable, "MDS_STORE_PROMPT_OFFLINE") != 0 || !hud.m_selector.DrawSelector(state)) { ++failures; }
                 hud.AdvanceMenu(2000);
                 if (!hud.m_selector.DrawSelector(state) || !hud.m_selector.m_selectorPrompt.IsReady()) { ++failures; }

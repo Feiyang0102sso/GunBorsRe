@@ -5,10 +5,10 @@
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
-#include "gun_bros_re/data/ZMissionCatalog.h"
+#include "gun_bros_re/data/mission/Mission.h"
 #include "TestOutput.h"
 using namespace MapDetail;
-int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile);
+int CheckLiveMode(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile);
 
 // A stationary enemy in open space must not make the peer zigzag every frame.
 class SteadyPeerWorld : public ZBrotherAIWorld {
@@ -62,9 +62,9 @@ bool CaptureRescueEffect(SurvivalDeathFixture &fixture, const char *name) {
 int RunLocalLiveCheck(const std::string &bigDirectory) {
     CResTOCManager toc;
     if (!toc.Init(bigDirectory, "xga") || !toc.Bind()) { return 1; }
-    ZPackTables tables(toc);
+    CGunBros tables(toc);
     CProfileManager source;
-    if (!LoadProfile(toc, tables, source, TestOutput::Path("local-live-profile"), TestOutput::Fixtures())) { return 1; }
+    if (!(source).LoadNative(toc, tables, TestOutput::Path("local-live-profile"), TestOutput::Fixtures())) { return 1; }
     if (CheckLiveMode(toc, tables, source) != 0) { return 1; }
     const auto sourceExperience = source.experience;
     const auto sourceCoins = source.coins;
@@ -104,9 +104,9 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     development.localLiveCheck = true;
     if (CGame::Run(launch) != 0) { return 1; }
     std::printf("[local-live-check] profile-copy=1 no-save=1\n");
-    std::vector<ZMissionEntry> missions;
-    if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
-    const ZMissionEntry *horde = nullptr;
+    std::vector<Mission::Entry> missions;
+    if (!Mission::LoadEntries(toc, tables, missions)) { return 1; }
+    const Mission::Entry *horde = nullptr;
     for (const auto &mission : missions) { if (mission.data.type == 2) { horde = &mission; break; } }
     if (horde == nullptr || !tables.ReadSectionResource(horde->data.level.packHash, ZGameSection::Level, horde->data.level.localIndex, bytes)) { return 1; }
     CArrayInputStream hordeInput(bytes);

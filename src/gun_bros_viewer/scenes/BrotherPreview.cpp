@@ -1,13 +1,13 @@
 #include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Bare mesh exploration belongs to the viewer, outside the actor lifecycle. */
-#include "gun_bros_re/data/ZMeshAssets.h"
+#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 #include <cstdio>
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 
-bool ZBrotherPreview::AttachGun(ZPackTables &tables, const std::string &owner,
+bool ZBrotherPreview::AttachGun(CGunBros &tables, const std::string &owner,
                      std::uint32_t meshPackHash, std::uint32_t meshOrdinal,
                      std::uint32_t imagePackHash, std::uint32_t imageOrdinal) {
     const CMesh *torsoMesh = body.GetTorso().GetAnimation().GetMesh();
