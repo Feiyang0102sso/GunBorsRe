@@ -7,7 +7,7 @@
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/map/CMapResources.h"
 #include "gun_bros_re/gameplay/map/CCameraDrawing.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "engine/graphics/ZMarkerBatch.h"

@@ -2,6 +2,8 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+2026-09-19 UI 全包更新：页面、系统、控件、内容、HUD 与宿主适配分为六个目录；删除巨型 `ZMenuInternal.h`，商店/结算/好友职责按原 `CMenu...` 类型归位，七个原 `.inc` 保持原路径及字节。修正商店底层 Movie、按钮完成动作、PREVIEW 与筛选，导航引入 pending 并在帧边界提交。Windows 和本地模拟保留 Z；完整异步菜单/分支生命周期不冒充已还原。详见 [UI 重组结果](ui-optimization-result.md)，本段覆盖下文旧 UI 文件位置。
+
 2026-09-19 gameplay 全目录更新：根目录 32 个源码文件全部归位；原 23 个 Z 文件中 6 个合并删除、7 个迁至 host／Viewer、10 个留在 multiplayer，新增 `multiplayer/bot/ZBotSettings.h` 统一 Bot 策略配置。弹体恢复共同 group／Y 排序、追踪角速度和直接命中击退，脚本随机恢复原算法并共享关卡上下文。Haven 玩家激光遮挡有动态修复证据；Quadcaptain 串珠已核对真实发射链，原始动画 1 仍产生串珠，不冒充已修复。完整归属、统计口径、测试及边界见 [本轮结果](gameplay-optimization-result.md)。本段覆盖下文旧目录和包装状态。
 
 2026-09-18 游戏会话更新：本批源码归入 `gameplay/game/`，八个旧 `ZSurvival*` 文件全部移除。会话资源与各阶段归 `CGame`，跨局进度归 `CGameFlow`；只保留键位、统一宿主观察入口、本地商店同步三个必要 Z 文件。测试配置、自动驾驶、性能实验、CSV 与截图编排归 `tests/`。游戏输入采用动作分派，G、N/M 不再是游戏快捷键，Viewer 目录选枪留在 Viewer。证据与验收见 [游戏会话职责归位](game-responsibility-migration.md)，本段覆盖下文旧会话文件状态。

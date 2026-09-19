@@ -1,0 +1,142 @@
+#include "gun_bros_re/ui/controls/CMenuMeshPlayer.h"
+#include "gun_bros_re/ui/host/ZMenuSurface.h"
+
+namespace MenuDetail {
+
+    bool CMenuMeshPlayer::Draw(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &profile,
+        const std::vector<ZWeaponEntry> &weapons, const std::vector<ZArmorEntry> &armors, unsigned slot,
+        const GameObjectTypeRef *previewItem , const ZMovieRegion *storePanel , float spin ) {
+        unsigned gunSlot = profile.activeWeaponSlot;
+        if (slot < 2) { gunSlot = slot; }
+        // Preview substitutes only the model configuration. Ownership, currency
+        // and the saved loadout remain owned by the explicit purchase action.
+        CPlayerConfiguration configuration = profile.configuration;
+        if (previewItem != nullptr) {
+            if (previewItem->type == 6) { configuration.guns[gunSlot] = previewItem->object; }
+            if (previewItem->type == 2 && slot >= 2 && slot <= 4) { configuration.armor[kArmorSlots[slot]] = previewItem->object; }
+        }
+        // Switching weapon slot is the original's swap, not just a rebuild.
+        bool changed = equippedPreview == nullptr;
+        if (equippedPreview != nullptr && equippedPreview->brotherIndex != profile.playerBrother) { changed = true; }
+        for (unsigned index = 0; index < 2; ++index) {
+            if (!SameObject(previewConfiguration.guns[index], configuration.guns[index])) { changed = true; }
+        }
+        for (unsigned index = 0; index < kArmorSlotCount; ++index) {
+            if (!SameObject(previewConfiguration.armor[index], configuration.armor[index])) { changed = true; }
+        }
+        if (changed) {
+            CBrother::Template playerTemplate;
+            if (!playerTemplate.Load(toc, tables)) { return false; }
+            auto candidate = std::make_unique<CBrother>();
+            candidate->brotherIndex = profile.playerBrother;
+            if (!candidate->BuildBody(tables, playerTemplate.GetMoveSet())) { return false; }
+            const ZWeaponEntry *gun = nullptr;
+            for (const ZWeaponEntry &entry : weapons) {
+                const auto &ref = configuration.guns[gunSlot];
+                if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) { gun = &entry; break; }
+            }
+            if (gun == nullptr || !candidate->EquipWeapon(tables, playerTemplate.GetScript(), gun->data, gun->owner)) { return false; }
+            const GameObjectRef &otherRef = configuration.guns[1 - gunSlot];
+            if (!otherRef.IsNull()) {
+                const ZWeaponEntry *otherGun = nullptr;
+                for (const ZWeaponEntry &entry : weapons) {
+                    if (entry.packHash == otherRef.packHash && entry.ordinal == otherRef.localIndex) { otherGun = &entry; break; }
+                }
+                if (otherGun == nullptr || !candidate->PrepareSecondaryWeapon(tables, otherGun->data, otherGun->owner)) { return false; }
+            }
+            if (!candidate->SpawnForUI()) { return false; }
+            const auto &uiTorso = candidate->GetTorso();
+            std::printf("[player-ui] gun=%s state=%d weapon-torso=%d move=%d config=%d time=%d range=%d..%d override9=%d\n",
+                gun->owner.c_str(), candidate->GetStateId(), candidate->TorsoUsesWeapon(),
+                uiTorso.GetMoveIndex(), uiTorso.GetMeshConfigIndex(), uiTorso.GetAnimation().GetTimeMs(),
+                uiTorso.GetAnimation().GetRangeStartMs(), uiTorso.GetAnimation().GetRangeStartMs() + uiTorso.GetAnimation().GetRangeDurationMs(),
+                candidate->weapon->GetOverrides()[9]);
+            for (unsigned index = 0; index < kArmorSlotCount; ++index) {
+                const auto &ref = configuration.armor[index];
+                if (ref.IsNull()) { continue; }
+                for (const ZArmorEntry &entry : armors) {
+                    if (entry.packHash == ref.packHash && entry.ordinal == ref.localIndex) {
+                        if (!candidate->EquipArmor(tables, entry.data, view.ImageProgram())) { return false; }
+                        break;
+                    }
+                }
+            }
+            if (!candidate->CreateBuffers(view.ImageProgram())) { return false; }
+            equippedPreview = std::move(candidate);
+            previewConfiguration = configuration;
+            previewGunSlot = gunSlot;
+            previewPrimarySlot = gunSlot;
+            previewSwapPending = false;
+            previewSlotChanged = false;
+            previewTicks = view.clock;
+            // CPlayer::OnSwapGun :101048 hands input event 5 to the player
+            // script, which owns the swap animation.
+        }
+        if (previewGunSlot != gunSlot && !previewSwapPending && equippedPreview->uiOtherWeapon) {
+            previewSwapPending = equippedPreview->OnSwapGun();
+        }
+        if (storePanel == nullptr) { return false; }
+        const std::uint64_t now = view.clock;
+        unsigned previewDelta = 0;
+        if (now >= previewTicks) { previewDelta = static_cast<unsigned>(std::min<std::uint64_t>(now - previewTicks, 100)); }
+        AdvancePlayerPreview(previewDelta);
+        previewTicks = now;
+        int width = 0, height = 0;
+        view.window.GetDrawableSize(width, height);
+        float *model = lastModelMatrix.data();
+        if (storePanel != nullptr) {
+            // CMenuStore::Bind :180082 supplies region 2 as mesh bounds.
+            // CMenuMeshPlayer::Draw :169591 calls DrawUI in the full page;
+            // that region is not a viewport or a scissor rectangle.
+            if (!equippedPreview->BuildUIMatrix(storePanel->x + static_cast<int>(storePanel->width) / 2,
+                storePanel->y, storePanel->height, spin, kMenuWidth, kMenuHeight, model)) { return false; }
+            glViewport(0, 0, width, height);
+            glDisable(GL_SCISSOR_TEST);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+        }
+
+        equippedPreview->Draw(view.ImageProgram(), model);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_SCISSOR_TEST);
+        glViewport(0, 0, width, height);
+        return true;
+    }
+
+    /** CMenuMeshPlayer::Update observes configuration only after native 3. */
+    void CMenuMeshPlayer::AdvancePlayerPreview(int deltaMs) {
+        CBrother &brother = (*equippedPreview);
+        brother.UpdateUI(deltaMs);
+        previewAudio.Update();
+        PlayPreviewSounds(brother.GetTorso().TakeSounds());
+        PlayPreviewSounds(brother.GetLegs().TakeSounds());
+        if (brother.TakeWeaponSwap() && previewSwapPending) {
+            previewGunSlot = 1 - previewGunSlot;
+            equippedPreview->SelectWeapon(previewGunSlot == previewPrimarySlot);
+            previewSwapPending = false;
+            previewSlotChanged = true;
+            std::printf("[player-ui] native-swap slot=%u state=%d torso-preserved=1\n", previewGunSlot, brother.GetStateId());
+        }
+    }
+
+    void CMenuMeshPlayer::PlayPreviewSounds(const std::vector<ZMoveSoundRef> &sounds) {
+        // UpdateUI :137574 uses direct WAV ordinals, not SoundEffect templates.
+        for (const auto &sound : sounds) {
+            const std::uint64_t key = (static_cast<std::uint64_t>(sound.packHash) << 32) | sound.localIndex;
+            if (!previewAudio.HasSound(key)) {
+                std::vector<std::uint8_t> bytes;
+                if (!resourceTables->ReadSectionResource(sound.packHash, ZGameSection::Wav, sound.localIndex, bytes) ||
+                    !previewAudio.Load(key, bytes)) {
+                    std::printf("[player-ui-audio] failed WAV=%08x:%u\n", sound.packHash, sound.localIndex);
+                    continue;
+                }
+            }
+            if (!previewAudio.Play(key)) {
+                std::printf("[player-ui-audio] playback failed WAV=%08x:%u\n", sound.packHash, sound.localIndex);
+                continue;
+            }
+            ++previewSoundCount;
+            std::printf("[player-ui-audio] WAV=%08x:%u\n", sound.packHash, sound.localIndex);
+        }
+    }
+}

@@ -1,9 +1,25 @@
 /** Host cheat actions shared by the menu and survival entry points. */
 #include "gun_bros_re/cheats/CheatActions.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
-#include "gun_bros_re/ui/ZMenuInternal.h"
+#include "gun_bros_re/ui/host/ZMenuSession.h"
+#include "gun_bros_re/ui/menus/CMenuStoreOption.h"
+#include "gun_bros_re/ui/menus/CMenuMovieMultiplayerOverlay.h"
+#include "gun_bros_re/ui/menus/CMenuMissionInfo.h"
+#include "gun_bros_re/ui/menus/CMenuUpgradePopup.h"
+#include "gun_bros_re/ui/menus/CMenuGameResources.h"
+#include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
+#include "gun_bros_re/ui/menus/CMenuList.h"
+#include "gun_bros_re/ui/menus/CMenuGreeting.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZMenuWipe.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
+#include "gun_bros_re/cheats/CheatActions.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
+#include "engine/glu/sprite/CSpriteIterator.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include <ctime>
 
@@ -111,7 +127,7 @@ void AdvanceDailyDebugDay(CProfileManager &profile, const CDailyBonusTracking &d
 }
 }
 
-bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZMenuState &state,
+bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::CMenuSystem &state,
     const CDailyBonusTracking &daily, const std::filesystem::path &savePath,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress) {
     for (std::string cheat = window.TakeCheatCode(); !cheat.empty(); cheat = window.TakeCheatCode()) {
@@ -125,7 +141,7 @@ bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZM
             profile.warbucks += GameCheats::Warbucks;
             char message[256];
             std::snprintf(message, sizeof(message), GameCheats::MoneyMessage, GameCheats::Coins, GameCheats::Warbucks);
-            state.message = message;
+            state.feedback.Show(message);
         }
         if (cheat == GameCheats::NextDay) {
             MenuDetail::AdvanceDailyDebugDay(profile, daily, static_cast<std::uint32_t>(MenuDetail::CurrentSeconds()));
@@ -134,20 +150,20 @@ bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZM
         if (cheat == GameCheats::ToggleDebug) { GameHostSettings().debugMode = !GameHostSettings().debugMode; }
         if (cheat == GameCheats::ToggleConnection) { GameHostSettings().isConnected = !GameHostSettings().isConnected; }
         if (cheat == GameCheats::UpdateChallenges) {
-            if (!GameCheats::AdvanceChallenges(profile, state.social.challenges, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return false; }
+            if (!GameCheats::AdvanceChallenges(profile, state.challenges.manager, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return false; }
             state.social.contentBound = false;
-            state.social.selectedChallenge = 0;
+            state.challenges.selected = 0;
         }
         if (cheat == GameCheats::UnlockWaves) {
             if (!GameCheats::UnlockAllWaves(profile)) { return false; }
-            state.message = GameCheats::UnlockMessage;
+            state.feedback.Show(GameCheats::UnlockMessage);
         }
         if (cheat == GameCheats::LevelUp || cheat == GameCheats::MaximumLevel) {
             progress.SetExperience(GameCheats::ExperienceTarget(cheat, progressData, progress));
             profile.experience = progress.GetExperience();
             char message[256];
             std::snprintf(message, sizeof(message), GameCheats::LevelMessage, progress.GetLevel());
-            state.message = message;
+            state.feedback.Show(message);
         }
         if (!profile.SaveToDisk(savePath)) { return false; }
         std::printf("[cheat] %s\n", cheat.c_str());

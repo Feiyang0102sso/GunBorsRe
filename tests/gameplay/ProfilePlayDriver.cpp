@@ -2,7 +2,7 @@
 #include "gameplay/ProfilePlayDriver.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/host/ZGameKeys.h"

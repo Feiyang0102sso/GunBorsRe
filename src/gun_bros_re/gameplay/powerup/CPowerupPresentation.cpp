@@ -9,7 +9,7 @@
 #include "engine/core/ZMatrix4d.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticlePool.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include <cstdio>
 #include "gun_bros_re/effects/CParticleEffectPlayer.h"
 #include "gun_bros_re/effects/ZParticleResources.h"

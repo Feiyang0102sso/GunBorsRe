@@ -48,6 +48,7 @@ void PrintTestUsage() {
         "  --powerup-selector-check original in-game selector and native purchase\n"
         "  --pause-check original pause list, help and native preferences\n"
         "  --postgame-menu-check original wrapup with actual native survival results\n"
+        "  --store-equipped-check    verify equipped cards hide EQUIP in both layouts\n"
         "  --store-template-check    verify BIG store filter and shared item cards\n"
         "  --ui-feedback-check       verify splash, package purchase and store badges\n"
         "  --package-purchase-check  verify package delivery, equipment and restart\n"

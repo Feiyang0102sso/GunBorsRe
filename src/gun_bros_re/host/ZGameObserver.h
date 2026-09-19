@@ -4,7 +4,7 @@
  * These nested views are borrowed host data, not recovered original classes.
  */
 #include "gun_bros_re/gameplay/game/CGameSession.h"
-#include "gun_bros_re/ui/ZHudState.h"
+#include "gun_bros_re/ui/hud/ZHudState.h"
 #include "engine/platform/ZWindow.h"
 #include <optional>
 class CBGM;

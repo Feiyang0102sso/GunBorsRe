@@ -78,4 +78,7 @@ inline bool LoadPlanetCatalog(CResTOCManager &toc, ZPackTables &tables, std::vec
     }
     return result.size() == slots.size();
 }
+/** Read PLANET -> Mission.type1 -> Level, ordered by original mapSlot. */
+bool LoadRetailSurvivalLevels(CResTOCManager &toc, ZPackTables &tables,
+    std::map<unsigned, GameObjectRef> &retailLevels);
 #endif

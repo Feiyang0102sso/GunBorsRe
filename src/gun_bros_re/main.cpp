@@ -1,5 +1,5 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
-#include "gun_bros_re/ui/ZGameFrontEndInternal.h"
+#include "gun_bros_re/ui/host/ZGameFrontEndInternal.h"
 #include "gun_bros_re/host/ZConfig.h"
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "engine/platform/ZStartup.h"
@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 #include <io.h>
-#include "gun_bros_re/ui/ZGameFrontEnd.h"
+#include "gun_bros_re/ui/host/ZGameFrontEnd.h"
 #include "engine/platform/ZWindow.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "gun_bros_re/host/ZHostSettings.h"

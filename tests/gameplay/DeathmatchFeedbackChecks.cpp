@@ -3,7 +3,7 @@
 #define NOMINMAX
 #include "gameplay/SurvivalChecks.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 #include "engine/core/CStringToKey.h"

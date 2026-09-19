@@ -1,5 +1,21 @@
 #pragma once
-#include "gun_bros_re/ui/ZMenuInternal.h"
+#include "gun_bros_re/ui/host/ZMenuSession.h"
+#include "gun_bros_re/ui/menus/CMenuStoreOption.h"
+#include "gun_bros_re/ui/menus/CMenuMovieMultiplayerOverlay.h"
+#include "gun_bros_re/ui/menus/CMenuMissionInfo.h"
+#include "gun_bros_re/ui/menus/CMenuUpgradePopup.h"
+#include "gun_bros_re/ui/menus/CMenuGameResources.h"
+#include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
+#include "gun_bros_re/ui/menus/CMenuList.h"
+#include "gun_bros_re/ui/menus/CMenuGreeting.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZMenuWipe.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
+#include "gun_bros_re/cheats/CheatActions.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
+#include "engine/glu/sprite/CSpriteIterator.h"
 using namespace MenuDetail;
 
 int RunTutorialPlayCheck(const std::string &bigDirectory);
@@ -22,9 +38,9 @@ int RunGreetingCheck(const std::string &bigDirectory);
 
 int RunRefineryMenuCheck(const std::string &bigDirectory);
 /** Advance the actual button Movie to action dispatch, checking no early transfer. */
-bool FinishRefineryClick(ZGameMenu &view, ZMenuState &state, CProfileManager &profile,
+bool FinishRefineryClick(ZMenuSurface &view, CMenuSystem &state, CProfileManager &profile,
     const CRefinementManager::Template &data, const std::filesystem::path &path, std::int64_t now, unsigned slot);
-int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZGameMenu &view,
+int CheckOnlineRefinery(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &view,
     const CRefinementManager::Template &data);
 
 int RunNavigationBarCheck(const std::string &bigDirectory);
@@ -105,3 +121,16 @@ int RunLoadingWipeCheck(const std::string &bigDirectory);
 int RunOriginalDialogCheck(const std::string &bigDirectory);
 
 */
+
+int CheckStoreFiltering(CResTOCManager &toc, const CRefinementManager::Template &refinement,
+    const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
+    const std::vector<ZArmorEntry> &armor);
+
+/** Complete the frame when a check drives a page without the host loop. */
+inline bool FinishMenuFrame(bool drawn, CMenuSystem &state) {
+    if (drawn) { state.UpdateNavigation(); }
+    return drawn;
+}
+
+/** Actual folded/expanded card pixels for equipped and available actions. */
+int RunStoreEquippedCheck(const std::string &bigDirectory);

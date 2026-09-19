@@ -1,5 +1,26 @@
 # 源码文件名映射
 
+## UI 归位（2026-09-19）
+
+实际目录以本节和 [UI 重组结果](ui-optimization-result.md) 为准，后面的旧路径保留为历史索引。
+
+| 旧职责 | 当前归属 | 依据与界限 |
+|---|---|---|
+| `ZMenuInternal.h`、`ZMenuState` | `ui/system/CMenuSystem.*`、`CMenuStack.h`，各页面状态归 `ui/menus/CMenu*.h` | 原 CreateMenuInstance/SetMenu/Update；不伪造完整原虚表 |
+| `ZMenuNavigation.cpp` | `ui/system/CMenuNavigationBar.*` | 原导航条更新/绘制 |
+| `ZMenuData.h` | `ui/content/CMenuDataProvider.*` | 原 MDS 绑定；根目录 `ZMenuData.inc` 原样保留 |
+| `ZStoreMenu.cpp` | `menus/CMenuStore*`、`content/CStoreAggregator.*`、`controls/CMenuMovieButton.*`、`menus/CMenuMovieMultiplayerOverlay*` | 原聚合、页面、商品卡、按钮、模式覆盖层 |
+| `ZMenuPreview.cpp` | `ui/controls/CMenuMeshPlayer.*` | 装备副本、模型、换枪与声音 |
+| `ZTextLayout.h` | `ui/controls/CTextBox.*` | 已支持的字体 token 与布局；推广控件组合归 `ZPromotionPopup` |
+| `ZPlanetMenu/ZMissionMenu` | `ui/menus/CMenuMission*`、`CMenuMissionInfo.*` | 原 Planet/Mission 回调与页面状态 |
+| `ZPostGameMenu/ZLivePostGame` | `ui/menus/CMenuPostGame*`、`CMenuPostGameOption*`、`CMenuUpgradePopupDraw.cpp` | 普通/在线结算、卡片及升级弹窗分开 |
+| `ZSocialContent/ZLocalOnlineMenus` | `ui/menus/CMenuFriends*`、`CMenuChallenges*`、`CMenuChallengeOption.cpp`、`host/ZLocalOnlineMenus.*` | 原页面内容与本地连接模拟分开 |
+| `ZGreetingMenu/ZOptionsMenu/ZRefineryMenu` | `ui/menus/CMenuGreeting.*`、`CMenuList.*`、`CMenuPlayerSelect.*`、`CMenuGameResources*` | 原页面绑定、播放与数据消费 |
+| `ZMenuFlow/ZGameMenu` | `ui/host/ZMenuSession.*`、`ZMenuSurface.*` | Windows 会话与窗口；页面 GPU 实例按窗口生命周期聚合 |
+| `CInputPad*`、`CPowerUpSelector*`、`ZHud*` | `ui/hud/` | 现有 HUD 职责不再与外部菜单混排 |
+| 自创作弊提示 | `cheats/CheatFeedback.h` | cheats 管理内容与显示；启动提示仍属正常宿主 UI |
+
+
 日期：2026-09-19。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
 
 ## 应用根目录归包（2026-09-19）

@@ -1,10 +1,10 @@
 #include "gun_bros_re/debug/Capture.h"
 /** BRO-OPS regression with real templates, Movies and a disposable native save. */
 #include "ui/MenuChecks.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "TestOutput.h"
 
-int CheckBroOps(ZGameMenu &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &source) {
+int CheckBroOps(ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables, const CProfileManager &source) {
     CProfileManager profile = source;
     // Leave room for the actual consumable reward in this disposable profile.
     profile.powerups.clear();
@@ -179,14 +179,14 @@ int CheckBroOps(ZGameMenu &view, CResTOCManager &toc, ZPackTables &tables, const
     CRefinementManager::Template refinement;
     std::vector<ZArmorEntry> armor;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
-    ZMenuState menu;
-    menu.page = 5;
-    std::vector<ZMenuTestClick> frames(4);
+    CMenuSystem menu;
+    menu.stack.page = 5;
+    std::vector<ZMenuInputFrame> frames(4);
     for (auto &frame : frames) { frame.advanceMs = 500; }
     if (ShowGameMenu(toc, tables, menuProfile, menuProfile.nativeArchive->progression, refinement, store, weapons, armor,
         menu, directory / "menu-profile", (directory / "reward-prompt.png").string(), &frames, true, &view.window) != -2 ||
         menu.challengeRewardTitle.empty() || menu.challengeRewardBody.find(completedName) == std::string::npos ||
-        menu.social.challenges.current[selected].rewardStatus == 0) { return 1; }
+        menu.challenges.manager.current[selected].rewardStatus == 0) { return 1; }
     if (!rewardedPowerup.IsNull() && menuProfile.GetPowerupCount(rewardedPowerup) == 0) { return 1; }
     GameHostSettings().isConnected = false;
     if (hud.FindActionRegion(state, ZInputPadAction::BroOps, button)) { return 1; }

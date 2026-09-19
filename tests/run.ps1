@@ -136,6 +136,7 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'native-profile-play' @('--native-profile-play-check')
         Add-Check 'tutorial-native' @('--tutorial-check')
         Add-Check 'store-cards' @('--store-card-check')
+        Add-Check 'store-equipped' @('--store-equipped-check')
         Add-Check 'dual-weapon' @('--dual-weapon-check')
         Add-Check 'combat-feedback' @('--combat-feedback-check')
         Add-Check 'mastery-upgrade' @('--upgrade-popup-check')

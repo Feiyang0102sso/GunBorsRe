@@ -12,7 +12,7 @@ class CLevel;
 class CGame;
 class CPowerUpSelector;
 struct CGameFlow;
-namespace MenuDetail { struct ZMenuState; }
+namespace MenuDetail { class CMenuSystem; }
 
 /** Commands mutate game state here; the host applies the returned timing/UI changes. */
 struct CombatCheatResult {
@@ -24,7 +24,7 @@ struct CombatCheatResult {
 bool ApplyCombatCheat(const std::string &command, CLevel &scene, CBrother::Vitals &vitals,
     CPowerUpSelector &powerups, CGame &session, CGameFlow *context, CombatCheatResult &result,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
-bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::ZMenuState &state,
+bool ProcessMenuCheats(ZWindow &window, CProfileManager &profile, MenuDetail::CMenuSystem &state,
     const CDailyBonusTracking &daily, const std::filesystem::path &savePath,
     const CPlayerProgress::Template &progressData, CPlayerProgress &progress);
 namespace GameCheats {

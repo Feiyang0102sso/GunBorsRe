@@ -3,7 +3,7 @@
  */
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "engine/core/CStringToKey.h"
 #include <cmath>
 

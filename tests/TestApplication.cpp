@@ -34,7 +34,7 @@
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/ui/ZGameFrontEnd.h"
+#include "gun_bros_re/ui/host/ZGameFrontEnd.h"
 #include "tests/checks/PropCatalog.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
@@ -43,7 +43,7 @@
 #include "engine/platform/ZAudioPlayer.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "tests/research/MovieStudy.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/CDailyBonusTracking.h"
 
@@ -113,6 +113,7 @@ int RunTestApplication(int argc, char **argv) {
     bool checkPromotion = false;
     bool checkSceneTransition = false;
     bool checkDualWeapon = false;
+    bool checkStoreEquipped = false;
     bool checkCombatFeedback = false;
     bool checkBoss = false;
     bool checkMapOcclusion = false;
@@ -480,6 +481,10 @@ else if (std::strcmp(argument, "--scene-transition-check") == 0) {
             checkSceneTransition = true;
         }
  
+else if (std::strcmp(argument, "--store-equipped-check") == 0) {
+            checkStoreEquipped = true;
+        }
+
 else if (std::strcmp(argument, "--dual-weapon-check") == 0) {
             checkDualWeapon = true;
         }
@@ -682,6 +687,7 @@ else if (std::strcmp(argument, "--screenshot") == 0 && i + 1 < argc) {
     if (checkLoadingWipe) { return RunLoadingWipeCheck(bigDirectory); }
     if (checkPromotion) { return RunPromotionCheck(bigDirectory); }
     if (checkSceneTransition) { return RunSceneTransitionCheck(bigDirectory); }
+    if (checkStoreEquipped) { return RunStoreEquippedCheck(bigDirectory); }
     if (checkDualWeapon) { return RunDualWeaponCheck(bigDirectory); }
     if (checkBoss) { return RunBossCheck(bigDirectory); }
     if (checkMapOcclusion) { return RunMapOcclusionCheck(bigDirectory); }

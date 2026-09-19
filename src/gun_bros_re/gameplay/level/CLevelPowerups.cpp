@@ -3,7 +3,7 @@
  */
 #define NOMINMAX
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
 #include <algorithm>
 #include <cstdio>

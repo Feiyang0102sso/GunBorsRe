@@ -5,7 +5,7 @@
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gameplay/SurvivalStudy.h"

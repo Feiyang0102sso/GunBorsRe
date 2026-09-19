@@ -1,8 +1,60 @@
+#include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/debug/Capture.h"
-#include "gun_bros_re/ui/ZMenuInternal.h"
+#include "gun_bros_re/ui/host/ZMenuSession.h"
+#include "gun_bros_re/ui/menus/CMenuStoreOption.h"
+#include "gun_bros_re/ui/menus/CMenuMovieMultiplayerOverlay.h"
+#include "gun_bros_re/ui/menus/CMenuMissionInfo.h"
+#include "gun_bros_re/ui/menus/CMenuUpgradePopup.h"
+#include "gun_bros_re/ui/menus/CMenuGameResources.h"
+#include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
+#include "gun_bros_re/ui/menus/CMenuList.h"
+#include "gun_bros_re/ui/menus/CMenuGreeting.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZMenuWipe.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
+#include "gun_bros_re/cheats/CheatActions.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
+#include "engine/glu/sprite/CSpriteIterator.h"
 #include "TestOutput.h"
 #include "ui/MenuChecks.h"
 using namespace MenuDetail;
+namespace {
+bool DrawAndCheckPlayer(MenuDetail::ZMenuSurface &view, CResTOCManager &toc, ZPackTables &tables,
+    const CProfileManager &profile, const std::vector<ZWeaponEntry> &weapons,
+    const std::vector<ZArmorEntry> &armors, unsigned slot, const GameObjectTypeRef *previewItem,
+    const ZMovieRegion *storePanel, float spin = 0) {
+    if (!view.playerPreview.Draw(view, toc, tables, profile, weapons, armors, slot, previewItem, storePanel, spin)) { return false; }
+    int width = 0, height = 0;
+    view.window.GetDrawableSize(width, height);
+    const float *model = view.playerPreview.LastModelMatrix().data();
+
+            // Independent oracle from CBrother::DrawUI :136337-136357.
+            // Compare the actual GL viewport + MVP, not just a helper's return.
+            const auto &brother = (*view.playerPreview.GetPlayerPreview());
+            const ZMeshBounds &torso = brother.GetTorso().GetAnimation().GetMesh()->GetBounds();
+            const float expectedScale = storePanel->height / std::abs(torso.maxZ - torso.minZ);
+            const float expectedX = storePanel->x + static_cast<int>(storePanel->width) / 2;
+            const float expectedY = static_cast<float>(static_cast<int>(storePanel->y - torso.centerZ * expectedScale +
+                storePanel->height + storePanel->height * 0.5f));
+            GLint viewport[4];
+            glGetIntegerv(GL_VIEWPORT, viewport);
+            const float actualX = (viewport[0] + (model[3] + 1) * viewport[2] / 2) * kMenuWidth / width;
+            const float actualY = (height - viewport[1] - (model[7] + 1) * viewport[3] / 2) * kMenuHeight / height;
+            const float actualScale = std::abs(model[0]) * viewport[2] * kMenuWidth / (2 * width);
+            const bool matches = std::abs(actualX - expectedX) < 0.01f && std::abs(actualY - expectedY) < 0.01f &&
+                std::abs(actualScale - expectedScale) < 0.01f && glIsEnabled(GL_SCISSOR_TEST) == GL_FALSE;
+            std::printf("[store-player-check] origin=(%.3f,%.3f) expected=(%.3f,%.3f) scale=%.3f expected=%.3f clip=%u match=%u\n",
+                actualX, actualY, expectedX, expectedY, actualScale, expectedScale, glIsEnabled(GL_SCISSOR_TEST), matches);
+            if (!matches) { return false; }
+
+    return true;
+}
+}
+
+
+
 
 /** Exercise real card resources and the same renderer/input path as --game.
  * All money, XP, mutated templates and profile writes below are test fixtures. */
@@ -10,10 +62,12 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     const CPlayerProgress::Template &progress, const CRefinementManager::Template &refinement,
     const std::vector<ZStoreEntry> &store, const std::vector<ZWeaponEntry> &weapons,
     const std::vector<ZArmorEntry> &armor) {
-    ZMenuTestClick cardClick, purchaseClick, previewClick;
+    if (CheckStoreFiltering(toc, refinement, store, weapons, armor) != 0) { return 1; }
+    ZMenuInputFrame cardClick, purchaseClick, previewClick;
     unsigned start = 0, end = 0;
+    unsigned purchaseDuration = 0, previewDuration = 0;
     {
-        ZGameMenu probe;
+        ZMenuSurface probe;
         if (!probe.Open(toc, tables)) { return 1; }
         const CMovie *mastery = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_MASTERY"));
         if (mastery == nullptr) { return 1; }
@@ -62,9 +116,8 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         rotation.UpdateRotation(16, true, touchX, touchY, playerRegion.x, playerRegion.y, playerRegion.width, playerRegion.height, true);
         if (rotation.GetDegrees() != 0) { return 1; }
         std::printf("[store-card-check] original-rotation drag-origin region-width release-return outside-start failures=0\n");
-        probe.verifyPlayerProjection = true;
-        probe.Begin(14);
-        if (!probe.DrawEquippedPlayer(toc, tables, profile, weapons, armor, 0, nullptr, &playerRegion)) { return 1; }
+        probe.Begin();
+        if (!DrawAndCheckPlayer(probe, toc, tables, profile, weapons, armor, 0, nullptr, &playerRegion)) { return 1; }
         // Perturb the authored region only in this fixture, across both brothers
         // and one retail gun per category. No viewport or framing constant may win.
         ZMovieRegion changedRegion = playerRegion;
@@ -83,9 +136,9 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
                 ref.localIndex = weapon.ordinal;
                 if (FindWeaponStore(store, ref) == nullptr) { continue; }
                 modelProfile.configuration.guns[0] = ref;
-                probe.Begin(14);
+                probe.Begin();
                 std::printf("[store-player-check] brother=%u weapon=%s category=%d mutated-region=1\n", brother, weapon.name.c_str(), weapon.category);
-                if (!probe.DrawEquippedPlayer(toc, tables, modelProfile, weapons, armor, 0, nullptr, &changedRegion)) { return 1; }
+                if (!DrawAndCheckPlayer(probe, toc, tables, modelProfile, weapons, armor, 0, nullptr, &changedRegion)) { return 1; }
                 checked[weapon.category] = true;
             }
             for (bool found : checked) { if (!found) { return 1; } }
@@ -96,14 +149,14 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         if (!LoadProfile(toc, tables, savedProfile, savedPath, TestOutput::Fixtures())) { return 1; }
         for (unsigned slot = 0; slot < 2; ++slot) {
             for (unsigned phase = 0; phase < 2; ++phase) {
-                probe.Begin(14);
+                probe.Begin();
                 if (phase == 1) {
-                    for (unsigned step = 0; step < 300; ++step) { probe.AdvancePlayerPreview(16); }
+                    for (unsigned step = 0; step < 300; ++step) { probe.playerPreview.AdvancePlayerPreview(16); }
                 }
-                if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, slot, nullptr, &playerRegion)) { return 1; }
+                if (!DrawAndCheckPlayer(probe, toc, tables, savedProfile, weapons, armor, slot, nullptr, &playerRegion)) { return 1; }
                 const auto image = TestOutput::Path("ui-original-2026-09-09/native-model-") + std::to_string(slot) + "-" + std::to_string(phase) + ".png";
                 if (!Capture::SaveFrame(probe.window, image)) { return 1; }
-                const auto &brother = *probe.GetPlayerPreview();
+                const auto &brother = *probe.playerPreview.GetPlayerPreview();
                 std::printf("[store-player-check] native slot=%u phase=%u state=%d torso-move=%d time=%d\n", slot, phase,
                     brother.GetStateId(), brother.GetTorso().GetMoveIndex(), brother.GetTorso().GetAnimation().GetTimeMs());
             }
@@ -111,29 +164,29 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         // Original PLAYER flow fixture: 17 -> 18 -> 19/native 3 -> 17.
         // A switch must preserve the actor and the outgoing torso until the
         // next sequence consumes the incoming gun's move overrides.
-        CBrother *originalActor = probe.GetPlayerPreview();
+        CBrother *originalActor = probe.playerPreview.GetPlayerPreview();
         for (unsigned exchange = 0; exchange < 3; ++exchange) {
-            const unsigned oldSlot = probe.GetPlayerPreviewSlot();
+            const unsigned oldSlot = probe.playerPreview.GetPlayerPreviewSlot();
             const unsigned targetSlot = 1 - oldSlot;
-            CBrother &model = *probe.GetPlayerPreview();
+            CBrother &model = *probe.playerPreview.GetPlayerPreview();
             CGun *oldWeapon = model.uiActiveWeapon;
             if (oldWeapon == nullptr) { oldWeapon = model.weapon.get(); }
-            probe.TakePlayerPreviewSlotChange();
-            if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
-            if (&model != originalActor || probe.GetPlayerPreviewSlot() != oldSlot) { return 1; }
+            probe.playerPreview.TakePlayerPreviewSlotChange();
+            if (!DrawAndCheckPlayer(probe, toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
+            if (&model != originalActor || probe.playerPreview.GetPlayerPreviewSlot() != oldSlot) { return 1; }
             unsigned elapsed = 0;
-            while (probe.GetPlayerPreviewSlot() == oldSlot && elapsed < 10000) {
-                probe.AdvancePlayerPreview(16);
+            while (probe.playerPreview.GetPlayerPreviewSlot() == oldSlot && elapsed < 10000) {
+                probe.playerPreview.AdvancePlayerPreview(16);
                 elapsed += 16;
             }
-            if (probe.GetPlayerPreviewSlot() != targetSlot || originalActor->GetStateId() != 19 ||
-                model.uiActiveWeapon == oldWeapon || !probe.TakePlayerPreviewSlotChange() || probe.TakePlayerPreviewSlotChange()) { return 1; }
+            if (probe.playerPreview.GetPlayerPreviewSlot() != targetSlot || originalActor->GetStateId() != 19 ||
+                model.uiActiveWeapon == oldWeapon || !probe.playerPreview.TakePlayerPreviewSlotChange() || probe.playerPreview.TakePlayerPreviewSlotChange()) { return 1; }
             const CMesh *switchTorso = originalActor->GetTorso().GetAnimation().GetMesh();
             bool outgoingTorso = !originalActor->TorsoUsesWeapon();
             for (const CMesh *mesh : oldWeapon->GetBodyMeshes()) { if (mesh == switchTorso) { outgoingTorso = true; } }
             if (!outgoingTorso) { return 1; }
             while (originalActor->GetStateId() != 17 && elapsed < 10000) {
-                probe.AdvancePlayerPreview(16);
+                probe.playerPreview.AdvancePlayerPreview(16);
                 elapsed += 16;
             }
             bool incomingTorso = !originalActor->TorsoUsesWeapon();
@@ -145,13 +198,13 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             if (!savedProfile.SaveToDisk(savedPath)) { return 1; }
             CProfileManager restored;
             if (!LoadProfile(toc, tables, restored, savedPath, savedPath / "absent-source") || restored.activeWeaponSlot != targetSlot) { return 1; }
-            probe.Begin(14);
-            if (!probe.DrawEquippedPlayer(toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
+            probe.Begin();
+            if (!DrawAndCheckPlayer(probe, toc, tables, savedProfile, weapons, armor, targetSlot, nullptr, &playerRegion)) { return 1; }
             if (!Capture::SaveFrame(probe.window, TestOutput::Path("ui-original-2026-09-09/native-model-swapped-") + std::to_string(exchange) + ".png")) { return 1; }
             std::printf("[store-player-check] native-swap exchange=%u slot=%u actor-preserved=1 outgoing-torso=1 incoming-torso=1 reload=1 elapsed=%u\n",
                 exchange, targetSlot, elapsed);
         }
-        const auto *swapEntry = FindMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+        const auto *swapEntry = CMenuDataProvider::Find("MDS_BUTTON_STORE_GUN_SWAP", 0);
         if (swapEntry == nullptr) { return 1; }
         const unsigned swapMovieId = probe.movies.Ordinal(swapEntry->movies[0]);
         const CMovie *swapMovie = probe.movies.GetMovie(swapMovieId);
@@ -171,20 +224,20 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
             if (region.index == 0) { swapTouch = region; foundTouch = true; }
         }
         if (!foundTouch) { return 1; }
-        ZMenuState swapState;
-        swapState.store.shopGunSlot = probe.GetPlayerPreviewSlot();
+        CMenuSystem swapState;
+        swapState.store.shopGunSlot = probe.playerPreview.GetPlayerPreviewSlot();
         const unsigned beforeSlot = swapState.store.shopGunSlot;
-        const ZMenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
-        probe.Begin(14); probe.clock = 1000;
-        probe.SetTestClick(swapClick);
+        const ZMenuInputFrame swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
+        probe.Begin(); probe.clock = 1000;
+        probe.InjectTap(swapClick);
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopSwapPhase != 0 || swapState.store.shopGunSlot != beforeSlot) { return 1; }
-        probe.Begin(14); probe.clock += showEnd - showStart;
+        probe.Begin(); probe.clock += showEnd - showStart;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopSwapPhase != 2) { return 1; }
-        probe.SetTestClick(swapClick);
+        probe.InjectTap(swapClick);
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopSwapPhase != 4 || swapState.store.shopGunSlot != beforeSlot) { return 1; }
-        probe.Begin(14); probe.clock += pressEnd - pressStart - 1;
+        probe.Begin(); probe.clock += pressEnd - pressStart - 1;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopGunSlot != beforeSlot) { return 1; }
-        probe.Begin(14); ++probe.clock;
+        probe.Begin(); ++probe.clock;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopGunSlot != 1 - beforeSlot) { return 1; }
         swapState.store.shopFilter = 1;
         // Filtering the GUNS list must preserve the equipped-player slot button.
@@ -194,7 +247,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         }
         swapState.store.shopCategory = 1;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopSwapPhase != 1) { return 1; }
-        probe.Begin(14); probe.clock += showEnd - showStart;
+        probe.Begin(); probe.clock += showEnd - showStart;
         if (!DrawStoreGunSwap(probe, swapState, swapParent, true) || swapState.store.shopSwapPhase != 8) { return 1; }
         std::printf("[store-player-check] original-swap-button movie=%u region-shift=1 intro-gate=1 press-boundary=1 category-hide=1 failures=0\n", swapMovieId);
         const CMovie *movie = probe.movies.GetMovie(probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX"));
@@ -207,34 +260,64 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         const unsigned card = probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
             !probe.movies.Region(card, 0, end, openBody)) { return 1; }
-        const ZStoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - openBody.width / 2,
+        const CMenuStoreOption::Face face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - openBody.width / 2,
             content.y + content.height / 2 - openBody.height / 2, 1, end};
-        const ZMenuDataEntry *buy = FindMenuData("MDS_BUTTON_STORE_ITEMS", 0);
-        const ZMenuDataEntry *preview = FindMenuData("MDS_BUTTON_STORE_PREVIEW", 0);
+        const CMenuDataProvider::Entry *buy = CMenuDataProvider::Find("MDS_BUTTON_STORE_ITEMS", 0);
+        const CMenuDataProvider::Entry *preview = CMenuDataProvider::Find("MDS_BUTTON_STORE_PREVIEW", 0);
         if (buy == nullptr || preview == nullptr || !CardRegion(probe, card, 10, face, actions) ||
             !probe.movies.Region(probe.movies.Ordinal(buy->movies[0]), 1, 0, buyLabel) ||
             !probe.movies.Region(probe.movies.Ordinal(preview->movies[0]), 1, 0, previewLabel)) { return 1; }
+        unsigned buttonStart = 0, buttonEnd = 0;
+        const CMovie *buyMovie = probe.movies.GetMovie(probe.movies.Ordinal(buy->movies[0]));
+        const CMovie *previewMovie = probe.movies.GetMovie(probe.movies.Ordinal(preview->movies[0]));
+        if (!buyMovie->GetChapterRange(1, buttonStart, buttonEnd)) { return 1; }
+        purchaseDuration = buttonEnd - buttonStart + 1;
+        if (!previewMovie->GetChapterRange(1, buttonStart, buttonEnd)) { return 1; }
+        previewDuration = buttonEnd - buttonStart + 1;
+        // Native toggle mode 3 must dispatch once after crossing inclusive bounds.
+        CMenuMovieButton press;
+        ZMovieRegion origin;
+        origin.x = 200; origin.y = 200;
+        ZMovieRegion touch;
+        if (!probe.movies.Region(probe.movies.Ordinal(buy->movies[0]), 0, 0, touch)) { return 1; }
+        touch.x -= kMenuWidth / 2;
+        touch.y -= kMenuHeight / 2;
+        bool activated = false;
+        probe.clock = 1000;
+        probe.InjectTap({origin.x + touch.x + touch.width / 2, origin.y + touch.y + touch.height / 2});
+        if (!press.Draw(probe, *buy, origin, 5, true, activated) || activated || !press.IsSelected()) { std::printf("[store-button-check] select failed selected=%u active=%u\n", press.IsSelected(), activated); return 1; }
+        probe.clock += purchaseDuration - 1;
+        if (!press.Draw(probe, *buy, origin, 5, true, activated) || activated) { std::printf("[store-button-check] boundary failed active=%u\n", activated); return 1; }
+        ++probe.clock;
+        if (!press.Draw(probe, *buy, origin, 5, true, activated) || !activated || press.IsSelected()) { std::printf("[store-button-check] completion failed selected=%u active=%u\n", press.IsSelected(), activated); return 1; }
+        ++probe.clock;
+        if (!press.Draw(probe, *buy, origin, 5, true, activated) || activated) { return 1; }
+        probe.InjectTap({origin.x + touch.x + touch.width / 2, origin.y + touch.y + touch.height / 2});
+        if (!press.Draw(probe, *buy, origin, 5, true, activated) || activated) { return 1; }
+        probe.clock += purchaseDuration;
+        if (!press.Draw(probe, *buy, origin, 5, false, activated) || activated || press.IsSelected()) { return 1; }
+        std::printf("[store-button-check] delayed=1 once=1 cancelled=1 duration=%u failures=0\n", purchaseDuration);
         purchaseClick = {actions.x + actions.width - buyLabel.width / 2, actions.y + buyLabel.height / 2};
         previewClick = {actions.x + previewLabel.width / 2, actions.y + previewLabel.height / 2};
-        ZMenuState animation;
-        animation.store.shopDetailOpen = true;
-        animation.store.shopDetailTime = start;
+        CMenuSystem animation;
+        animation.store.focused.shopDetailOpen = true;
+        animation.store.focused.shopDetailTime = start;
         probe.clock = 60;
-        if (!AdvanceStoreCard(probe, animation, *movie) || animation.store.shopDetailTime != start + 240) { return 1; }
-        animation.store.shopDetailClosing = true;
+        if (!animation.store.focused.Update(probe.clock, *movie) || animation.store.focused.shopDetailTime != start + 240) { return 1; }
+        animation.store.focused.shopDetailClosing = true;
         probe.clock += 10;
-        if (!AdvanceStoreCard(probe, animation, *movie) || animation.store.shopDetailTime != start + 200) { return 1; }
+        if (!animation.store.focused.Update(probe.clock, *movie) || animation.store.focused.shopDetailTime != start + 200) { return 1; }
         probe.clock += 1000;
-        if (!AdvanceStoreCard(probe, animation, *movie) || animation.store.shopDetailOpen) { return 1; }
+        if (!animation.store.focused.Update(probe.clock, *movie) || animation.store.focused.shopDetailOpen) { return 1; }
         CMovie changed = *movie;
         changed.chapter.starts[1] += 32;
         changed.chapter.starts[2] += 64;
         changed.duration += 64;
-        animation = ZMenuState{};
-        animation.store.shopDetailOpen = true;
-        animation.store.shopDetailTime = changed.chapter.starts[1];
-        if (!AdvanceStoreCard(probe, animation, changed) || animation.store.shopDetailTime != end + 64) { return 1; }
-        const auto mixed = FormatStoreText(probe.movies, "^f0DMG ^f112 ^f2SPD ^f3+4 ^f450\nNEXT", 1000);
+        animation = CMenuSystem{};
+        animation.store.focused.shopDetailOpen = true;
+        animation.store.focused.shopDetailTime = changed.chapter.starts[1];
+        if (!animation.store.focused.Update(probe.clock, changed) || animation.store.focused.shopDetailTime != end + 64) { return 1; }
+        const auto mixed = CTextBox::Format(probe.movies, "^f0DMG ^f112 ^f2SPD ^f3+4 ^f450\nNEXT", 1000);
         constexpr unsigned expectedFonts[] = {1, 2, 4, 3, 0};
         if (mixed.size() != 2 || mixed[0].runs.size() != 5) { return 1; }
         for (unsigned index = 0; index < 5; ++index) {
@@ -269,68 +352,68 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     constexpr unsigned categoryOrder[] = {2, 0, 1};
     for (unsigned category : categoryOrder) {
         const std::string base = std::string(TestOutput::Path("store-card-")) + categories[category];
-        ZMenuState folded, opening, opened, closing, closed;
-        ZMenuState *states[] = {&folded, &opening, &opened, &closing, &closed};
-        for (ZMenuState *state : states) {
-            state->page = 2;
+        CMenuSystem folded, opening, opened, closing, closed;
+        CMenuSystem *states[] = {&folded, &opening, &opened, &closing, &closed};
+        for (CMenuSystem *state : states) {
+            state->stack.page = 2;
             state->store.shopCategory = category;
             const char *table = nullptr;
             const unsigned rows = StoreFilterRows(category, table);
             // Native STORE.type criteria; the previous fixture assumed every
             // category reused gun bit 0 and silently disabled powerup filtering.
             for (unsigned row = 2; row < rows; ++row) {
-                const auto *entry = FindMenuData(table, row);
+                const auto *entry = CMenuDataProvider::Find(table, row);
                 if (entry->action == 65 && entry->parameter < 17) { state->store.shopFilter |= 1u << entry->parameter; }
                 if (category != 2) { break; }
             }
         }
-        const std::vector<ZMenuTestClick> idle = {{-100, -100}};
-        const std::vector<ZMenuTestClick> begin = {cardClick, {-100, -100, 60}};
-        const std::vector<ZMenuTestClick> open = {cardClick, {-100, -100, 2500}};
-        const std::vector<ZMenuTestClick> reverse = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 60}};
-        const std::vector<ZMenuTestClick> finish = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 250}};
-        const std::vector<ZMenuTestClick> *clicks[] = {&idle, &begin, &open, &reverse, &finish};
+        const std::vector<ZMenuInputFrame> idle = {{-100, -100}};
+        const std::vector<ZMenuInputFrame> begin = {cardClick, {-100, -100, 60}};
+        const std::vector<ZMenuInputFrame> open = {cardClick, {-100, -100, 2500}};
+        const std::vector<ZMenuInputFrame> reverse = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 60}};
+        const std::vector<ZMenuInputFrame> finish = {cardClick, {-100, -100, 2500}, {10, 700}, {-100, -100, 250}};
+        const std::vector<ZMenuInputFrame> *clicks[] = {&idle, &begin, &open, &reverse, &finish};
         constexpr const char *phases[] = {"folded", "opening", "open", "closing", "closed"};
         for (unsigned phase = 0; phase < 5; ++phase) {
             const std::string image = base + "-" + phases[phase] + ".png";
             if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
                 *states[phase], TestOutput::Path("store-card-check.dat"), image.c_str(), clicks[phase]) != -2) { return 1; }
         }
-        if (!opening.store.shopDetailOpen || opening.store.shopDetailTime != start + 240 || !opened.store.shopDetailOpen ||
-            opened.store.shopDetailTime != end || !closing.store.shopDetailClosing || closing.store.shopDetailTime != end - 240 ||
-            closed.store.shopDetailOpen || opened.selectedItem < 0) { return 1; }
+        if (!opening.store.focused.shopDetailOpen || opening.store.focused.shopDetailTime != start + 240 || !opened.store.focused.shopDetailOpen ||
+            opened.store.focused.shopDetailTime != end || !closing.store.focused.shopDetailClosing || closing.store.focused.shopDetailTime != end - 240 ||
+            closed.store.focused.shopDetailOpen || opened.selectedItem < 0) { return 1; }
         const ZStoreEntry &entry = store[opened.selectedItem];
         if (category != 0) {
             CProfileManager buyer = profile;
             buyer.coins = 2ull * entry.data.commonPrice;
             buyer.warbucks = 2ull * entry.data.rarePrice;
-            ZMenuState previewState = opened;
-            const std::vector<ZMenuTestClick> previewActions = {{-100, -100, 2500}, previewClick};
+            CMenuSystem previewState = opened;
+            const std::vector<ZMenuInputFrame> previewActions = {{-100, -100, 2500}, previewClick, {-100, -100, previewDuration}, previewClick, {-100, -100, previewDuration}};
             if (category == 1) {
                 if (ShowGameMenu(toc, tables, buyer, progress, refinement, store, weapons, armor, previewState,
-                    TestOutput::Path("store-card-preview.dat"), base + "-preview.png", &previewActions) != -2 || !previewState.store.shopPreview ||
+                    TestOutput::Path("store-card-preview.dat"), base + "-preview.png", &previewActions) != -2 || !previewState.store.focused.shopPreview ||
                     buyer.inventory.size() != profile.inventory.size()) { return 1; }
             }
             // Exercise the real purchase failure, including its original button table.
             CProfileManager poorBuyer = profile;
             poorBuyer.coins = 0;
             poorBuyer.warbucks = 0;
-            ZMenuState insufficient = opened;
-            const std::vector<ZMenuTestClick> insufficientActions = {{-100, -100, 2500}, purchaseClick};
+            CMenuSystem insufficient = opened;
+            const std::vector<ZMenuInputFrame> insufficientActions = {{-100, -100, 2500}, purchaseClick, {-100, -100, purchaseDuration}};
             if (ShowGameMenu(toc, tables, poorBuyer, progress, refinement, store, weapons, armor, insufficient,
                 TestOutput::Path("store-card-insufficient.dat"), base + "-insufficient.png", &insufficientActions) != -2 ||
                 insufficient.failedPrice == 0 || insufficient.storePromptButtons == nullptr ||
                 std::string(insufficient.storePromptButtons) != "MDS_BUTTON_STORE_PROMPT") { return 1; }
             std::printf("[store-card-check] insufficient category=%s original-three-buttons=1 failures=0\n", categories[category]);
-            ZMenuState purchase = opened;
-            std::vector<ZMenuTestClick> purchaseActions = {{-100, -100, 2500}, purchaseClick};
-            if (category == 2) { purchaseActions.push_back(purchaseClick); }
+            CMenuSystem purchase = opened;
+            std::vector<ZMenuInputFrame> purchaseActions = {{-100, -100, 2500}, purchaseClick, {-100, -100, purchaseDuration}};
+            if (category == 2) { purchaseActions.push_back(purchaseClick); purchaseActions.push_back({-100, -100, purchaseDuration}); }
             const std::filesystem::path path = base + "-purchase.dat";
             if (ShowGameMenu(toc, tables, buyer, progress, refinement, store, weapons, armor, purchase,
                 path, base + "-purchased.png", &purchaseActions) != -2) { return 1; }
             const GameObjectTypeRef &object = entry.data.objects[0];
             if (category == 1 && (!buyer.Owns(object.type, object.object) ||
-                !SameObject(Equipped(buyer, purchase.slot), object.object))) { return 1; }
+                !SameObject(CStoreAggregator::Equipped(buyer, purchase.slot), object.object))) { return 1; }
             // The selected card and its quantity come from the current STORE
             // ordering. This fixture buys it twice; do not assume a particular
             // powerup ID or pack size.
@@ -351,7 +434,7 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     }
     if (profile.coins != before.coins || profile.warbucks != before.warbucks || profile.inventory.size() != before.inventory.size()) { return 1; }
     for (unsigned slot = 0; slot < 5; ++slot) {
-        if (!SameObject(Equipped(profile, slot), Equipped(before, slot))) { return 1; }
+        if (!SameObject(CStoreAggregator::Equipped(profile, slot), CStoreAggregator::Equipped(before, slot))) { return 1; }
     }
     std::printf("[store-card-check] no-purchase unchanged-loadout failures=0\n");
     // Full native menu path: actual child-button click -> authored press ->
@@ -361,13 +444,13 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
     CProfileManager nativeSwapProfile;
     if (!LoadProfile(toc, tables, nativeSwapProfile, nativeSwapPath, TestOutput::Fixtures())) { return 1; }
     const unsigned originalSlot = nativeSwapProfile.activeWeaponSlot;
-    ZMenuTestClick nativeSwapClick;
+    ZMenuInputFrame nativeSwapClick;
     unsigned showDuration = 0, pressDuration = 0;
     {
-        ZGameMenu probe;
+        ZMenuSurface probe;
         if (!probe.Open(toc, tables)) { return 1; }
         ZMovieRegion parent, origin;
-        const auto *entry = FindMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+        const auto *entry = CMenuDataProvider::Find("MDS_BUTTON_STORE_GUN_SWAP", 0);
         if (entry == nullptr || !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"), kStoreGunSwapRegion, 0, parent) ||
             !StoreGunSwapOrigin(probe, parent, origin)) { return 1; }
         const unsigned movieId = probe.movies.Ordinal(entry->movies[0]);
@@ -385,11 +468,11 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         }
         if (!found) { return 1; }
     }
-    ZMenuState nativeSwapState;
-    nativeSwapState.page = 2;
+    CMenuSystem nativeSwapState;
+    nativeSwapState.stack.page = 2;
     nativeSwapState.store.shopGunSlot = originalSlot;
     nativeSwapState.store.shopFilter = kOwnedFilterBit;
-    std::vector<ZMenuTestClick> nativeSwapActions{{-100, -100, 1}, {-100, -100, showDuration + 1},
+    std::vector<ZMenuInputFrame> nativeSwapActions{{-100, -100, 1}, {-100, -100, showDuration + 1},
         nativeSwapClick, {-100, -100, pressDuration + 1}};
     for (unsigned frame = 0; frame < 120; ++frame) { nativeSwapActions.push_back({-100, -100, 16}); }
     if (ShowGameMenu(toc, tables, nativeSwapProfile, progress, refinement, store, weapons, armor,
@@ -413,8 +496,8 @@ int CheckStoreCards(CResTOCManager &toc, ZPackTables &tables, CProfileManager &p
         if (!LoadProfile(toc, tables, reference, referencePath, TestOutput::Fixtures())) { return 1; }
         reference.configuration.guns[reference.activeWeaponSlot].packHash = weapon.packHash;
         reference.configuration.guns[reference.activeWeaponSlot].localIndex = static_cast<std::uint8_t>(weapon.ordinal);
-        ZMenuState referenceState;
-        referenceState.page = 2;
+        CMenuSystem referenceState;
+        referenceState.stack.page = 2;
         referenceState.store.shopGunSlot = reference.activeWeaponSlot;
         const std::string referenceImage = TestOutput::Path("ui-original-2026-09-09/reference-gun-") + referenceKey + ".png";
         if (ShowGameMenu(toc, tables, reference, progress, refinement, store, weapons, armor, referenceState, referencePath,
@@ -437,8 +520,8 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         !LoadWeaponCatalog(toc, tables, weapons)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    ZMenuState state;
-    state.page = 26;
+    CMenuSystem state;
+    state.stack.page = 26;
     state.masteryWeapon = profile.configuration.guns[0];
     const ZWeaponEntry *weapon = FindMasteryWeapon(weapons, state.masteryWeapon);
     const ZStoreEntry *item = FindWeaponStore(store, state.masteryWeapon);
@@ -450,7 +533,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     profile.AddWeaponExperience(state.masteryWeapon, initialXP, weapon->data.GetMasteryLimit());
     const std::filesystem::path path = TestOutput::Path("ui-original-2026-09-09/upgrade-profile.dat");
     if (!profile.SaveToDisk(path)) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     const unsigned popupOrdinal = view.movies.Ordinal("GLU_MOVIE_UPGRADE_POPUP");
@@ -484,8 +567,8 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     ZMovieRegion buyArea, closeArea;
     if (!view.movies.Region(popupOrdinal, kUpgradeBuyRegion, idleStart, buyArea) ||
         !view.movies.Region(popupOrdinal, kUpgradeCloseRegion, idleStart, closeArea)) { return 1; }
-    const ZMenuDataEntry *buy = FindMenuData("MDS_BUTTON_STORE_UPGRADE", 2);
-    const ZMenuDataEntry *close = FindMenuData("MDS_BUTTON_STORE_UPGRADE", 0);
+    const CMenuDataProvider::Entry *buy = CMenuDataProvider::Find("MDS_BUTTON_STORE_UPGRADE", 2);
+    const CMenuDataProvider::Entry *close = CMenuDataProvider::Find("MDS_BUTTON_STORE_UPGRADE", 0);
     if (buy == nullptr || close == nullptr) { return 1; }
     ZMovieRegion buyTouch, closeTouch;
     bool foundBuy = false, foundClose = false;
@@ -507,10 +590,10 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     unsigned index = 0;
     for (const Step &step : steps) {
         view.clock += step.delta;
-        view.Begin(26);
-        if (step.click == 1) { view.SetTestClick({buyTouch.x + buyTouch.width / 2, buyTouch.y + buyTouch.height / 2}); }
-        if (step.click == 2) { view.SetTestClick({closeTouch.x + closeTouch.width / 2, closeTouch.y + closeTouch.height / 2}); }
-        if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path)) { return 1; }
+        view.Begin();
+        if (step.click == 1) { view.InjectTap({buyTouch.x + buyTouch.width / 2, buyTouch.y + buyTouch.height / 2}); }
+        if (step.click == 2) { view.InjectTap({closeTouch.x + closeTouch.width / 2, closeTouch.y + closeTouch.height / 2}); }
+        if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state)) { return 1; }
         if (index < 3 && state.masteryPopup.StarsTime() != 0) { return 1; }
         if (index < 5 && profile.GetWeaponExperience(state.masteryWeapon) != initialXP) { return 1; }
         if (index == 4 && state.masteryPopup.StarsTime() != initialTarget) { return 1; }
@@ -518,7 +601,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         if (index == 6 && state.masteryPopup.DisplayExperience() != initialXP) { return 1; }
         if (index == 7 && state.masteryPopup.GetState() != CMenuUpgradePopup::State::Flash) { return 1; }
         if (index == 9 && state.masteryPopup.GetState() != CMenuUpgradePopup::State::Ready) { return 1; }
-        if (index == 12 && state.page == 26) { return 1; }
+        if (index == 12 && state.stack.page == 26) { return 1; }
         const std::string capture = std::string(TestOutput::Path("ui-original-2026-09-09/upgrade-")) + step.name + ".png";
         if (glGetError() != 0 || !Capture::SaveFrame(view.window, capture)) { return 1; }
         view.window.Present();
@@ -534,31 +617,32 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     // Reopen the real panel, then buy silver and gold. Gold closes only after
     // the star movie reaches its target and the native 250 ms flash completes.
     state.Navigate(26);
-    view.Begin(26);
-    if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path)) { return 1; }
+    state.UpdateNavigation();
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state)) { return 1; }
     view.clock += opening;
-    view.Begin(26);
-    if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path)) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state)) { return 1; }
     unsigned totalPrice = static_cast<unsigned>(item->data.statGroups[7][1]);
     for (unsigned level = 2; level <= kMaxMasteryLevel; ++level) {
-        view.Begin(26);
-        view.SetTestClick({buyTouch.x + buyTouch.width / 2, buyTouch.y + buyTouch.height / 2});
-        if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path) ||
+        view.Begin();
+        view.InjectTap({buyTouch.x + buyTouch.width / 2, buyTouch.y + buyTouch.height / 2});
+        if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state) ||
             state.masteryPopup.GetState() != CMenuUpgradePopup::State::Upgrading) { return 1; }
         view.clock += stars->duration;
-        view.Begin(26);
-        if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path) ||
+        view.Begin();
+        if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state) ||
             state.masteryPopup.GetState() != CMenuUpgradePopup::State::Flash) { return 1; }
         view.clock += 250;
-        view.Begin(26);
-        if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path)) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state)) { return 1; }
         totalPrice += static_cast<unsigned>(item->data.statGroups[7][level]);
         if (level < kMaxMasteryLevel && state.masteryPopup.GetState() != CMenuUpgradePopup::State::Ready) { return 1; }
         if (level == kMaxMasteryLevel && state.masteryPopup.GetState() != CMenuUpgradePopup::State::Closing) { return 1; }
     }
     view.clock += closing;
-    view.Begin(26);
-    if (!DrawMastery(view, state, profile, toc, tables, store, weapons, path) || state.page == 26 ||
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, state, profile, toc, tables, store, weapons, path), state) || state.stack.page == 26 ||
         !restored.LoadFromDisk(path) || restored.GetWeaponExperience(state.masteryWeapon) != weapon->data.GetMasteryThreshold(2) ||
         restored.warbucks != 10000 - totalPrice) { return 1; }
     std::printf("[upgrade-check] reopen silver gold auto-close total-price=%u reload failures=0\n", totalPrice);
@@ -570,8 +654,8 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     if (!LoadProfile(toc, tables, poorProfile, fundsPath, TestOutput::Fixtures())) { return 1; }
     poorProfile.warbucks = 0;
     poorProfile.weaponMastery.clear();
-    ZMenuState fundsState;
-    fundsState.page = 26;
+    CMenuSystem fundsState;
+    fundsState.stack.page = 26;
     fundsState.masteryWeapon = state.masteryWeapon;
     const unsigned price = static_cast<unsigned>(item->data.statGroups[7][1]);
     const int offer = FindCurrencyOffer(store, 1, price);
@@ -582,9 +666,9 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         prompt->duration, 0, prompt->duration, 0, 2000, 2000, prompt->duration, prompt->duration, 0};
     for (unsigned phase = 0; phase < 15; ++phase) {
         view.clock += durations[phase];
-        view.Begin(26);
+        view.Begin();
         if (phase == 2 || phase == 7 || phase == 14) {
-            view.SetTestClick({buyTouch.x + buyTouch.width / 2, buyTouch.y + buyTouch.height / 2});
+            view.InjectTap({buyTouch.x + buyTouch.width / 2, buyTouch.y + buyTouch.height / 2});
         }
         if (phase == 4 || phase == 9) {
             unsigned buttonRegion = 3;
@@ -592,10 +676,10 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
             ZMovieRegion touch;
             if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_POPUP"), buttonRegion,
                 fundsState.storePopup.MovieTime(), touch)) { return 1; }
-            view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
+            view.InjectTap({touch.x + touch.width / 2, touch.y + touch.height / 2});
         }
         if (!CompleteOfflineIAP(view.clock, fundsState, poorProfile, store, fundsPath) ||
-            !DrawMastery(view, fundsState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+            !FinishMenuFrame(DrawMastery(view, fundsState, poorProfile, toc, tables, store, weapons, fundsPath), fundsState) ||
             !DrawStorePrompt(view, fundsState)) { return 1; }
         if (phase <= 10 && (poorProfile.warbucks != 0 || poorProfile.GetWeaponExperience(fundsState.masteryWeapon) != 0)) { return 1; }
         if (phase == 3 && (!fundsState.storePopup.IsReady() || fundsState.failedPrice != price ||
@@ -630,38 +714,40 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     for (unsigned slot : {1u, 0u}) {
         poorProfile.activeWeaponSlot = slot;
         CGameFlow context{poorProfile, fundsPath, 0};
-        ZMenuState resultState;
-        BeginPostGame(resultState, context, weapons);
+        CMenuSystem resultState;
+        resultState.postGame.Refresh(resultState, context, weapons);
+            resultState.UpdateNavigation();
         if (!SameObject(resultState.masteryWeapon, poorProfile.configuration.guns[slot])) {
             std::printf("[upgrade-active-slot-check] expected-slot=%u selected=%u:%u\n", slot,
                 resultState.masteryWeapon.packHash, resultState.masteryWeapon.localIndex);
             return 1;
         }
         resultState.Navigate(26);
-        view.Begin(26);
-        if (!DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath)) { return 1; }
+    resultState.UpdateNavigation();
+        view.Begin();
+        if (!FinishMenuFrame(DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath), resultState)) { return 1; }
         view.clock += opening;
-        view.Begin(26);
-        if (!DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+        view.Begin();
+        if (!FinishMenuFrame(DrawMastery(view, resultState, poorProfile, toc, tables, store, weapons, fundsPath), resultState) ||
             !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-postgame-active-") + std::to_string(slot + 1) + ".png")) { return 1; }
         std::printf("[upgrade-active-slot-check] active=%u selected=%u:%u failures=0\n", slot,
             resultState.masteryWeapon.packHash, resultState.masteryWeapon.localIndex);
     }
     const auto fundsBeforeSwap = poorProfile.warbucks;
-    ZMenuState swapState;
-    swapState.page = 26;
+    CMenuSystem swapState;
+    swapState.stack.page = 26;
     swapState.masteryWeapon = state.masteryWeapon;
-    view.Begin(26);
-    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath)) {
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath), swapState)) {
         std::printf("[upgrade-swap-check] opening draw failed\n"); return 1;
     }
     view.clock += opening;
-    view.Begin(26);
-    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath)) {
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath), swapState)) {
         std::printf("[upgrade-swap-check] ready draw failed\n"); return 1;
     }
     ZMovieRegion swapArea, swapTouch;
-    const auto *swap = FindMenuData("MDS_BUTTON_STORE_UPGRADE", 1);
+    const auto *swap = CMenuDataProvider::Find("MDS_BUTTON_STORE_UPGRADE", 1);
     if (swap == nullptr || !view.movies.Region(popupOrdinal, 10, swapState.masteryPopup.MovieTime(), swapArea)) { return 1; }
     // Match DrawMovieButton: child origin is the parent region center.
     bool foundSwapTouch = false;
@@ -670,15 +756,15 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
         if (region.index == 0) { swapTouch = region; foundSwapTouch = true; break; }
     }
     if (!foundSwapTouch) { return 1; }
-    const ZMenuTestClick swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
+    const ZMenuInputFrame swapClick{swapTouch.x + swapTouch.width / 2, swapTouch.y + swapTouch.height / 2};
     if (!Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-1.png"))) { return 1; }
     const unsigned beforeSwapTime = swapState.masteryPopup.MovieTime();
     std::printf("[upgrade-swap-check] click=%.1f/%.1f movie=%u state=%u alpha=%.3f input=%u xp=%u limit=%u\n", swapClick.x, swapClick.y, beforeSwapTime,
         static_cast<unsigned>(swapState.masteryPopup.GetState()), swapArea.alpha, view.inputEnabled,
         poorProfile.GetWeaponExperience(secondGun), secondWeapon->data.GetMasteryLimit());
-    view.Begin(26);
-    view.SetTestClick(swapClick);
-    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+    view.Begin();
+    view.InjectTap(swapClick);
+    if (!FinishMenuFrame(DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath), swapState) ||
         !SameObject(swapState.masteryWeapon, secondGun) || swapState.masteryPopup.MovieTime() != beforeSwapTime ||
         swapState.masteryPopup.StarsTime() != 0 || poorProfile.warbucks != fundsBeforeSwap ||
         !SameObject(poorProfile.configuration.guns[0], state.masteryWeapon)) {
@@ -686,17 +772,17 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
             swapState.masteryWeapon.localIndex, swapState.masteryPopup.MovieTime(), swapState.masteryPopup.StarsTime()); return 1;
     }
     view.clock += 100;
-    view.Begin(26);
-    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath), swapState) ||
         swapState.masteryPopup.StarsTime() != std::min(100u, swapState.masteryPopup.TargetTime())) { return 1; }
     if (!Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap.png"))) { return 1; }
-    view.Begin(26);
-    view.SetTestClick(swapClick);
-    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+    view.Begin();
+    view.InjectTap(swapClick);
+    if (!FinishMenuFrame(DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath), swapState) ||
         !SameObject(swapState.masteryWeapon, poorProfile.configuration.guns[0]) ||
         poorProfile.warbucks != fundsBeforeSwap) { return 1; }
-    view.Begin(26);
-    if (!DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath) ||
+    view.Begin();
+    if (!FinishMenuFrame(DrawMastery(view, swapState, poorProfile, toc, tables, store, weapons, fundsPath), swapState) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/upgrade-swap-back-1.png"))) { return 1; }
     std::printf("[upgrade-swap-check] store-entry distinct-guns stars-reset no-reopen unchanged-loadout failures=0\n");
     return 0;
@@ -710,8 +796,9 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
         bool previous = GameHostSettings().isConnected;
         ~ConnectionRestore() { GameHostSettings().isConnected = previous; }
     } connectionRestore;
-    ZMenuTestClick buyClick;
-    ZMenuTestClick dismissClick;
+    ZMenuInputFrame buyClick;
+    ZMenuInputFrame dismissClick;
+    unsigned buyDuration = 0;
     float columnPitch = 0, rowPitch = 0;
     std::vector<std::pair<int, unsigned>> currencies;
     for (unsigned index = 0; index < store.size(); ++index) {
@@ -722,10 +809,10 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
     }
     std::sort(currencies.begin(), currencies.end());
     {
-        ZGameMenu probe;
+        ZMenuSurface probe;
         if (!probe.Open(toc, tables)) { return 1; }
         ZMovieRegion slot, price, button;
-        ZStoreCardFace face;
+        CMenuStoreOption::Face face;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), kFirstColumnRegion, probe.storeRestTime, slot)) { return 1; }
         ZMovieRegion secondColumn, promptTouch;
         if (!probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), kFirstColumnRegion + 1, probe.storeRestTime, secondColumn) ||
@@ -735,13 +822,17 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
         dismissClick = {promptTouch.x + promptTouch.width / 2, promptTouch.y + promptTouch.height / 2, 100};
         face.x = slot.x;
         face.y = slot.y;
-        const auto *entry = FindMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+        const auto *entry = CMenuDataProvider::Find("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
         if (entry == nullptr || !CardRegion(probe, probe.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), kCardPriceRegion, face, price) ||
             !probe.movies.Region(probe.movies.Ordinal(entry->movies[0]), 1, 0, button)) { return 1; }
         buyClick = {price.x + price.width - button.width / 2, price.y + price.height - button.height / 2};
+        const CMovie *buttonMovie = probe.movies.GetMovie(probe.movies.Ordinal(entry->movies[0]));
+        unsigned pressStart = 0, pressEnd = 0;
+        if (!buttonMovie->GetChapterRange(1, pressStart, pressEnd)) { return 1; }
+        buyDuration = pressEnd - pressStart + 1;
         constexpr unsigned parameters[] = {17, 14, 15, 16};
         for (unsigned index = 0; index < 4; ++index) {
-            entry = FindMenuData("MDS_BUTTON_STORE_SORT_CURRENCY", index);
+            entry = CMenuDataProvider::Find("MDS_BUTTON_STORE_SORT_CURRENCY", index);
             if (entry == nullptr || entry->action != 65 || entry->parameter != parameters[index]) { return 1; }
             std::printf("[bank-check] original-filter row=%u label=%s parameter=%u\n", index,
                 probe.movies.NamedString(entry->strings[0]).c_str(), entry->parameter);
@@ -756,8 +847,8 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
         profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
         const auto path = root / std::to_string(phase);
         if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-        ZMenuState state;
-        state.page = 2;
+        CMenuSystem state;
+        state.stack.page = 2;
         state.store.shopCategory = 3;
         state.store.shopGunSlot = profile.activeWeaponSlot;
         state.store.shopFilter = 1u << 14;
@@ -787,11 +878,12 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
             if ((state.store.shopFilter & (1u << (fixture[row.second].data.type))) != 0) { ++position; }
         }
         state.store.shopScroll = (position / 2) * columnPitch;
-        ZMenuTestClick cardClick = buyClick;
+        ZMenuInputFrame cardClick = buyClick;
         cardClick.y += (position % 2) * rowPitch;
         if (phase == 5) { fixture[first].data.commonPrice += 321; }
-        std::vector<ZMenuTestClick> clicks = {cardClick, {30, 90, 2000}};
+        std::vector<ZMenuInputFrame> clicks = {cardClick, {30, 90, 2000}};
         if (phase >= 3) { clicks[1] = {-100, -100, 2000}; }
+        clicks.insert(clicks.begin() + 1, {-100, -100, buyDuration});
         if (phase != 0) { clicks.push_back({-100, -100, 4000}); clicks.push_back({-100, -100, 1000}); }
         if (phase == 8) {
             clicks.push_back(dismissClick);
@@ -800,7 +892,7 @@ int CheckBank(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgress::T
         }
         const auto capture = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("bank-phase-" + std::to_string(phase) + ".png");
         if (ShowGameMenu(toc, tables, profile, progress, refinement, fixture, weapons, armor, state, path, capture.string(), &clicks) != -2 ||
-            state.page != 2 || state.store.shopCategory != 3) { return 1; }
+            state.stack.page != 2 || state.store.shopCategory != 3) { return 1; }
         if (phase == 0) {
             if (!state.currencyPending || profile.coins != coins || profile.warbucks != bucks || !state.storePopup.IsReady()) { return 1; }
         } else {
@@ -835,14 +927,14 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     if (!LoadProfile(toc, tables, profile, save, TestOutput::Fixtures())) { return 1; }
     {
-        ZGameMenu view;
+        ZMenuSurface view;
         if (!view.Open(toc, tables)) { return 1; }
         ZMovieRegion viewport, column, content, badge, sprite;
         const unsigned scroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
         if (!view.movies.Region(scroll, 0, view.storeRestTime, viewport) ||
             !view.movies.Region(scroll, 1, view.storeRestTime, column) ||
             !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content)) { return 1; }
-        ZStoreCardFace face;
+        CMenuStoreOption::Face face;
         face.x = column.x;
         face.y = column.y;
         if (!CardRegion(view, view.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), kCardBadgeRegion, face, badge) ||
@@ -856,10 +948,10 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
         }
     }
     for (unsigned phase = 0; phase < 4; ++phase) {
-        ZMenuState state;
-        state.page = 14;
+        CMenuSystem state;
+        state.stack.page = 14;
         profile.firstLaunch = phase == 3;
-        std::vector<ZMenuTestClick> clicks;
+        std::vector<ZMenuInputFrame> clicks;
         if (phase == 0) { clicks.push_back({-1, -1, 1200}); }
         if (phase == 1) { clicks.push_back({-1, -1, 600}); }
         if (phase >= 2) { clicks.push_back({12, 12, 16}); }
@@ -869,8 +961,8 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
         unsigned expectedPage = 14;
         if (phase == 2) { expectedPage = 24; }
         if (phase == 3) { expectedPage = 25; }
-        if (state.page != expectedPage) { return 1; }
-        std::printf("[ui-feedback-check] splash-phase=%u page=%u wait blink click original-entry failures=0\n", phase, state.page);
+        if (state.stack.page != expectedPage) { return 1; }
+        std::printf("[ui-feedback-check] splash-phase=%u page=%u wait blink click original-entry failures=0\n", phase, state.stack.page);
     }
     profile.firstLaunch = false;
     const ZStoreEntry *package = nullptr;
@@ -879,13 +971,13 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
         if (store[index].data.singlePurchase != 0) { package = &store[index]; packageIndex = index; break; }
     }
     if (package == nullptr) { return 1; }
-    ZMenuTestClick packageCard, buyPackage;
+    ZMenuInputFrame packageCard, buyPackage;
     {
-        ZGameMenu view;
+        ZMenuSurface view;
         if (!view.Open(toc, tables)) { return 1; }
         ZMovieRegion column, body, right, label;
-        ZStoreCardFace face;
-        const auto *entry = FindMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+        CMenuStoreOption::Face face;
+        const auto *entry = CMenuDataProvider::Find("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
         if (entry == nullptr || !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, view.storeRestTime, column)) { return 1; }
         face.x = column.x; face.y = column.y;
         const unsigned box = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
@@ -896,20 +988,20 @@ int CheckUiFeedback(CResTOCManager &toc, ZPackTables &tables, const CPlayerProgr
         if (label.width <= right.width) { buyPackage.x = right.x + right.width / 2; }
     }
     for (unsigned phase = 0; phase < 7; ++phase) {
-        ZMenuState state;
-        state.page = 2;
+        CMenuSystem state;
+        state.stack.page = 2;
         state.store.shopGunSlot = profile.activeWeaponSlot;
         if (phase == 0 || phase == 1) { state.store.shopCategory = 2; }
         if (phase == 2) { state.store.shopCategory = 1; }
-        std::vector<ZMenuTestClick> clicks{{-1, -1, 1000}};
+        std::vector<ZMenuInputFrame> clicks{{-1, -1, 1000}};
         if (phase == 1 || phase == 2 || phase == 3 || phase == 6) { clicks.push_back(packageCard); }
-        if (phase == 4) { clicks.push_back(buyPackage); }
+        if (phase == 4) { clicks.push_back(buyPackage); clicks.push_back({-1, -1, 1000}); }
         const auto screenshot = root / ("store-" + std::to_string(phase) + ".png");
         if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, save,
             screenshot.string(), &clicks) != -2) { return 1; }
         if (phase == 3 && state.selectedItem != static_cast<int>(packageIndex)) { return 1; }
         if ((phase == 1 || phase == 2 || phase == 6) && state.selectedItem == static_cast<int>(packageIndex)) { return 1; }
-        if (phase == 4 && (!profile.IsPackagePurchased(package->ref) || state.store.shopDetailOpen)) { return 1; }
+        if (phase == 4 && (!profile.IsPackagePurchased(package->ref) || state.store.focused.shopDetailOpen)) { return 1; }
         if (phase == 5) {
             // A disk reload in the same session must retain OWNED. Reset models
             // a new process before applying the original purchased-item override.
@@ -939,28 +1031,28 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
     }
     if (package == nullptr) { return 1; }
     const auto root = std::filesystem::path(TestOutput::Path("package-purchase-check")) / std::to_string(GetTickCount64());
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = false;
     const unsigned box = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
     ZMovieRegion column, content, body, right, button, actions;
     unsigned start = 0, end = 0;
-    const auto *buy = FindMenuData("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
+    const auto *buy = CMenuDataProvider::Find("MDS_BUTTON_STORE_ITEMS", kBuyButtonEntry);
     if (buy == nullptr || !view.movies.GetMovie(box)->GetChapterRange(1, start, end) ||
         !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 2, view.storeRestTime, column) ||
         !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
         !view.movies.Region(view.movies.Ordinal(buy->movies[0]), 1, 0, button)) { return 1; }
-    ZStoreCardFace folded{column.x, column.y};
+    CMenuStoreOption::Face folded{column.x, column.y};
     if (!CardRegion(view, box, kCardBodyRegion, folded, body) || !CardRegion(view, box, kCardRightRegion, folded, right)) { return 1; }
-    const ZMenuTestClick openClick{body.x + 10, body.y + 10};
-    ZMenuTestClick foldedBuy{right.x + right.width - button.width / 2, right.y + right.height - button.height / 2};
+    const ZMenuInputFrame openClick{body.x + 10, body.y + 10};
+    ZMenuInputFrame foldedBuy{right.x + right.width - button.width / 2, right.y + right.height - button.height / 2};
     if (button.width <= right.width) { foldedBuy.x = right.x + right.width / 2; }
     if (!view.movies.Region(box, kCardBodyRegion, end, body)) { return 1; }
-    const ZStoreCardFace expanded{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
+    const CMenuStoreOption::Face expanded{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
         content.y + content.height / 2 - body.height / 2, 1, end};
     if (!CardRegion(view, box, kCardActionRegion, expanded, actions)) { return 1; }
-    const ZMenuTestClick expandedBuy{actions.x + actions.width - button.width / 2, actions.y + button.height / 2};
+    const ZMenuInputFrame expandedBuy{actions.x + actions.width - button.width / 2, actions.y + button.height / 2};
     unsigned failures = 0;
     for (unsigned mode = 0; mode < 2; ++mode) {
         CProfileManager profile;
@@ -971,17 +1063,17 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         profile.warbucks = package->data.rarePrice;
         profile.activeWeaponSlot = mode;
         const CPlayerConfiguration initialConfiguration = profile.configuration;
-        ZMenuState state;
-        state.page = 2;
+        CMenuSystem state;
+        state.stack.page = 2;
         state.store.shopGunSlot = mode;
-        std::vector<ZMenuTestClick> clicks{{-1, -1, 1000}};
+        std::vector<ZMenuInputFrame> clicks{{-1, -1, 1000}};
         if (mode == 1) { clicks.push_back(openClick); clicks.push_back({-1, -1, 1000}); clicks.push_back(expandedBuy); }
         else { clicks.push_back(foldedBuy); }
         clicks.push_back({-1, -1, 1000});
-        for (const ZMenuTestClick &click : clicks) {
+        for (const ZMenuInputFrame &click : clicks) {
             view.clock += click.advanceMs;
-            view.Begin(2); view.SetTestClick(click);
-            if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+            view.Begin(); view.InjectTap(click);
+            if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
         }
         if (!Capture::SaveFrame(view.window, (save / "after-purchase.png").string())) { return 1; }
         const bool purchased = profile.IsPackagePurchased(package->ref);
@@ -1003,7 +1095,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
                 for (const auto &part : profile.configuration.armor) { if (SameObject(part, object.object)) { ++equipped; break; } }
             }
         }
-        if (!purchased || state.store.shopDetailOpen != (mode == 1) || delivered != gear || equipped != gear ||
+        if (!purchased || state.store.focused.shopDetailOpen != (mode == 1) || delivered != gear || equipped != gear ||
             profile.IsPackageHidden(package->ref)) { ++failures; }
         unsigned gunIndex = 0, restoredRows = 0;
         for (const auto &object : package->data.objects) {
@@ -1029,19 +1121,19 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         const auto inventory = profile.inventory.size();
         const auto acquiredConfiguration = profile.configuration;
         // Clicking the former BUY area must not acquire or equip again.
-        view.clock += 1000; view.Begin(2);
-        if (mode == 0) { view.SetTestClick(foldedBuy); }
-        else { view.SetTestClick(expandedBuy); }
-        if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+        view.clock += 1000; view.Begin();
+        if (mode == 0) { view.InjectTap(foldedBuy); }
+        else { view.InjectTap(expandedBuy); }
+        if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
         if (profile.AcquireItem(package->data, package->data.requiredLevel) != ZPurchaseResult::Owned ||
             profile.coins != coins || profile.warbucks != warbucks || profile.inventory.size() != inventory) { ++failures; }
         // Re-entering categories must preserve the session's OWNED card.
         for (unsigned category : {1u, 2u, 0u}) {
-            state = ZMenuState{};
-            state.page = 2; state.store.shopCategory = category; state.store.shopGunSlot = mode;
+            state = CMenuSystem{};
+            state.stack.page = 2; state.store.shopCategory = category; state.store.shopGunSlot = mode;
             view.clock += 1000;
-            view.Begin(2); view.SetTestClick(openClick);
-            if (!DrawStore(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+            view.Begin(); view.InjectTap(openClick);
+            if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
             bool selectedPackage = state.selectedItem >= 0 && static_cast<unsigned>(state.selectedItem) < store.size() &&
                 SameObject(store[state.selectedItem].ref, package->ref);
             if (selectedPackage != (category == 0)) { ++failures; }
@@ -1066,9 +1158,9 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
                 if (restarted.GetPowerupCount(object.object) != expected || profile.GetPowerupCount(object.object) != expected) { ++failures; }
             } else if (!restarted.Owns(object.type, object.object)) { ++failures; }
         }
-        state = ZMenuState{}; state.page = 2; state.store.shopGunSlot = mode;
-        view.clock += 1000; view.Begin(2); view.SetTestClick(openClick);
-        if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+        state = CMenuSystem{}; state.stack.page = 2; state.store.shopGunSlot = mode;
+        view.clock += 1000; view.Begin(); view.InjectTap(openClick);
+        if (!FinishMenuFrame(state.store.Draw(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
         if (state.selectedItem >= 0 && static_cast<unsigned>(state.selectedItem) < store.size() &&
             SameObject(store[state.selectedItem].ref, package->ref)) { ++failures; }
         if (!Capture::SaveFrame(view.window, (save / "after-restart.png").string())) { return 1; }
@@ -1084,7 +1176,7 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         }
         std::sort(ownedArmor.begin(), ownedArmor.end());
         ZMovieRegion firstColumn, secondColumn, equipButton;
-        const auto *equipEntry = FindMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
+        const auto *equipEntry = CMenuDataProvider::Find("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
         const unsigned scroll = view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL");
         if (equipEntry == nullptr || !view.movies.Region(scroll, kFirstColumnRegion, view.storeRestTime, firstColumn) ||
             !view.movies.Region(scroll, kFirstColumnRegion + 1, view.storeRestTime, secondColumn) ||
@@ -1093,27 +1185,33 @@ int RunPackagePurchaseCheck(const std::string &bigDirectory) {
         for (unsigned position = 0; position < ownedArmor.size(); ++position) {
             const auto &item = store[ownedArmor[position].second].data;
             if (item.displayOrder >= 0) { continue; }
-            state = ZMenuState{}; state.page = 2; state.store.shopCategory = 1;
+            state = CMenuSystem{}; state.stack.page = 2; state.store.shopCategory = 1;
             state.store.shopGunSlot = mode; state.store.shopFilter = kOwnedFilterBit;
             state.store.shopScroll = (position / 2) * (secondColumn.x - firstColumn.x);
-            const ZStoreCardFace face{firstColumn.x, firstColumn.y + (position % 2) * (firstColumn.height / 2 + 5)};
+            const CMenuStoreOption::Face face{firstColumn.x, firstColumn.y + (position % 2) * (firstColumn.height / 2 + 5)};
             ZMovieRegion price;
             if (!CardRegion(view, box, kCardPriceRegion, face, price)) { return 1; }
-            view.clock += 1000; view.Begin(2);
-            view.SetTestClick({price.x + price.width - equipButton.width / 2, price.y + price.height - equipButton.height / 2});
-            if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save)) { return 1; }
+            view.clock += 1000; view.Begin();
+            view.InjectTap({price.x + price.width - equipButton.width / 2, price.y + price.height - equipButton.height / 2});
+            if (!FinishMenuFrame(state.store.Draw(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
+            const CMovie *equipMovie = view.movies.GetMovie(view.movies.Ordinal(equipEntry->movies[0]));
+            unsigned selectedStart = 0, selectedEnd = 0;
+            if (!equipMovie->GetChapterRange(1, selectedStart, selectedEnd)) { return 1; }
+            view.clock += selectedEnd - selectedStart + 1;
+            view.Begin(); view.InjectTap({-1, -1});
+            if (!FinishMenuFrame(state.store.Draw(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save), state)) { return 1; }
             ++armorClicks;
         }
         for (unsigned slot = 0; slot < acquiredConfiguration.armor.size(); ++slot) {
             if (!SameObject(restarted.configuration.armor[slot], acquiredConfiguration.armor[slot])) { ++failures; }
         }
         if (armorClicks != restoredRows) { ++failures; }
-        state = ZMenuState{}; state.page = 2; state.store.shopCategory = 1; state.store.shopFilter = kOwnedFilterBit; state.store.shopGunSlot = mode;
-        view.clock += 1000; view.Begin(2); view.SetTestClick({-1, -1});
-        if (!DrawStore(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save) ||
+        state = CMenuSystem{}; state.stack.page = 2; state.store.shopCategory = 1; state.store.shopFilter = kOwnedFilterBit; state.store.shopGunSlot = mode;
+        view.clock += 1000; view.Begin(); view.InjectTap({-1, -1});
+        if (!FinishMenuFrame(state.store.Draw(view, toc, tables, restarted, package->data.requiredLevel, store, weapons, armor, state, save), state) ||
             !Capture::SaveFrame(view.window, (save / "armor-re-equipped.png").string())) { return 1; }
         std::printf("[package-purchase-check] expanded=%u purchased=%u detail-open=%u gear-delivered=%u/%u gear-equipped=%u/%u failures=%u\n",
-            mode, purchased, state.store.shopDetailOpen, delivered, gear, equipped, gear, failures);
+            mode, purchased, state.store.focused.shopDetailOpen, delivered, gear, equipped, gear, failures);
         std::printf("[package-purchase-check] restored-armor-rows=%u session-owned restart-hidden loadout-reloaded repeat-rejected failures=%u\n", restoredRows, failures);
         std::printf("[package-purchase-check] armor-equip-clicks=%u failures=%u\n", armorClicks, failures);
     }
@@ -1140,7 +1238,7 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
     unsigned closedStart = 0, closedEnd = 0, slideStart = 0, slideEnd = 0;
     ZMovieRegion closedButton, openButton, openPanel, optionLabel;
     {
-        ZGameMenu probe;
+        ZMenuSurface probe;
         if (!probe.Open(toc, tables)) { return 1; }
         const unsigned ordinal = probe.movies.Ordinal("GLU_MOVIE_SORT_BAR");
         const CMovie *movie = probe.movies.GetMovie(ordinal);
@@ -1152,7 +1250,7 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
             !probe.movies.Region(ordinal, kSortButtonRegion, slideEnd, openButton) ||
             !probe.movies.Region(ordinal, kSortPanelRegion, slideEnd, openPanel) ||
             !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_BUTTON_LG"), 1, 0, optionLabel)) { return 1; }
-        ZMenuState playback;
+        CMenuSystem playback;
         if (!AdvanceStoreFilter(probe, playback, *movie)) { return 1; }
         playback.store.shopFilterOpen = true;
         probe.clock = (slideEnd - closedEnd) / 2;
@@ -1175,7 +1273,7 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
         CMovie changed = *movie;
         changed.chapter.starts[1] += 20;
         changed.chapter.starts[2] += 20;
-        ZMenuState changedPlayback;
+        CMenuSystem changedPlayback;
         if (!AdvanceStoreFilter(probe, changedPlayback, changed) || changedPlayback.store.shopFilterTime != closedEnd + 20) { return 1; }
         changedPlayback.store.shopFilterOpen = true;
         probe.clock += changed.duration;
@@ -1184,33 +1282,33 @@ int RunStoreTemplateCheck(const std::string &bigDirectory, bool cardsOnly, bool 
         if (movie->GetChapterRange(static_cast<unsigned>(movie->chapter.starts.size()), unusedStart, unusedEnd)) { return 1; }
         std::printf("[store-template-check] chapter-bounds moving-region reversal modified-resource failures=0\n");
     }
-    const ZMenuTestClick openClick{closedButton.x + closedButton.width / 2, closedButton.y + closedButton.height / 2};
-    const ZMenuTestClick closeClick{openButton.x + openButton.width / 2, openButton.y + openButton.height / 2};
+    const ZMenuInputFrame openClick{closedButton.x + closedButton.width / 2, closedButton.y + closedButton.height / 2};
+    const ZMenuInputFrame closeClick{openButton.x + openButton.width / 2, openButton.y + openButton.height / 2};
     const unsigned travel = slideEnd - closedEnd;
     const float optionX = openPanel.x + openPanel.width / 2;
     const float optionY = openPanel.y + optionLabel.height / 2;
     const float rowPitch = optionLabel.height * kSortRowSpacing;
-    ZMenuState closed, halfway, selected, closing, closedAgain;
-    closed.page = halfway.page = selected.page = closing.page = closedAgain.page = 2;
+    CMenuSystem closed, halfway, selected, closing, closedAgain;
+    closed.stack.page = halfway.stack.page = selected.stack.page = closing.stack.page = closedAgain.stack.page = 2;
     const std::filesystem::path profilePath = TestOutput::Path("store-template-check.dat");
-    const std::vector<ZMenuTestClick> idle = {{-100, -100}};
+    const std::vector<ZMenuInputFrame> idle = {{-100, -100}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         closed, profilePath, TestOutput::Path("store-template-closed.png"), &idle) != -2) { return 1; }
-    const std::vector<ZMenuTestClick> halfwayClicks = {openClick, {-100, -100, travel / 2}};
+    const std::vector<ZMenuInputFrame> halfwayClicks = {openClick, {-100, -100, travel / 2}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         halfway, profilePath, TestOutput::Path("store-template-opening.png"), &halfwayClicks) != -2 ||
         halfway.store.shopFilterTime != closedEnd + travel / 2) { return 1; }
     // Click a row's final position before it arrives: it must not select there.
-    const std::vector<ZMenuTestClick> selectClicks = {openClick, {optionX, optionY + 2 * rowPitch},
+    const std::vector<ZMenuInputFrame> selectClicks = {openClick, {optionX, optionY + 2 * rowPitch},
         {optionX, optionY + 2 * rowPitch, travel}, {optionX, optionY + 3 * rowPitch}, {-100, -100}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         selected, profilePath, TestOutput::Path("store-template-open.png"), &selectClicks) != -2 ||
         selected.store.shopFilter != 3 || selected.store.shopFilterTime != slideEnd) { return 1; }
-    const std::vector<ZMenuTestClick> closingClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel / 2}};
+    const std::vector<ZMenuInputFrame> closingClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel / 2}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         closing, profilePath, TestOutput::Path("store-template-closing.png"), &closingClicks) != -2 ||
         closing.store.shopFilterOpen || closing.store.shopFilterTime != slideEnd - travel / 2) { return 1; }
-    const std::vector<ZMenuTestClick> closeClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel}};
+    const std::vector<ZMenuInputFrame> closeClicks = {openClick, {-100, -100, travel}, closeClick, {-100, -100, travel}};
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor,
         closedAgain, profilePath, TestOutput::Path("store-template-closed-again.png"), &closeClicks) != -2 ||
         closedAgain.store.shopFilterOpen || closedAgain.store.shopFilterTime != slideStart) { return 1; }
@@ -1237,7 +1335,7 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
         const auto &item = store[index].data;
         if (item.objects.size() != 1 || item.objects[0].type != 6 || item.singlePurchase != 0) { continue; }
         const auto &ref = item.objects[0].object;
-        const auto *weapon = FindWeaponEntry(weapons, ref);
+        const auto *weapon = CStoreAggregator::FindWeaponEntry(weapons, ref);
         if (weapon == nullptr || weapon->visualOnly) { continue; }
         bool duplicate = false;
         for (unsigned existing : entries) { if (SameObject(store[existing].data.objects[0].object, ref)) { duplicate = true; } }
@@ -1245,24 +1343,26 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
         entries.push_back(index);
         profile.Grant(6, ref);
         // Gold weapons still expose EQUIP: exercise the duplicate-write guard.
+        // Correction: equipped gold weapons have no action plate. This check
+        // must also preserve EQUIP for an owned weapon outside both slots.
         profile.AddWeaponExperience(ref, weapon->data.GetMasteryThreshold(2), weapon->data.GetMasteryThreshold(2));
     }
     if (entries.size() != 3) { return 1; }
     const GameObjectRef first = store[entries[0]].data.objects[0].object;
     const GameObjectRef second = store[entries[1]].data.objects[0].object;
     const GameObjectRef third = store[entries[2]].data.objects[0].object;
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     const unsigned card = view.movies.Ordinal("GLU_MOVIE_SHOP_BOX");
     const CMovie *movie = view.movies.GetMovie(card);
     unsigned start = 0, end = 0;
     ZMovieRegion content, body, actions, label;
-    const auto *equip = FindMenuData("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
+    const auto *equip = CMenuDataProvider::Find("MDS_BUTTON_STORE_ITEMS", kEquipButtonEntry);
     if (movie == nullptr || equip == nullptr || !movie->GetChapterRange(1, start, end) ||
         !view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_MENU"), 0, 0, content) ||
         !view.movies.Region(card, 0, end, body) ||
         !view.movies.Region(view.movies.Ordinal(equip->movies[0]), 1, 0, label)) { return 1; }
-    const ZStoreCardFace face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
+    const CMenuStoreOption::Face face{content.x + content.width / 2 - static_cast<int>(content.width) / 16 - body.width / 2,
         content.y + content.height / 2 - body.height / 2, 1, end};
     if (!CardRegion(view, card, kCardActionRegion, face, actions)) { return 1; }
     unsigned failures = 0;
@@ -1270,21 +1370,29 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
         profile.configuration.guns = {first, second};
         profile.activeWeaponSlot = active;
         unsigned stamps = 0;
-        for (const auto &gun : profile.configuration.guns) { if (IsStoreObjectEquipped(profile, active, gun)) { ++stamps; } }
+        for (const auto &gun : profile.configuration.guns) { if (CStoreAggregator::IsStoreObjectEquipped(profile, active, gun)) { ++stamps; } }
         if (stamps != 2) { ++failures; }
         for (unsigned step = 0; step < 2; ++step) {
-            ZMenuState state;
-            state.page = 2;
+            CMenuSystem state;
+            state.stack.page = 2;
             state.store.shopGunSlot = active;
             state.slot = active;
-            state.store.shopDetailOpen = true;
-            state.store.shopFocusAmount = 1;
-            state.store.shopDetailTime = end;
+            state.store.focused.shopDetailOpen = true;
+            state.store.focused.shopFocusAmount = 1;
+            state.store.focused.shopDetailTime = end;
             state.selectedItem = entries[1 - active];
             if (step == 1) { state.selectedItem = entries[2]; }
-            view.Begin(2);
-            view.SetTestClick({actions.x + actions.width - label.width / 2, actions.y + label.height / 2});
-            if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path)) { return 1; }
+            view.Begin();
+            view.InjectTap({actions.x + actions.width - label.width / 2, actions.y + label.height / 2});
+            if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state)) { return 1; }
+            if (step == 1) {
+                unsigned pressStart = 0, pressEnd = 0;
+                const auto *press = view.movies.GetMovie(view.movies.Ordinal(equip->movies[0]));
+                if (!press || !press->GetChapterRange(1, pressStart, pressEnd)) { return 1; }
+                view.Begin();
+                view.clock += pressEnd - pressStart + 1;
+                if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state)) { return 1; }
+            }
             bool correct = SameObject(profile.configuration.guns[0], first) && SameObject(profile.configuration.guns[1], second);
             if (step == 1) {
                 correct = SameObject(profile.configuration.guns[active], third);
@@ -1295,9 +1403,9 @@ int RunDualWeaponCheck(const std::string &bigDirectory) {
             if (!correct || !distinct) { ++failures; }
             std::printf("[dual-weapon-check] active=%u stamps=%u step=%u correct=%d distinct=%d\n", active, stamps, step, correct, distinct);
             if (step == 0) {
-                state.store.shopDetailOpen = false;
-                view.Begin(2);
-                if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path) ||
+                state.store.focused.shopDetailOpen = false;
+                view.Begin();
+                if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state) ||
                     !Capture::SaveFrame(view.window, TestOutput::Path("dual-weapon-slot-") + std::to_string(active) + ".png")) { return 1; }
             }
         }

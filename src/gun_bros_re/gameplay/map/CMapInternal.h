@@ -20,9 +20,9 @@
 #include <chrono>
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
-#include "gun_bros_re/ui/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
 #include "gun_bros_re/host/ZHostSettings.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/data/ZPackTables.h"

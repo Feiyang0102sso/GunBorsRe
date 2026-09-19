@@ -5,9 +5,9 @@
  */
 #define NOMINMAX
 #include "TestOutput.h"
-#include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/ui/ZMenuData.h"
-#include "gun_bros_re/ui/ZTextLayout.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
+#include "gun_bros_re/ui/content/CMenuDataProvider.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include <algorithm>

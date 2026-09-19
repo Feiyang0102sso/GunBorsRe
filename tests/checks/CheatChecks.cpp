@@ -1,9 +1,25 @@
 /** Verify desktop cheats through the menu, combat and native save consumers. */
-#include "gun_bros_re/ui/ZMenuInternal.h"
+#include "gun_bros_re/ui/host/ZMenuSession.h"
+#include "gun_bros_re/ui/menus/CMenuStoreOption.h"
+#include "gun_bros_re/ui/menus/CMenuMovieMultiplayerOverlay.h"
+#include "gun_bros_re/ui/menus/CMenuMissionInfo.h"
+#include "gun_bros_re/ui/menus/CMenuUpgradePopup.h"
+#include "gun_bros_re/ui/menus/CMenuGameResources.h"
+#include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
+#include "gun_bros_re/ui/menus/CMenuList.h"
+#include "gun_bros_re/ui/menus/CMenuGreeting.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZMenuWipe.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
+#include "gun_bros_re/cheats/CheatActions.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
+#include "engine/glu/sprite/CSpriteIterator.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include "gun_bros_re/gameplay/game/CGame.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "TestOutput.h"
 #include <SDL3/SDL.h>
 
@@ -18,18 +34,18 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     window.EnableCheats(true);
     CPlayerProgress progress;
     progress.Bind(data);
-    MenuDetail::ZMenuState menu;
+    MenuDetail::CMenuSystem menu;
     CDailyBonusTracking daily;
     const auto savePath = TestOutput::Path("cheat-profile");
     const auto initialCoins = profile.coins;
     const auto initialWarbucks = profile.warbucks;
     const auto initialXplodium = profile.xplodium;
-    if (!menu.social.challenges.InitProgressData(toc, tables, profile, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return 1; }
-    const unsigned initialChallengeDay = menu.social.challenges.cycleDay;
-    menu.social.challenges.current.front().counters.kills = 1;
-    menu.social.challenges.current.front().progress = 100;
-    menu.social.challenges.current.front().rewardStatus = 1;
-    if (!menu.social.challenges.StoreProgress(profile)) { return 1; }
+    if (!menu.challenges.manager.InitProgressData(toc, tables, profile, static_cast<unsigned>(MenuDetail::CurrentSeconds()))) { return 1; }
+    const unsigned initialChallengeDay = menu.challenges.manager.cycleDay;
+    menu.challenges.manager.current.front().counters.kills = 1;
+    menu.challenges.manager.current.front().progress = 100;
+    menu.challenges.manager.current.front().rewardStatus = 1;
+    if (!menu.challenges.manager.StoreProgress(profile)) { return 1; }
     const auto initialDailyLaunch = profile.dailyLastLaunchSeconds;
     const auto initialDailySeconds = profile.dailyConsecutiveSeconds;
     // The same SDL input and menu consumer used by the game also save each action.

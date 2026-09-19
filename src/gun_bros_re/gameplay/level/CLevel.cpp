@@ -9,7 +9,7 @@
 #include "gun_bros_re/gameplay/multiplayer/CMPMatch.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/map/CLevelProps.h"
 #include "gun_bros_re/data/CFriendPowerManager.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"

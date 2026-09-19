@@ -4,9 +4,9 @@
  */
 #define NOMINMAX
 #include "TestOutput.h"
-#include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/ui/ZMenuData.h"
-#include "gun_bros_re/ui/ZTextLayout.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
+#include "gun_bros_re/ui/content/CMenuDataProvider.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/ZPowerupCatalog.h"
 #include "engine/platform/ZWindow.h"
@@ -140,7 +140,7 @@ int RunOriginalPauseCheck(const std::string &bigDirectory) {
             const auto action = hud.Pointer(state, x, y, true);
             ++hits;
             found = true;
-            const unsigned originalAction = FindMenuData("MDS_PAUSE_ROOT", hud.m_pauseItems[index])->action;
+            const unsigned originalAction = CMenuDataProvider::Find("MDS_PAUSE_ROOT", hud.m_pauseItems[index])->action;
             if (originalAction == 31 && action != ZInputPadAction::Resume) { ++failures; }
             if (originalAction == 40 && action != ZInputPadAction::Exit) { ++failures; }
             if (originalAction == 9) {

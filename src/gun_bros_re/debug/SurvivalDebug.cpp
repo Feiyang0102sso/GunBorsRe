@@ -2,7 +2,7 @@
 #define NOMINMAX
 #include "gun_bros_re/debug/SurvivalDebug.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include <cstdio>

@@ -1,6 +1,6 @@
 #pragma once
 #include "engine/platform/ZWindow.h"
-#include "gun_bros_re/ui/ZHudState.h"
+#include "gun_bros_re/ui/hud/ZHudState.h"
 
 /** Desktop gameplay bindings; viewer catalog and debug controls have their own owners. */
 namespace ZGameKeys {

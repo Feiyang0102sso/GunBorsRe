@@ -1,6 +1,6 @@
 /** Real Live HUD, death Flow and wave progression must work together. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include <chrono>
 
 int CheckLiveCheatProgress(SurvivalDeathFixture fixture, CInputPad &hud) {

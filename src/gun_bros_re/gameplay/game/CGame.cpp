@@ -4,7 +4,7 @@
 #define NOMINMAX
 #include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
-#include "gun_bros_re/ui/CInputPad.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/data/Mission.h"
 #include <cstdio>
 

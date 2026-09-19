@@ -1,15 +1,34 @@
+#include "gun_bros_re/ui/host/ZStorePurchase.h"
 #include "gun_bros_re/debug/Capture.h"
-#include "gun_bros_re/ui/ZPostGameCardCallbacks.h"
+#include "gun_bros_re/ui/menus/CMenuPostGameOption.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/ui/ZMenuInternal.h"
+#include "gun_bros_re/ui/host/ZMenuSession.h"
+#include "gun_bros_re/ui/menus/CMenuStoreOption.h"
+#include "gun_bros_re/ui/menus/CMenuMovieMultiplayerOverlay.h"
+#include "gun_bros_re/ui/menus/CMenuMissionInfo.h"
+#include "gun_bros_re/ui/menus/CMenuUpgradePopup.h"
+#include "gun_bros_re/ui/menus/CMenuGameResources.h"
+#include "gun_bros_re/ui/host/ZLocalOnlineMenus.h"
+#include "gun_bros_re/ui/menus/CMenuList.h"
+#include "gun_bros_re/ui/menus/CMenuGreeting.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZMenuWipe.h"
+#include "gun_bros_re/ui/controls/CTextBox.h"
+#include "gun_bros_re/cheats/CheatActions.h"
+#include "gun_bros_re/data/ZProfileImport.h"
+#include "gun_bros_re/data/ZPowerupCatalog.h"
+#include "gun_bros_re/startup/ZStartupSequence.h"
+#include "engine/glu/sprite/CSpriteIterator.h"
 #include "TestOutput.h"
 #include "ui/MenuChecks.h"
 using namespace MenuDetail;
 
+
+
 /** Compare the real button callback with the native unselected artwork. */
-static bool CheckUnselectedTabArtwork(ZGameMenu &view, const char *table) {
+static bool CheckUnselectedTabArtwork(ZMenuSurface &view, const char *table) {
     for (unsigned index = 0; index < 2; ++index) {
-        const auto *entry = FindMenuData(table, index);
+        const auto *entry = CMenuDataProvider::Find(table, index);
         if (entry == nullptr) { return false; }
         ZMovieRegion origin;
         origin.x = 320;
@@ -20,27 +39,27 @@ static bool CheckUnselectedTabArtwork(ZGameMenu &view, const char *table) {
         glGetIntegerv(GL_VIEWPORT, viewport);
         std::vector<std::uint8_t> actual(viewport[2] * viewport[3] * 4);
         std::vector<std::uint8_t> expected(actual.size());
-        view.Begin(3);
-        if (!DrawMovieButton(view, *entry, origin, {}, 5, false, pressed, 2, 1000, UINT32_MAX, true)) { return false; }
+        view.Begin();
+        if (!CMenuMovieButton::DrawFrame(view, *entry, origin, {}, 5, false, pressed, 2, 1000, UINT32_MAX, true)) { return false; }
         glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, actual.data());
-        ZMenuDataEntry reference = *entry;
+        CMenuDataProvider::Entry reference = *entry;
         reference.sprites[0] = entry->sprites[1];
-        view.Begin(3);
-        if (!DrawMovieButton(view, reference, origin, {}, 5, false, pressed, 2, 1000)) { return false; }
+        view.Begin();
+        if (!CMenuMovieButton::DrawFrame(view, reference, origin, {}, 5, false, pressed, 2, 1000)) { return false; }
         glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, expected.data());
         if (actual != expected) {
             std::printf("[tab-artwork-check] table=%s index=%u expected unselected sprite=%u failures=1\n", table, index, entry->sprites[1]);
             return false;
         }
-        view.Begin(3);
-        if (!DrawMovieButton(view, *entry, origin, {}, 5, false, pressed, 3, 1000, UINT32_MAX, true)) { return false; }
+        view.Begin();
+        if (!CMenuMovieButton::DrawFrame(view, *entry, origin, {}, 5, false, pressed, 3, 1000, UINT32_MAX, true)) { return false; }
         glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, actual.data());
         if (actual == expected) {
             std::printf("[tab-artwork-check] table=%s index=%u missing selected color/glow\n", table, index);
             return false;
         }
-        view.Begin(3);
-        if (!DrawMovieButton(view, *entry, origin, {}, 5, false, pressed, 3, 1000)) { return false; }
+        view.Begin();
+        if (!CMenuMovieButton::DrawFrame(view, *entry, origin, {}, 5, false, pressed, 3, 1000)) { return false; }
         glReadPixels(0, 0, viewport[2], viewport[3], GL_RGBA, GL_UNSIGNED_BYTE, expected.data());
         if (actual != expected) { return false; }
     }
@@ -81,11 +100,12 @@ int RunPostGameMenuCheck(const std::string &bigDirectory) {
                 false, false, true, 2, 0, &context, true, false, archiveMission) != 0) { return 1; }
             if (context.result.kills == 0 || context.result.casualties.empty() || context.result.waves != 2) { return 1; }
             const auto coins = profile.coins, warbucks = profile.warbucks, ore = profile.xplodium;
-            ZMenuState state;
-            BeginPostGame(state, context, weapons);
+            CMenuSystem state;
+            state.postGame.Refresh(state, context, weapons);
+            state.UpdateNavigation();
             const bool popupExpected = state.postGame.postGameUpgradePending;
-            if (state.page != 27) { return 1; }
-            ZGameMenu view;
+            if (state.stack.page != 27) { return 1; }
+            ZMenuSurface view;
             if (!view.Open(toc, tables)) { return 1; }
             view.scripted = true;
             if (!CheckUnselectedTabArtwork(view, "MDS_BUTTON_POSTGAME_INFO")) { return 1; }
@@ -95,77 +115,78 @@ int RunPostGameMenuCheck(const std::string &bigDirectory) {
             if (movie == nullptr || !movie->GetChapterRange(1, start, end)) { return 1; }
             ZMovieRegion tabs;
             if (!view.movies.Region(ordinal, 1, start, tabs)) { return 1; }
-            const auto *tab = FindMenuData("MDS_BUTTON_POSTGAME_INFO", 1);
+            const auto *tab = CMenuDataProvider::Find("MDS_BUTTON_POSTGAME_INFO", 1);
             ZMovieRegion tabBounds;
             if (tab == nullptr || !view.movies.Region(view.movies.Ordinal(tab->movies[0]), 0, 0, tabBounds)) { return 1; }
             const float tabX = tabs.x + static_cast<int>(tabs.width) / 2;
-            ZMenuTestClick casualtyClick{};
+            ZMenuInputFrame casualtyClick{};
             for (const auto &area : view.movies.Regions(view.movies.Ordinal(tab->movies[0]), 0, tabX, tabs.y)) {
                 if (area.index == 0) { casualtyClick = {area.x + area.width / 2, area.y + area.height / 2}; }
             }
-            view.Begin(27);
-            view.SetTestClick(casualtyClick);
-            if (!DrawPostGame(view, state, toc, tables, profile) || state.page != 27) { return 1; }
+            view.Begin();
+            view.InjectTap(casualtyClick);
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || state.stack.page != 27) { return 1; }
             view.clock += start;
-            view.Begin(27);
-            if (!DrawPostGame(view, state, toc, tables, profile)) { return 1; }
+            view.Begin();
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state)) { return 1; }
             if (popupExpected) {
-                if (state.page != 26) { return 1; }
+                if (state.stack.page != 26) { return 1; }
                 CloseMastery(state);
-                if (state.page != 27) { return 1; }
+                state.UpdateNavigation();
+                if (state.stack.page != 27) { return 1; }
             }
             view.clock += 1000;
-            view.Begin(27);
-            if (!DrawPostGame(view, state, toc, tables, profile)) { return 1; }
+            view.Begin();
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state)) { return 1; }
             const std::string prefix = TestOutput::Path("ui-original-2026-09-09/postgame-original-") + std::to_string(type);
             if (!Capture::SaveFrame(view.window, prefix + "-overview.png")) { return 1; }
-            view.Begin(27);
-            view.SetTestClick(casualtyClick);
-            if (!DrawPostGame(view, state, toc, tables, profile) || state.page != 28) { return 1; }
-            view.Begin(28);
-            if (!DrawPostGame(view, state, toc, tables, profile)) { return 1; }
+            view.Begin();
+            view.InjectTap(casualtyClick);
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || state.stack.page != 28) { return 1; }
+            view.Begin();
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state)) { return 1; }
             if (!Capture::SaveFrame(view.window, prefix + "-casualties.png")) { return 1; }
             // Every actual killed enemy must resolve its own original menu model.
             for (unsigned enemy = 0; enemy < state.result.casualties.size(); ++enemy) {
                 state.postGame.postGameGalleryPosition = static_cast<float>(enemy) - 1;
                 view.clock += 100;
-                view.Begin(28);
-                if (!DrawPostGame(view, state, toc, tables, profile)) { return 1; }
+                view.Begin();
+                if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state)) { return 1; }
             }
             ZMovieRegion backArea;
-            const auto *back = FindMenuData("MDS_BUTTON_POSTGAME_BACK", 0);
+            const auto *back = CMenuDataProvider::Find("MDS_BUTTON_POSTGAME_BACK", 0);
             if (back == nullptr || !view.movies.Region(ordinal, 0, start, backArea)) { return 1; }
-            ZMenuTestClick backClick{};
+            ZMenuInputFrame backClick{};
             for (const auto &area : view.movies.Regions(view.movies.Ordinal(back->movies[0]), 0,
                 backArea.x + backArea.width / 2, backArea.y + backArea.height / 2, true)) {
                 if (area.index == 0) { backClick = {area.x + area.width / 2, area.y + area.height / 2}; }
             }
-            view.Begin(28);
-            view.SetTestClick(backClick);
-            if (!DrawPostGame(view, state, toc, tables, profile) || !state.postGame.postGameClosing || state.page != 28) { return 1; }
+            view.Begin();
+            view.InjectTap(backClick);
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || !state.postGame.postGameClosing || state.stack.page != 28) { return 1; }
             const auto *backMovie = view.movies.GetMovie(view.movies.Ordinal(back->movies[0]));
             unsigned exitStart = 0, exitEnd = 0;
             if (backMovie == nullptr || !backMovie->GetChapterRange(1, exitStart, exitEnd)) { return 1; }
             unsigned hideStart = 0, hideEnd = 0;
             if (!backMovie->GetChapterRange(0, hideStart, hideEnd)) { return 1; }
             view.clock += exitEnd - exitStart + 1;
-            view.Begin(28);
-            if (!DrawPostGame(view, state, toc, tables, profile) || state.page != 28) { return 1; }
+            view.Begin();
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || state.stack.page != 28) { return 1; }
             view.clock += hideEnd - hideStart + 1;
-            view.Begin(28);
-            if (!DrawPostGame(view, state, toc, tables, profile) || state.page != 3) { return 1; }
+            view.Begin();
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || state.stack.page != 3) { return 1; }
             if (profile.coins != coins || profile.warbucks != warbucks || profile.xplodium != ore ||
                 !profile.LoadFromDisk(path) || profile.xplodium != ore) { return 1; }
             // Zero-ore routing is isolated from the actual persisted reward.
             profile.xplodium = 0;
-            state.page = 28;
+            state.stack.page = 28;
             state.postGame.postGameClosing = false;
-            view.Begin(28);
-            view.SetTestClick(backClick);
-            if (!DrawPostGame(view, state, toc, tables, profile) || !state.postGame.postGameClosing) { return 1; }
+            view.Begin();
+            view.InjectTap(backClick);
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || !state.postGame.postGameClosing) { return 1; }
             view.clock += exitEnd - exitStart + hideEnd - hideStart + 2;
-            view.Begin(28);
-            if (!DrawPostGame(view, state, toc, tables, profile) || state.page != 0 ||
+            view.Begin();
+            if (!FinishMenuFrame(state.postGame.Draw(view, state, toc, tables, profile), state) || state.stack.page != 0 ||
                 !profile.LoadFromDisk(path) || profile.xplodium != ore) { return 1; }
             std::printf("[postgame-original-check] type=%u waves=%u kills=%u casualties=%zu score=%u best=%u time=%u opening=1 tabs=1 exit=1 no-duplicate-reward=1 failures=0\n",
                 type, context.result.waves, context.result.kills, context.result.casualties.size(), context.result.score,
@@ -199,7 +220,7 @@ int RunGreetingCheck(const std::string &bigDirectory) {
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = true;
@@ -209,43 +230,43 @@ int RunGreetingCheck(const std::string &bigDirectory) {
     if (movie == nullptr || !movie->GetChapterRange(1, start, end)) { return 1; }
     for (unsigned day = 0; day < 7; ++day) {
         const auto seconds = first + day * 86400;
-        ZMenuState state;
-        state.page = 24;
+        CMenuSystem state;
+        state.stack.page = 24;
         const auto coins = profile.coins;
         const auto warbucks = profile.warbucks;
         const auto xp = profile.experience;
         const auto awarded = profile.statistics[32];
         const auto &prize = daily.prizes[day % daily.prizes.size()];
-        view.Begin(24);
-        if (!DrawGreeting(view, state, toc, tables, profile, daily, store, progress, path, seconds) ||
+        view.Begin();
+        if (!FinishMenuFrame(state.greeting.Draw(view, state, toc, tables, profile, daily, store, progress, path, seconds), state) ||
             profile.coins != coins || profile.warbucks != warbucks || profile.statistics[32] != awarded) { return 1; }
         view.clock += start;
-        view.Begin(24);
+        view.Begin();
         view.inputEnabled = true; // ShowGameMenu resets the frame input gate.
-        if (!DrawGreeting(view, state, toc, tables, profile, daily, store, progress, path, seconds) ||
+        if (!FinishMenuFrame(state.greeting.Draw(view, state, toc, tables, profile, daily, store, progress, path, seconds), state) ||
             profile.coins != coins || state.greeting.greetingClosing) { return 1; }
         if (day == 0 && !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/greeting-original-open.png"))) { return 1; }
         ZMovieRegion button;
         if (!view.movies.Region(ordinal, 3 + day % 2, state.greeting.greetingTime, button)) { return 1; }
-        view.SetTestClick({button.x + button.width / 2, button.y + button.height / 2});
-        if (!DrawGreeting(view, state, toc, tables, profile, daily, store, progress, path, seconds) ||
+        view.InjectTap({button.x + button.width / 2, button.y + button.height / 2});
+        if (!FinishMenuFrame(state.greeting.Draw(view, state, toc, tables, profile, daily, store, progress, path, seconds), state) ||
             !state.greeting.greetingExitRequested || profile.coins != coins) { return 1; }
-        view.Begin(24);
-        if (!DrawGreeting(view, state, toc, tables, profile, daily, store, progress, path, seconds) ||
+        view.Begin();
+        if (!FinishMenuFrame(state.greeting.Draw(view, state, toc, tables, profile, daily, store, progress, path, seconds), state) ||
             !state.greeting.greetingClosing || state.greeting.greetingTime != start || profile.coins != coins + prize.coins ||
             profile.warbucks != warbucks + prize.warbucks || profile.experience != xp + prize.experience ||
             profile.statistics[32] != awarded + 1) { return 1; }
         view.clock += start / 2;
-        view.Begin(24);
-        if (!DrawGreeting(view, state, toc, tables, profile, daily, store, progress, path, seconds) ||
+        view.Begin();
+        if (!FinishMenuFrame(state.greeting.Draw(view, state, toc, tables, profile, daily, store, progress, path, seconds), state) ||
             state.greeting.greetingTime != start - start / 2 || profile.statistics[32] != awarded + 1) { return 1; }
         if (day == 0 && !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/greeting-original-exit.png"))) { return 1; }
         view.clock += start;
-        view.Begin(24);
+        view.Begin();
         unsigned target = 5;
         if (day % 2 != 0) { target = 4; }
-        if (!DrawGreeting(view, state, toc, tables, profile, daily, store, progress, path, seconds) ||
-            state.page != target || daily.CommitBonus(profile, seconds, store)) { return 1; }
+        if (!FinishMenuFrame(state.greeting.Draw(view, state, toc, tables, profile, daily, store, progress, path, seconds), state) ||
+            state.stack.page != target || daily.CommitBonus(profile, seconds, store)) { return 1; }
     }
     CProfileManager reloaded;
     reloaded.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
@@ -266,7 +287,7 @@ int RunGreetingCheck(const std::string &bigDirectory) {
 }
 
 /** Run the actual shell through collection, header entrance and one cold store wipe. */
-int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGameMenu &probe,
+int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZMenuSurface &probe,
     const CRefinementManager::Template &refinement, unsigned previousCategory) {
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
@@ -282,14 +303,14 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGame
     if (!profile.refinery.BeginRefinement(6, 6, profile.xplodium, profile.xplodium, CurrentSeconds())) { return 1; }
     const auto coins = profile.coins;
     const auto yield = profile.refinery.GetRefinementSlotYield(6);
-    ZMenuState state;
-    state.page = 3;
+    CMenuSystem state;
+    state.stack.page = 3;
     state.store.shopCategory = previousCategory;
     // Leave category-specific browsing state behind, as a previous store visit would.
     state.store.shopFilter = 1;
     state.store.shopExclusionFilter = 1;
     state.store.shopScroll = 500;
-    state.store.shopDetailOpen = true;
+    state.store.focused.shopDetailOpen = true;
     state.selectedItem = 0;
     state.refinementRequired = true;
     ZMovieRegion meter;
@@ -306,7 +327,7 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGame
     unsigned clickStart = 0, clickEnd = 0;
     if (!meterButton || !meterButton->GetChapterRange(1, clickStart, clickEnd)) { return 1; }
     const unsigned clickDuration = (clickEnd - clickStart + 1) / 2;
-    const std::vector<ZMenuTestClick> clicks{
+    const std::vector<ZMenuInputFrame> clicks{
         {-100, -100, 1}, {-100, -100, idle + fill->duration + 1},
         {meter.x + meter.width / 2, meter.y + meter.height / 2, 1},
         {-100, -100, clickDuration},
@@ -330,7 +351,7 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGame
         if (index == 8 && (frame.page != 2 || !frame.wipeActive || frame.wipeTime != 0)) { return 1; }
         if (index == 9 && (!frame.wipeActive || frame.wipeTime != wipe->duration / 2)) { return 1; }
     }
-    if (trace.starts != 1 || trace.active || state.page != 2 || !state.history.empty() ||
+    if (trace.starts != 1 || trace.active || state.stack.page != 2 || !state.stack.history.empty() ||
         state.refinery.refineryExitPending || profile.coins != coins + yield || profile.xplodium != 0) { return 1; }
     if (state.store.shopCategory != 0) {
         std::printf("[refinery-store-category-check] previous=%u actual=%u expected=0\n",
@@ -339,7 +360,7 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGame
     }
     std::printf("[refinery-store-category-check] previous=%u guns=1 failures=0\n", previousCategory);
     if (state.store.shopFilter != 0 || state.store.shopExclusionFilter != 0 || state.store.shopScroll != 0 ||
-        state.store.shopDetailOpen || state.selectedItem != -1) { return 1; }
+        state.store.focused.shopDetailOpen || state.selectedItem != -1) { return 1; }
     if (state.store.shopGunSlot != profile.activeWeaponSlot) {
         std::printf("[store-return-slot-check] active=%u store=%u\n", profile.activeWeaponSlot, state.store.shopGunSlot);
         return 1;
@@ -359,7 +380,7 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGame
             slot, state.store.shopGunSlot, restored.activeWeaponSlot);
     }
     // A fresh binding must still allow the authored button and PLAYER Flow to swap guns.
-    const auto *swapEntry = FindMenuData("MDS_BUTTON_STORE_GUN_SWAP", 0);
+    const auto *swapEntry = CMenuDataProvider::Find("MDS_BUTTON_STORE_GUN_SWAP", 0);
     ZMovieRegion swapParent, swapOrigin;
     if (swapEntry == nullptr || !probe.movies.Region(probe.movies.Ordinal("GLU_MOVIE_STORE_MENU"),
         kStoreGunSwapRegion, 0, swapParent) || !StoreGunSwapOrigin(probe, swapParent, swapOrigin)) { return 1; }
@@ -369,14 +390,14 @@ int CheckRefineryStoreTransition(CResTOCManager &toc, ZPackTables &tables, ZGame
     if (swapMovie == nullptr || !swapMovie->GetChapterRange(0, swapStart, swapEnd) ||
         !swapMovie->GetChapterRange(1, pressStart, pressEnd)) { return 1; }
     bool foundSwap = false;
-    ZMenuTestClick swapClick;
+    ZMenuInputFrame swapClick;
     for (const auto &region : probe.movies.Regions(swapId, swapEnd, swapOrigin.x, swapOrigin.y, true)) {
         if (region.index != 0) { continue; }
         swapClick = {region.x + region.width / 2, region.y + region.height / 2};
         foundSwap = true;
     }
     if (!foundSwap) { return 1; }
-    std::vector<ZMenuTestClick> swapActions{{-100, -100, 1}, {-100, -100, swapEnd - swapStart + 1},
+    std::vector<ZMenuInputFrame> swapActions{{-100, -100, 1}, {-100, -100, swapEnd - swapStart + 1},
         swapClick, {-100, -100, pressEnd - pressStart + 1}};
     for (unsigned frame = 0; frame < 120; ++frame) { swapActions.push_back({-100, -100, 16}); }
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, path,
@@ -398,7 +419,7 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("refinery-check-" + std::to_string(GetTickCount64()));
     if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = true;
@@ -406,8 +427,8 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
-    ZMenuState state;
-    state.page = 3;
+    CMenuSystem state;
+    state.stack.page = 3;
     state.refinementRequired = true;
     // Isolated fixture amount. Native gameplay loads its actual source balance.
     profile.xplodium = 250;
@@ -418,23 +439,23 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     CMovie *movie = view.movies.GetMovie(ordinal);
     unsigned idle = 0, end = 0;
     if (movie == nullptr || !movie->GetChapterRange(1, idle, end)) { return 1; }
-    const auto *coin = FindMenuData("MDS_ICON_STANDARD", 2);
+    const auto *coin = CMenuDataProvider::Find("MDS_ICON_STANDARD", 2);
     ZMovieRegion clamped, lastAnimation;
     if (coin == nullptr || coin->sprites[0] != 0x0004002B ||
         !view.movies.SpriteBounds(4, 43, clamped) || !view.movies.SpriteBounds(4, 32, lastAnimation) ||
         clamped.width != lastAnimation.width || clamped.height != lastAnimation.height) { return 1; }
     ZMovieRegion meter;
     if (!view.movies.Region(ordinal, 0, idle, meter)) { return 1; }
-    view.Begin(3);
-    view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != -1) { return 1; }
+    view.Begin();
+    view.InjectTap({meter.x + meter.width / 2, meter.y + meter.height / 2});
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTransfer != -1) { return 1; }
     view.clock = 2000;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTab != 1 ||
-        view.Header(profile, progress, 3) == -3 || !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-standard.png"))) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTab != 1 ||
+        view.navigation.Draw(view, profile, progress, 3) == -3 || !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-standard.png"))) { return 1; }
     // Both category buttons use entry ordinal dispatch, not static parameter.
     ZMovieRegion category, graphic, hit;
-    const auto *button = FindMenuData("MDS_BUTTON_REFINE_SLOT_CATEGORY", 1);
+    const auto *button = CMenuDataProvider::Find("MDS_BUTTON_REFINE_SLOT_CATEGORY", 1);
     if (button == nullptr || !view.movies.Region(ordinal, 16, state.refinery.refineryTime, category)) { return 1; }
     const unsigned categoryMovie = view.movies.Ordinal(button->movies[0]);
     if (!view.movies.Region(categoryMovie, 1, 0, graphic) || !view.movies.Region(categoryMovie, 0, 0, hit)) { return 1; }
@@ -442,22 +463,22 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     for (unsigned tab : {0u, 1u}) {
         float x = categoryX;
         if (tab == 0) { x += graphic.width + 4; }
-        view.Begin(3);
-        view.SetTestClick({x + hit.x - 512 + hit.width / 2, category.y + hit.y - 384 + hit.height / 2});
-        if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTab != tab) {
+        view.Begin();
+        view.InjectTap({x + hit.x - 512 + hit.width / 2, category.y + hit.y - 384 + hit.height / 2});
+        if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTab != tab) {
             std::printf("[refinery-check] category failed expected=%u actual=%u\n", tab, state.refinery.refineryTab);
             return 1;
         }
-        view.Begin(3);
-        if (!DrawRefinery(view, state, profile, refinement, path, now) || view.Header(profile, progress, 3) == -3 ||
+        view.Begin();
+        if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || view.navigation.Draw(view, profile, progress, 3) == -3 ||
             !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-tab-") + std::to_string(tab) + ".png")) { return 1; }
         for (unsigned cell = 1; cell < 6; ++cell) {
             ZMovieRegion offline;
             if (!view.movies.Region(ordinal, cell, state.refinery.refineryTime, offline)) { return 1; }
             const auto before = profile.refinery.slots[tab * 6 + cell].state;
-            view.Begin(3);
-            view.SetTestClick({offline.x + offline.width / 2, offline.y + offline.height / 2});
-            if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != -1 ||
+            view.Begin();
+            view.InjectTap({offline.x + offline.width / 2, offline.y + offline.height / 2});
+            if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTransfer != -1 ||
                 profile.refinery.slots[tab * 6 + cell].state != before || profile.xplodium != 250) { return 1; }
         }
     }
@@ -471,12 +492,12 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     }
     ZMovieRegion moved;
     if (!view.movies.Region(ordinal, 0, state.refinery.refineryTime, moved)) { return 1; }
-    view.Begin(3);
-    view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != -1) { return 1; }
-    view.Begin(3);
-    view.SetTestClick({moved.x + moved.width / 2, moved.y + moved.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) ||
+    view.Begin();
+    view.InjectTap({meter.x + meter.width / 2, meter.y + meter.height / 2});
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTransfer != -1) { return 1; }
+    view.Begin();
+    view.InjectTap({moved.x + moved.width / 2, moved.y + moved.height / 2});
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) ||
         !FinishRefineryClick(view, state, profile, refinement, path, now, 6) || state.refinery.refineryTransfer != 6 || profile.xplodium != 250) {
         std::printf("[refinery-check] moved meter click failed transfer=%d\n", state.refinery.refineryTransfer);
         return 1;
@@ -484,55 +505,55 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     *movie = original;
     // Save halfway through transfer: the original amount has not been committed.
     view.clock += 187;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.xplodium != 250 ||
-        view.RefineryParticleCount(6) == 0 || !DrawRefineryOverlay(view, state) ||
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || profile.xplodium != 250 ||
+        view.refineryEffects.RefineryParticleCount(6) == 0 || !state.refinery.DrawOverlay(view, state) ||
         !profile.SaveToDisk(path) || !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-transfer.png"))) { return 1; }
     CProfileManager restored;
     if (!LoadProfile(toc, tables, restored, path) || restored.xplodium != 250 || restored.coins != coins) { return 1; }
     view.clock += 188;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryTransfer != -1 ||
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryTransfer != -1 ||
         profile.xplodium != 0 || profile.coins != coins || profile.refinery.slots[6].state != 3 ||
         !state.refinementRequired) { return 1; }
     if (!ReloadProfile(restored, path) || restored.refinery.slots[6].state != 3 || restored.xplodium != 0) { return 1; }
     const CMovie *fill = view.movies.GetMovie(view.movies.Ordinal("GLU_MOVIE_BUCKET_FILL"));
     if (fill == nullptr) { return 1; }
     view.clock += fill->duration;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || state.refinery.refineryStatusChapter[6] != 3 ||
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || state.refinery.refineryStatusChapter[6] != 3 ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/refinery-original-collect.png"))) { return 1; }
     if (!view.movies.Region(ordinal, 0, state.refinery.refineryTime, meter)) { return 1; }
     const auto yield = profile.refinery.GetRefinementSlotYield(6);
-    view.Begin(3);
-    view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
-    if (!DrawRefinery(view, state, profile, refinement, path, now) ||
+    view.Begin();
+    view.InjectTap({meter.x + meter.width / 2, meter.y + meter.height / 2});
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) ||
         !FinishRefineryClick(view, state, profile, refinement, path, now, 6) || state.refinery.refineryTransfer != 6 || profile.coins != coins) { return 1; }
     view.clock += 187;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.coins != coins ||
-        view.RefineryParticleCount(6) == 0 || view.Header(profile, progress, 3) == -3 ||
-        !DrawRefineryOverlay(view, state) ||
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || profile.coins != coins ||
+        view.refineryEffects.RefineryParticleCount(6) == 0 || view.navigation.Draw(view, profile, progress, 3) == -3 ||
+        !state.refinery.DrawOverlay(view, state) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("refinery-coin-flight.png"))) { return 1; }
     view.clock += 188;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || profile.coins != coins + yield ||
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || profile.coins != coins + yield ||
         state.refinementRequired || profile.refinery.slots[6].state != 1 || profile.warbucks != warbucks ||
         !ReloadProfile(restored, path) || restored.coins != profile.coins || restored.refinery.slots[6].state != 1) { return 1; }
-    if (state.page != 3) {
-        std::printf("[refinery-check] collection must wait for navigation: expected page=3 actual=%u\n", state.page);
+    if (state.stack.page != 3) {
+        std::printf("[refinery-check] collection must wait for navigation: expected page=3 actual=%u\n", state.stack.page);
         return 1;
     }
     // Read the real header before/after the overlay: live arrival particles
     // must still be visible above its artwork after the coin sprite is gone.
-    if (view.RefineryParticleCount(6) == 0 || view.Header(profile, progress, 3) == -3) { return 1; }
+    if (view.refineryEffects.RefineryParticleCount(6) == 0 || view.navigation.Draw(view, profile, progress, 3) == -3) { return 1; }
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
     const int headerHeight = viewport[3] / 4;
     std::vector<std::uint8_t> headerOnly(viewport[2] * headerHeight * 4);
     std::vector<std::uint8_t> arrival(headerOnly.size());
     glReadPixels(0, viewport[3] - headerHeight, viewport[2], headerHeight, GL_RGBA, GL_UNSIGNED_BYTE, headerOnly.data());
-    if (!DrawRefineryOverlay(view, state)) { return 1; }
+    if (!state.refinery.DrawOverlay(view, state)) { return 1; }
     glReadPixels(0, viewport[3] - headerHeight, viewport[2], headerHeight, GL_RGBA, GL_UNSIGNED_BYTE, arrival.data());
     if (headerOnly == arrival) {
         std::printf("[refinery-check] coin arrival particles hidden by header\n");
@@ -540,25 +561,25 @@ int RunRefineryMenuCheck(const std::string &bigDirectory) {
     }
     if (!Capture::SaveFrame(view.window, TestOutput::Path("refinery-coin-arrival.png"))) { return 1; }
     view.clock += 100;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || view.Header(profile, progress, 3) == -3 ||
-        !DrawRefineryOverlay(view, state) || profile.coins != coins + yield) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || view.navigation.Draw(view, profile, progress, 3) == -3 ||
+        !state.refinery.DrawOverlay(view, state) || profile.coins != coins + yield) { return 1; }
     glReadPixels(0, viewport[3] - headerHeight, viewport[2], headerHeight, GL_RGBA, GL_UNSIGNED_BYTE, headerOnly.data());
     if (headerOnly == arrival) { return 1; }
     if (!Capture::SaveFrame(view.window, TestOutput::Path("refinery-coin-dissipating.png"))) { return 1; }
     view.clock += 5000;
-    view.Begin(3);
-    if (!DrawRefinery(view, state, profile, refinement, path, now) || view.RefineryParticleCount(6) != 0 ||
+    view.Begin();
+    if (!FinishMenuFrame(state.refinery.Draw(view, state, profile, refinement, path, now), state) || view.refineryEffects.RefineryParticleCount(6) != 0 ||
         profile.coins != coins + yield) { return 1; }
     std::printf("[refinery-particle-check] flight arrival-overlay animation drain single-payout failures=0\n");
     // Reopening an empty refinery manually must not repeat the postgame route.
-    ZMenuState manualState;
-    manualState.page = 3;
+    CMenuSystem manualState;
+    manualState.stack.page = 3;
     view.clock += 400;
-    view.Begin(3);
-    view.SetTestClick({meter.x + meter.width / 2, meter.y + meter.height / 2});
-    if (!DrawRefinery(view, manualState, profile, refinement, path, now) || manualState.refinery.refineryTransfer != -1 ||
-        manualState.page != 3 || manualState.refinery.refineryExitPending || profile.coins != coins + yield || glGetError() != 0) { return 1; }
+    view.Begin();
+    view.InjectTap({meter.x + meter.width / 2, meter.y + meter.height / 2});
+    if (!FinishMenuFrame(manualState.refinery.Draw(view, manualState, profile, refinement, path, now), manualState) || manualState.refinery.refineryTransfer != -1 ||
+        manualState.stack.page != 3 || manualState.refinery.refineryExitPending || profile.coins != coins + yield || glGetError() != 0) { return 1; }
     std::printf("[refinery-check] categories=2 offline=10 region-mutation transfer=375 fill collect save-reload failures=0\n");
     for (unsigned category = 0; category < 4; ++category) {
         if (CheckRefineryStoreTransition(toc, tables, view, refinement, category) != 0) { return 1; }
@@ -577,7 +598,7 @@ int RunNavigationBarCheck(const std::string &bigDirectory) {
     CPlayerProgress progress;
     progress.Bind(profile.nativeArchive->progression);
     progress.SetExperience(profile.experience);
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_HEADER");
@@ -586,21 +607,21 @@ int RunNavigationBarCheck(const std::string &bigDirectory) {
     if (movie == nullptr || !movie->GetChapterRange(2, start, end)) { return 1; }
     ZMovieRegion first;
     if (!view.movies.Region(ordinal, 0, start, first)) { return 1; }
-    view.Begin(2);
-    view.SetTestClick({first.x + first.width / 2, first.y + first.height / 2});
-    if (view.Header(profile, progress, 2) != -1) { return 1; }
+    view.Begin();
+    view.InjectTap({first.x + first.width / 2, first.y + first.height / 2});
+    if (view.navigation.Draw(view, profile, progress, 2) != -1) { return 1; }
     view.clock = start / 2;
-    view.Begin(2);
-    view.SetTestClick({first.x + first.width / 2, first.y + first.height / 2});
-    if (view.Header(profile, progress, 2) != -1 ||
+    view.Begin();
+    view.InjectTap({first.x + first.width / 2, first.y + first.height / 2});
+    if (view.navigation.Draw(view, profile, progress, 2) != -1 ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/header-original-opening.png"))) { return 1; }
     view.clock = start;
     for (unsigned index = 0; index < std::size(kNavigationBranches); ++index) {
         ZMovieRegion area;
         if (!view.movies.Region(ordinal, index, start, area)) { return 1; }
-        view.Begin(2);
-        view.SetTestClick({area.x + area.width / 2, area.y + area.height / 2});
-        if (view.Header(profile, progress, 2) != static_cast<int>(index)) {
+        view.Begin();
+        view.InjectTap({area.x + area.width / 2, area.y + area.height / 2});
+        if (view.navigation.Draw(view, profile, progress, 2) != static_cast<int>(index)) {
             std::printf("[header-check] original button failed index=%u\n", index);
             return 1;
         }
@@ -615,30 +636,30 @@ int RunNavigationBarCheck(const std::string &bigDirectory) {
     }
     ZMovieRegion moved;
     if (!view.movies.Region(ordinal, 0, start, moved) || moved.x == first.x || moved.y == first.y) { return 1; }
-    view.Begin(2);
-    view.SetTestClick({first.x + first.width / 2, first.y + first.height / 2});
-    const int oldHit = view.Header(profile, progress, 2);
+    view.Begin();
+    view.InjectTap({first.x + first.width / 2, first.y + first.height / 2});
+    const int oldHit = view.navigation.Draw(view, profile, progress, 2);
     if (oldHit != -1) { std::printf("[header-check] old position still hit=%d\n", oldHit); return 1; }
-    view.Begin(2);
-    view.SetTestClick({moved.x + moved.width / 2, moved.y + moved.height / 2});
-    const int movedHit = view.Header(profile, progress, 2);
+    view.Begin();
+    view.InjectTap({moved.x + moved.width / 2, moved.y + moved.height / 2});
+    const int movedHit = view.navigation.Draw(view, profile, progress, 2);
     if (movedHit != 0) { std::printf("[header-check] moved position hit=%d x=%.0f y=%.0f\n", movedHit, moved.x, moved.y); return 1; }
     *movie = original;
     view.animateNavigation = false;
-    view.Begin(25);
-    view.SetTestClick({first.x + first.width / 2, first.y + first.height / 2});
-    if (view.Header(profile, progress, 25) != -1 ||
+    view.Begin();
+    view.InjectTap({first.x + first.width / 2, first.y + first.height / 2});
+    if (view.navigation.Draw(view, profile, progress, 25) != -1 ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/header-original-hidden.png"))) { return 1; }
     view.animateNavigation = true;
-    view.Begin(2);
-    view.SetTestClick({first.x + first.width / 2, first.y + first.height / 2});
-    if (view.Header(profile, progress, 2) != -1) { return 1; }
+    view.Begin();
+    view.InjectTap({first.x + first.width / 2, first.y + first.height / 2});
+    if (view.navigation.Draw(view, profile, progress, 2) != -1) { return 1; }
     unsigned showStart = 0, showEnd = 0;
     if (!movie->GetChapterRange(1, showStart, showEnd)) { return 1; }
     view.clock += start - showStart;
-    view.Begin(2);
-    view.SetTestClick({first.x + first.width / 2, first.y + first.height / 2});
-    if (view.Header(profile, progress, 2) != 0 || glGetError() != 0) { return 1; }
+    view.Begin();
+    view.InjectTap({first.x + first.width / 2, first.y + first.height / 2});
+    if (view.navigation.Draw(view, profile, progress, 2) != 0 || glGetError() != 0) { return 1; }
     std::printf("[header-check] seven native branches movie entrance hidden reentry mutated-position failures=0\n");
     return 0;
 }
@@ -650,7 +671,7 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
     CProfileManager profile;
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) / ("mission-check-" + std::to_string(GetTickCount64()));
     if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = false;
@@ -660,11 +681,11 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
     unsigned testedWaves = 0, testedHordes = 0;
     unsigned start = 0, end = 0;
     if (list == nullptr || card == nullptr || !list->GetChapterRange(1, start, end)) { return 1; }
-    for (unsigned planetIndex = 0; planetIndex < view.planetEntries.size(); ++planetIndex) {
-        const auto &planet = view.planetEntries[planetIndex];
+    for (unsigned planetIndex = 0; planetIndex < view.planets.planetEntries.size(); ++planetIndex) {
+        const auto &planet = view.planets.planetEntries[planetIndex];
         if (planet.missions.empty()) { continue; }
-        ZMenuState state;
-        state.page = 21;
+        CMenuSystem state;
+        state.stack.page = 21;
         state.planet = planetIndex;
         state.mode.modeSelected = true;
         state.mode.modeBound = true;
@@ -672,8 +693,8 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
         state.mode.modeTime = 1200;
         state.mode.modeLastTick = view.clock;
         bool launch = false;
-        view.Begin(21);
-        if (!DrawMissionInfo(view, state, profile, launch) || launch) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(state.missions.Draw(view, state, profile, launch), state) || launch) { return 1; }
         const std::string prefix = TestOutput::Path("ui-original-2026-09-09/mission-native-") + std::to_string(planetIndex);
         if (!Capture::SaveFrame(view.window, prefix + "-list.png")) { return 1; }
         for (unsigned index = 0; index < planet.missions.size(); ++index) {
@@ -682,15 +703,15 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
             state.missions.missionListTime = start;
             ZMovieRegion area;
             if (!view.movies.Region(listOrdinal, index - state.missions.missionFirst + 1, start, area)) { return 1; }
-            view.Begin(21);
-            view.SetTestClick({area.x + area.width / 2, area.y + area.height / 2});
-            if (!DrawMissionInfo(view, state, profile, launch) || launch || state.missions.missionFocused != static_cast<int>(index)) {
+            view.Begin();
+            view.InjectTap({area.x + area.width / 2, area.y + area.height / 2});
+            if (!FinishMenuFrame(state.missions.Draw(view, state, profile, launch), state) || launch || state.missions.missionFocused != static_cast<int>(index)) {
                 std::printf("[mission-menu-check] focus failed planet=%u index=%u actual=%d\n", planetIndex, index, state.missions.missionFocused);
                 return 1;
             }
             view.clock += 1000;
-            view.Begin(21);
-            if (!DrawMissionInfo(view, state, profile, launch) || launch) { return 1; }
+            view.Begin();
+            if (!FinishMenuFrame(state.missions.Draw(view, state, profile, launch), state) || launch) { return 1; }
             const auto &mission = planet.missions[index];
             const auto &info = planet.missionInfo[index];
             if (index == 0 || index + 1 == planet.missions.size()) {
@@ -718,9 +739,9 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
                     const unsigned cell = localWave % 10;
                     const float x = detail.x + (cell % 5 + 1) * std::floor(pageRegion.width / 6);
                     const float y = detail.y + rowStep * (cell / 5 + 1) - tabGraphic.height;
-                    view.Begin(21);
-                    view.SetTestClick({x, y});
-                    if (!DrawMissionInfo(view, state, profile, launch)) { return 1; }
+                    view.Begin();
+                    view.InjectTap({x, y});
+                    if (!FinishMenuFrame(state.missions.Draw(view, state, profile, launch), state)) { return 1; }
                     const unsigned wave = mission.value64 + localWave;
                     const bool allowed = !IsMissionLocked(profile, mission, info) && wave <= NativeMissionProgress(profile, mission.level);
                     if (launch != allowed || (launch && (state.starMap.startingWave != static_cast<int>(wave) || !SameObject(state.selectedMission, planet.data.missions[index])))) {
@@ -731,15 +752,15 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
                     ++testedWaves;
                 }
             } else if (mission.type == 2 && !IsMissionLocked(profile, mission, info)) {
-                const auto *play = FindMenuData("MDS_BUTTON_PLAY", 0);
+                const auto *play = CMenuDataProvider::Find("MDS_BUTTON_PLAY", 0);
                 ZMovieRegion graphic, art;
                 if (play == nullptr || !view.movies.Region(view.movies.Ordinal(play->movies[0]), 1, 0, graphic) ||
                     !view.movies.SpriteBounds(5, 42 + mission.value66, art)) { return 1; }
                 const float x = detail.x + art.width + (detail.width - art.width - graphic.width) / 2;
                 const float y = detail.y + detail.height - graphic.height;
-                view.Begin(21);
-                view.SetTestClick({x + graphic.width / 2, y + graphic.height / 2});
-                if (!DrawMissionInfo(view, state, profile, launch) || !launch || state.hordeStart != index ||
+                view.Begin();
+                view.InjectTap({x + graphic.width / 2, y + graphic.height / 2});
+                if (!FinishMenuFrame(state.missions.Draw(view, state, profile, launch), state) || !launch || state.hordeStart != index ||
                     !SameObject(state.selectedMission, planet.data.missions[index])) { return 1; }
                 ++testedHordes;
             }
@@ -747,7 +768,7 @@ int RunMissionMenuCheck(const std::string &bigDirectory) {
     }
     CProfileManager fresh;
     if (!LoadProfile(toc, tables, fresh, path / "fresh")) { return 1; }
-    for (const auto &planet : view.planetEntries) {
+    for (const auto &planet : view.planets.planetEntries) {
         for (unsigned index = 0; index < planet.missions.size(); ++index) {
             const auto &mission = planet.missions[index];
             const auto &info = planet.missionInfo[index];
@@ -774,11 +795,11 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("planet-check-" + std::to_string(GetTickCount64()));
     if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = true;
-    ZMenuState state;
+    CMenuSystem state;
     const unsigned mapOrdinal = view.movies.Ordinal("GLU_MOVIE_MAP_PARALAX_COPY");
     const unsigned modeOrdinal = view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP");
     const CMovie *map = view.movies.GetMovie(mapOrdinal);
@@ -788,19 +809,19 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
     // Zero is the menu's unbound-clock sentinel. Start this scripted fixture at
     // a nonzero tick, as the live window does; the elapsed time still comes from BIG.
     view.clock = 1;
-    view.Begin(0);
-    if (!DrawStarMap(view, state, profile) || !DrawModeOverlay(view, state)) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.mode.Draw(view, state)) { return 1; }
     view.clock += end;
-    view.Begin(0);
-    if (!DrawStarMap(view, state, profile) || !DrawModeOverlay(view, state) ||
+    view.Begin();
+    if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.mode.Draw(view, state) ||
         state.mode.modeTime != end ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/mode-original-expanded.png"))) { return 1; }
     for (unsigned mode : {1u, 2u, 0u}) {
         ZMovieRegion touch;
         if (!view.movies.Region(modeOrdinal, mode * 2 + 1, state.mode.modeTime, touch)) { return 1; }
-        view.Begin(0);
-        view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
-        if (!DrawModeOverlay(view, state)) { return 1; }
+        view.Begin();
+        view.InjectTap({touch.x + touch.width / 2, touch.y + touch.height / 2});
+        if (!state.mode.Draw(view, state)) { return 1; }
         if (mode != 0) {
             if (state.gameMode != 0 || state.mode.modeSelected || !state.storePromptRequested || state.storePromptIndex != 2) {
                 std::printf("[planet-check] offline-click mode=%u time=%u expected-open=%u phase=%u selected=%d prompt=%d index=%u\n",
@@ -809,8 +830,8 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
             }
             if (!DrawStorePrompt(view, state)) { return 1; }
             view.clock += 1000;
-            view.Begin(0);
-            if (!DrawStarMap(view, state, profile) || !DrawModeOverlay(view, state) || !DrawStorePrompt(view, state) ||
+            view.Begin();
+            if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.mode.Draw(view, state) || !DrawStorePrompt(view, state) ||
                 !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/mode-original-offline.png"))) { return 1; }
             state.storePopup.Hide();
             state.storePopup.Update(1000);
@@ -819,12 +840,12 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
     }
     if (!state.mode.modeSelected || state.mode.modePhase != 1) { return 1; }
     view.clock += 150;
-    view.Begin(0);
-    if (!DrawStarMap(view, state, profile) || !DrawModeOverlay(view, state) ||
+    view.Begin();
+    if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.mode.Draw(view, state) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/mode-original-folding.png"))) { return 1; }
     view.clock += overlay->duration;
-    view.Begin(0);
-    if (!DrawStarMap(view, state, profile) || !DrawModeOverlay(view, state) || state.mode.modePhase != 2 ||
+    view.Begin();
+    if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.mode.Draw(view, state) || state.mode.modePhase != 2 ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/mode-original-collapsed.png"))) { return 1; }
     ZMovieRegion before, middle, after;
     if (!view.movies.Region(modeOrdinal, 1, 700, before) || !view.movies.Region(modeOrdinal, 1, 850, middle) ||
@@ -832,12 +853,12 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
         std::abs(middle.x - (before.x + after.x) / 2) > 1 || std::abs(middle.y - (before.y + after.y) / 2) > 1) { return 1; }
     std::printf("[planet-check] mode-native-regions anchors-interpolate unscaled-hit-box offline-no-fake-match failures=0\n");
     for (unsigned index = 0; index < profile.clearedWaves.size(); ++index) {
-        const auto &planet = view.planetEntries[index];
+        const auto &planet = view.planets.planetEntries[index];
         if (planet.missions.empty() || planet.missions[0].type != 1 ||
             !SameObject(planet.missions[0].level, profile.nativeArchive->survivalLevels[index]) ||
             !map->GetChapterRange(planet.data.mapSlot - 1, begin, end)) { return 1; }
         // Test positions the original playback cursor at its authored stop.
-        state.page = 0;
+        state.stack.page = 0;
         state.starMap.starSelectedSlot = -1;
         state.starMap.starLocked = false;
         state.starMap.starTargetTime = -1;
@@ -845,33 +866,33 @@ int RunPlanetMenuCheck(const std::string &bigDirectory) {
         view.clock += 1000;
         ZMovieRegion touch;
         if (!view.movies.Region(mapOrdinal, planet.data.mapSlot, end, touch)) { return 1; }
-        view.Begin(0);
-        view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
-        if (!DrawStarMap(view, state, profile) || state.starMap.starSelectedSlot != static_cast<int>(planet.data.mapSlot) || state.page != 0) { return 1; }
+        view.Begin();
+        view.InjectTap({touch.x + touch.width / 2, touch.y + touch.height / 2});
+        if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || state.starMap.starSelectedSlot != static_cast<int>(planet.data.mapSlot) || state.stack.page != 0) { return 1; }
         view.clock += 1000;
-        view.Begin(0);
-        if (!DrawStarMap(view, state, profile) || !state.starMap.starLocked || !DrawModeOverlay(view, state)) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.starMap.starLocked || !state.mode.Draw(view, state)) { return 1; }
         const std::string screenshot = TestOutput::Path("ui-original-2026-09-09/planet-selected-") + std::to_string(index) + ".png";
         if (!Capture::SaveFrame(view.window, screenshot)) { return 1; }
         if (planet.data.requiredLevel > 1) {
             // Only the isolated profile changes; geometry and lock art stay in BIG.
             const auto experience = profile.experience;
             profile.experience = 0;
-            view.Begin(0);
-            if (!DrawStarMap(view, state, profile) ||
+            view.Begin();
+            if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) ||
                 !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/planet-level-locked-") + std::to_string(index) + ".png")) { return 1; }
             profile.experience = profile.nativeArchive->progression.GetExperienceForLevel(planet.data.requiredLevel) + 1;
-            view.Begin(0);
-            if (!DrawStarMap(view, state, profile) ||
+            view.Begin();
+            if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) ||
                 !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/planet-level-unlocked-") + std::to_string(index) + ".png")) { return 1; }
             profile.experience = experience;
         }
-        view.Begin(0);
-        view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
-        if (!DrawStarMap(view, state, profile) || !state.starMap.starEntering || state.page != 0) { return 1; }
+        view.Begin();
+        view.InjectTap({touch.x + touch.width / 2, touch.y + touch.height / 2});
+        if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || !state.starMap.starEntering || state.stack.page != 0) { return 1; }
         view.clock += 1000;
-        view.Begin(0);
-        if (!DrawStarMap(view, state, profile) || state.page != 21 || state.planet != index) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(state.starMap.Draw(view, state, profile), state) || state.stack.page != 21 || state.planet != index) { return 1; }
         std::printf("[planet-check] slot=%u original-thumb double-select exit-chapter host=%u level=%u:%u failures=0\n",
             planet.data.mapSlot, index, planet.missions[0].level.packHash, planet.missions[0].level.localIndex);
     }
@@ -897,34 +918,34 @@ int RunSocialOfflineCheck(const std::string &bigDirectory) {
     for (unsigned index = 0; index < 8; ++index) {
         if (profile.ClaimActivity(index)) { return 1; }
     }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
-    const auto *button = FindMenuData("MDS_BUTTON_CONNECTIVITY", 0);
+    const auto *button = CMenuDataProvider::Find("MDS_BUTTON_CONNECTIVITY", 0);
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_OFFLINE_BROHOOD");
     const CMovie *movie = view.movies.GetMovie(ordinal);
     unsigned start = 0, end = 0;
     if (button == nullptr || button->action != 86 || movie == nullptr || !movie->GetChapterRange(1, start, end)) { return 1; }
     for (unsigned page : {4u, 5u, 11u, 13u}) {
         for (bool credentials : {false, true}) {
-            ZMenuState state;
-            state.page = page;
+            CMenuSystem state;
+            state.stack.page = page;
             GameHostSettings().isConnected = credentials;
-            view.Begin(page);
-            if (!DrawSocialOffline(view, state, credentials)) { return 1; }
+            view.Begin();
+            if (!state.social.DrawOffline(view, state, credentials)) { return 1; }
             ZMovieRegion area;
             if (!view.movies.Region(ordinal, 0, start, area)) { return 1; }
             bool found = false;
-            ZMenuTestClick click;
+            ZMenuInputFrame click;
             for (const auto &part : view.movies.Regions(view.movies.Ordinal(button->movies[0]), 0, area.x, area.y)) {
                 if (part.index == 0) { click = {part.x + part.width / 2, part.y + part.height / 2}; found = true; }
             }
             if (!found) { return 1; }
             view.clock += movie->duration * 3;
-            view.Begin(page);
-            view.SetTestClick(click);
-            if (!DrawSocialOffline(view, state, credentials) || view.ExchangeClick(false) ||
-                state.page != page || state.promotion.IsActive() || state.social.socialTime < start || state.social.socialTime > end) { return 1; }
+            view.Begin();
+            view.InjectTap(click);
+            if (!state.social.DrawOffline(view, state, credentials) || view.ExchangeClick(false) ||
+                state.stack.page != page || state.promotion.IsActive() || state.social.socialTime < start || state.social.socialTime > end) { return 1; }
             const auto screenshot = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
                 ("social-original-" + std::to_string(page) + "-" + std::to_string(credentials) + ".png");
             if (!Capture::SaveFrame(view.window, screenshot.string())) { return 1; }
@@ -933,16 +954,16 @@ int RunSocialOfflineCheck(const std::string &bigDirectory) {
     }
     // The local connection must pass the same mode selection path as a click.
     GameHostSettings().isConnected = true;
-    ZMenuState onlineMode;
+    CMenuSystem onlineMode;
     view.animateNavigation = false;
-    view.Begin(0);
-    if (!DrawModeOverlay(view, onlineMode)) { return 1; }
+    view.Begin();
+    if (!onlineMode.mode.Draw(view, onlineMode)) { return 1; }
     ZMovieRegion multiplayer;
     if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_MULTIPLAYER_AND_VERSUS_MAP"),
         3, onlineMode.mode.modeTime, multiplayer)) { return 1; }
-    view.Begin(0);
-    view.SetTestClick({multiplayer.x + multiplayer.width / 2, multiplayer.y + multiplayer.height / 2});
-    if (!DrawModeOverlay(view, onlineMode) || onlineMode.gameMode != 1 ||
+    view.Begin();
+    view.InjectTap({multiplayer.x + multiplayer.width / 2, multiplayer.y + multiplayer.height / 2});
+    if (!onlineMode.mode.Draw(view, onlineMode) || onlineMode.gameMode != 1 ||
         onlineMode.storePromptRequested) {
         std::printf("[local-online-check] connected mode selection blocked\n");
         return 1;
@@ -965,36 +986,36 @@ int RunOptionsCheck(const std::string &bigDirectory) {
     const auto path = std::filesystem::path(TestOutput::Path("ui-original-2026-09-09")) /
         ("options-check-" + std::to_string(GetTickCount64()));
     if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.scripted = true;
     view.animateNavigation = true;
-    ZMenuState state;
-    state.page = 6;
+    CMenuSystem state;
+    state.stack.page = 6;
     const unsigned list = view.movies.Ordinal("GLU_MOVIE_LIST_MENU");
     const unsigned button = view.movies.Ordinal("GLU_MOVIE_LIST_MENU_BUTTON");
     const CMovie *movie = view.movies.GetMovie(list);
     unsigned start = 0, end = 0;
     if (movie == nullptr || !movie->GetChapterRange(1, start, end)) { return 1; }
     bool changed = false;
-    view.Begin(6);
-    if (!DrawOptions(view, state, profile, changed)) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state)) { return 1; }
     view.clock += start / 2;
-    view.Begin(6);
-    view.SetTestClick({240, 360});
-    if (!DrawOptions(view, state, profile, changed) || changed || state.settings.optionsOpening != start / 2 ||
+    view.Begin();
+    view.InjectTap({240, 360});
+    if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state) || changed || state.settings.optionsOpening != start / 2 ||
         !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/options-opening.png"))) { return 1; }
     const unsigned order[] = {0, 1, 3, 4, 5, 7, 9, 6, 2, 8};
     for (unsigned index : order) {
         changed = false;
-        state.page = 6;
+        state.stack.page = 6;
         state.settings.optionsScroll = std::clamp(float(static_cast<int>(index) - 1), 0.0f, 7.0f);
         state.settings.optionsTarget = state.settings.optionsScroll;
         view.clock += movie->duration;
-        view.Begin(6);
-        if (!DrawOptions(view, state, profile, changed)) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state)) { return 1; }
         const int base = static_cast<int>(state.settings.optionsScroll) - 1;
-        ZMenuTestClick click;
+        ZMenuInputFrame click;
         bool found = false;
         for (const auto &region : view.movies.Regions(list, start)) {
             if (region.type < 2 || base + static_cast<int>(region.type) - 2 != static_cast<int>(index)) { continue; }
@@ -1003,22 +1024,22 @@ int RunOptionsCheck(const std::string &bigDirectory) {
             }
         }
         const auto before = profile;
-        const auto *entry = FindMenuData("MDS_OPTIONS", index);
+        const auto *entry = CMenuDataProvider::Find("MDS_OPTIONS", index);
         const auto label = OptionsText(view, profile, index, 0);
         const auto body = OptionsText(view, profile, index, 1);
         if (!found || entry == nullptr || label.empty() || body.empty()) { return 1; }
-        view.Begin(6);
-        view.SetTestClick(click);
-        if (!DrawOptions(view, state, profile, changed)) { return 1; }
+        view.Begin();
+        view.InjectTap(click);
+        if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state)) { return 1; }
         if (entry->action != 1 && state.settings.optionsFocus != index) { return 1; }
         if (entry->action == 9 && profile.soundEnabled == before.soundEnabled) { return 1; }
         if (entry->action == 10 && profile.musicEnabled == before.musicEnabled) { return 1; }
         if (entry->action == 17 && profile.options.AutoBro() != (before.options.AutoBro() + 1) % 3) { return 1; }
         if (entry->action == 77 && profile.options.NotificationsEnabled() == before.options.NotificationsEnabled()) { return 1; }
         if (entry->action == 113 && profile.pushChallenges == before.pushChallenges) { return 1; }
-        if (entry->action == 79 && state.page != 29) { return 1; }
-        if (entry->action == 1 && state.page != 8) { return 1; }
-        if (entry->action == 20 && state.page != 6) { return 1; }
+        if (entry->action == 79 && state.stack.page != 29) { return 1; }
+        if (entry->action == 1 && state.stack.page != 8) { return 1; }
+        if (entry->action == 20 && state.stack.page != 6) { return 1; }
         const auto expectedOptions = profile.options;
         const bool expectedSound = profile.soundEnabled, expectedMusic = profile.musicEnabled, expectedPush = profile.pushChallenges;
         if (!profile.SaveToDisk(path) || !profile.LoadFromDisk(path) || profile.soundEnabled != expectedSound ||
@@ -1027,45 +1048,46 @@ int RunOptionsCheck(const std::string &bigDirectory) {
             profile.options.NotificationsEnabled() != expectedOptions.NotificationsEnabled() ||
             profile.coins != before.coins || profile.warbucks != before.warbucks) { return 1; }
         view.clock += movie->duration;
-        view.Begin(6);
-        if (!DrawOptions(view, state, profile, changed) || glGetError() != 0 ||
+        view.Begin();
+        if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state) || glGetError() != 0 ||
             !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/options-entry-") + std::to_string(index) + ".png")) { return 1; }
         std::printf("[options-check] index=%u action=%u label=%s body=%zu original-layout native-reload failures=0\n",
             index, entry->action, label.c_str(), body.size());
         if (index == 9) {
             ZMovieRegion bodyArea;
             if (!view.movies.Region(list, 8, start, bodyArea)) { return 1; }
-            view.Begin(6);
-            view.SetTestClick({bodyArea.x + bodyArea.width / 2, bodyArea.y + bodyArea.height / 2});
+            view.Begin();
+            view.InjectTap({bodyArea.x + bodyArea.width / 2, bodyArea.y + bodyArea.height / 2});
             view.dragY = -bodyArea.height / 2;
-            if (!DrawOptions(view, state, profile, changed) || state.settings.optionsBodyScroll <= 0 ||
+            if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state) || state.settings.optionsBodyScroll <= 0 ||
                 !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/options-about-scroll.png"))) { return 1; }
             view.clock += movie->duration;
-            view.Begin(6);
-            view.SetTestClick({bodyArea.x + bodyArea.width / 2, bodyArea.y + bodyArea.height / 2});
+            view.Begin();
+            view.InjectTap({bodyArea.x + bodyArea.width / 2, bodyArea.y + bodyArea.height / 2});
             view.dragY = -bodyArea.height * 10;
-            if (!DrawOptions(view, state, profile, changed) ||
+            if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state) ||
                 !Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/options-about-last-page.png"))) { return 1; }
             std::printf("[options-check] authored text pages scrollbar drag-clamp failures=0\n");
         }
     }
-    state.page = 6;
+    state.stack.page = 6;
     state.settings.optionsFocus = 2;
     state.Navigate(8);
+    state.UpdateNavigation();
     view.animateNavigation = false;
     unsigned helpCount = 0;
-    while (FindMenuData("MDS_HELP", helpCount)) { ++helpCount; }
+    while (CMenuDataProvider::Find("MDS_HELP", helpCount)) { ++helpCount; }
     for (unsigned index = 0; index < helpCount; ++index) {
         state.settings.optionsFocus = index;
         state.settings.optionsScroll = state.settings.optionsTarget = std::clamp(float(int(index) - 1), 0.0f, float(helpCount - 3));
         view.clock += movie->duration;
-        view.Begin(8);
-        if (!DrawOptions(view, state, profile, changed)) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state)) { return 1; }
         if (OptionsText(view, profile, index, 0, "MDS_HELP").empty()) { return 1; }
     }
     if (!Capture::SaveFrame(view.window, TestOutput::Path("ui-original-2026-09-09/help-last-item.png"))) { return 1; }
     const auto regions = view.movies.Regions(list, start, 512, 384, true);
-    const auto *back = FindMenuData("MDS_BUTTON_BACK", 0);
+    const auto *back = CMenuDataProvider::Find("MDS_BUTTON_BACK", 0);
     bool returned = false;
     for (const auto &region : regions) {
         if (region.index != regions.size() - 3) { continue; }
@@ -1076,10 +1098,10 @@ int RunOptionsCheck(const std::string &bigDirectory) {
             if (part.index == 0) { touch = part; found = true; }
         }
         if (!found) { return 1; }
-        view.Begin(8);
-        view.SetTestClick({touch.x + touch.width / 2, touch.y + touch.height / 2});
-        if (!DrawOptions(view, state, profile, changed)) { return 1; }
-        returned = state.page == 6 && state.settings.optionsFocus == 2;
+        view.Begin();
+        view.InjectTap({touch.x + touch.width / 2, touch.y + touch.height / 2});
+        if (!FinishMenuFrame(state.settings.Draw(view, state, profile, changed), state)) { return 1; }
+        returned = state.stack.page == 6 && state.settings.optionsFocus == 2;
     }
     std::printf("[options-check] help-items=%u original-back=%d\n", helpCount, returned);
     if (!returned || helpCount == 0) { return 1; }
@@ -1109,42 +1131,42 @@ int RunPromotionCheck(const std::string &bigDirectory) {
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
     const std::filesystem::path path = TestOutput::Path("ui-restoration-promotion-profile");
     if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables)) { return 1; }
     view.animateNavigation = false;
     unsigned failures = 0;
     for (unsigned row = 0; row < 2; ++row) {
-        ZMenuState state;
-        state.page = 2;
-        view.Begin(2);
-        if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path)) { return 1; }
+        CMenuSystem state;
+        state.stack.page = 2;
+        view.Begin();
+        if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state)) { return 1; }
         ZMovieRegion slot, body;
         if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_STORE_SCROLL"), 1, view.storeRestTime, slot)) { return 1; }
-        ZStoreCardFace face;
+        CMenuStoreOption::Face face;
         face.x = slot.x; face.y = slot.y + row * (slot.height / 2 + 5);
         if (!CardRegion(view, view.movies.Ordinal("GLU_MOVIE_SHOP_BOX"), 0, face, body)) { return 1; }
-        view.SetTestClick({body.x + body.width / 2, body.y + body.height / 2});
-        if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path)) { return 1; }
+        view.InjectTap({body.x + body.width / 2, body.y + body.height / 2});
+        if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state)) { return 1; }
         unsigned action = 125;
         if (row == 1) { action = 130; }
-        const bool opened = state.page == 2 && state.promotion.IsActive() && state.promotion.Action() == action;
+        const bool opened = state.stack.page == 2 && state.promotion.IsActive() && state.promotion.Action() == action;
         if (!opened) { ++failures; }
         std::printf("[promotion-check] card=%u page=%u modal=%d action=%u failures=%u\n",
-            row, state.page, state.promotion.IsActive(), state.promotion.Action(), failures);
+            row, state.stack.page, state.promotion.IsActive(), state.promotion.Action(), failures);
         if (!opened) { continue; }
         const CMovie *movie = view.movies.GetMovie(state.promotion.Ordinal());
         unsigned start = 0, end = 0;
         if (!movie->GetChapterRange(2, start, end)) { return 1; }
         if (state.promotion.Click(body.x, body.y) != 0) { ++failures; }
         state.promotion.Update(start);
-        view.Begin(2);
+        view.Begin();
         view.ExchangeClick(false);
-        if (!DrawStore(view, toc, tables, profile, 200, store, weapons, armor, state, path)) { return 1; }
+        if (!FinishMenuFrame(state.store.Draw(view, toc, tables, profile, 200, store, weapons, armor, state, path), state)) { return 1; }
         CPlayerProgress::Template progressTemplate;
         CPlayerProgress progress;
         if (!LoadPlayerProgress(toc, tables, progressTemplate)) { return 1; }
         progress.Bind(progressTemplate); progress.SetExperience(profile.experience);
-        if (view.Header(profile, progress, 2) == -3 || !state.promotion.Draw(view.movies) ||
+        if (view.navigation.Draw(view, profile, progress, 2) == -3 || !state.promotion.Draw(view.movies) ||
             !state.promotion.IsReady() || state.promotion.Hits().size() != 3) { return 1; }
         const std::string capture = TestOutput::Path("ui-promotion-") + std::to_string(action) + ".png";
         if (!Capture::SaveFrame(view.window, capture)) { return 1; }
@@ -1152,25 +1174,25 @@ int RunPromotionCheck(const std::string &bigDirectory) {
         if (state.promotion.Click(hit.x + hit.width / 2, hit.y + hit.height / 2) != 45 ||
             state.promotion.IsReady()) { ++failures; }
         state.promotion.Update(movie->duration);
-        if (state.promotion.IsActive() || state.page != 2) { ++failures; }
+        if (state.promotion.IsActive() || state.stack.page != 2) { ++failures; }
         std::printf("[promotion-check] movie=%u chapters=%zu close-region=1 retained-store=1 failures=%u\n",
             state.promotion.Ordinal(), movie->chapter.starts.size(), failures);
     }
     profile.coins = 0;
     for (unsigned index = 0; index < 3; ++index) {
-        ZMenuState state;
+        CMenuSystem state;
         ShowStoreFundsPrompt(state, store, profile, 0, 1, false); // Test-only shortage.
-        view.Begin(2);
+        view.Begin();
         if (!DrawStorePrompt(view, state)) { return 1; }
         const unsigned popup = view.movies.Ordinal("GLU_MOVIE_POPUP");
         view.clock += view.movies.GetMovie(popup)->duration;
-        view.Begin(2);
+        view.Begin();
         if (!DrawStorePrompt(view, state) || !state.storePopup.IsReady()) { return 1; }
         if (index == 0 && !Capture::SaveFrame(view.window, TestOutput::Path("ui-store-funds-original.png"))) { return 1; }
-        const auto *entry = FindMenuData("MDS_BUTTON_STORE_PROMPT", index);
+        const auto *entry = CMenuDataProvider::Find("MDS_BUTTON_STORE_PROMPT", index);
         ZMovieRegion area;
         if (!view.movies.Region(popup, index + 2, state.storePopup.MovieTime(), area)) { return 1; }
-        view.SetTestClick({area.x + area.width / 2, area.y + area.height / 2});
+        view.InjectTap({area.x + area.width / 2, area.y + area.height / 2});
         if (!DrawStorePrompt(view, state)) { return 1; }
         if (entry->action == 71 && !state.currencyPending) { ++failures; }
         if (entry->action != 71 && state.storePopup.IsReady()) { ++failures; }
@@ -1251,13 +1273,13 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
     if (!movies.Region(header, 5, headerStart, options) || !movies.Region(header, 3, headerStart, storeTab) ||
         !movies.Region(header, 0, headerStart, play) ||
         !movies.Region(movies.Ordinal("GLU_MOVIE_STORE_MENU"), kStoreCategoryRegion, 0, categoryBar)) { return 1; }
-    std::vector<ZMenuTestClick> targets = {
+    std::vector<ZMenuInputFrame> targets = {
         {options.x + options.width / 2, options.y + options.height / 2},
         {play.x + play.width / 2, play.y + play.height / 2}
     };
     float categoryX = categoryBar.x;
     for (unsigned index = 0; index < 4; ++index) {
-        const auto *entry = FindMenuData("MDS_BUTTON_STORE_CATEGORIES", index);
+        const auto *entry = CMenuDataProvider::Find("MDS_BUTTON_STORE_CATEGORIES", index);
         ZMovieRegion label, touch;
         if (!movies.Region(movies.Ordinal(entry->movies[0]), 1, 0, label) ||
             !movies.Region(movies.Ordinal(entry->movies[0]), 0, 0, touch)) { return 1; }
@@ -1266,14 +1288,20 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
         categoryX += label.width + kCategoryGap;
     }
     for (unsigned index = 0; index < targets.size(); ++index) {
-        ZMenuState state;
-        state.page = 2;
+        CMenuSystem state;
+        state.stack.page = 2;
         auto target = targets[index];
         target.advanceMs = 1;
         target.renderDelayMs = duration * 2;
-        const std::vector<ZMenuTestClick> clicks = {{-100, -100, 1}, {-100, -100, headerEnd + 1},
-            {-100, -100, headerEnd + 1}, {-100, -100, headerEnd + 1}, target,
-            {storeTab.x + storeTab.width / 2, storeTab.y + storeTab.height / 2, duration / 2}};
+        if (index < 2) { target.renderDelayMs = 0; }
+        std::vector<ZMenuInputFrame> clicks = {{-100, -100, 1}, {-100, -100, headerEnd + 1},
+            {-100, -100, headerEnd + 1}, {-100, -100, headerEnd + 1}, target};
+        if (index < 2) {
+            // Pending navigation commits on the next frame. A click on that
+            // destination frame must be blocked even before WIPE is captured.
+            clicks.push_back({storeTab.x + storeTab.width / 2, storeTab.y + storeTab.height / 2, 1, duration * 2});
+        }
+        clicks.push_back({storeTab.x + storeTab.width / 2, storeTab.y + storeTab.height / 2, duration / 2});
         const std::string capture = TestOutput::Path("ui-wipe-menu-") + std::to_string(index) + ".png";
         ZMenuTransitionTrace trace;
         if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state,
@@ -1283,18 +1311,18 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
         // the store click that follows. The categories are menus inside that
         // branch, so they change with no sweep and nothing to swallow.
         const bool branchChange = index < 2;
-        bool wrong = state.page != expectedPage[index] || (index >= 2 && state.store.shopCategory != index - 1);
+        bool wrong = state.stack.page != expectedPage[index] || (index >= 2 && state.store.shopCategory != index - 1);
         if (branchChange && (!trace.active || trace.time != duration / 2 || trace.starts != 1)) { wrong = true; }
         if (!branchChange && (trace.active || trace.starts != 0)) { wrong = true; }
         if (wrong) { ++failures; }
         std::printf("[loading-wipe-check] cold-load=%u midpoint-active=%d time=%u starts=%u expected-sweep=%d\n",
-            target.renderDelayMs, trace.active, trace.time, trace.starts, branchChange);
+            duration * 2, trace.active, trace.time, trace.starts, branchChange);
         std::printf("[loading-wipe-check] real-shell target=%u page=%u category=%u blocked-store-click=%d failures=%u\n",
-            index, state.page, state.store.shopCategory, branchChange, failures);
+            index, state.stack.page, state.store.shopCategory, branchChange, failures);
     }
     // Actual planet click -> authored reticle exit -> REV page, with cold work.
-    ZMenuState revolution;
-    revolution.page = 0;
+    CMenuSystem revolution;
+    revolution.stack.page = 0;
     revolution.mode.modeSelected = true;
     const unsigned mapId = movies.Ordinal("GLU_MOVIE_MAP_PARALAX_COPY");
     const auto *mapMovie = movies.GetMovie(mapId);
@@ -1303,19 +1331,19 @@ int RunLoadingWipeCheck(const std::string &bigDirectory) {
         !movies.GetMovie(movies.Ordinal("GLU_MOVIE_MAP_RETICLE"))->GetChapterRange(2, exitStart, exitEnd)) { return 1; }
     ZMovieRegion planet;
     if (!movies.Region(mapId, 1, mapEnd, planet)) { return 1; }
-    ZMenuTestClick planetClick{planet.x + planet.width / 2, planet.y + planet.height / 2, 1};
+    ZMenuInputFrame planetClick{planet.x + planet.width / 2, planet.y + planet.height / 2, 1};
     // No trailing store click: the REV list opens inside the PLAY branch with no
     // sweep to swallow it, so such a click would simply leave for the store.
-    const std::vector<ZMenuTestClick> revolutionClicks = {{-100, -100, 1}, {-100, -100, headerEnd + 1},
+    const std::vector<ZMenuInputFrame> revolutionClicks = {{-100, -100, 1}, {-100, -100, headerEnd + 1},
         {-100, -100, headerEnd + 1}, {-100, -100, headerEnd + 1}, planetClick,
         {-100, -100, exitEnd + 1, duration * 2}, {-100, -100, duration / 2}};
     ZMenuTransitionTrace revolutionTrace;
     if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, revolution,
         TestOutput::Path("ui-restoration-loading-profile"), TestOutput::Path("ui-wipe-revolution.png"), &revolutionClicks,
         true, &window, true, &revolutionTrace) != -2) { return 1; }
-    if (revolution.page != 21 || revolutionTrace.active || revolutionTrace.starts != 0) { ++failures; }
+    if (revolution.stack.page != 21 || revolutionTrace.active || revolutionTrace.starts != 0) { ++failures; }
     std::printf("[loading-wipe-check] planet-to-REV page=%u active=%d starts=%u expected-sweep=0 failures=%u\n",
-        revolution.page, revolutionTrace.active, revolutionTrace.starts, failures);
+        revolution.stack.page, revolutionTrace.active, revolutionTrace.starts, failures);
     // Startup has the original launch image and animated core 0:124 only.
     {
         ZLoadingScreen startup(window, movies, tables, &profile, false, true);
@@ -1347,11 +1375,11 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
     if (!LoadProfile(toc, tables, profile, path, TestOutput::Fixtures())) { return 1; }
     ZWindow window;
     if (!window.Open("Postgame presentation verification", 1600, 1200)) { return 1; }
-    ZGameMenu view(&window);
+    ZMenuSurface view(&window);
     if (!view.Open(toc, tables, &profile)) { return 1; }
     unsigned failures = 0;
     for (unsigned index : {0u, 1u, 4u, 5u}) {
-        const auto *entry = FindMenuData("MDS_ICON_POSTGAME", index);
+        const auto *entry = CMenuDataProvider::Find("MDS_ICON_POSTGAME", index);
         if (!entry) { return 1; }
         const unsigned sprite = entry->sprites[0];
         const unsigned duration = view.movies.SpriteDuration(sprite >> 16, sprite & 255);
@@ -1366,19 +1394,19 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
         // Sample the final three seconds of a 30-second run to catch a finite
         // emitter that stops after the short initial sparkle check has passed.
         for (unsigned time = 0; time <= 30000; time += 20) {
-            view.Begin(27);
+            view.Begin();
             unsigned delta = 20;
             if (time == 0) { delta = 0; }
-            if (!view.AdvancePostGameEffect(index, delta)) { return 1; }
-            particles = std::max(particles, view.PostGameParticleCount(index));
+            if (!view.postGameEffects.AdvancePostGameEffect(index, delta)) { return 1; }
+            particles = std::max(particles, view.postGameEffects.PostGameParticleCount(index));
             const std::string value;
-            ZPostGameCardCallbacks callback(view, *entry, value, time);
+            CMenuPostGameOption callback(view, *entry, value, time);
             if (!callback.DrawMovieRegion(icon)) { return 1; }
             if (time == 1000 && !Capture::SaveFrame(window, TestOutput::Path("postgame-icon-") + std::to_string(index) + "-1000.png")) { return 1; }
             glReadPixels(640, 440, 320, 320, GL_RGBA, GL_UNSIGNED_BYTE, current.data());
             if (time >= 27000) {
                 if (current != previous) { ++lateChanged; }
-                lateParticles = std::max(lateParticles, view.PostGameParticleCount(index));
+                lateParticles = std::max(lateParticles, view.postGameEffects.PostGameParticleCount(index));
             }
             previous = current;
             if (first.empty()) { first = current; }
@@ -1395,8 +1423,8 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
     }
     // Inspect the same original ENEMY resources in both spawn paths.
     std::vector<CEnemy::Template> enemies;
-    ZMenuState casualtyState;
-    casualtyState.page = 28;
+    CMenuSystem casualtyState;
+    casualtyState.stack.page = 28;
     casualtyState.result.horde = true;
     if (!CEnemy::Template::LoadCatalog(toc, tables, enemies)) { return 1; }
     for (const auto &entry : enemies) {
@@ -1444,36 +1472,36 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
     }
     // Render the corrected models through the real, uniformly sized Movie cards.
     if (casualtyState.result.casualties.size() != 7) { return 1; }
-    view.Begin(28);
-    if (!DrawPostGame(view, casualtyState, toc, tables, profile)) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(casualtyState.postGame.Draw(view, casualtyState, toc, tables, profile), casualtyState)) { return 1; }
     for (unsigned page = 0; page < 3; ++page) {
-        view.Begin(28);
+        view.Begin();
         view.clock += 1000;
-        if (!DrawPostGame(view, casualtyState, toc, tables, profile)) { return 1; }
+        if (!FinishMenuFrame(casualtyState.postGame.Draw(view, casualtyState, toc, tables, profile), casualtyState)) { return 1; }
         casualtyState.postGame.postGameGalleryPosition = static_cast<float>(page * 2);
-        view.Begin(28);
-        if (!DrawPostGame(view, casualtyState, toc, tables, profile) ||
+        view.Begin();
+        if (!FinishMenuFrame(casualtyState.postGame.Draw(view, casualtyState, toc, tables, profile), casualtyState) ||
             !Capture::SaveFrame(window, TestOutput::Path("enemy-scale-casualties-") + std::to_string(page) + ".png")) { return 1; }
     }
     const unsigned ordinal = view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN");
     unsigned idleStart = 0, idleEnd = 0;
     if (!view.movies.GetMovie(ordinal)->GetChapterRange(1, idleStart, idleEnd)) { return 1; }
     ZMovieRegion tabs, buttonBounds;
-    const auto *button = FindMenuData("MDS_BUTTON_POSTGAME_INFO", 0);
+    const auto *button = CMenuDataProvider::Find("MDS_BUTTON_POSTGAME_INFO", 0);
     if (!view.movies.Region(ordinal, 1, idleStart, tabs) || !button ||
         !view.movies.Region(view.movies.Ordinal(button->movies[0]), 0, 0, buttonBounds)) { return 1; }
     const float firstX = tabs.x + static_cast<int>(tabs.width) / 2 - static_cast<int>((buttonBounds.width + 2) * 2) / 2;
     for (unsigned target = 0; target < 2; ++target) {
-        ZMenuState state;
-        state.page = 28 - target;
+        CMenuSystem state;
+        state.stack.page = 28 - target;
         ZMenuTransitionTrace trace;
-        const std::vector<ZMenuTestClick> clicks{{-100, -100, 1}, {-100, -100, idleEnd + 1},
+        const std::vector<ZMenuInputFrame> clicks{{-100, -100, 1}, {-100, -100, idleEnd + 1},
             {firstX + target * (buttonBounds.width + 2) + buttonBounds.width / 2, tabs.y + buttonBounds.height / 2, 1}};
         if (ShowGameMenu(toc, tables, profile, progress, refinement, store, weapons, armor, state, path,
             TestOutput::Path("postgame-tab-") + std::to_string(target) + ".png", &clicks, true, &window, true, &trace) != -2) { return 1; }
-        if (state.page != 27 + target || trace.starts != 0 || trace.active) { ++failures; }
+        if (state.stack.page != 27 + target || trace.starts != 0 || trace.active) { ++failures; }
         std::printf("[postgame-presentation-check] tab=%u page=%u wipes=%u active=%d failures=%u\n",
-            target, state.page, trace.starts, trace.active, failures);
+            target, state.stack.page, trace.starts, trace.active, failures);
     }
     return failures != 0;
 }

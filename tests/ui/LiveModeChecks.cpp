@@ -1,13 +1,13 @@
 #include "gun_bros_re/debug/Capture.h"
 /** Real BIG Live presentation, local transport and independent friend persistence. */
 #include "ui/MenuChecks.h"
-#include "gun_bros_re/ui/CInputPad.h"
-#include "gun_bros_re/ui/CMenuSplash.h"
+#include "gun_bros_re/ui/hud/CInputPad.h"
+#include "gun_bros_re/ui/menus/CMenuSplash.h"
 #include "gun_bros_re/gameplay/multiplayer/ZLiveShopSession.h"
 #include "TestOutput.h"
 #include <fstream>
 
-std::vector<std::uint8_t> ReadLiveListPixels(ZGameMenu &view, ZMovieRegion region) {
+std::vector<std::uint8_t> ReadLiveListPixels(ZMenuSurface &view, ZMovieRegion region) {
     int width = 0, height = 0;
     view.window.GetDrawableSize(width, height);
     region.height = 768 - region.y;
@@ -20,7 +20,7 @@ std::vector<std::uint8_t> ReadLiveListPixels(ZGameMenu &view, ZMovieRegion regio
     return pixels;
 }
 
-int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile, ZGameMenu &view) {
+int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &profile, ZMenuSurface &view) {
     const auto root = std::filesystem::path(TestOutput::Path("roster"));
     CProfileManager player = profile;
     ZLocalBotFriend migrated;
@@ -65,19 +65,19 @@ int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &
         !reloaded.Select(0) || reloaded.MatchSelected() != reloaded.At(0) ||
         !reloaded.Select(7)) { return 1; }
     std::printf("[live-regression] active-bot-match=1 repeat=12 reload=1 selection-change=1 default=1\n");
-    ZMenuState friends;
-    friends.page = 4;
+    CMenuSystem friends;
+    friends.stack.page = 4;
     friends.botRoster = &reloaded;
     friends.botFriend = reloaded.At(6);
     friends.social.selectedLocalFriend = 7;
     const bool wasConnected = GameHostSettings().isConnected;
     GameHostSettings().isConnected = true;
-    view.Begin(4);
-    if (!DrawSocialMenu(view, friends, player, false) || !friends.social.onlinePage ||
+    view.Begin();
+    if (!FinishMenuFrame(friends.social.Draw(view, friends, player, false), friends) || !friends.social.onlinePage ||
         !Capture::SaveFrame(view.window, TestOutput::Path("local-bot-roster.png"))) { return 1; }
     friends.social.socialTab = 1;
-    view.Begin(4);
-    if (!DrawSocialMenu(view, friends, player, false) ||
+    view.Begin();
+    if (!FinishMenuFrame(friends.social.Draw(view, friends, player, false), friends) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("local-bot-boost.png"))) { return 1; }
     GameHostSettings().isConnected = wasConnected;
     friends.online.SetConnected(true);
@@ -114,28 +114,28 @@ int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &
     }
     ZLocalBotRoster compactRoster;
     if (!compactRoster.Load(toc, tables, root, player)) { return 1; }
-    ZMenuState compact;
-    compact.page = 4;
+    CMenuSystem compact;
+    compact.stack.page = 4;
     compact.botRoster = &compactRoster;
     GameHostSettings().isConnected = true;
-    view.Begin(4);
-    if (!DrawSocialMenu(view, compact, player, false)) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(compact.social.Draw(view, compact, player, false), compact)) { return 1; }
     ZMovieRegion viewport;
     if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_BROBUFF_MENU"), 4, compact.social.socialTime, viewport)) { return 1; }
     const auto dim = ReadLiveListPixels(view, viewport);
     view.clock += 200;
-    view.Begin(4);
-    if (!DrawSocialMenu(view, compact, player, false)) { return 1; }
+    view.Begin();
+    if (!FinishMenuFrame(compact.social.Draw(view, compact, player, false), compact)) { return 1; }
     const bool glow = dim != ReadLiveListPixels(view, viewport);
     std::printf("[live-regression] selected-bro-glow=%d default-name=%s\n", glow, compact.social.brotherName.c_str());
     if (!glow || compact.social.brotherName != view.movies.NamedString("IDS_FRIEND_DEFAULT_BRO2") ||
         !Capture::SaveFrame(view.window, TestOutput::Path("bros-selected-glow.png"))) { return 1; }
-    view.Begin(4);
+    view.Begin();
     view.clock += 16;
-    view.SetTestClick({viewport.x + 10, viewport.y + 10});
+    view.InjectTap({viewport.x + 10, viewport.y + 10});
     view.pointerPressed = view.pointerHeld = true;
     view.dragY = -300;
-    const bool drawn = DrawSocialMenu(view, compact, player, false);
+    const bool drawn = FinishMenuFrame(compact.social.Draw(view, compact, player, false), compact);
     const bool scrolled = drawn && compact.social.scrollPosition > 0;
     std::printf("[live-regression] four-entry-bros-scroll=%d position=%.1f\n", scrolled, compact.social.scrollPosition);
     view.pointerPressed = view.pointerHeld = false;
@@ -153,12 +153,12 @@ int CheckLocalRoster(CResTOCManager &toc, ZPackTables &tables, CProfileManager &
     unsigned cardStart = 0, cardEnd = 0;
     if (!view.movies.GetMovie(cardMovie)->GetChapterRange(0, cardStart, cardEnd) ||
         !view.movies.Region(cardMovie, 0, cardEnd, lastCard)) { return 1; }
-    view.Begin(4);
-    view.SetTestClick({lastRow.x + lastCard.x - 512 + lastCard.width / 2, lastRow.y + lastCard.y - 384 + lastCard.height / 2});
-    if (!DrawSocialMenu(view, compact, player, false) || compact.social.selectedLocalFriend != 3) { return 1; }
+    view.Begin();
+    view.InjectTap({lastRow.x + lastCard.x - 512 + lastCard.width / 2, lastRow.y + lastCard.y - 384 + lastCard.height / 2});
+    if (!FinishMenuFrame(compact.social.Draw(view, compact, player, false), compact) || compact.social.selectedLocalFriend != 3) { return 1; }
     view.clock += 200;
-    view.Begin(4);
-    if (!DrawSocialMenu(view, compact, player, false) ||
+    view.Begin();
+    if (!FinishMenuFrame(compact.social.Draw(view, compact, player, false), compact) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("bros-last-selected.png"))) { return 1; }
     GameHostSettings().isConnected = wasConnected;
     if (!scrolled) { return 1; }
@@ -183,7 +183,7 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     ZLocalBotFriend reloaded;
     if (!reloaded.Load(toc, tables, root, &profile) || !reloaded.selected || reloaded.profile.coins != 321 ||
         profile.coins != originalCoins) { return 1; }
-    ZGameMenu view;
+    ZMenuSurface view;
     if (!view.Open(toc, tables, &profile)) { return 1; }
     view.scripted = true;
     view.animateNavigation = false;
@@ -194,14 +194,14 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
         CMenuSplash splash;
         if (!splash.Init(view.movies, index, &profile, ZLoadingMode::Live)) { return 1; }
         if (splash.ImageHandle() != wallpapers.handles[wallpapers.handles.size() - 5 + index % 4]) { return 1; }
-        view.Begin(0);
+        view.Begin();
         if (!splash.Draw(splash.IdleStart()) || !Capture::SaveFrame(view.window,
             TestOutput::Path("live-loading-" + std::to_string(index) + ".png"))) { return 1; }
     }
     CMenuSplash deathmatchSplash;
     if (!deathmatchSplash.Init(view.movies, 2, &profile, ZLoadingMode::Deathmatch) ||
         deathmatchSplash.ImageHandle() != wallpapers.handles.back()) { return 1; }
-    view.Begin(0);
+    view.Begin();
     if (!deathmatchSplash.Draw(deathmatchSplash.IdleStart()) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("deathmatch-loading.png"))) { return 1; }
     CInputPad hud;
@@ -218,13 +218,13 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     player.total = player.wave; peer.total = peer.wave;
     hud.BeginLiveWave(player, peer);
     for (unsigned elapsed = 0; elapsed < 3000; elapsed += 16) { hud.Advance(16); }
-    view.Begin(0);
+    view.Begin();
     if (!hud.Draw(hudState) || !Capture::SaveFrame(view.window, TestOutput::Path("live-wave-results.png"))) { return 1; }
     while (hud.LiveWaveRemaining() > 6000) { hud.Advance(1); }
-    view.Begin(0);
+    view.Begin();
     if (!hud.Draw(hudState) || !Capture::SaveFrame(view.window, TestOutput::Path("live-wave-countdown.png"))) { return 1; }
     hudState.indicators.push_back({-1, Collision::Brother, 4, 512, -100, 500, -1});
-    view.Begin(0);
+    view.Begin();
     if (!hud.Draw(hudState) || !Capture::SaveFrame(view.window, TestOutput::Path("live-peer-indicator.png"))) { return 1; }
     hudState.indicators.clear();
     while (hud.LiveWaveRemaining() > 1) { hud.Advance(1); }
@@ -237,11 +237,11 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     hudState.brotherName = "LOCAL BOT";
     hudState.inventory = reloaded.profile.powerups;
     hudState.coins = reloaded.profile.coins;
-    view.Begin(0);
+    view.Begin();
     if (!hud.Draw(hudState)) { return 1; }
     hud.AdvanceMenu(3000);
     hud.BrowseRemoteShop(3);
-    view.Begin(0);
+    view.Begin();
     if (!hud.Draw(hudState) || !Capture::SaveFrame(view.window, TestOutput::Path("live-peer-shop.png"))) { return 1; }
     for (unsigned y = 0; y < 768; y += 32) {
         for (unsigned x = 0; x < 1024; x += 32) {
@@ -249,9 +249,9 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
             hud.Pointer(hudState, float(x), float(y), false);
         }
     }
-    ZMenuState results;
+    CMenuSystem results;
     results.online.SetConnected(true);
-    results.page = 27;
+    results.stack.page = 27;
     results.result.live = true;
     results.result.peers[0] = player.total;
     results.result.peers[1] = peer.total;
@@ -260,30 +260,30 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     results.result.waves = 1;
     for (unsigned frame = 0; frame < 5; ++frame) {
         view.clock += 1000;
-        view.Begin(27);
-        if (!DrawPostGame(view, results, toc, tables, profile)) { return 1; }
+        view.Begin();
+        if (!FinishMenuFrame(results.postGame.Draw(view, results, toc, tables, profile), results)) { return 1; }
     }
     if (!Capture::SaveFrame(view.window, TestOutput::Path("live-final-results.png"))) { return 1; }
     for (const auto &region : view.movies.Regions(view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN_MP"), results.postGame.postGameTime)) {
         std::printf("[live-layout-check] region=%u x=%.1f y=%.1f width=%.1f height=%.1f\n", region.index, region.x, region.y, region.width, region.height);
     }
     results.postGame.livePosition = 3;
-    view.Begin(27);
-    if (!DrawPostGame(view, results, toc, tables, profile) ||
+    view.Begin();
+    if (!FinishMenuFrame(results.postGame.Draw(view, results, toc, tables, profile), results) ||
         !Capture::SaveFrame(view.window, TestOutput::Path("live-final-results-bottom.png"))) { return 1; }
     ZMovieRegion replay;
     if (!view.movies.Region(view.movies.Ordinal("GLU_MOVIE_WRAPUP_SCREEN_MP"), 7, results.postGame.postGameTime, replay)) { return 1; }
-    view.Begin(27);
-    view.SetTestClick({replay.x + replay.width / 2, replay.y + replay.height / 2});
-    if (!DrawPostGame(view, results, toc, tables, profile) || !results.postGame.liveReplay) { return 1; }
+    view.Begin();
+    view.InjectTap({replay.x + replay.width / 2, replay.y + replay.height / 2});
+    if (!FinishMenuFrame(results.postGame.Draw(view, results, toc, tables, profile), results) || !results.postGame.liveReplay) { return 1; }
     std::printf("[live-mode-check] shop-owner-delay-timeout=1 friend-reload=1 wave-timer=1 remote-readonly=1 final-results=1\n");
 
     // Enter the real menu loop with its popup clock and launch return value.
     const bool connected = GameHostSettings().isConnected;
     GameHostSettings().isConnected = true;
-    ZMenuState match;
+    CMenuSystem match;
     match.gameMode = 1;
-    match.page = 0;
+    match.stack.page = 0;
     if (!BeginLocalMatch(match)) { return 1; }
     CRefinementManager::Template refinement;
     std::vector<ZStoreEntry> store;
@@ -291,7 +291,7 @@ int CheckLiveMode(CResTOCManager &toc, ZPackTables &tables, CProfileManager &pro
     std::vector<ZArmorEntry> armor;
     if (!LoadRefinementTemplate(toc, tables, refinement) || !LoadStoreCatalog(toc, tables, store) ||
         !LoadWeaponCatalog(toc, tables, weapons) || !LoadArmorCatalog(toc, tables, armor)) { return 1; }
-    std::vector<ZMenuTestClick> waits(12, {-100, -100, 500});
+    std::vector<ZMenuInputFrame> waits(12, {-100, -100, 500});
     const int launch = ShowGameMenu(toc, tables, profile, profile.nativeArchive->progression, refinement,
         store, weapons, armor, match, root, TestOutput::Path("live-matching-failure.png"), &waits, false, &view.window);
     GameHostSettings().isConnected = connected;

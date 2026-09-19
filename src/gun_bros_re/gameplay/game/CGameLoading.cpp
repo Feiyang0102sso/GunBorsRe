@@ -4,7 +4,7 @@
 #include "gun_bros_re/gameplay/game/CGameRuntime.h"
 #include "gun_bros_re/debug/DebugMaps.h"
 #include "gun_bros_re/debug/FrameRateOverlay.h"
-#include "gun_bros_re/ui/ZLoadingScreen.h"
+#include "gun_bros_re/ui/host/ZLoadingScreen.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
 #include "gun_bros_re/gameplay/map/CLayerObjectPlayers.h"

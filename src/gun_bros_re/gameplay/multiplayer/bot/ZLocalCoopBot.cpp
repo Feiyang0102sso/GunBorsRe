@@ -1,5 +1,5 @@
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalPVPBot.h"
-#include "gun_bros_re/ui/CPowerUpSelector.h"
+#include "gun_bros_re/ui/hud/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
 /** Test peer input policy. Shared CBrother/CGun/Flow still execute all actions.
  * This policy is a Windows replacement for player input, not original game AI.
