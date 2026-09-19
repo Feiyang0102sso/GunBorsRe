@@ -38,6 +38,8 @@ constexpr float kRadians = 3.14159265f / 180.0f;
  */
 // Correction (R03): the historical authoring-rule workaround above has
 // been removed. pack5 BULLET104 really binds animation 1 and caps 2/3.
+// 2026-09-19: a user-approved, resource-specific compatibility fix now selects
+// 0/1/2 in Bind. Draw still uses the bound slots; no bounds heuristic is restored.
 
 }
 void CBullet::DrawLightning(ZSpriteRenderer &sprites, ZEffectColors &colors,

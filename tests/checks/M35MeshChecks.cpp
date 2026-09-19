@@ -453,6 +453,10 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                 }
                 // Native 18 sets a beam's range; it must never become an expiry timer.
                 if (shot.beam) {
+                    // The Haven compatibility override must not affect player beams.
+                    const int authoredBody = data.GetSpriteRef().animation;
+                    if (shot.animation != authoredBody || shot.beamSourceAnimation != authoredBody + 1 ||
+                        shot.beamEndAnimation != authoredBody + 2) { ++failures; }
                     CBullet reference;
                     reference.Bind(data, false);
                     const std::int16_t range[] = {123};
@@ -595,8 +599,14 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
                     sprite.archetype, archetype->GetAnimationCount(), sprite.animation + 2, cap.frames.size(), failures);
                 const int sourceAnimation = static_cast<std::uint8_t>(sprite.animation + 1);
                 const int endAnimation = static_cast<std::uint8_t>(sprite.animation + 2);
-                if (shot.animation != sprite.animation || shot.beamSourceAnimation != sourceAnimation ||
-                    shot.beamEndAnimation != endAnimation) { ++failures; }
+                int expectedBody = sprite.animation;
+                if (sample.second == 104) {
+                    // Approved Haven compatibility fix; keep the BIG template unchanged.
+                    if (sprite.archetype != 139 || sprite.animation != 1) { ++failures; }
+                    expectedBody = 0;
+                }
+                if (shot.animation != expectedBody || shot.beamSourceAnimation != expectedBody + 1 ||
+                    shot.beamEndAnimation != expectedBody + 2) { ++failures; }
                 std::printf("[beam-binding-check] body=%d source=%d end=%d authored=%u failures=%u\n",
                     shot.animation, shot.beamSourceAnimation, shot.beamEndAnimation, sprite.animation, failures);
                 CBullet reference;
@@ -642,7 +652,9 @@ int RunWeaponEffectsCheck(const std::string &bigDirectory) {
             // Measured: bead chain 3%, tiled beam body 44%.
             // R03 correction: that brightness threshold encoded a visual guess.
             // Keep the measurement for comparison; validate BIG slots, not smoothness.
-            if (firstLit < 0) { ++failures; }
+            // The user confirmed the iOS beam is continuous and approved a scoped
+            // compatibility fix. This threshold is visual acceptance, not BIG data.
+            if (firstLit < 0 || troughPercent < 20) { ++failures; }
         }
         Capture::SaveFrame(window, TestOutput::Path("boss-beam-") + std::string(sample.first) + "-" + std::to_string(sample.second) + ".png");
     }

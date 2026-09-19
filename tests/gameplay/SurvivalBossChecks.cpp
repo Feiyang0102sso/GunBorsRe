@@ -94,7 +94,12 @@ int CheckSurvivalBoss(SurvivalBossFixture fixture) {
                         elapsed, bullet.source.resource.packHash, bullet.source.resource.localIndex,
                         ref.archetype, ref.animation, bullet.animation, bullet.beamSourceAnimation,
                         bullet.beamEndAnimation, item.group, bullet.length);
-                    if (bullet.animation != ref.animation || item.group != 5) { ++checkFailures; }
+                    // Exercise the scoped compatibility fix through the real boss attack.
+                    if (bullet.source.resource.packHash != 0x00267585 || bullet.source.resource.localIndex != 104 ||
+                        ref.archetype != 139 || ref.animation != 1 || bullet.animation != 0 ||
+                        bullet.beamSourceAnimation != 1 || bullet.beamEndAnimation != 2 || item.group != 5) {
+                        ++checkFailures;
+                    }
                     break;
                 }
             }

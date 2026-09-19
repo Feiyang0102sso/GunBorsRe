@@ -12,6 +12,8 @@ namespace {
 
 // The same 16.16 fixed point every template scalar uses.
 constexpr float kFixedPointScale = 1.0f / 65536.0f;
+constexpr std::uint32_t kHavenBeamPackHash = 0x00267585; // pack5.
+constexpr unsigned kHavenBeamBulletIndex = 104;
 
 float ReadFixedPoint(CArrayInputStream &stream) {
     return static_cast<float>(stream.ReadInt32()) * kFixedPointScale;
@@ -87,6 +89,17 @@ void CBullet::Bind(const Template &data, bool alternate) {
     m_trajectoryType = data.GetTrajectoryType();
     if (!data.HasMesh()) { m_trajectoryHeight = 0; m_trajectoryDurationMs = 0; }
     animation = data.GetSpriteRef().animation;
+    // User-approved compatibility fix (2026-09-19): iOS displays a continuous
+    // Haven beam, but our BULLET104 path tiles the muzzle flare. Use the same
+    // BIG sprite's body/source/end slots as Kraken, without changing the template.
+    // The remaining original-runtime discrepancy is documented in
+    // docs/haven-boss-beam-investigation.md; this is not an original Bind rule.
+    const auto &sprite = data.GetSpriteRef();
+    if (source.resource.packHash == kHavenBeamPackHash && source.resource.localIndex == kHavenBeamBulletIndex &&
+        sprite.packHash == kHavenBeamPackHash && sprite.archetype == 139 && sprite.action == 0 &&
+        sprite.animation == 1 && (data.GetFlags() & 0x100) != 0) {
+        animation = 0;
+    }
     beamSourceAnimation = static_cast<std::uint8_t>(animation + 1);
     beamEndAnimation = static_cast<std::uint8_t>(animation + 2);
     m_boundAnimation = -1;
