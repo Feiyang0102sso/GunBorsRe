@@ -4,7 +4,7 @@
 #define GUN_BROS_RE_ZLOADINGSCREEN_H
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "gun_bros_re/ui/menus/CMenuSplash.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "engine/platform/ZWindow.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"

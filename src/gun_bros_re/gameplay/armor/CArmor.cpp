@@ -11,6 +11,7 @@
 CArmor::Template::Template() : m_slot(0), m_attachmentNode{} {}
 
 bool CArmor::Template::Init(CArrayInputStream &stream) {
+    for (auto &model : m_models) { model = std::make_shared<CMesh>(); }
     // The wire order interleaves the variants with their flags, so this does
     // not loop: mesh and image of variant 0, a flag, then variant 1, a flag,
     // then both sprite fallbacks together.

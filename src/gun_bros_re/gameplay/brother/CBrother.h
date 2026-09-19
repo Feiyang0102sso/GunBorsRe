@@ -37,7 +37,7 @@
 #include <array>
 #include <map>
 #include "gun_bros_re/gameplay/armor/CArmor.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 class ZShaderProgram;
 // CGameSpriteGluRef lives here, next to its first user
 // Historical location above; now declared in original gameAssetRef module.

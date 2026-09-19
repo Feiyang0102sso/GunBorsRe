@@ -6,6 +6,8 @@
 #include "engine/graphics/CMoveSetMesh.h"
 
 #include <cstdio>
+#include "engine/graphics/CMesh.h"
+#include "engine/resources/CResourceLoader.h"
 
 CMoveSetMesh::CMoveSetMesh() : m_packHash(0) {}
 
@@ -13,6 +15,7 @@ bool CMoveSetMesh::Init(CArrayInputStream &stream) {
     m_packHash = 0;
     m_meshConfigs.clear();
     m_moves.clear();
+    m_meshes.clear();
 
     // The original turns the hash into a pack index here and keeps only that.
     // We keep the hash: resolving it needs the TOC manager, which a template
@@ -24,6 +27,7 @@ bool CMoveSetMesh::Init(CArrayInputStream &stream) {
     for (std::uint8_t i = 0; i < meshConfigCount; ++i) {
         m_meshConfigs[i].meshOrdinal = stream.ReadUInt8();
         m_meshConfigs[i].imageOrdinal = stream.ReadUInt8();
+        m_meshes.push_back(std::make_shared<CMesh>());
     }
 
     const std::uint8_t moveCount = stream.ReadUInt8();

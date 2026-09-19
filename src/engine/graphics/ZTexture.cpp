@@ -6,6 +6,11 @@
 #include "engine/graphics/ZTexture.h"
 
 #include <cstdio>
+#include <SDL3/SDL_video.h>
+
+std::uintptr_t ZTexture::GetCurrentContext() {
+    return reinterpret_cast<std::uintptr_t>(SDL_GL_GetCurrentContext());
+}
 
 ZTexture::ZTexture() : m_handle(0), m_width(0), m_height(0) {}
 

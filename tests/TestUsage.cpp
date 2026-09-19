@@ -24,6 +24,7 @@ void PrintTestUsage() {
         "  --hud-check              original combat HUD, overlays and input check\n"
         "  --profile <directory>    use separate original DataStore files (.dat: legacy study)\n"
         "  --progress-check          verify progression, purchases and refinery\n"
+        "  --resource-loading-check  verify shared models, images and GPU lifetime\n"
         "  --profile-play-check      play, save, reload and resume test account\n"
         "  --play                    retail survival; default pack2 map7\n"
         "  --survival-check          real-map projectile/wave integration check\n"

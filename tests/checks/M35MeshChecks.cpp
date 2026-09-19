@@ -34,7 +34,7 @@
 #include "TestOutput.h"
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"

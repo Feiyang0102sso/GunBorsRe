@@ -1,6 +1,6 @@
 #include "gun_bros_re/gameplay/map/CLayerObjectPlayers.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

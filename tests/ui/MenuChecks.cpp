@@ -1453,7 +1453,7 @@ int RunPostGamePresentationCheck(const std::string &bigDirectory) {
             else { model.SpawnForUI(); }
             const int config = model.GetPartConfig(0);
             if (config < 0) { return 1; }
-            const auto &bounds = model.configs[config]->mesh.GetBounds();
+            const auto &bounds = model.configs[config]->mesh->GetBounds();
             const auto &meshConfig = entry.moveSet.GetMeshConfigs()[config];
             std::vector<std::uint8_t> meshBytes;
             if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), ZGameSection::Mesh, meshConfig.meshOrdinal, meshBytes)) { return 1; }

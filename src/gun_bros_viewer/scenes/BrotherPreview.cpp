@@ -1,7 +1,6 @@
 #include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Bare mesh exploration belongs to the viewer, outside the actor lifecycle. */
-#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include "engine/core/ZMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 #include <cstdio>
@@ -17,10 +16,13 @@ bool ZBrotherPreview::AttachGun(CGunBros &tables, const std::string &owner,
     }
 
     auto gun = std::make_unique<Gun>();
-    if (!LoadMeshAndAtlas(tables, owner.c_str(), meshPackHash, meshOrdinal,
-                          imagePackHash, imageOrdinal, gun->mesh, gun->texture)) {
-        return false;
-    }
+    CResourceLoader &loader = tables.GetResourceLoader();
+    std::vector<std::uint8_t> bytes;
+    if (!loader.ReadMesh(meshPackHash, meshOrdinal, bytes)) { return false; }
+    CArrayInputStream input(bytes);
+    if (!gun->mesh.Init(input) || input.Available() != 0) { return false; }
+    loader.AddImage(imagePackHash, imageOrdinal, gun->texture);
+    if (!loader.LoadImmediate()) { return false; }
 
     const CMesh &torso = *torsoMesh;
     gun->attached = true;
@@ -103,7 +105,7 @@ void ZBrotherPreview::Draw(const ZShaderProgram &program, const float *base) {
     }
     float matrix[kMatrix4dElements];
     MeshCameraBuildPartMatrix(placement, base, matrix);
-    m_gun->buffer.Draw(program, matrix, m_gun->texture);
+    m_gun->buffer.Draw(program, matrix, *m_gun->texture);
 }
 
 namespace MapDetail {

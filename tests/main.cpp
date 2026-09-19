@@ -1,6 +1,7 @@
 /** Built on demand in Debug; reuses the same command routing and implementations. */
 #include "engine/platform/ZStartup.h"
 #include "TestApplication.h"
+#include "Checks.h"
 #include "engine/platform/ZAudioPlayer.h"
 #include <string>
 #include "gameplay/CampaignDoorChecks.h"
@@ -40,6 +41,10 @@ int wmain(int argc, wchar_t **argv) {
         if (std::wstring(argv[index]) == L"--gameplay-ownership-check") {
             ZAudioPlayer::SetMuted(true);
             return RunGameplayOwnershipCheck();
+        }
+        if (std::wstring(argv[index]) == L"--resource-loading-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunResourceLoadingCheck(sampleBigDirectory.u8string());
         }
         if (std::wstring(argv[index]) == L"--deathmatch-data-check") {
             ZAudioPlayer::SetMuted(true);

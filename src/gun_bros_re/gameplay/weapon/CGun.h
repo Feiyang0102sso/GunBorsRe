@@ -43,7 +43,7 @@
 
 #ifndef GUN_BROS_RE_GUN_BROS_CGUN_H
 #define GUN_BROS_RE_GUN_BROS_CGUN_H
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <string>
 
 #include "engine/resources/CArrayInputStream.h"
@@ -117,6 +117,10 @@ public:
 
         static const Template *Load(CResTOCManager &toc, CGunBros &tables, const GameObjectRef &ref);
         bool Init(CArrayInputStream &stream);
+        void Load(CResourceLoader &loader, std::shared_ptr<ZTexture> &image,
+            std::vector<std::shared_ptr<ZTexture>> *moveImages = nullptr) const;
+        bool LoadMesh(CResourceLoader &loader) const;
+        const std::shared_ptr<CMesh> &GetMesh() const { return m_model; }
 
         const CScript &GetScript() const { return m_script; }
 
@@ -136,6 +140,7 @@ public:
         unsigned GetCriticalDamageScale() const { if (m_value148 == 0) { return 10; } return m_value148; }
 
     private:
+        std::shared_ptr<CMesh> m_model = std::make_shared<CMesh>();
         std::uint8_t m_flag104;
         CGameAssetRef m_meshRef;
         CGameAssetRef m_imageRef;

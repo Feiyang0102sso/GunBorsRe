@@ -6,7 +6,7 @@
 #include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <vector>
 #include <map>
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 
 class Planet {
 public:

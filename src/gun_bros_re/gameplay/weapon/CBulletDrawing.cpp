@@ -161,7 +161,7 @@ void CBullet::DrawProjectile(ZSpriteRenderer &sprites, ZEffectColors &colors, co
         const float apparentScale = data->GetMeshScale() + 25 * GetTrajectoryHeight();
         const float meshScale = apparentScale * part.mesh.GetBounds().inverseExtent * projection.scale * meshCameraScale;
         MeshCameraBuildGameMatrix(sceneMvp, x, y, meshScale, direction + 90, base);
-        part.buffer.Draw(program, base, part.texture);
+        part.buffer.Draw(program, base, *part.texture);
     }
     if (beam) { beamQuads += sprites.Batch().GetQuadCount() - beforeQuads; }
 }

@@ -1,7 +1,7 @@
 /** Host roster configuration. Native profiles retain earned progress separately. */
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalBotFriend.h"
 #include "gun_bros_re/data/profile/CPlayerProgress.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "engine/core/CStringToKey.h"
 #include <charconv>
 #include <fstream>

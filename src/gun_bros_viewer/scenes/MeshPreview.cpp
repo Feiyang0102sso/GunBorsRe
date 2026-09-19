@@ -1,5 +1,4 @@
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
-#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_viewer/ViewerSettings.h"
@@ -36,7 +35,7 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 #include "gun_bros_re/gameplay/armor/CArmor.h"
@@ -693,20 +692,22 @@ namespace MeshPreviewDetail {
 
 /** Fetch and decode one catalogue entry. */
 bool LoadModel(CGunBros &tables, const CatalogEntry &entry, LoadedModel &out) {
+    CResourceLoader &loader = tables.GetResourceLoader();
+    std::vector<std::uint8_t> payload;
+    if (!loader.ReadMesh(entry.meshPackHash, entry.meshOrdinal, payload)) { return false; }
+    CArrayInputStream stream(payload);
+    if (!out.mesh.Init(stream) || stream.Available() != 0) { return false; }
     if (entry.imageOrdinal == UINT32_MAX) {
-        std::vector<std::uint8_t> payload;
-        if (!tables.ReadSectionResource(entry.meshPackHash, ZGameSection::Mesh, entry.meshOrdinal, payload)) { return false; }
-        CArrayInputStream stream(payload);
-        if (!out.mesh.Init(stream)) { return false; }
         // Neutral inspection material; explicitly labeled as untextured, not a game asset.
         ZPNGImage neutral;
         neutral.width = 1;
         neutral.height = 1;
         neutral.pixels.assign(4, 255);
-        if (!out.texture.Create(neutral, GL_REPEAT)) { return false; }
-    } else if (!LoadMeshAndAtlas(tables, entry.owner.c_str(), entry.meshPackHash,
-                   entry.meshOrdinal, entry.imagePackHash, entry.imageOrdinal, out.mesh, out.texture)) {
-        return false;
+        out.texture = std::make_shared<ZTexture>();
+        if (!out.texture->Create(neutral, GL_REPEAT)) { return false; }
+    } else {
+        loader.AddImage(entry.imagePackHash, entry.imageOrdinal, out.texture);
+        if (!loader.LoadImmediate()) { return false; }
     }
     if (out.mesh.GetFrames().empty()) { return false; }
     out.rawAnimation.SetMesh(&out.mesh);
@@ -1043,7 +1044,7 @@ int RunMeshPreview(const std::string &bigDirectory, std::uint32_t startIndex,
         float mvp[kMatrix4dElements];
         BuildModelViewProjection(model->mesh.GetBounds(), view, drawableWidth,
                                  drawableHeight, mvp);
-        buffer.Draw(program, mvp, model->texture);
+        buffer.Draw(program, mvp, *model->texture);
 
         if (!controls.Draw()) { return 1; }
 

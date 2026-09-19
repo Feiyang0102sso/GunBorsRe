@@ -1,7 +1,7 @@
 #pragma once
 /** BIG particle template cache. Players and their pools belong to callers. */
 #include "gun_bros_re/effects/CParticleEffect.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <map>
 

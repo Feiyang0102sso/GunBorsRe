@@ -86,7 +86,7 @@ void CEnemy::Draw(const ZShaderProgram &program, const float *base) {
         if (animation.Evaluate(pose)) {
             config.buffer.SetVertices(pose);
         } else {
-            config.buffer.SetFrame(config.mesh, 0);
+            config.buffer.SetFrame(*config.mesh, 0);
         }
 
         const CEnemy::Part &part = GetPart(i);
@@ -112,7 +112,7 @@ void CEnemy::Draw(const ZShaderProgram &program, const float *base) {
             float pivot[16], rotation[16], translated[16], local[16], next[16];
             const int bodyConfig = GetPartConfig(0);
             ZMeshBounds bounds{};
-            if (bodyConfig >= 0) { bounds = configs[bodyConfig]->mesh.GetBounds(); }
+            if (bodyConfig >= 0) { bounds = configs[bodyConfig]->mesh->GetBounds(); }
             Matrix4dTranslation(bounds.centerX, bounds.centerY, bounds.centerZ, pivot);
             Matrix4dRotationZ(-combat.facing * kDegreesToRadians, rotation);
             Matrix4dTranslation(-bounds.centerX, -bounds.centerY, -bounds.centerZ, translated);
@@ -125,7 +125,7 @@ void CEnemy::Draw(const ZShaderProgram &program, const float *base) {
         // CEnemy::Draw :67667 uses white RGB and half the part flash amount.
         // Gun heat retains the buffer's default red overlay.
         const float hitColor[] = {1, 1, 1};
-        config.buffer.Draw(program, mvp, config.texture, part.hitFlash * 0.5f, hitColor);
+        config.buffer.Draw(program, mvp, *config.texture, part.hitFlash * 0.5f, hitColor);
     }
 }
 
@@ -153,7 +153,7 @@ float CEnemy::GetWorldScale(float gameScale, float cameraScale) const {
     // something changes it, and nothing in this port does yet.
     // Current callers apply combat.scaleFactor separately; native 61 sets it.
     const float inverseExtent =
-        configs[configIndex]->mesh.GetBounds().inverseExtent;
+        configs[configIndex]->mesh->GetBounds().inverseExtent;
     return inverseExtent * gameScale * cameraScale;
 }
 
@@ -178,7 +178,7 @@ void CEnemy::BuildGameMatrix(const float *base, float x,
 
     const std::int32_t configIndex = GetPartConfig(0);
     if (configIndex >= 0) {
-        const ZMeshBounds &bounds = configs[configIndex]->mesh.GetBounds();
+        const ZMeshBounds &bounds = configs[configIndex]->mesh->GetBounds();
         pivotX = bounds.centerX;
         pivotY = bounds.centerY;
         pivotZ = bounds.centerZ;
@@ -224,13 +224,13 @@ bool CEnemy::DrawUI(const ZShaderProgram &program, float x, float y,
     if (body < 0) { return true; }
     // CEnemy::GetBoundsInternal :67314: union of integer XY boxes,
     // all scaled by PART 0 inverse extent * 100; attachment is ignored.
-    const float units = configs[body]->mesh.GetBounds().inverseExtent * 100;
+    const float units = configs[body]->mesh->GetBounds().inverseExtent * 100;
     int left = 0, top = 0, right = 0, bottom = 0;
     bool bounded = false;
     for (unsigned part = 0; part < GetPartCount(); ++part) {
         const int config = GetPartConfig(part);
         if (config < 0) { continue; }
-        const auto &bounds = configs[config]->mesh.GetBounds();
+        const auto &bounds = configs[config]->mesh->GetBounds();
         const int width = static_cast<int>((bounds.maxX - bounds.minX) * units);
         const int height = static_cast<int>((bounds.maxY - bounds.minY) * units);
         if (width == 0 || height == 0) { continue; }

@@ -56,7 +56,7 @@
 #include "engine/graphics/ZMeshBuffer.h"
 #include "engine/graphics/ZShaderProgram.h"
 #include "engine/graphics/ZTexture.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 
 #include <cstdint>
 #include <vector>
@@ -137,8 +137,8 @@ public:
 
     /** One mesh config of a move set, decoded and -- optionally -- uploaded. */
     struct ModelConfig {
-        CMesh mesh;
-        ZTexture texture;
+        std::shared_ptr<const CMesh> mesh;
+        std::shared_ptr<ZTexture> texture;
         ZMeshBuffer buffer;
         bool valid;
 

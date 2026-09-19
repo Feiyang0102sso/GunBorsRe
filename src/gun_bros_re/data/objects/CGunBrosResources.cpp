@@ -1,10 +1,17 @@
 /** Game-pack lifetime and cross-pack addressing, original gunbros.cpp. */
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 
 CGunBros::CGunBros(CResTOCManager &toc) : m_tocManager(toc) {
+    m_resourceLoader.SetReadObserver([this]() {
+        if (m_progress != nullptr) { m_progress->OnResourceRead(); }
+    });
     m_objectPacks.resize(toc.GetPackCount());
     for (unsigned index = 0; index < toc.GetPackCount(); ++index) {
         m_objectPacks[index].Init(*toc.GetPack(index));
+        const auto &pack = m_objectPacks[index];
+        m_resourceLoader.BindPack(*toc.GetPack(index),
+            {pack.GetSectionBase(ZGameSection::Mesh), pack.GetSectionSpan(ZGameSection::Mesh)},
+            {pack.GetSectionBase(ZGameSection::Png), pack.GetSectionSpan(ZGameSection::Png)});
     }
 }
 

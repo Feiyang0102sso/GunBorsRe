@@ -32,8 +32,8 @@ constexpr std::uint8_t kPlayerLegsConfigIndex = 1;
 /** Actor-owned body meshes; animation controllers stay on CBrother. */
 struct CBrother::Drawing {
     struct BodyMesh {
-        CMesh mesh;
-        ZTexture texture;
+        std::shared_ptr<const CMesh> mesh;
+        std::shared_ptr<ZTexture> texture;
         ZMeshBuffer buffer;
         std::vector<float> pose;
     };

@@ -3,7 +3,6 @@
  * The BIG references remain the only source of sprite/model identity.
  */
 #include "gun_bros_re/gameplay/weapon/CBullet.h"
-#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include <cstdio>
 
 bool CBullet::Template::Load(CGunBros &tables, const ZShaderProgram &program, const GameObjectRef &ref) {
@@ -18,10 +17,25 @@ bool CBullet::Template::Load(CGunBros &tables, const ZShaderProgram &program, co
         return false;
     }
     if (!HasMesh() || !HasImage()) { return true; }
-    auto mesh = std::make_shared<Mesh>();
-    if (!LoadMeshAndAtlas(tables, "projectile", m_meshRef.packHash, m_meshRef.assetId,
-        m_imageRef.packHash, m_imageRef.assetId, mesh->mesh, mesh->texture)) { return false; }
-    if (!mesh->buffer.Create(program) || !mesh->buffer.SetMesh(mesh->mesh)) { return false; }
-    m_mesh = std::move(mesh);
+    m_mesh = std::make_shared<Mesh>();
+    CResourceLoader &loader = tables.GetResourceLoader();
+    loader.AddFunction([this, &loader]() { return LoadMesh(loader); });
+    loader.AddImage(m_imageRef.packHash, m_imageRef.assetId, m_mesh->texture);
+    if (!loader.LoadImmediate() || !m_mesh->buffer.Create(program) || !m_mesh->buffer.SetMesh(m_mesh->mesh)) {
+        m_mesh.reset();
+        return false;
+    }
+    return true;
+}
+
+/** Original CBullet::Template::LoadMesh :60448, distinct from atlas loading. */
+bool CBullet::Template::LoadMesh(CResourceLoader &loader) {
+    if (m_mesh->mesh.GetVertexCount() != 0) { return true; }
+    std::vector<std::uint8_t> bytes;
+    if (!loader.ReadMesh(m_meshRef.packHash, m_meshRef.assetId, bytes)) { return false; }
+    CArrayInputStream input(bytes);
+    CMesh candidate;
+    if (!candidate.Init(input) || input.Available() != 0) { return false; }
+    m_mesh->mesh = std::move(candidate);
     return true;
 }

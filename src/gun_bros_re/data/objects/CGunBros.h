@@ -20,6 +20,7 @@
 // Original InitGameObject/GetGameObject: 78471/78497; no UI or session singleton.
 #include "gun_bros_re/data/objects/CGameObjectPack.h"
 #include "engine/resources/CResTOCManager.h"
+#include "engine/resources/CResourceLoader.h"
 #include <vector>
 
 struct CGameAssetRef;
@@ -35,6 +36,7 @@ public:
     CGunBros(const CGunBros &) = delete;
     CGunBros &operator=(const CGunBros &) = delete;
     CGameObjectPack &GetObjectPack(int packIndex) { return m_objectPacks[packIndex]; }
+    CResourceLoader &GetResourceLoader() { return m_resourceLoader; }
     /** Game entry points still use the latest rule set; older BIGs are viewer inputs. */
     bool HasLatestBigVersion() const;
     std::string ReadString(const CGameAssetRef &ref);
@@ -47,4 +49,5 @@ private:
     CResTOCManager &m_tocManager;
     std::vector<CGameObjectPack> m_objectPacks;
     LoadProgress *m_progress = nullptr;
+    CResourceLoader m_resourceLoader;
 };

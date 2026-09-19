@@ -2,6 +2,8 @@
 
 日期：2026-09-19。依据已批准的 [实施方案](data-optimization-plan.md)，在本轮开始时的工作区上增量实施；没有回退其他未提交修改。
 
+后续模型加载更新：原先仅迁移的 `ZMeshAssets.*` 现已删除，加载职责归回模板／动作集与 CResourceLoader／CImagePool；CGunBros.h 归 data/objects，application／graphics 空目录移除。当前 data 共 39 个文件。后续细节与验收见 [模型加载职责归位](model-loading-alignment.md)，下文保留第一阶段的统计和验证记录。
+
 ## 当前职责
 
 `data/` 原有 46 个源码文件归为四个包，目前共 38 个文件，根目录不再散放源码。

@@ -36,6 +36,7 @@ int RunPropCombatCheck(const std::string &bigDirectory);
 int RunActorFeedbackCheck(const std::string &bigDirectory);
 
 int RunProgressCheck(const std::string &bigDirectory);
+int RunResourceLoadingCheck(const std::string &bigDirectory);
 
 int RunOriginalPowerupSelectorCheck(const std::string &bigDirectory);
 

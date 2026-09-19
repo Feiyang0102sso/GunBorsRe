@@ -3,7 +3,7 @@
  */
 #ifndef GUN_BROS_RE_CPLAYERPROGRESS_H
 #define GUN_BROS_RE_CPLAYERPROGRESS_H
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "engine/resources/CArrayInputStream.h"
 #include <vector>
 

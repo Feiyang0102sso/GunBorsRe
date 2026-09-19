@@ -25,7 +25,7 @@
 #include "gun_bros_re/ui/hud/CInputPad.h"
 #include "gun_bros_re/data/mission/Mission.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/platform/ZAudioPlayer.h"
 #include "engine/graphics/ZMarkerBatch.h"

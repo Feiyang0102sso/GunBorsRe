@@ -36,6 +36,10 @@
 
 #include <cstdint>
 #include <vector>
+#include <memory>
+class CMesh;
+class ZTexture;
+class CResourceLoader;
 
 // Speed is stored as 16.16 fixed point; 1.0 means "play as authored".
 constexpr float kMoveSpeedScale = 1.0f / 65536.0f;
@@ -78,6 +82,10 @@ public:
     CMoveSetMesh();
 
     bool Init(CArrayInputStream &stream);
+    /** Original Load/LoadMesh: config-owned CPU models, separately queued images. */
+    void Load(CResourceLoader &loader, std::vector<std::shared_ptr<ZTexture>> *images = nullptr) const;
+    bool LoadMesh(CResourceLoader &loader, unsigned configIndex) const;
+    const std::shared_ptr<CMesh> &GetMesh(unsigned configIndex) const { return m_meshes[configIndex]; }
 
     std::uint32_t GetPackHash() const { return m_packHash; }
     const std::vector<ZMeshConfig> &GetMeshConfigs() const { return m_meshConfigs; }
@@ -96,6 +104,8 @@ private:
     std::uint32_t m_packHash;
     std::vector<ZMeshConfig> m_meshConfigs;
     std::vector<ZMeshMove> m_moves;
+    // Template copies share immutable decoded models, never actor pose buffers.
+    std::vector<std::shared_ptr<CMesh>> m_meshes;
 };
 
 #endif  // GUN_BROS_RE_GUN_BROS_CMOVESETMESH_H

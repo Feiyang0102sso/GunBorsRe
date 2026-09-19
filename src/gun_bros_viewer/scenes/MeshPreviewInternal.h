@@ -33,7 +33,7 @@
 #define NOMINMAX
 #include "gun_bros_viewer/scenes/MeshPreview.h"
 
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/armor/CArmor.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
@@ -478,7 +478,7 @@ private:
  */
 struct LoadedModel {
     CMesh mesh;
-    ZTexture texture;
+    std::shared_ptr<ZTexture> texture;
 
     // The playback machinery, used only when the catalogue entry brought a
     // move set. A model named by a plain asset ref shows frame 0 and stops.

@@ -264,14 +264,24 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
                         // Sample the actual selector frame away from the title,
                         // character and thin moving streaks. A movie-active flag
                         // alone passed while the whole frame was missing.
-                        std::vector<std::uint8_t> pixels(200 * 400 * 4);
-                        glReadPixels(0, 640, 200, 400, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                        // The original probe rectangle used a 1600x1200 viewport.
+                        // Scale both its area and threshold when the host fits a
+                        // smaller desktop, keeping the same visible-frame ratio.
+                        GLint viewport[4];
+                        glGetIntegerv(GL_VIEWPORT, viewport);
+                        const int sampleWidth = std::max(1, viewport[2] * 200 / 1600);
+                        const int sampleHeight = std::max(1, viewport[3] * 400 / 1200);
+                        const int sampleY = viewport[1] + viewport[3] * 640 / 1200;
+                        std::vector<std::uint8_t> pixels(sampleWidth * sampleHeight * 4);
+                        glReadPixels(viewport[0], sampleY, sampleWidth, sampleHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
                         unsigned framePixels = 0;
                         for (std::size_t pixel = 0; pixel < pixels.size(); pixel += 4) {
                             if (pixels[pixel + 1] > 40 && pixels[pixel + 2] > 50) { ++framePixels; }
                         }
-                        if (framePixels < 300) { ++checkFailures; }
-                        std::printf("[airstrike-frame-check] item=%u pixels=%u failures=%u\n", airstrikeIndex, framePixels, checkFailures);
+                        const std::uint64_t sampledArea = static_cast<std::uint64_t>(sampleWidth) * sampleHeight;
+                        if (static_cast<std::uint64_t>(framePixels) * 80000 < 300 * sampledArea) { ++checkFailures; }
+                        std::printf("[airstrike-frame-check] item=%u pixels=%u area=%llu viewport=%dx%d failures=%u\n",
+                            airstrikeIndex, framePixels, static_cast<unsigned long long>(sampledArea), viewport[2], viewport[3], checkFailures);
                     }
                 }
             }

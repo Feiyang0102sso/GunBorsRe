@@ -6,7 +6,7 @@
  * Keep WAV coalescing, loop ownership and move-frame busy windows unchanged.
  */
 #include "engine/platform/ZAudioPlayer.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
 #include "gun_bros_re/gameplay/audio/SoundEffect.h"

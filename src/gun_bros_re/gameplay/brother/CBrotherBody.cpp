@@ -6,7 +6,6 @@
 #include "gun_bros_re/gameplay/brother/CBrotherDrawing.h"
 
 
-#include "gun_bros_re/graphics/ZMeshAssets.h"
 #include <cstdio>
 
 bool CBrother::BuildBody(CGunBros &tables, const CMoveSetMesh &moves) {
@@ -28,17 +27,19 @@ bool CBrother::BuildBody(CGunBros &tables, const CMoveSetMesh &moves) {
     // Part 0 is the torso, and it is the parent: every attachment is read off
     // ITS mesh at ITS animation time.
     // Build each animated body mesh from its move-set config and original atlas.
-    const char *names[] = {"torso", "legs"};
+    CResourceLoader &loader = tables.GetResourceLoader();
+    std::vector<std::shared_ptr<ZTexture>> images;
+    moveSet.Load(loader, &images);
+    if (!loader.LoadImmediate()) { return false; }
     for (unsigned index = 0; index <= kPlayerLegsConfigIndex; ++index) {
         auto part = std::make_unique<Drawing::BodyMesh>();
-        const auto &config = moveSet.GetMeshConfigs()[index];
-        if (!LoadMeshAndAtlas(tables, names[index], moveSet.GetPackHash(), config.meshOrdinal,
-            moveSet.GetPackHash(), config.imageOrdinal, part->mesh, part->texture, &moveSet)) { return false; }
+        part->mesh = moveSet.GetMesh(index);
+        part->texture = images[index];
         m_drawing->parts.push_back(std::move(part));
     }
     m_bodyMeshes.assign(moveSet.GetMeshConfigs().size(), nullptr);
     for (std::size_t index = 0; index < m_drawing->parts.size(); ++index) {
-        m_bodyMeshes[index] = &m_drawing->parts[index]->mesh;
+        m_bodyMeshes[index] = m_drawing->parts[index]->mesh.get();
     }
     CMoveSetMeshController *controllers[] = {&m_torso, &m_legs};
     for (unsigned config = 0; config < 2; ++config) {

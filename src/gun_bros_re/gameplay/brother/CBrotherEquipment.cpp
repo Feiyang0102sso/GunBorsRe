@@ -54,7 +54,7 @@ bool CBrother::EquipWeapon(CGunBros &tables, const CScript &playerScript, const 
     if (!replacement->Load(tables, data, owner)) { return false; }
     const auto meshes = replacement->GetBodyMeshes();
     std::vector<const CMesh *> bodyMeshes;
-    for (auto &part : m_drawing->parts) { bodyMeshes.push_back(&part->mesh); }
+    for (auto &part : m_drawing->parts) { bodyMeshes.push_back(part->mesh.get()); }
     replacement->SetDeathmatch(IsDeathmatch());
     replacement->SetMasteryExperience(masteryExperience);
     Bind(playerScript, moveSet, bodyMeshes, *replacement, meshes);

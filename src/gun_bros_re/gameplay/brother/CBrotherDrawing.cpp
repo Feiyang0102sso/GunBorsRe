@@ -24,7 +24,7 @@ constexpr float kPlayerRuntimeScale = 1.0f;
 bool CBrother::CreateBuffers(const ZShaderProgram &program) {
     for (std::size_t i = 0; i < m_drawing->parts.size(); ++i) {
         auto &part = *m_drawing->parts[i];
-        if (!part.buffer.Create(program) || !part.buffer.SetMesh(part.mesh)) {
+        if (!part.buffer.Create(program) || !part.buffer.SetMesh(*part.mesh)) {
             return false;
         }
     }
@@ -43,20 +43,25 @@ bool CBrother::CreateBuffers(const ZShaderProgram &program) {
 CBrother::TorsoDrawing CBrother::ResolveTorsoDrawing() const {
     const CMesh *mesh = GetTorso().GetAnimation().GetMesh();
     for (auto &part : m_drawing->parts) {
-        if (&part->mesh == mesh) { return {&part->texture, &part->buffer, &part->pose}; }
+        if (TorsoUsesWeapon()) { break; }
+        if (part->mesh.get() == mesh) { return {part->texture.get(), &part->buffer, &part->pose}; }
     }
     CGun *banks[] = {weapon.get(), uiOtherWeapon.get()};
     for (CGun *bank : banks) {
         if (bank == nullptr) { continue; }
+        // Identical equipped templates share CPU meshes, but their pose buffers
+        // are distinct. Select the controller's bank before matching the model.
+        if (GetTorso().GetMoveSet() != &bank->GetTemplate()->GetMoveSet()) { continue; }
         for (auto &part : bank->m_drawing->configs) {
-            if (&part->mesh == mesh) { return {&part->texture, &part->buffer, &part->pose}; }
+            if (part->mesh.get() == mesh) { return {part->texture.get(), &part->buffer, &part->pose}; }
         }
     }
     for (auto &entry : m_cachedWeapons) {
         // UploadPose can still evaluate the outgoing weapon after a PvP swap.
         // Completed uploads enter the cache atomically; no empty bank is published.
+        if (GetTorso().GetMoveSet() != &entry.second->GetTemplate()->GetMoveSet()) { continue; }
         for (auto &part : entry.second->m_drawing->configs) {
-            if (&part->mesh == mesh) { return {&part->texture, &part->buffer, &part->pose}; }
+            if (part->mesh.get() == mesh) { return {part->texture.get(), &part->buffer, &part->pose}; }
         }
     }
     return {};
@@ -86,7 +91,7 @@ void CBrother::UploadPose() {
         if (controllers[i]->GetAnimation().Evaluate(part.pose)) {
             part.buffer.SetVertices(part.pose);
         } else {
-            part.buffer.SetFrame(part.mesh, 0);
+            part.buffer.SetFrame(*part.mesh, 0);
         }
     }
 }
@@ -96,7 +101,7 @@ ZMeshBounds CBrother::GetBounds() const {
     for (std::size_t i = 0; i < m_drawing->parts.size(); ++i) {
         const auto &part = *m_drawing->parts[i];
 
-        const ZMeshBounds &bounds = part.mesh.GetBounds();
+        const ZMeshBounds &bounds = part.mesh->GetBounds();
         if (bounds.minX < combined.minX) {
             combined.minX = bounds.minX;
         }
@@ -165,17 +170,17 @@ void CBrother::Draw(const ZShaderProgram &program,
         const auto part = ResolveTorsoDrawing();
         if (part.buffer != nullptr) {
             const ZTexture *texture = part.texture;
-            if (armor[1] && armor[1]->m_drawing->images[brotherIndex].IsValid()) {
-                texture = &armor[1]->m_drawing->images[brotherIndex];
+            if (armor[1] && armor[1]->m_drawing->images[brotherIndex] != nullptr) {
+                texture = armor[1]->m_drawing->images[brotherIndex].get();
             }
             part.buffer->Draw(program, base, *texture, flash);
         }
         if (legsIndex >= 0) {
             auto &part = *m_drawing->parts[legsIndex];
-            const ZTexture *texture = &part.texture;
+            const ZTexture *texture = part.texture.get();
             // CBrother::Draw :134795 always uses the first legs image.
-            if (armor[0] && armor[0]->m_drawing->images[0].IsValid()) {
-                texture = &armor[0]->m_drawing->images[0];
+            if (armor[0] && armor[0]->m_drawing->images[0] != nullptr) {
+                texture = armor[0]->m_drawing->images[0].get();
             }
             part.buffer.Draw(program, base, *texture, flash);
         }
@@ -190,7 +195,7 @@ void CBrother::Draw(const ZShaderProgram &program,
             if (!GetTorso().GetAnimation().GetNodeAt(bone, placement.attachment)) { continue; }
             float mvp[kMatrix4dElements];
             MeshCameraBuildPartMatrix(placement, base, mvp);
-            active->m_drawing->gunPart.buffer.Draw(program, mvp, active->m_drawing->gunPart.texture, active->GetHeatIntensity());
+            active->m_drawing->gunPart.buffer.Draw(program, mvp, *active->m_drawing->gunPart.texture, active->GetHeatIntensity());
         }
         // Original order after weapons: head, then both torso attachments.
         const std::uint32_t slots[] = {2, 1};
@@ -216,14 +221,14 @@ void CBrother::Draw(const ZShaderProgram &program,
                 MeshCameraBuildPartMatrix(placement, base, mvp);
                 unsigned imageIndex = brotherIndex;
                 if (slot == 2) { imageIndex = 0; }
-                part.buffer.Draw(program, mvp, equippedArmor.m_drawing->images[imageIndex], flash);
+                part.buffer.Draw(program, mvp, *equippedArmor.m_drawing->images[imageIndex], flash);
             }
         }
         return;
     }
 
     for (auto &part : m_drawing->parts) {
-        part->buffer.Draw(program, base, part->texture);
+        part->buffer.Draw(program, base, *part->texture);
     }
 }
 
@@ -233,7 +238,7 @@ float CBrother::GetWorldScale(float gameScale,
         return 0.0f;
     }
 
-    const float inverseExtent = m_drawing->parts[0]->mesh.GetBounds().inverseExtent;
+    const float inverseExtent = m_drawing->parts[0]->mesh->GetBounds().inverseExtent;
     if (weapon) {
         const CMesh *torso = GetTorso().GetAnimation().GetMesh();
         if (torso != nullptr) {

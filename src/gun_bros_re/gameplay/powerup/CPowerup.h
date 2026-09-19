@@ -4,7 +4,7 @@
  */
 #ifndef GUN_BROS_RE_CPOWERUP_H
 #define GUN_BROS_RE_CPOWERUP_H
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <string>
 #include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include "engine/glu/script/CScriptInterpreter.h"

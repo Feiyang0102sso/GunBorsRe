@@ -111,6 +111,7 @@ foreach ($suite in ($Phase | Select-Object -Unique)) {
         Add-Check 'level-flow' @('--level-flow-check')
         Add-Check 'gameplay-ownership' @('--gameplay-ownership-check')
         Add-Check 'progress' @('--progress-check')
+        Add-Check 'resource-loading' @('--resource-loading-check')
         Add-Check 'daily-bonus' @('--daily-bonus-check')
         Add-Check 'armor-render' @('--armor-render-check')
         Add-Check 'pickup-render' @('--pickup-render-check')

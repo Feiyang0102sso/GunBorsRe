@@ -35,7 +35,7 @@
 #include "engine/graphics/CMeshCamera.h"
 #include "engine/graphics/CMoveSetMesh.h"
 #include "engine/resources/CResTOCManager.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 
 #include <cmath>
 #include <cstdio>
@@ -235,7 +235,7 @@ std::int32_t MoveDurationMs(const EnemyTemplate &entry,
     CMoveSetMeshController controller;
     std::vector<const CMesh *> meshes;
     for (const auto &config : configs) {
-        if (config->valid) { meshes.push_back(&config->mesh); }
+        if (config->valid) { meshes.push_back(config->mesh.get()); }
         else { meshes.push_back(nullptr); }
     }
     controller.SetMoveSet(&entry.moveSet, meshes);
@@ -576,7 +576,7 @@ ZMeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
             continue;
         }
 
-        const ZMeshBounds &bounds = loaded.configs[configIndex]->mesh.GetBounds();
+        const ZMeshBounds &bounds = loaded.configs[configIndex]->mesh->GetBounds();
         any = true;
         if (bounds.minX < combined.minX) {
             combined.minX = bounds.minX;
@@ -603,7 +603,7 @@ ZMeshBounds EnemyBounds(const LoadedEnemy &loaded, bool part0Only) {
     if (!any && loaded.GetPartCount() > 0) {
         const std::int32_t configIndex = PartConfigIndex(loaded, 0);
         if (configIndex >= 0) {
-            combined = loaded.configs[configIndex]->mesh.GetBounds();
+            combined = loaded.configs[configIndex]->mesh->GetBounds();
         }
     }
 

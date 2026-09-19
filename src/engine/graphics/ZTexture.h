@@ -24,6 +24,9 @@ public:
     ZTexture(const ZTexture &) = delete;
     ZTexture &operator=(const ZTexture &) = delete;
 
+    /** Opaque host context identity, for resource-pool isolation. */
+    static std::uintptr_t GetCurrentContext();
+
     /**
      * Upload an RGBA8 image. Replaces whatever this held before.
      *

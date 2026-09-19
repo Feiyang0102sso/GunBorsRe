@@ -31,7 +31,7 @@
 
 #ifndef GUN_BROS_RE_GUN_BROS_CARMOR_H
 #define GUN_BROS_RE_GUN_BROS_CARMOR_H
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <string>
 
 #include "engine/resources/CArrayInputStream.h"
@@ -67,6 +67,9 @@ public:
 
         static const Template *Load(CResTOCManager &toc, CGunBros &tables, const GameObjectRef &ref);
         bool Init(CArrayInputStream &stream);
+        void Load(CResourceLoader &loader, std::shared_ptr<ZTexture> (&images)[kArmorVariantCount]) const;
+        bool LoadMesh(CResourceLoader &loader, unsigned variant) const;
+        const std::shared_ptr<CMesh> &GetMesh(unsigned variant) const { return m_models[variant]; }
 
         const CGameAssetRef &GetMeshRef(std::uint32_t variant) const {
             return m_meshRef[variant];
@@ -95,6 +98,7 @@ public:
         }
 
     private:
+        std::shared_ptr<CMesh> m_models[kArmorVariantCount];
         std::uint8_t m_slot;
         std::uint8_t m_attachmentNode[kArmorVariantCount];
 

@@ -1,5 +1,9 @@
 # 源码文件名映射
 
+## 模型加载归位（2026-09-19，接续 data）
+
+`ZMeshAssets.*` 已删除。模型加载归 `CGun::Template`、`CArmor::Template`、`CBullet::Template` 和 `CMoveSetMesh`；图像队列与复用归 `engine/resources/CResourceLoader.*`、`CImagePool.*`。角色、敌人、弹体和 Viewer 共用这些入口。`CGunBros.h` 从 application 移至 data/objects；空 application／graphics 目录移除。本节覆盖后文“ZMeshAssets 保留在 graphics”的历史状态，详见 [模型加载职责归位](model-loading-alignment.md)。
+
 ## data 归位（2026-09-19）
 
 当前 `data/` 分为 `objects`、`store`、`mission`、`profile` 四个包，共 38 个源码文件。原 23 个 Z 文件中 21 个拆除，`ZMeshAssets.*` 两个迁至 `graphics/`，data 内不再保留 Z 文件。逐文件去向、原版依据、验收与还原边界见 [data 整体优化结果](data-optimization-result.md)，本节覆盖后文旧 data 路径。

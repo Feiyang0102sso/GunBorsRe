@@ -101,11 +101,12 @@ public:
          */
         struct Mesh {
             CMesh mesh;
-            ZTexture texture;
+            std::shared_ptr<ZTexture> texture;
             ZMeshBuffer buffer;
         };
         Template();
         bool Load(CGunBros &tables, const ZShaderProgram &program, const GameObjectRef &resource);
+        bool LoadMesh(CResourceLoader &loader);
         const Mesh *GetMesh() const { return m_mesh.get(); }
 
         bool Init(CArrayInputStream &stream);

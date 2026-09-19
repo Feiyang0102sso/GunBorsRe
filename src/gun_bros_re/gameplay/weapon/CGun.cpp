@@ -37,6 +37,7 @@ CGun::Template::Template()
       m_flag256(0) {}
 
 bool CGun::Template::Init(CArrayInputStream &stream) {
+    m_model = std::make_shared<CMesh>();
     m_flag104 = stream.ReadUInt8();
     m_meshRef.Init(stream);
     m_imageRef.Init(stream);

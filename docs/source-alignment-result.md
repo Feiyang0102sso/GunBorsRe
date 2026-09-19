@@ -2,6 +2,8 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+2026-09-19 模型加载补充：ZMeshAssets 两个文件已删除；枪、盔甲、弹体和动作模型的加载归回对应 Template／CMoveSetMesh，CResourceLoader／CImagePool 统一模型回调和模型贴图的排队、复用、取消与释放，敌人也接入同一入口。CGunBros.h 归 data/objects，application／graphics 空目录移除。完整 Sprite／Movie／音频加载器不在本轮冒充已恢复，详见 [模型加载职责归位](model-loading-alignment.md)。本段覆盖后文“模型适配保留于 graphics”的旧状态。
+
 2026-09-19 data 全包更新：源码归入 objects、store、mission、profile 四包；原 23 个 Z 文件中 21 个拆除、2 个模型适配文件迁至 graphics，data 内为 0。CGunBros 持有游戏资源包，CGameObjectPack 持有已支持的六类模板及文本；目录职责归原资源类，移除 engine 的 ZResourcePacks 转发。星球菜单归 UI，存档封装与已确认客户端读写归 profile，Windows 文件替换独立为 host/ZProfileFiles。未完整恢复的对象分派、客户端注册和远程同步明确保留边界，详见 [data 整体优化结果](data-optimization-result.md)。本段覆盖下文旧 data 路径。
 
 2026-09-19 UI 全包更新：页面、系统、控件、内容、HUD 与宿主适配分为六个目录；删除巨型 `ZMenuInternal.h`，商店/结算/好友职责按原 `CMenu...` 类型归位，七个原 `.inc` 保持原路径及字节。修正商店底层 Movie、按钮完成动作、PREVIEW 与筛选，导航引入 pending 并在帧边界提交。Windows 和本地模拟保留 Z；完整异步菜单/分支生命周期不冒充已还原。详见 [UI 重组结果](ui-optimization-result.md)，本段覆盖下文旧 UI 文件位置。

@@ -20,7 +20,6 @@
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/graphics/ZPNG.h"
 #include "gun_bros_re/data/objects/CGameObjectPack.h"
 
 #include <cstdio>
@@ -40,42 +39,23 @@ static bool LoadEnemyConfigs(CGunBros &tables, const CEnemy::Template &entry,
         else { ++cache->misses; }
     }
 
+    std::vector<std::shared_ptr<ZTexture>> images;
+    if (!cached) {
+        CResourceLoader &loader = tables.GetResourceLoader();
+        if (createBuffers) { entry.moveSet.Load(loader, &images); }
+        else { entry.moveSet.Load(loader); }
+        if (!loader.LoadImmediate()) { return false; }
+    }
     for (std::size_t i = 0; !cached && i < entry.moveSet.GetMeshConfigs().size(); ++i) {
-        const ZMeshConfig &config = entry.moveSet.GetMeshConfigs()[i];
         auto loaded = std::make_shared<CEnemy::ModelConfig>();
-
-        std::vector<std::uint8_t> meshPayload;
-        if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), ZGameSection::Mesh,
-                                        config.meshOrdinal, meshPayload)) {
-            std::printf("[enemy] %s: mesh %u unreadable\n", entry.owner.c_str(),
-                        config.meshOrdinal);
-            return false;
-        }
-
-        CArrayInputStream meshStream(meshPayload);
         // CEnemy::Template::Load :68895 -> CMoveSetMesh::LoadMesh :123178
         // retains only move-used frames. The first retained pose supplies the
         // bounds used by both DrawUI and gameplay size normalization.
-        if (!loaded->mesh.Init(meshStream, &entry.moveSet)) {
-            return false;
-        }
-
+        loaded->mesh = entry.moveSet.GetMesh(static_cast<unsigned>(i));
         if (createBuffers) {
-            std::vector<std::uint8_t> imagePayload;
-            ZPNGImage decoded;
-            if (!tables.ReadSectionResource(entry.moveSet.GetPackHash(), ZGameSection::Png,
-                                            config.imageOrdinal, imagePayload) ||
-                !PNGDecode(imagePayload, decoded) ||
-                !loaded->texture.Create(decoded, GL_REPEAT)) {
-                std::printf("[enemy] %s: atlas %u unreadable\n",
-                            entry.owner.c_str(), config.imageOrdinal);
-                return false;
-            }
-
-            if (!loaded->buffer.Create(*program) ||
-                !loaded->buffer.SetMesh(loaded->mesh)) {
-                std::printf("[enemy] %s: config %zu has no GL buffer\n",
-                            entry.owner.c_str(), i);
+            loaded->texture = images[i];
+            if (!loaded->buffer.Create(*program) || !loaded->buffer.SetMesh(*loaded->mesh)) {
+                std::printf("[enemy] %s: config %zu has no GL buffer\n", entry.owner.c_str(), i);
                 return false;
             }
         }
@@ -108,7 +88,7 @@ bool CEnemy::Bind(CGunBros &tables, const Template &entry,
     m_configMeshes.assign(configs.size(), nullptr);
     for (std::size_t i = 0; i < configs.size(); ++i) {
         if (configs[i]->valid) {
-            m_configMeshes[i] = &configs[i]->mesh;
+            m_configMeshes[i] = configs[i]->mesh.get();
         }
     }
 

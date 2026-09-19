@@ -3,7 +3,7 @@
 #include "gun_bros_re/data/profile/CProfileManager.h"
 #include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <cstdio>
 
 bool PrepareDebugTutorial(CResTOCManager &toc, CGunBros &tables, CGameFlow &context,

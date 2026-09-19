@@ -2,7 +2,7 @@
  * @brief Collection natives :99742. Rewards always address the human player.
  */
 #include "gun_bros_re/gameplay/pickup/CPickup.h"
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <cstdio>
 
 bool CPickup::Template::Init(CArrayInputStream &stream) {

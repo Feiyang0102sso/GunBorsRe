@@ -25,7 +25,7 @@ public:
 private:
     struct Gun {
         CMesh mesh;
-        ZTexture texture;
+        std::shared_ptr<ZTexture> texture;
         ZMeshBuffer buffer;
         // Empty moves for a gun model: its pose follows the torso's hand.
         bool attached = false;

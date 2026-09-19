@@ -6,8 +6,8 @@
 /** Each gun owns its drawable mesh bank, including the outgoing torso. */
 struct CGun::Drawing {
     struct Mesh {
-        CMesh mesh;
-        ZTexture texture;
+        std::shared_ptr<const CMesh> mesh;
+        std::shared_ptr<ZTexture> texture;
         ZMeshBuffer buffer;
         std::vector<float> pose;
     };

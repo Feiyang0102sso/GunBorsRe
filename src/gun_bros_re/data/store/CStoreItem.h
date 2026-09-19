@@ -3,7 +3,7 @@
  */
 #ifndef GUN_BROS_RE_CSTOREITEM_H
 #define GUN_BROS_RE_CSTOREITEM_H
-#include "gun_bros_re/application/CGunBros.h"
+#include "gun_bros_re/data/objects/CGunBros.h"
 #include <string>
 #include "gun_bros_re/data/objects/CGameAssetRef.h"
 #include <array>
