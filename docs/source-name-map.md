@@ -2,6 +2,23 @@
 
 日期：2026-09-18。路径相对 `src/`。历史研究记录可能仍使用旧名，以此表定位当前文件。
 
+## 游戏会话归位（2026-09-18）
+
+本批源码统一放入 `gun_bros_re/gameplay/game/`，旧路径不留别名或转发壳。详见 [游戏会话职责归位](game-responsibility-migration.md)。
+
+| 旧文件／职责 | 当前归属 | 原版依据或保留原因 |
+|---|---|---|
+| `gameplay/CGame.*`、`CGameSession.h` | `game/CGame.*`、`CGameSession.h` | `game.cpp`；启动参数为嵌套宿主记录 |
+| `ZSurvivalLoop.cpp`、`ZSurvivalRuntime.h` | `CGameLoading/Session/Input/Update/Drawing/Hud/Shop.cpp`、`CGameRuntime.h` | CGame 的绑定、输入、更新和绘制职责；SDL/GL 仍明确为平台适配 |
+| `ZSurvivalGameContext.h`、`ZSurvivalProgress.cpp` | `CGameFlow.h/.cpp`，结算为嵌套 `Result` | `gameFlow.cpp` 的跨局配置与进度，以及 CGame 清波／结算回调 |
+| `ZSurvivalFrame.h`、`ZSurvivalScenario.h` | `ZGameObserver.h` | 合并为一个必要的资源、生命周期、帧输入适配接口；不含测试选择或断言 |
+| `ZSurvivalInputDriver.h/.cpp` | `tests/gameplay/SurvivalPilot`、`ZGameKeys.h` | 自动驾驶只在测试直接创建；游戏键位为必要 Windows 适配 |
+| `debug/SurvivalDevelopment.h`、`debug/FlockMetrics.*`、循环中的性能实验 | `tests/gameplay/SurvivalDevelopment.h`、`tests/research/FlockMetrics.*`、`PerformanceSession.*` | 研究配置、固定输入、CSV、截图和性能断言属于测试 |
+| `gameplay/ZLiveShopSession.h` | `game/ZLiveShopSession.h` | 必要的本地多人商店同步适配 |
+| `data/ZWeaponCatalog` 中的目录选枪按键处理 | `gun_bros_viewer/ViewerControls` | 数字分类及 N/M 目录轮换仅供 Viewer |
+
+下文旧会话路径按本节定位。`CGame::Session` 与 `CGameFlow::Result` 为宿主实现分组，不代表恢复了原 ARM 对象布局。
+
 ## 地图组合层拆分（2026-09-18）
 
 地图本体、图层、相机、TileSet、CProp、渲染队列及其资源实现集中在 `gun_bros_re/gameplay/map/`。旧路径不保留转发头。完整证据和验证见 [地图职责归位](map-responsibility-migration.md)。

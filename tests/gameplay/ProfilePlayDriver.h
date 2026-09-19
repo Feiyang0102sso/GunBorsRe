@@ -1,10 +1,10 @@
 #pragma once
-#include "gun_bros_re/gameplay/ZSurvivalFrame.h"
+#include "gun_bros_re/gameplay/game/ZGameObserver.h"
 
 /** Deterministic pointer/shortcut and animation assertions for profile-play. */
-class ProfilePlayDriver : public ZSurvivalFrameDriver {
+class ProfilePlayDriver : public ZGameObserver {
 public:
-    int OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame) override;
+    int OnFrame(ZGameObserver::FramePhase phase, ZGameObserver::Frame &frame) override;
 private:
     unsigned controlFrame = 0, checkFailures = 0, combatSwapEvents = 0;
     std::uint64_t controlsInitialBucks = 0;

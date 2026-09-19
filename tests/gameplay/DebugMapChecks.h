@@ -3,8 +3,8 @@ class ZPackTables;
 class CPlayerProgress;
 class CLevel;
 class CBrother;
-struct ZSurvivalGameContext;
+struct CGameFlow;
 int RunDebugMapProfileCheck();
 int CheckDebugMapProfile(ZPackTables &tables, const CBrother &player,
-    const CPlayerProgress &progress, ZSurvivalGameContext &context, const CLevel &scene, const CLevel &level);
+    const CPlayerProgress &progress, CGameFlow &context, const CLevel &scene, const CLevel &level);
 int RunCampaignContentCheck();

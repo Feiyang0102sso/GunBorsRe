@@ -70,10 +70,6 @@ using namespace ResearchDefaults;
 
 }  // namespace
 
-std::unique_ptr<ZSurvivalInputDriver> MakeResearchPilot(CLevel &scene, const CLayerCamera::Rectangle &bounds) {
-    return std::make_unique<SurvivalPilot>(scene, bounds);
-}
-
 int RunTestApplication(int argc, char **argv) {
     GameCheats::Bind();
     // The test driver supplies the absolute case directory before any dispatch.
@@ -93,7 +89,6 @@ int RunTestApplication(int argc, char **argv) {
         }
         if (std::strcmp(argv[index], "--reference-gallery") == 0) { TestOutput::referenceGallery = true; }
     }
-    SetSurvivalInputFactory(MakeResearchPilot);
     bool checkDailyBonus = false;
     bool checkUpgradePopup = false;
     bool checkNativeProfile = false;

@@ -1,7 +1,7 @@
 #include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 /** Exercise Live decisions against the real BIG catalog and actor instances. */
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/ZLiveShopSession.h"
+#include "gun_bros_re/gameplay/game/ZLiveShopSession.h"
 
 int CheckLivePolicies(SurvivalDeathFixture fixture, CPowerUpSelector &powerups, CProfileManager &profile) {
     std::uint32_t powerupChoice = 0;

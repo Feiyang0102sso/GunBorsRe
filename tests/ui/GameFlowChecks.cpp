@@ -19,7 +19,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     if (!LoadRefinementTemplate(toc, tables, refinement)) { return 1; }
     CProfileManager profile;
     profile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    ZSurvivalGameContext context{profile, TestOutput::Path("tutorial-profile-check.dat"), 0};
+    CGameFlow context{profile, TestOutput::Path("tutorial-profile-check.dat"), 0};
     context.tutorial = true;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
     CProfileManager restored;
@@ -41,7 +41,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     CArrayInputStream input(payload);
     CLevel::Template data;
     if (!data.Init(input) || input.Available() != 0) { return 1; }
-    ZSurvivalGameContext nativeContext{native, nativePath, 0};
+    CGameFlow nativeContext{native, nativePath, 0};
     nativeContext.tutorial = true;
     if (RunSurvivalStudy(bigDirectory, tables.GetPackName(data.mapRef.packHash), data.mapRef.localIndex,
         0, -1, "", 0, false, false, true, 2, 0, &nativeContext, true) != 0) { return 1; }
@@ -53,7 +53,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     std::printf("[tutorial-profile-check] native created-without-source original-HUD completed=1 steps=255 earned-rifle-restored=1\n");
     CProfileManager debugProfile;
     debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-    ZSurvivalGameContext debugContext{debugProfile, {}};
+    CGameFlow debugContext{debugProfile, {}};
     CGame::Launch debugLaunch;
     debugLaunch.bigDirectory = bigDirectory;
     if (!PrepareDebugTutorial(toc, tables, debugContext, debugLaunch) ||
@@ -80,7 +80,7 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     escape.type = SDL_EVENT_KEY_UP;
     if (!SDL_PushEvent(&escape)) { return 1; }
     debugLaunch.window = &debugWindow;
-    if (RunSurvival(debugLaunch) != 0 || !debugWindow.IsOpen() ||
+    if (CGame::Run(debugLaunch) != 0 || !debugWindow.IsOpen() ||
         std::filesystem::exists(debugContext.savePath)) { return 1; }
     ZMovieRenderer debugMovies;
     auto &core = *toc.GetPack(toc.GetCorePackIndex());
@@ -110,8 +110,12 @@ int RunTutorialPlayCheck(const std::string &bigDirectory) {
     replay.type = SDL_EVENT_KEY_UP;
     replay.key.mod = SDL_KMOD_NONE;
     if (!SDL_PushEvent(&replay)) { return 1; }
+    // This debug shortcut requires the host gate; isolated test configs default it off.
+    const bool previousDebugMode = GameHostSettings().debugMode;
+    GameHostSettings().debugMode = true;
     const int menuResult = ShowGameMenu(toc, tables, debugProfile, progressData, refinement,
         store, weapons, armor, menuState, debugContext.savePath, "", nullptr, false, &debugWindow);
+    GameHostSettings().debugMode = previousDebugMode;
     if (menuResult != kDebugTutorialMenuChoice || std::filesystem::exists(debugContext.savePath)) { return 1; }
     std::printf("[tutorial-profile-check] menu shift-T=1 return-checkpoint-skipped=1 no-save=1\n");
     return 0;
@@ -133,10 +137,9 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
     gun.localIndex = static_cast<std::uint8_t>(weapons[65].ordinal);
     profile.Grant(6, gun);
     profile.configuration.guns[0] = gun;
-    ZSurvivalGameContext context{profile, TestOutput::Path("game-profile-check.dat"), 0};
+    CGameFlow context{profile, TestOutput::Path("game-profile-check.dat"), 0};
     profile.warbucks = 50;
     ProfilePlayDriver controls;
-    context.frameDriver = &controls;
     // This regression exercises real SDL transport at zero device gain.
     // Keep the host alive across both sessions, as the formal front end does.
     ZWindow window;
@@ -145,14 +148,14 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
     music.EnableSilentValidation();
     context.music = &music;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0,
-        &context, false, false, nullptr, false, &window) != 0) { return 1; }
+        &context, false, false, nullptr, false, &window, false, false, false, &controls) != 0) { return 1; }
     const std::uint64_t firstExperience = profile.experience;
     const std::uint64_t firstXplodium = profile.xplodium;
     CProfileManager restored;
     restored.Reset(core, refinement);
     if (!restored.LoadFromDisk(context.savePath) || restored.experience == 0 || restored.xplodium == 0 ||
         restored.clearedWaves[0] != 2 || restored.configuration.guns[0].packHash != gun.packHash) { return 1; }
-    ZSurvivalGameContext continued{restored, context.savePath, 0};
+    CGameFlow continued{restored, context.savePath, 0};
     continued.music = &music;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 2,
         &continued, false, false, nullptr, false, &window) != 0) { return 1; }
@@ -431,7 +434,7 @@ int RunAudioTransitionsCheck(const std::string &bigDirectory) {
     if (CBGM::GetPlaybackStarts() != starts || music.GetTrack() != 0) { ++failures; }
     std::printf("[audio-transition-check] menu retained=%d extra-starts=%u failures=%u\n",
         music.GetTrack() == 0, CBGM::GetPlaybackStarts() - starts, failures);
-    ZSurvivalGameContext context{profile, savePath, 0};
+    CGameFlow context{profile, savePath, 0};
     context.music = &music;
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0,
         &context, false, false, nullptr, false, &window) != 0) { return 1; }

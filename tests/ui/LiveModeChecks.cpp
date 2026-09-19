@@ -3,7 +3,7 @@
 #include "ui/MenuChecks.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/ui/CMenuSplash.h"
-#include "gun_bros_re/gameplay/ZLiveShopSession.h"
+#include "gun_bros_re/gameplay/game/ZLiveShopSession.h"
 #include "TestOutput.h"
 #include <fstream>
 

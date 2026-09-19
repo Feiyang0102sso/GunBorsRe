@@ -101,27 +101,6 @@ bool LoadWeaponCatalog(CResTOCManager &toc, ZPackTables &tables,
     return !weapons.empty();
 }
 
-std::size_t SelectWeaponKey(const std::vector<ZWeaponEntry> &weapons,
-                            std::size_t current, ZKeyCode key) {
-    if (weapons.empty()) { return current; }
-    const int categoryKey = static_cast<int>(key) - static_cast<int>(ZKeyCode::Digit1);
-    if (categoryKey >= 0 && categoryKey < kWeaponCategoryCount) {
-        if (weapons[current].category == categoryKey) { return current; }
-        for (std::size_t i = 0; i < weapons.size(); ++i) {
-            if (weapons[i].category == categoryKey) { return i; }
-        }
-    }
-    if (key == ZKeyCode::N || key == ZKeyCode::M) {
-        std::size_t next = current;
-        for (std::size_t i = 0; i < weapons.size(); ++i) {
-            if (key == ZKeyCode::M) { next = (next + 1) % weapons.size(); }
-            else { next = (next + weapons.size() - 1) % weapons.size(); }
-            if (weapons[next].category == weapons[current].category) { return next; }
-        }
-    }
-    return current;
-}
-
 std::string WeaponSelectionLabel(const std::vector<ZWeaponEntry> &weapons,
                                  std::size_t current) {
     const ZWeaponEntry &weapon = weapons[current];

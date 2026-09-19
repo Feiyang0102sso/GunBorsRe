@@ -6,20 +6,19 @@
 #include "gun_bros_re/gameplay/map/CMapResources.h"
 #include "gun_bros_re/gameplay/map/CLevelProps.h"
 #include "engine/core/CStringToKey.h"
-#include "gun_bros_re/gameplay/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/CBGM.h"
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
-#include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/data/ZWeaponCatalog.h"
 #include "gun_bros_re/data/ZArmorCatalog.h"
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"
 #include "gun_bros_re/debug/CollisionOverlay.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include <sstream>
 #include <chrono>
-#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
 #include "gun_bros_re/ui/ZLoadingScreen.h"
 #include "gun_bros_re/ZHostSettings.h"
@@ -61,6 +60,3 @@
 #include "gun_bros_re/gameplay/map/CMapEffects.h"
 #include "gun_bros_re/gameplay/map/CCameraDrawing.h"
 #include "gun_bros_re/gameplay/map/CLayerObjectPlayers.h"
-
-bool SaveSurvivalProgress(ZSurvivalGameContext *context, const CPlayerProgress &progress,
-    const CLevel &scene, const CLevel &level, std::uint64_t &accountedXplodium, bool missionEnded = false);

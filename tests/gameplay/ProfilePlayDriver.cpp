@@ -1,16 +1,16 @@
 #define NOMINMAX
 #include "gameplay/ProfilePlayDriver.h"
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/CBGM.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gun_bros_re/debug/DebugKeys.h"
-#include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
+#include "gun_bros_re/gameplay/game/ZGameKeys.h"
 #include "TestOutput.h"
 #include <cmath>
 #include <cstdio>
 
-int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame) {
+int ProfilePlayDriver::OnFrame(ZGameObserver::FramePhase phase, ZGameObserver::Frame &frame) {
     auto *pickupProfile = frame.profile;
     auto &survivalHud = frame.hud;
     auto &session = frame.session;
@@ -36,11 +36,12 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
     constexpr unsigned controlClickCount = sizeof(controlActions) / sizeof(controlActions[0]);
     // Test through the production key dispatcher after the mouse regression.
     const ZKeyCode controlKeys[] = {ZKeyCode::Digit1, ZKeyCode::Escape, ZKeyCode::Digit2,
-        ZKeyCode::Q, ZKeyCode::None, ZKeyCode::E, ZKeyCode::F, ZKeyCode::R};
+        ZKeyCode::Q, ZKeyCode::None, ZKeyCode::E, ZKeyCode::F, ZKeyCode::R,
+        ZKeyCode::G, ZKeyCode::N, ZKeyCode::M};
     const unsigned controlKeyCount = sizeof(controlKeys) / sizeof(controlKeys[0]);
 
     switch (phase) {
-    case ZSurvivalFramePhase::Begin: {
+    case ZGameObserver::FramePhase::Begin: {
     controlFrame = 0;
     checkFailures = 0;
     combatSwapEvents = 0;
@@ -57,7 +58,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
     controlsLeftBeforeKeys = 0;
         break;
     }
-    case ZSurvivalFramePhase::Pointer: {
+    case ZGameObserver::FramePhase::Pointer: {
         if (controlFrame < controlClickCount) {
             // Bind and finish authored menu entrance before querying its live hitbox.
             if (!survivalHud.Draw(inputState)) { return 1; }
@@ -75,7 +76,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
         }
         break;
     }
-    case ZSurvivalFramePhase::Keys: {
+    case ZGameObserver::FramePhase::Keys: {
         controlsWaveBeforeInput = session.GetLevel().GetWave();
         if (controlFrame >= controlClickCount && controlFrame < controlClickCount + controlKeyCount) {
             const unsigned step = controlFrame - controlClickCount;
@@ -93,18 +94,18 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
                 controlsBeforeKeys = pickupProfile->GetPowerupCount(rightPowerup);
                 vitals.health = 1;
             }
-            MapDetail::AppendSurvivalShortcut(inputs, controlKeys[step]);
+            ZGameKeys::AppendShortcut(inputs, controlKeys[step]);
         }
         break;
     }
-    case ZSurvivalFramePhase::AfterKeys: {
+    case ZGameObserver::FramePhase::AfterKeys: {
         if ((controlFrame == controlClickCount + 3 || controlFrame == controlClickCount + 5)) {
             // Throwing consumes inventory at the authored animation event.
             for (unsigned tick = 0; tick < 60; ++tick) { session.Update(16, 0, 0, false); }
         }
         break;
     }
-    case ZSurvivalFramePhase::BeforeSimulation: {
+    case ZGameObserver::FramePhase::BeforeSimulation: {
         if (!paused && !shopOpen) { accumulator = 960; }
         if (controlFrame < controlClickCount + controlKeyCount) {
             const auto playback = music.GetPlaybackState();
@@ -123,7 +124,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
 
         break;
     }
-    case ZSurvivalFramePhase::AfterSimulation: {
+    case ZGameObserver::FramePhase::AfterSimulation: {
         if (checkSwapFiring) {
             const std::size_t shots = scene.GetShotCount() - shotsBeforeSwap;
             if (shots == 0) { ++checkFailures; }
@@ -131,7 +132,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
         }
         break;
     }
-    case ZSurvivalFramePhase::Drawn: {
+    case ZGameObserver::FramePhase::Drawn: {
         if (controlFrame < controlClickCount) {
             if (controlFrame == 0 && !Capture::SaveFrame(window, TestOutput::Path("combat-controls-shop.png"))) { return 1; }
             if (controlFrame == 3 && !Capture::SaveFrame(window, TestOutput::Path("combat-controls-pause.png"))) { return 1; }
@@ -156,7 +157,7 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
                 pickupProfile->GetPowerupCount(leftPowerup) == controlsLeftBeforeKeys - 1 &&
                 pickupProfile->GetPowerupCount(rightPowerup) == controlsBeforeKeys; }
             if (step == 5) { passed = equippedWeaponSlot == 0 && pickupProfile->GetPowerupCount(rightPowerup) == controlsBeforeKeys - 1; }
-            if (step == 6 || step == 7) { passed = inputs.empty() && equippedWeaponSlot == 0 &&
+            if (step >= 6) { passed = inputs.empty() && equippedWeaponSlot == 0 &&
                 session.GetLevel().GetWave() == controlsWaveBeforeInput && rightPowerup.localIndex == 13; }
             std::printf("[shortcut-check] step=%u key=%d passed=%d inventory=%u\n", step,
                 static_cast<int>(controlKeys[step]), passed, pickupProfile->GetPowerupCount(rightPowerup));
@@ -172,13 +173,13 @@ int ProfilePlayDriver::OnFrame(ZSurvivalFramePhase phase, ZSurvivalFrame &frame)
 
         break;
     }
-    case ZSurvivalFramePhase::BeforeWeaponSwap: {
+    case ZGameObserver::FramePhase::BeforeWeaponSwap: {
         const auto &torso = player.GetTorso().GetAnimation();
         outgoingMesh = torso.GetMesh();
         outgoingTime = torso.GetTimeMs();
         break;
     }
-    case ZSurvivalFramePhase::AfterWeaponSwap: {
+    case ZGameObserver::FramePhase::AfterWeaponSwap: {
         const auto &torso = player.GetTorso().GetAnimation();
         if (torso.GetMesh() != outgoingMesh || torso.GetTimeMs() != outgoingTime) { ++checkFailures; }
         ++combatSwapEvents;

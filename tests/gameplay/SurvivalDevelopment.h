@@ -3,9 +3,8 @@
  * @brief Development-run configuration for a survival session.
  *
  * Pure configuration: which experiment to run, where to write evidence, how
- * far to advance. It carries no assertions, so the session loop can read it
- * without reaching into tests/. Production leaves SurvivalLaunch::development
- * null and every field below stays at its default.
+ * far to advance. It carries no assertions; the test observer consumes it.
+ * Production does not include or receive this record.
  */
 #include <string>
 

@@ -27,9 +27,6 @@ struct ZWeaponEntry {
 /** Reads each GUN once, then joins STORE_ITEM references for display names. */
 bool LoadWeaponCatalog(CResTOCManager &toc, ZPackTables &tables,
                        std::vector<ZWeaponEntry> &weapons);
-/** Number keys select categories, N/M wrap within the selected category. */
-std::size_t SelectWeaponKey(const std::vector<ZWeaponEntry> &weapons,
-                            std::size_t current, ZKeyCode key);
 std::string WeaponSelectionLabel(const std::vector<ZWeaponEntry> &weapons,
                                  std::size_t current);
 

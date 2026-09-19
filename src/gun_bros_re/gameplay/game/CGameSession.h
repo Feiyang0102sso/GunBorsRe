@@ -4,16 +4,13 @@
  */
 #pragma once
 #include <string>
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 class ZWindow;
-struct ZSurvivalGameContext;
+struct CGameFlow;
 struct ZMissionEntry;
 struct DebugMapSelection;
 class ZLocalBotFriend;
-// Development-only check configuration, defined in tests/. Production never
-// sets it, so an incomplete type is all this header needs.
-struct SurvivalDevelopment;
-class ZSurvivalScenario;
+class ZGameObserver;
 
 /** Production session configuration: map, equipment, progress, and an existing window, without validation modes. */
 struct CGame::Launch {
@@ -23,7 +20,7 @@ struct CGame::Launch {
     unsigned weaponIndex = 0;
     int armorIndex = -1;
     unsigned startWave = 0;
-    ZSurvivalGameContext *gameContext = nullptr;
+    CGameFlow *gameContext = nullptr;
     bool withBrother = false;
     const ZMissionEntry *archiveMission = nullptr;
     ZWindow *window = nullptr;
@@ -35,10 +32,6 @@ struct CGame::Launch {
     bool deathmatch = false;
     unsigned matchIndex = 0;
     unsigned loadout[2]{0, 1};
-    // Always null on the production path. Keep this last so the existing
-    // aggregate initialisations in tests/ stay valid.
-    const SurvivalDevelopment *development = nullptr;
-    // Development hook set; production leaves it null and the loop skips every hook.
-    ZSurvivalScenario *scenario = nullptr;
+    // Optional caller adapter. Production uses ordinary platform input.
+    ZGameObserver *observer = nullptr;
 };
-int RunSurvival(const CGame::Launch &launch);

@@ -10,8 +10,8 @@
 #include "gun_bros_re/data/CChallengeManager.h"
 #include "gun_bros_re/data/ZProfileImport.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
-#include "gun_bros_re/gameplay/CGameSession.h"
-#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -254,7 +254,7 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
         CArrayInputStream input(bytes);
         CLevel::Template data;
         if (!data.Init(input) || input.Available() != 0 || !profile.SaveToDisk(planetPath)) { return 1; }
-        ZSurvivalGameContext context{profile, planetPath, planet};
+        CGameFlow context{profile, planetPath, planet};
         if (RunSurvivalStudy(bigDirectory, tables.GetPackName(data.mapRef.packHash), data.mapRef.localIndex, 0, -1,
             "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
         if (!profile.LoadFromDisk(planetPath) || profile.clearedWaves[planet] != 2 || context.result.kills == 0 ||
@@ -288,7 +288,7 @@ int RunNativeProfilePlayCheck(const std::string &bigDirectory) {
             testWaves.erase(testWaves.begin() + previousWave, testWaves.begin() + previousWave + 524);
             Put32(testWaves, 0, Get32(testWaves, 0) - 1);
         }
-        ZSurvivalGameContext context{profile, hordePath};
+        CGameFlow context{profile, hordePath};
         context.hordeStart = 0;
         if (RunSurvivalStudy(bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1,
             "", 0, false, false, true, 2, mission.data.value64, &context, true, false, &mission) != 0 ||

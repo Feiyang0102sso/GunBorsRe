@@ -11,14 +11,19 @@
 #include <chrono>
 
 class CInputPad;
+struct CGameFlow;
 
 /** Coordinates one active CLevel and the HUD/session state around it. */
 class CGame {
-public:
+  public:
     struct Launch;
+    struct Session; // Desktop session storage; not an original ARM memory layout.
+    static int Run(const Launch &launch);
+    static bool SaveProgress(CGameFlow *flow, const CPlayerProgress &progress, const CLevel &level,
+                             std::uint64_t &accountedXplodium, bool missionEnded = false);
     CGame(CLevel &level, CMap &map, const std::vector<CEnemy::Template> &catalog);
     bool Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
-        const GameObjectRef *selectedLevel = nullptr, bool archive = false);
+              const GameObjectRef *selectedLevel = nullptr, bool archive = false);
     void Restart(float x, float y, float facingDegrees);
     void SetHorde(bool enabled) {
         m_horde = enabled;
@@ -27,10 +32,12 @@ public:
         m_level.SetHorde(enabled);
     }
     void SetStartWave(int wave) { m_startWave = wave; }
-    void SetDeathmatch(CMPMatch *match) { m_match = match; m_level.SetMatch(match); }
+    void SetDeathmatch(CMPMatch *match) {
+        m_match = match;
+        m_level.SetMatch(match);
+    }
     void SetDialogHud(CInputPad *hud) { m_dialogHud = hud; }
-    void SetChallenges(CChallengeManager *manager, CProfileManager *profile,
-        const std::vector<ZWeaponEntry> *weapons) {
+    void SetChallenges(CChallengeManager *manager, CProfileManager *profile, const std::vector<ZWeaponEntry> *weapons) {
         m_challenges = manager;
         m_challengeProfile = profile;
         m_challengeWeapons = weapons;
@@ -66,12 +73,15 @@ public:
     float GetClosestSpawnDistance() const { return m_level.GetClosestSpawnDistance(); }
     unsigned GetOnScreenSpawns() const { return m_level.GetOnScreenSpawns(); }
     void SetViewSize(float width, float height) { m_level.SetViewSize(width, height); }
-    void SetScriptRandomSeed(std::uint32_t seed) { m_scriptRandomSeed = seed; m_hasScriptRandomSeed = true; }
+    void SetScriptRandomSeed(std::uint32_t seed) {
+        m_scriptRandomSeed = seed;
+        m_hasScriptRandomSeed = true;
+    }
     const std::string &GetDialogText() const { return m_dialogText; }
     void CompleteDialog();
     unsigned GetPowerupCount(unsigned localIndex) const { return m_level.GetPowerupCount(localIndex); }
 
-private:
+  private:
     void FinishBossSkip();
     void UpdateDialog(int deltaMs);
 

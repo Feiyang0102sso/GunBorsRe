@@ -2,7 +2,7 @@
 #include "gun_bros_re/ui/ZMenuInternal.h"
 #include "gun_bros_re/cheats/CheatCodes.h"
 #include "gun_bros_re/data/ZProfileStorage.h"
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "TestOutput.h"
 #include <SDL3/SDL.h>
@@ -101,7 +101,7 @@ unsigned CheckCheatActions(CResTOCManager &toc, ZPackTables &tables,
     CMap map;
     CGame session(scene, map, enemies);
     CPowerUpSelector powerups(toc, tables, player, vitals, scene, profile);
-    ZSurvivalGameContext context{profile, savePath};
+    CGameFlow context{profile, savePath};
     CombatCheatResult result;
     // Start real BIG intervals, including >24h standard work, then advance only refinery time.
     profile.refinery.Bind(refinement);

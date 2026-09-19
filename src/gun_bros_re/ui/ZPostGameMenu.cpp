@@ -71,7 +71,7 @@ const ZStoreEntry *FindWeaponStore(const std::vector<ZStoreEntry> &store, const 
     return nullptr;
 }
 
-void BeginPostGame(ZMenuState &state, const ZSurvivalGameContext &context, const std::vector<ZWeaponEntry> &weapons) {
+void BeginPostGame(ZMenuState &state, const CGameFlow &context, const std::vector<ZWeaponEntry> &weapons) {
     state.result = context.result;
     state.postGame.liveReplay = false;
     state.postGame.liveReplayAt = 0;

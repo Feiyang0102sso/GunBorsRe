@@ -5,7 +5,7 @@
 
 #include "gun_bros_re/gameplay/level/CLevel.h"
 
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
 #include "gun_bros_re/gameplay/ZCombatGeometry.h"

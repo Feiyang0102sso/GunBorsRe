@@ -25,7 +25,7 @@ int RunFrontEndSurvival(CGame::Launch launch, ZMenuState &state) {
         if (state.botRoster != nullptr) { launch.botFriend = MatchBot(state); }
         if (launch.botFriend == nullptr) { return 1; }
     }
-    return RunSurvival(launch);
+    return CGame::Run(launch);
 }
 }
 
@@ -107,12 +107,12 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         if (choice == kDebugTutorialMenuChoice) {
             CProfileManager debugProfile;
             debugProfile.Reset(toc.GetPack(toc.GetCorePackIndex())->GetPackHash(), refinement);
-            ZSurvivalGameContext context{debugProfile, {}};
+            CGameFlow context{debugProfile, {}};
             context.music = &music;
             CGame::Launch launch;
             launch.bigDirectory = bigDirectory;
             launch.window = &window;
-            if (!PrepareDebugTutorial(toc, tables, context, launch) || RunSurvival(launch) != 0) { return 1; }
+            if (!PrepareDebugTutorial(toc, tables, context, launch) || CGame::Run(launch) != 0) { return 1; }
             std::printf("[debug-tutorial] return to menu no-save=1\n");
             state.resumeAfterDebugTutorial = true;
             continue;
@@ -139,7 +139,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             static std::mt19937 matchRandom(std::random_device{}());
             const unsigned tier = std::uniform_int_distribution<unsigned>(0, static_cast<unsigned>(matches.size() - 1))(matchRandom);
             std::array<unsigned, 2> selection{0, 1};
-            ZSurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
+            CGameFlow context{profile, savePath, static_cast<unsigned>(choice)};
             context.music = &music;
             context.mission = mission.resource; context.missionLevel = mission.data.level;
             CGame::Launch launch;
@@ -150,7 +150,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             launch.deathmatch = true; launch.matchIndex = tier;
             launch.loadout[0] = selection[0]; launch.loadout[1] = selection[1];
             launch.archiveMission = &mission; launch.botFriend = MatchBot(state);
-            if (launch.botFriend == nullptr || RunSurvival(launch) != 0) { return 1; }
+            if (launch.botFriend == nullptr || CGame::Run(launch) != 0) { return 1; }
             state.online.CancelMatch();
             BeginPostGame(state, context, weapons);
             std::printf("[deathmatch] entered results\n");
@@ -158,7 +158,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         }
         if (state.gameMode == 1 && choice < 4) {
             // Live uses the real local account; the peer has its own archive.
-            ZSurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
+            CGameFlow context{profile, savePath, static_cast<unsigned>(choice)};
             context.music = &music;
             const auto &level = profile.nativeArchive->survivalLevels[choice];
             std::vector<std::uint8_t> bytes;
@@ -177,7 +177,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             if (launch.botFriend == nullptr) { return 1; }
             launch.withBrother = true;
             if (state.starMap.startingWave >= 0) { launch.startWave = static_cast<unsigned>(state.starMap.startingWave); }
-            const int result = RunSurvival(launch);
+            const int result = CGame::Run(launch);
             if (result != 0) { return result; }
             state.online.CancelMatch();
             BeginPostGame(state, context, weapons);
@@ -185,7 +185,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
             continue;
         }
         if (choice == 5) {
-            ZSurvivalGameContext context{profile, savePath, 0};
+            CGameFlow context{profile, savePath, 0};
             context.music = &music;
             context.tutorial = true;
             std::string tutorialPack = "pack2";
@@ -220,7 +220,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 selected.title = planet.missionInfo[state.hordeStart].title;
                 if (selected.data.type != 2 || IsMissionLocked(profile, selected.data, planet.missionInfo[state.hordeStart])) { return 1; }
                 const auto &map = planet.missionInfo[state.hordeStart].map;
-                ZSurvivalGameContext context{profile, savePath};
+                CGameFlow context{profile, savePath};
                 context.music = &music;
                 context.hordeStart = static_cast<int>(state.hordeStart);
                 const int result = RunFrontEndSurvival(CGame::Launch{bigDirectory, tables.GetPackName(map.packHash), map.localIndex, 0, -1, selected.data.value64, &context, profile.brotherEnabled, &selected, &window}, state);
@@ -238,7 +238,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
                 if (mission.resource.packHash == packHash && mission.resource.localIndex == state.hordeStart && mission.data.type == 2) { selected = &mission; break; }
             }
             if (selected == nullptr) { return 1; }
-            ZSurvivalGameContext context{profile, savePath};
+            CGameFlow context{profile, savePath};
             context.music = &music;
             context.hordeStart = static_cast<int>(state.hordeStart);
             const int result = RunFrontEndSurvival(CGame::Launch{bigDirectory, "pack11", 0, 0, -1, selected->data.value64, &context, profile.brotherEnabled, selected, &window}, state);
@@ -250,7 +250,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
         unsigned wave = profile.clearedWaves[choice];
         if (wave >= 500) { wave = 0; }
         if (state.starMap.startingWave >= 0) { wave = static_cast<unsigned>(state.starMap.startingWave); }
-        ZSurvivalGameContext context{profile, savePath, static_cast<unsigned>(choice)};
+        CGameFlow context{profile, savePath, static_cast<unsigned>(choice)};
         context.music = &music;
         std::string mapPack;
         unsigned mapIndex = 0;

@@ -5,7 +5,7 @@
 #include "gameplay/CampaignDoorChecks.h"
 #include "gameplay/SurvivalStudy.h"
 #include "gun_bros_re/debug/DebugMaps.h"
-#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 
 enum class CampaignCheck { Doors, Targets, Progression, Rescue, Portal, Cache };
@@ -39,7 +39,7 @@ static int RunCampaignCheck(unsigned levelIndex, CampaignCheck check) {
         development.campaignRescueCheck = check == CampaignCheck::Rescue;
         development.campaignPortalCheck = check == CampaignCheck::Portal;
         development.campaignCacheCheck = check == CampaignCheck::Cache;
-        return RunSurvivalSession(launch);
+        return CGame::Run(launch);
     }
     return 1;
 }
@@ -68,7 +68,7 @@ int RunCampaignLava2Check() {
     SurvivalDevelopment development;
     DevelopmentBinding binding(launch, development);
     development.campaignProgressionCheck = true;
-    return RunSurvivalSession(launch);
+    return CGame::Run(launch);
 }
 int RunCampaignTargetCheck() {
     if (RunCampaignCheck(4, CampaignCheck::Targets) != 0) { return 1; }

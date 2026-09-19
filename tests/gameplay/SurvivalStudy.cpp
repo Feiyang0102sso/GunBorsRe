@@ -1,6 +1,6 @@
 #include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 int RunFlockPerformanceCheck(const std::string &bigDirectory) {
     CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
@@ -12,7 +12,7 @@ int RunFlockPerformanceCheck(const std::string &bigDirectory) {
     development.performanceStudy = true;
     development.performanceSpawnStudy = true;
     development.performanceFlockStudy = true;
-    return RunSurvivalSession(launch);
+    return CGame::Run(launch);
 }
 int RunFlockCheck(const std::string &bigDirectory) {
     CGame::Launch launch;
@@ -22,7 +22,7 @@ int RunFlockCheck(const std::string &bigDirectory) {
     SurvivalDevelopment development;
     DevelopmentBinding binding(launch, development);
     development.flockCheck = true;
-    return RunSurvivalSession(launch);
+    return CGame::Run(launch);
 }
 int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime, bool uncachedPaths) {
     CGame::Launch launch;
@@ -37,19 +37,19 @@ int RunSpawnPerformanceCheck(const std::string &bigDirectory, bool realtime, boo
     development.performanceSpawnStudy = true;
     development.performanceRealtimeStudy = realtime;
     development.performanceUncachedPaths = uncachedPaths;
-    return RunSurvivalSession(launch);
+    return CGame::Run(launch);
 }
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    ZSurvivalGameContext *gameContext, bool withBrother, bool powerupStudy,
+    CGameFlow *gameContext, bool withBrother, bool powerupStudy,
     const ZMissionEntry *archiveMission, bool performanceStudy, ZWindow *sharedWindow, bool feedbackStudy,
-    bool bossStudy, bool deathStudy) {
+    bool bossStudy, bool deathStudy, ZGameObserver *frameDriver) {
 
     CGame::Launch launch{bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,
         startWave, gameContext, withBrother, archiveMission, sharedWindow};
     SurvivalDevelopment development{screenshotPath, advanceMs, firePreview, showCollisions,
         check, checkWaves, powerupStudy, performanceStudy, feedbackStudy, bossStudy, deathStudy};
-    DevelopmentBinding binding(launch, development);
-    return RunSurvivalSession(launch);
+    DevelopmentBinding binding(launch, development, frameDriver);
+    return CGame::Run(launch);
 }

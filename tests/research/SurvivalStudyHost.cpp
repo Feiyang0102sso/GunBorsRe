@@ -3,7 +3,7 @@
 int RunViewerSurvival(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check, unsigned checkWaves, unsigned startWave,
-    ZSurvivalGameContext *gameContext, bool withBrother, bool powerupStudy,
+    CGameFlow *gameContext, bool withBrother, bool powerupStudy,
     const ZMissionEntry *archiveMission, bool performanceStudy, ZWindow *sharedWindow, bool feedbackStudy,
     bool bossStudy, bool deathStudy) {
     return RunSurvivalStudy(bigDirectory, packShortName, mapIndex, weaponIndex, armorIndex,

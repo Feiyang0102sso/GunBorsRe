@@ -1,4 +1,4 @@
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/data/ZStoreCatalog.h"
 #include <cstdio>
 #include <cmath>

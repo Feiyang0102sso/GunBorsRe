@@ -1,9 +1,9 @@
 /** Directed checks run the production scene, original Flow and BIG maps. */
 #define NOMINMAX
 #include "gameplay/SurvivalCheckScenario.h"
-#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
-#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/gameplay/brother/bot/ZLocalPVPBot.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/data/ZPlanetCatalog.h"
@@ -35,7 +35,7 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
         CLevel::Template level;
         if (!level.Init(levelInput)) { return 1; }
         CProfileManager profile = source;
-        ZSurvivalGameContext context{profile, {}};
+        CGameFlow context{profile, {}};
         context.persistProgress = false;
         CGame::Launch launch;
         launch.bigDirectory = directory;
@@ -50,18 +50,18 @@ int RunDeathmatchCombatCheck(const std::string &directory, bool feedback) {
         development.deathmatchCheck = true;
         development.deathmatchFeedbackCheck = feedback;
         std::printf("[deathmatch-check] map=%u tier=%u\n", index, index);
-        if (RunSurvivalSession(launch) != 0) { return 1; }
+        if (CGame::Run(launch) != 0) { return 1; }
         if (!feedback && index == 0) {
             development.deathmatchCheck = false;
             development.advanceMs = 8000;
             development.screenshotPath = TestOutput::Path("deathmatch-play.png");
-            if (RunSurvivalSession(launch) != 0) { return 1; }
+            if (CGame::Run(launch) != 0) { return 1; }
         }
     }
     return 0;
 }
 
-int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile, ZSurvivalGameContext &context) {
+int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerUpSelector &powerups, CProfileManager &profile, CGameFlow &context) {
     auto &scene = fixture.scene; auto &session = fixture.session; auto &bot = fixture.brother;
     auto &player = fixture.player; auto &opponent = fixture.brotherModel; auto &vitals = fixture.vitals;
     if (!scene.RespawnDeathmatch(0, true) || !scene.RespawnDeathmatch(1, true)) { return 1; }
@@ -190,7 +190,7 @@ int CheckDeathmatchCombat(SurvivalDeathFixture fixture, CMPMatch &match, CPowerU
     context.persistProgress = true;
     std::uint64_t accountedOre = 0;
     for (unsigned save = 0; save < 2; ++save) {
-        if (!SaveSurvivalProgress(&context, savedProgress, scene, session.GetLevel(), accountedOre)) { return 1; }
+        if (!CGame::SaveProgress(&context, savedProgress, session.GetLevel(), accountedOre)) { return 1; }
     }
     CProfileManager reloaded = context.profile;
     if (!ReloadProfile(reloaded, context.savePath) || reloaded.statistics[37] != previousKills + match.Score(0) ||

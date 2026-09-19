@@ -8,8 +8,8 @@
 #include "engine/core/CCrc32.h"
 #include "gun_bros_re/data/CProfileManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
-#include "gun_bros_re/gameplay/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
@@ -153,7 +153,7 @@ int RunOriginalProfilePlayCheck(const std::string &bigDirectory) {
         restored.inventory.size() != 8 || restored.weaponMastery.size() != 4 ||
         restored.GetWeaponExperience(restored.configuration.guns[0]) < 800000) { return 1; }
     for (unsigned waves : restored.clearedWaves) { if (waves != 500) { return 1; } }
-    ZSurvivalGameContext context{restored, save, 0};
+    CGameFlow context{restored, save, 0};
     if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, true, 2, 0, &context, true) != 0) { return 1; }
     if (!restored.LoadFromDisk(save)) { return 1; }
     for (const auto &entry : profile.weaponMastery) {

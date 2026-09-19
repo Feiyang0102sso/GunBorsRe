@@ -1,6 +1,6 @@
 // Desktop-only fast-forward through the original survival Flow callbacks.
 #include "gun_bros_re/cheats/CheatConfig.h"
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include <chrono>
 #include <cstdio>
 

@@ -70,7 +70,7 @@ int RunPostGameMenuCheck(const std::string &bigDirectory) {
             mission.resource = planet.data.missions[0];
             mission.data = planet.missions[0];
             mission.title = planet.missionInfo[0].title;
-            ZSurvivalGameContext context{profile, path, index};
+            CGameFlow context{profile, path, index};
             context.mission = mission.resource;
             context.missionLevel = mission.data.level;
             if (type == 2) { context.hordeStart = 0; }

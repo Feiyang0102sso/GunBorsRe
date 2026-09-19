@@ -1,3 +1,4 @@
+#include "gameplay/SurvivalPilot.h"
 #include "gun_bros_re/gameplay/map/ZMapViewer.h"
 #include "gameplay/SurvivalChecks.h"
 #include "TestOutput.h"
@@ -139,7 +140,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                 std::printf("\n");
             }
         }
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
+        auto pilot = std::make_unique<SurvivalPilot>(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         int previousStep = -2;
         int grenadeWaitMs = 0;
@@ -153,7 +154,7 @@ int CheckSurvivalTutorial(SurvivalTutorialFixture fixture) {
                 std::printf("[tutorial-check] time=%d step=%d enemies=%d kills=%u grenades=%u\n",
                     elapsed, step, session.CountEnemies(), session.GetKills(), powerups.GetCount(13));
                 previousStep = step;
-                if (!SaveSurvivalProgress(gameContext, progress, scene, session.GetLevel(), accountedXplodium)) { return 1; }
+                if (!CGame::SaveProgress(gameContext, progress, session.GetLevel(), accountedXplodium)) { return 1; }
             }
             if (step == -1) { break; }
             if (step == 2) {
@@ -276,7 +277,7 @@ int CheckSurvivalHorde(SurvivalHordeFixture fixture) {
 
     if (check && horde) {
         vitals.invincible = true;
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
+        auto pilot = std::make_unique<SurvivalPilot>(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         const int initialWave = session.GetLevel().GetWave();
         int targetWave = initialWave + 1;
@@ -342,7 +343,7 @@ int CheckSurvivalCampaign(SurvivalCampaignFixture fixture) {
                 goals.emplace_back((a.x + b.x) * 0.5f - normalX, (a.y + b.y) * 0.5f - normalY);
             }
         }
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
+        auto pilot = std::make_unique<SurvivalPilot>(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         unsigned goal = 0, reached = 0;
         int goalElapsed = 0;

@@ -3,7 +3,7 @@
 #include "gameplay/SurvivalCheckScenario.h"
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/SurvivalStudy.h"
-#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/brother/bot/ZLocalCoopBot.h"
 #include "gun_bros_re/data/ZMissionCatalog.h"
 #include "TestOutput.h"
@@ -71,7 +71,7 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     const auto sourceCoins = source.coins;
     const auto sourceRecords = source.nativeArchive->records;
     CProfileManager practice = source;
-    ZSurvivalGameContext context{practice, {}};
+    CGameFlow context{practice, {}};
     context.persistProgress = false;
     const auto &level = practice.nativeArchive->survivalLevels[0];
     std::vector<std::uint8_t> bytes;
@@ -88,7 +88,7 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     SurvivalDevelopment development;
     DevelopmentBinding binding(launch, development);
     development.localLiveCheck = true;
-    const int result = RunSurvivalSession(launch);
+    const int result = CGame::Run(launch);
     if (result != 0 || source.experience != sourceExperience || source.coins != sourceCoins) { return 1; }
     for (unsigned index = 0; index < sourceRecords.size(); ++index) {
         if (source.nativeArchive->records[index].payload != sourceRecords[index].payload) { return 1; }
@@ -97,13 +97,13 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     development.localLiveCheck = false;
     development.advanceMs = 8000;
     development.screenshotPath = TestOutput::Path("local-live-play.png");
-    if (RunSurvivalSession(launch) != 0) { return 1; }
+    if (CGame::Run(launch) != 0) { return 1; }
     launch.localLive = false;
     launch.localBot = true;
     development.screenshotPath.clear();
     development.advanceMs = 0;
     development.localLiveCheck = true;
-    if (RunSurvivalSession(launch) != 0) { return 1; }
+    if (CGame::Run(launch) != 0) { return 1; }
     std::printf("[local-live-check] profile-copy=1 no-save=1\n");
     std::vector<ZMissionEntry> missions;
     if (!LoadMissionCatalog(toc, tables, missions)) { return 1; }
@@ -122,7 +122,7 @@ int RunLocalLiveCheck(const std::string &bigDirectory) {
     development.localLiveCheck = false;
     development.advanceMs = 8000;
     development.screenshotPath = TestOutput::Path("live-bokor.png");
-    if (RunSurvivalSession(launch) != 0) { return 1; }
+    if (CGame::Run(launch) != 0) { return 1; }
     std::printf("[local-live-check] bokor-live-entry=1\n");
     return 0;
 }

@@ -6,7 +6,7 @@
 #include "gun_bros_re/data/MissionObjective.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
-#include "gun_bros_re/gameplay/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>

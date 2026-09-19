@@ -159,7 +159,7 @@ int CheckDeathmatchMenus(CResTOCManager &toc, ZPackTables &tables, CProfileManag
     hud.AdvanceDeathmatchWrapUp(1);
     if (!hud.IsDeathmatchWrapUpComplete()) { return 1; }
     std::printf("[dm-presentation] intro=%u ms mission-end=%u ms completed=1\n", intro->duration, ending->duration);
-    ZSurvivalGameContext context{profile, {}};
+    CGameFlow context{profile, {}};
     context.persistProgress = false;
     context.result.live = true; context.result.deathmatch = true;
     context.result.matchResult = static_cast<unsigned>(CMPMatch::Result::PlayerWon);

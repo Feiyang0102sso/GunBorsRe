@@ -629,7 +629,7 @@ int RunUpgradePopupCheck(const std::string &bigDirectory) {
     poorProfile.AddWeaponExperience(secondGun, secondWeapon->data.GetMasteryThreshold(0) / 2, secondWeapon->data.GetMasteryLimit());
     for (unsigned slot : {1u, 0u}) {
         poorProfile.activeWeaponSlot = slot;
-        ZSurvivalGameContext context{poorProfile, fundsPath, 0};
+        CGameFlow context{poorProfile, fundsPath, 0};
         ZMenuState resultState;
         BeginPostGame(resultState, context, weapons);
         if (!SameObject(resultState.masteryWeapon, poorProfile.configuration.guns[slot])) {

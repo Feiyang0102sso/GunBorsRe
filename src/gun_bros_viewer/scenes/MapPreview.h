@@ -8,7 +8,7 @@
 
 #include <cstdint>
 #include <string>
-#include "gun_bros_re/gameplay/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 
 enum class ZMapViewMode { Preview, GameView };
 
@@ -42,7 +42,7 @@ int RunMapPreview(const std::string &bigDirectory, const std::string &packShortN
 int RunMapList(const std::string &bigDirectory);
 
 /** Retail survival on the same terrain renderer; research viewers stay separate. */
-struct ZSurvivalGameContext;
+struct CGameFlow;
 struct ZMissionEntry;
 // RunSurvival is declared in runtime/MapScene.h; no game caller needs this harness.
 

@@ -1,6 +1,7 @@
 #pragma once
 // Test-only borrowed views, assembled by SurvivalCheckScenario.
-#include "gun_bros_re/gameplay/ZSurvivalScenario.h"
+#include "gun_bros_re/gameplay/game/CGameRuntime.h"
+#include "gun_bros_re/gameplay/map/CMapInternal.h"
 
 struct SurvivalRewardsFixture {
     unsigned & checkFailures;
@@ -126,7 +127,7 @@ struct SurvivalTutorialFixture {
     unsigned & checkFailures;
     std::string & capturePath;
     bool check;
-    ZSurvivalGameContext * gameContext;
+    CGameFlow * gameContext;
     ZPackTables & tables;
     std::vector<ZWeaponEntry> & weapons;
     ZPlayerVitals & vitals;
@@ -153,7 +154,7 @@ struct SurvivalWavesFixture {
     bool check;
     unsigned checkWaves;
     unsigned startWave;
-    ZSurvivalGameContext * gameContext;
+    CGameFlow * gameContext;
     bool withBrother;
     bool powerupStudy;
     const ZMissionEntry * archiveMission;
@@ -240,7 +241,7 @@ struct SurvivalSceneFixture {
     CPowerUpSelector & powerups;
     CPowerUpSelector & peerPowerups;
     CProfileManager * peerProfile;
-    ZSurvivalGameContext * gameContext;
+    CGameFlow * gameContext;
     float startX;
     float startY;
     float startFacing;

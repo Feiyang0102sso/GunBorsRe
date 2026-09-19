@@ -2,7 +2,7 @@
 /** Reproduce reported DM regressions through real BIG actors and rendering state. */
 #define NOMINMAX
 #include "gameplay/SurvivalChecks.h"
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
 #include "gun_bros_re/ui/CPowerUpSelector.h"
 #include "gun_bros_re/gameplay/CMPMatch.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"

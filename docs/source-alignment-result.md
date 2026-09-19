@@ -2,6 +2,8 @@
 
 日期：2026-09-15。依据用户批准的 [对齐计划](source-alignment-plan.md) 实施。
 
+2026-09-18 游戏会话更新：本批源码归入 `gameplay/game/`，八个旧 `ZSurvival*` 文件全部移除。会话资源与各阶段归 `CGame`，跨局进度归 `CGameFlow`；只保留键位、统一宿主观察入口、本地商店同步三个必要 Z 文件。测试配置、自动驾驶、性能实验、CSV 与截图编排归 `tests/`。游戏输入采用动作分派，G、N/M 不再是游戏快捷键，Viewer 目录选枪留在 Viewer。证据与验收见 [游戏会话职责归位](game-responsibility-migration.md)，本段覆盖下文旧会话文件状态。
+
 2026-09-18 地图更新：地图相关实现集中在 `gameplay/map/`，移除原九个 `ZMap*` 文件及 `ZPropWorld.h`，只保留一个 Viewer 专属 `ZMapViewer.h`。`CMap` 直接持有资源，`CProp` 统一脚本与三播放器，道具调度归 `CLevel::Props`，绘制归 `CMap`／`CLayerTile`／`CProp`／`CRenderQueue`。正式加载不再遍历匹配关卡脚本；Viewer 状态预览执行原 Flow。Movie 图层保留引用和位置，当前样本没有此层，绘制仍为明确的未实现分支。映射与验收见 [地图职责归位](map-responsibility-migration.md)；本段覆盖后文旧地图包装与路径。
 
 2026-09-18 敌人更新：敌人专属生产源码归入 `gameplay/enemy/`，按本轮用户要求使用 C 文件前缀、保留 I 前缀，文件头标出原版对应与宿主差异。`ZEnemyModel`、`ZCombatEnemy`、`ZPlacedEnemy` 组合层已删除，模板、资源、脚本和动画归同一个 `CEnemy`；菜单归 `CMenuMeshEnemy`；对象池直接持有敌人实例。恢复 `CMeshPathFinder` 与 `CFlock` 目标距离图、地图／道具视线查询、原骨骼位置查询和 native 54 的 LEVEL 资源生成链。网络保留 TODO，本地合作／PvP Bot 不依赖网络生成器。完整范围、证据、验收与未验证边界见 [敌人职责归位](enemy-responsibility-migration.md)。本段覆盖后文旧敌人路径与旧 Z 包装状态。

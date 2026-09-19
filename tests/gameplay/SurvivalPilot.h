@@ -5,13 +5,13 @@
 #ifndef GUN_BROS_RE_SURVIVALPILOT_H
 #define GUN_BROS_RE_SURVIVALPILOT_H
 #include "gun_bros_re/gameplay/level/CLevel.h"
-#include "gun_bros_re/gameplay/ZSurvivalInputDriver.h"
+#include "gun_bros_re/gameplay/map/CLayerCamera.h"
 
-class SurvivalPilot : public ZSurvivalInputDriver {
+class SurvivalPilot {
 public:
     SurvivalPilot(CLevel &scene, const CLayerCamera::Rectangle &bounds);
-    void Update(int deltaMs, float &moveX, float &moveY) override;
-    void Report() const override;
+    void Update(int deltaMs, float &moveX, float &moveY);
+    void Report() const;
 private:
     struct Node { float x = 0; float y = 0; std::vector<int> neighbors; };
     void Plan(const CEnemy &target);

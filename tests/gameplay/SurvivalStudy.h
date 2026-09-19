@@ -1,14 +1,14 @@
 #pragma once
-#include "gun_bros_re/gameplay/CGameSession.h"
-#include "gun_bros_re/debug/SurvivalDevelopment.h"
-#include "gun_bros_re/debug/FlockMetrics.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
+#include "gameplay/SurvivalDevelopment.h"
+#include "research/FlockMetrics.h"
 int RunLocalLiveCheck(const std::string &bigDirectory);
 int RunSurvivalStudy(const std::string &bigDirectory, const std::string &packShortName,
     unsigned mapIndex, unsigned weaponIndex, int armorIndex, const std::string &screenshotPath,
     unsigned advanceMs, bool firePreview, bool showCollisions, bool check = false, unsigned checkWaves = 2, unsigned startWave = 0,
-    ZSurvivalGameContext *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
+    CGameFlow *gameContext = nullptr, bool withBrother = false, bool powerupStudy = false,
     const ZMissionEntry *archiveMission = nullptr, bool performanceStudy = false, ZWindow *sharedWindow = nullptr, bool feedbackStudy = false,
-    bool bossStudy = false, bool deathStudy = false);
+    bool bossStudy = false, bool deathStudy = false, ZGameObserver *frameDriver = nullptr);
 /** Fatal-hit and SDL suicide regression on all four retail survival maps. */
 int RunPlayerDeathCheck(const std::string &bigDirectory);
 /** Four retail LEVEL scripts, their Boss camera and real grenade collisions. */

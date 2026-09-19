@@ -1,3 +1,4 @@
+#include "gameplay/SurvivalPilot.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "gameplay/SurvivalChecks.h"
 #include "gameplay/PowerupRuntimeChecks.h"
@@ -713,7 +714,7 @@ int CheckSurvivalWaves(SurvivalWavesFixture fixture) {
         // invincibility only to keep the automated pilot running deterministically.
         vitals.invincible = true;
         const int targetWave = std::min(static_cast<int>(startWave + checkWaves), session.GetLevel().GetWaveLimit());
-        auto pilot = CreateSurvivalInputDriver(scene, loaded.GetVisibleBounds());
+        auto pilot = std::make_unique<SurvivalPilot>(scene, loaded.GetVisibleBounds());
         if (!pilot) { return 1; }
         float previousDamage = 0;
         int stalledMs = 0;

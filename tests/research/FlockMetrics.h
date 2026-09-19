@@ -3,7 +3,7 @@
  * @brief Crowd-spacing measurements for performance reports.
  *
  * Pure measurement with no assertions and no gameplay effect; the thresholds
- * here are diagnostic only. Lives in src/ because the session loop writes
+ * here are diagnostic only. The test-owned performance session writes
  * these numbers into its own performance CSV.
  */
 class CLevel;

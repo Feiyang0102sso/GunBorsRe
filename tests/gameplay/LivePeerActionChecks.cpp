@@ -14,7 +14,7 @@ int CheckLivePeerActions(SurvivalDeathFixture fixture, CResTOCManager &toc, ZPac
     CPlayerProgress::Template progressData;
     CPlayerProgress progress;
     const auto cheatSavePath = std::filesystem::path(TestOutput::Path("runtime-cheat-save"));
-    ZSurvivalGameContext cheatContext{peerProfile, cheatSavePath};
+    CGameFlow cheatContext{peerProfile, cheatSavePath};
     auto command = [&](const char *code, CombatCheatResult &result) {
         return ApplyCombatCheat(code, scene, fixture.vitals, playerPowerups, session, &cheatContext, result, progressData, progress);
     };

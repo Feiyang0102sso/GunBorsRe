@@ -22,7 +22,7 @@
 #include "gun_bros_re/ui/ZTextLayout.h"
 #include "gun_bros_re/ui/ZPromotionPopup.h"
 #include "gun_bros_re/ui/ZMenuWipe.h"
-#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/ZHostSettings.h"
 #include "gun_bros_re/ZLocalOnlineServices.h"
 #include "gun_bros_re/data/CDailyBonusTracking.h"
@@ -38,7 +38,7 @@
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "gun_bros_re/effects/CParticlePool.h"
 #include "gun_bros_re/effects/CParticleEffect.h"
-#include "gun_bros_re/gameplay/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/ZStartupSequence.h"
 #include "gun_bros_re/gameplay/enemy/CMenuMeshEnemy.h"
 #include "engine/graphics/ZQuadBatch.h"
@@ -327,7 +327,7 @@ struct ZMenuState {
     unsigned failedCurrency = 0, failedPrice = 0, failedMissing = 0;
     int currencyOffer = -1;
     std::uint64_t currencyReadyAt = 0;
-    ZSurvivalResult result;
+    CGameFlow::Result result;
     GameObjectRef masteryWeapon;
     bool refinementRequired = false;
     ZPromotionPopup promotion;
@@ -946,7 +946,7 @@ const ZWeaponEntry *FindMasteryWeapon(const std::vector<ZWeaponEntry> &weapons, 
 
 const ZStoreEntry *FindWeaponStore(const std::vector<ZStoreEntry> &store, const GameObjectRef &ref);
 
-void BeginPostGame(ZMenuState &state, const ZSurvivalGameContext &context, const std::vector<ZWeaponEntry> &weapons);
+void BeginPostGame(ZMenuState &state, const CGameFlow &context, const std::vector<ZWeaponEntry> &weapons);
 
 // GLU_MOVIE_UPGRADE_POPUP regions, in the order the movie declares them:
 // portrait, close, meter, CURRENT and NEXT headers, the two stat columns, the

@@ -2,18 +2,18 @@
  * @brief Coordinate the active CLevel with HUD and session presentation.
  */
 #define NOMINMAX
-#include "gun_bros_re/gameplay/CGame.h"
+#include "gun_bros_re/gameplay/game/CGame.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "gun_bros_re/ui/CInputPad.h"
 #include "gun_bros_re/data/Mission.h"
 #include <cstdio>
 
-CGame::CGame(CLevel &level, CMap &map,
-    const std::vector<CEnemy::Template> &catalog) : m_level(level), m_map(map) {
+CGame::CGame(CLevel &level, CMap &map, const std::vector<CEnemy::Template> &catalog) : m_level(level), m_map(map) {
     m_level.AttachRuntime(*this, catalog);
 }
 
 bool CGame::Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack, unsigned mapIndex,
-    const GameObjectRef *selectedLevel, bool archive) {
+                 const GameObjectRef *selectedLevel, bool archive) {
     m_archive = archive;
     m_level.SetArchive(archive);
     m_toc = &toc;
@@ -38,7 +38,9 @@ bool CGame::Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack
                 if (!mission.Init(missionStream) || missionStream.Available() != 0) { return false; }
                 if (mission.type != 1) { continue; }
                 level = mission.level;
-                if (!tables.ReadSectionResource(level.packHash, ZGameSection::Level, level.localIndex, payload)) { return false; }
+                if (!tables.ReadSectionResource(level.packHash, ZGameSection::Level, level.localIndex, payload)) {
+                    return false;
+                }
             }
             CArrayInputStream stream(payload);
             CLevel::Template candidate;
@@ -53,14 +55,16 @@ bool CGame::Load(CResTOCManager &toc, ZPackTables &tables, std::uint32_t mapPack
                 m_levelReference = level;
                 m_template = std::move(candidate);
                 if (selectedLevel != nullptr) {
-                    std::printf("[survival] selected explicit LEVEL %u:%u for MAP %u:%u\n", level.packHash, level.localIndex, mapPack, mapIndex);
+                    std::printf("[survival] selected explicit LEVEL %u:%u for MAP %u:%u\n", level.packHash,
+                                level.localIndex, mapPack, mapIndex);
                     return m_level.PreloadEnemies(m_map.GetRequirements(), m_template.script);
                 }
             }
         }
     }
     if (!requested.IsNull() && selectedLevel == nullptr) {
-        std::printf("[survival] selected retail Mission LEVEL %u:%u for MAP %u:%u\n", requested.packHash, requested.localIndex, mapPack, mapIndex);
+        std::printf("[survival] selected retail Mission LEVEL %u:%u for MAP %u:%u\n", requested.packHash,
+                    requested.localIndex, mapPack, mapIndex);
         return m_level.PreloadEnemies(m_map.GetRequirements(), m_template.script);
     }
     std::printf("[survival] no retail survival level for requested map\n");
@@ -86,12 +90,17 @@ void CGame::Restart(float x, float y, float facingDegrees) {
     }
     m_level.Bind(m_template, m_map, nullptr, m_startWave);
     m_bossIntroSerial = m_level.GetBossIntroSerial();
-    if (m_bossIntroSerial > 0) { m_transitionMs = 2000; m_transitionDuration = 2000; }
+    if (m_bossIntroSerial > 0) {
+        m_transitionMs = 2000;
+        m_transitionDuration = 2000;
+    }
     m_bossWave = m_bossIntroSerial > 0;
     if (m_hud != nullptr && m_match == nullptr) {
         m_transitionMs = 0;
         unsigned wave = m_level.GetRealWave() + 1;
-        if (m_horde && m_level.GetWavesPerRevolution() > 0) { wave = m_level.GetWave() / m_level.GetWavesPerRevolution() + 1; }
+        if (m_horde && m_level.GetWavesPerRevolution() > 0) {
+            wave = m_level.GetWave() / m_level.GetWavesPerRevolution() + 1;
+        }
         m_hud->BeginLevel(wave, m_horde, m_bossWave);
     }
     m_level.RefreshCamera();
@@ -103,18 +112,17 @@ void CGame::Restart(float x, float y, float facingDegrees) {
         if (m_hud != nullptr) { m_hud->BeginDeathmatch(m_match->Data().killLimit); }
     }
     for (const CLayerPathLink &path : m_map.GetPathLinkLayers()) {
-        std::printf("[survival] path layer=%u nodes=%zu selected=%d\n", path.GetLayerIndex(), path.GetNodes().size(), m_level.GetPathLayer());
+        std::printf("[survival] path layer=%u nodes=%zu selected=%d\n", path.GetLayerIndex(), path.GetNodes().size(),
+                    m_level.GetPathLayer());
     }
 }
 
 void CGame::OnWaveCleared(unsigned perfectRewardPercent) {
-    const bool perfect = !m_level.GetWavePerfectResults().empty() &&
-        m_level.GetWavePerfectResults().back();
+    const bool perfect = !m_level.GetWavePerfectResults().empty() && m_level.GetWavePerfectResults().back();
     SubmitChallenges(false, true);
     // CGame::OnWaveCleared :76246 only shows this sequence for game type 1.
     if (m_hud != nullptr && !m_horde) {
-        m_hud->OnWaveClear(m_level.GetRealWave() + 1,
-            perfect, perfectRewardPercent, m_bossWave);
+        m_hud->OnWaveClear(m_level.GetRealWave() + 1, perfect, perfectRewardPercent, m_bossWave);
         if (m_level.IsLocalLive() && m_level.GetWave() + 1 < m_level.GetWaveLimit()) {
             m_hud->BeginLiveWave(m_level.GetMultiplayerStatistics(0), m_level.GetMultiplayerStatistics(1));
         }
@@ -150,13 +158,19 @@ void CGame::UpdateDialog(int deltaMs) {
         if (m_toc != nullptr && m_level.GetStringResource(m_level.GetDialogResource(), resource)) {
             m_dialogText = ReadGameString(*m_toc, resource);
             std::printf("[campaign-dialog] %s\n", m_dialogText.c_str());
-            if (m_dialogHud != nullptr) { m_dialogBound = m_dialogHud->ShowDialog(m_dialogText, m_level.DoesDialogAutoClose(), m_level.GetDialogArrow()); }
+            if (m_dialogHud != nullptr) {
+                m_dialogBound =
+                    m_dialogHud->ShowDialog(m_dialogText, m_level.DoesDialogAutoClose(), m_level.GetDialogArrow());
+            }
             if (!m_dialogBound) {
                 std::printf("[dialog] original Movie binding failed resource=%d\n", m_level.GetDialogResource());
             }
         }
     }
-    if (m_level.GetDialogResource() < 0) { m_dialogText.clear(); return; }
+    if (m_level.GetDialogResource() < 0) {
+        m_dialogText.clear();
+        return;
+    }
     // Desktop reading duration; original movie/text-box pagination remains
     // separate research. Native argument three means automatic close, not pause.
     // The historical estimate above is superseded by CDialogPopup playback.
@@ -209,7 +223,10 @@ void CGame::Update(int deltaMs, float moveX, float moveY, bool fire) {
     }
     const int previousWave = m_level.GetWave();
     m_level.Update(deltaMs, moveX, moveY, fire, !waitingForLiveWave);
-    if (m_hud == nullptr && m_level.GetWave() != previousWave && !m_level.IsCleared()) { m_transitionMs = 1200; m_transitionDuration = 1200; }
+    if (m_hud == nullptr && m_level.GetWave() != previousWave && !m_level.IsCleared()) {
+        m_transitionMs = 1200;
+        m_transitionDuration = 1200;
+    }
     if (m_hud != nullptr && m_horde && m_level.GetWave() != previousWave && !m_level.IsCleared()) {
         // CGame::OnLevelStart :75385 names Horde rounds with GetRevolution.
         // Its Movie callback releases the script's slow-motion intermission.
@@ -255,4 +272,10 @@ bool CGame::SubmitChallenges(bool ended, bool waveCleared) {
     m_challenges->UpdateFromLevelSession(data, *m_challengeWeapons, *m_challengeProfile);
     m_challengeSessionEnded = ended;
     return m_challenges->StoreProgress(*m_challengeProfile);
+}
+
+bool CGame::SaveProgress(CGameFlow *flow, const CPlayerProgress &progress, const CLevel &level,
+                         std::uint64_t &accountedXplodium, bool missionEnded) {
+    if (flow == nullptr) { return true; }
+    return flow->UpdatePlayerProgress(progress, level, accountedXplodium, missionEnded);
 }

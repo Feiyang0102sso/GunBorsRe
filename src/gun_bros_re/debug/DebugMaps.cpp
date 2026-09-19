@@ -7,8 +7,8 @@
 #include "gun_bros_re/debug/DebugKeys.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/gameplay/map/CMap.h"
-#include "gun_bros_re/gameplay/CGameSession.h"
-#include "gun_bros_re/gameplay/ZSurvivalGameContext.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
+#include "gun_bros_re/gameplay/game/CGameFlow.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
 #include "engine/platform/ZGLLoader.h"
 #include <algorithm>
@@ -219,7 +219,7 @@ bool ShowDebugMapPicker(CResTOCManager &toc, ZPackTables &tables, ZWindow &windo
 }
 
 CGame::Launch MakeDebugMapLaunch(const std::string &bigDirectory, const DebugMapSelection &selection,
-    ZSurvivalGameContext &context) {
+    CGameFlow &context) {
     context.persistProgress = false;
     CGame::Launch launch;
     launch.bigDirectory = bigDirectory;
@@ -243,12 +243,12 @@ void RunDebugMaps(const std::string &bigDirectory, ZWindow &window, DebugMapSele
         // Reuse the retail equipment path (CBrother::Bind), including mastery,
         // armor and both gun slots. Purchases and pickups affect only this copy.
         CProfileManager previewProfile = profile;
-        ZSurvivalGameContext context{previewProfile, {}};
+        CGameFlow context{previewProfile, {}};
         CGame::Launch launch = MakeDebugMapLaunch(bigDirectory, current, context);
         launch.window = &window;
         launch.debugSelection = &selection;
         std::printf("[debug-maps] launch %s map=%u level=%u:%u\n", current.pack.c_str(), current.map, current.level.packHash, current.level.localIndex);
-        const int result = RunSurvival(launch);
+        const int result = CGame::Run(launch);
         if (result == kDebugMapSessionChoice) { continue; }
         if (result != 0) {
             std::string message = Labels::LoadFailed;

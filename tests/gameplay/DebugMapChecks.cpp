@@ -6,7 +6,7 @@
 #include "gameplay/SurvivalStudy.h"
 #include "TestOutput.h"
 #include "gun_bros_re/debug/DebugMaps.h"
-#include "gun_bros_re/gameplay/ZSurvivalRuntime.h"
+#include "gun_bros_re/gameplay/game/CGameSession.h"
 #include "gun_bros_re/gameplay/map/CMapInternal.h"
 
 static int CheckWallWeaponResources(CResTOCManager &toc, ZPackTables &tables) {
@@ -53,14 +53,14 @@ int RunDebugMapProfileCheck() {
         for (unsigned slot = 0; slot < 2; ++slot) {
             CProfileManager preview = original;
             preview.activeWeaponSlot = slot;
-            ZSurvivalGameContext context{preview, copiedSave / "must-not-exist"};
+            CGameFlow context{preview, copiedSave / "must-not-exist"};
             auto launch = MakeDebugMapLaunch(big, selected, context);
             if (launch.gameContext != &context || context.persistProgress ||
                 launch.withBrother != original.brotherEnabled) { return 1; }
             SurvivalDevelopment development;
             DevelopmentBinding binding(launch, development);
             development.debugMapProfileCheck = true;
-            if (RunSurvivalSession(launch) != 0) { return 1; }
+            if (CGame::Run(launch) != 0) { return 1; }
             preview.coins += 1;
             if (!context.SaveProfile() || std::filesystem::exists(context.savePath) ||
                 preview.coins == original.coins) { return 1; }
@@ -72,7 +72,7 @@ int RunDebugMapProfileCheck() {
 }
 
 int CheckDebugMapProfile(ZPackTables &tables, const CBrother &player,
-    const CPlayerProgress &progress, ZSurvivalGameContext &context, const CLevel &scene, const CLevel &level) {
+    const CPlayerProgress &progress, CGameFlow &context, const CLevel &scene, const CLevel &level) {
     const auto &profile = context.profile;
     const auto &gun = profile.configuration.guns[profile.activeWeaponSlot];
     if (player.gunResource.packHash != gun.packHash || player.gunResource.localIndex != gun.localIndex ||
@@ -96,7 +96,7 @@ int CheckDebugMapProfile(ZPackTables &tables, const CBrother &player,
         ++checkedArmor;
     }
     std::uint64_t accountedXplodium = 0;
-    if (!SaveSurvivalProgress(&context, progress, scene, level, accountedXplodium) ||
+    if (!CGame::SaveProgress(&context, progress, level, accountedXplodium) ||
         std::filesystem::exists(context.savePath)) { return 1; }
     std::printf("[debug-map-profile-check] slot=%u gun=%08x:%u armor=%u xp=%llu mastery=%u failures=0\n",
         profile.activeWeaponSlot, gun.packHash, gun.localIndex, checkedArmor,

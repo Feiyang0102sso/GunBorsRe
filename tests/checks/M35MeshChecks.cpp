@@ -1,3 +1,4 @@
+#include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_re/debug/Capture.h"
 #include "engine/core/ZPaths.h"
 /**

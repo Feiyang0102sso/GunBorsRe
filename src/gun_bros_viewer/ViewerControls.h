@@ -7,6 +7,12 @@
 #include "engine/graphics/ZQuadBatch.h"
 #include <memory>
 
+struct ZWeaponEntry;
+
+/** Number keys select categories, N/M wrap within the selected category. */
+std::size_t SelectWeaponKey(const std::vector<ZWeaponEntry> &weapons,
+                            std::size_t current, ZKeyCode key);
+
 class ViewerControls {
 public:
     ViewerControls(ZWindow &window, ViewerBindingSet bindings, bool enabled = true);
@@ -19,7 +25,7 @@ public:
     void TakeDragDelta(int &x, int &y);
     float TakeWheelDelta();
     bool GetMousePosition(float &x, float &y) const;
-    /** The game catalogue still accepts its original canonical selection keys. */
+    /** The viewer catalogue retains its original canonical selection keys. */
     ZKeyCode WeaponSelectionKey(ZKeyCode key) const;
     void GetDrawableSize(int &width, int &height) const;
     bool Draw();
