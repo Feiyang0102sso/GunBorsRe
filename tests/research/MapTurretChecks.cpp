@@ -140,6 +140,53 @@ int RunMapTurretChecks(const std::string &bigDirectory) {
     for (unsigned elapsed = 0; elapsed < 1024; elapsed += 16) { gameModel.Update(16); }
     if (gameModel.GetStateId() != 4 || gameModel.GetPart(1).controller.GetMoveIndex() != 1) { ++failures; }
     std::printf("[map-turret-check] gameplay prop messages and enemy activation failures=%u\n", failures);
+    // Exercise the real BIG attack script against a stationary target in range.
+    // pack9 ENEMY 0 states 5/6 aim, then fire three shots per burst.
+    // Let the original LEVEL choose the walking and bullet collision layers.
+    std::vector<std::uint8_t> levelBytes;
+    if (!tables.ReadSectionResource(CStringToKey("pack9"), ZGameSection::Level, 0, levelBytes)) { return 1; }
+    CArrayInputStream levelInput(levelBytes);
+    CLevel::Template levelTemplate;
+    if (!levelTemplate.Init(levelInput)) { return 1; }
+    level.Bind(levelTemplate, loaded);
+    loaded.BuildCollisionScene();
+    scene.SetMap(loaded, loaded.GetResources().collisionScene,
+        loaded.GetResources().weaponCollision, 1, 22);
+    for (const auto &placed : loaded.GetResources().enemies) {
+        CEnemy firingModel;
+        firingModel.combat.enabled = true;
+        if (!firingModel.Bind(tables, *placed->data, false, nullptr)) { return 1; }
+        firingModel.SetLevelContext(&scene);
+        firingModel.combat.x = placed->combat.x;
+        firingModel.combat.y = placed->combat.y;
+        firingModel.Spawn();
+        firingModel.HandleMessage(2);
+        firingModel.HandleMessage(1);
+        for (unsigned elapsed = 0; elapsed < 1024; elapsed += 16) { firingModel.Update(16); }
+        firingModel.combat.actions.clear();
+        firingModel.SetTarget(Collision::Player, firingModel.combat.x + 100, firingModel.combat.y, true);
+        unsigned shots = 0;
+        unsigned longestGapMs = 0;
+        unsigned lastShotMs = 0;
+        constexpr unsigned durationMs = 5000;
+        constexpr unsigned stepMs = 16;
+        unsigned elapsed = 0;
+        while (elapsed + stepMs <= durationMs) {
+            elapsed += stepMs;
+            firingModel.Update(stepMs);
+            for (const CEnemy::Action &action : firingModel.combat.actions) {
+                if (action.kind != CEnemy::Action::Kind::Bullet) { continue; }
+                ++shots;
+                longestGapMs = std::max(longestGapMs, elapsed - lastShotMs);
+                lastShotMs = elapsed;
+            }
+            firingModel.combat.actions.clear();
+        }
+        longestGapMs = std::max(longestGapMs, elapsed - lastShotMs);
+        std::printf("[map-turret-fire-check] x=%.0f y=%.0f shots=%u longest-gap-ms=%u state=%u\n",
+            firingModel.combat.x, firingModel.combat.y, shots, longestGapMs, firingModel.GetStateId());
+        if (shots < 15 || longestGapMs > 1000) { ++failures; }
+    }
     std::printf("[map-turret-check] failures=%u\n", failures);
     return failures == 0 ? 0 : 1;
 }

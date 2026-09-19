@@ -3,12 +3,14 @@
  * layerCollision.cpp TestCollisionSegment :125270, collision.cpp :65660.
  * The host's terrain set contains the selected map layer plus active prop bullet
  * edges, rebuilt from BIG collision_data.bt shapes whenever props change.
+ * Sight instead uses walls: native 23 reads CMap mem+9932 (:72162), selected
+ * by SetBulletCollisionLayer :91991. Terrain includes walking-only boundaries.
  */
 #include "gun_bros_re/gameplay/level/CLevel.h"
 
 bool CLevel::TestEnemyLineOfSight(float x, float y, float targetX, float targetY) const {
     if (m_weaponCollision == nullptr) { return true; }
-    const auto &collision = m_weaponCollision->terrain;
+    const auto &collision = m_weaponCollision->walls;
     const auto &vertices = collision.GetVertices();
     const float dx = targetX - x;
     const float dy = targetY - y;

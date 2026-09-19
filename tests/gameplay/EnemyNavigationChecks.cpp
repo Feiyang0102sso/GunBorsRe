@@ -45,6 +45,7 @@ unsigned CheckEnemySight() {
     CMap map;
     CCollisionData::Scene weaponCollision;
     weaponCollision.terrain = collision;
+    weaponCollision.walls = collision;
     CLevel level;
     level.SetMap(map, collision, weaponCollision, 1, 22);
     CEnemy enemy;
@@ -53,9 +54,10 @@ unsigned CheckEnemySight() {
     enemy.combat.y = 50;
     enemy.SetTarget(1, 150, 50, true);
     const int blocked = enemy.FunctionResolver(23, nullptr, 0);
-    weaponCollision.terrain.SetGroupEnabled(7, false);
+    // Walking collision remains enabled while the bullet/sight wall opens.
+    weaponCollision.walls.SetGroupEnabled(7, false);
     const int unlocked = enemy.FunctionResolver(23, nullptr, 0);
-    weaponCollision.terrain.SetGroupEnabled(7, true);
+    weaponCollision.walls.SetGroupEnabled(7, true);
     enemy.SetTarget(1, 90, 50, true);
     const int nearby = enemy.FunctionResolver(23, nullptr, 0);
     // Collinear segments are not intersections in original Collision::LineIntersection.
