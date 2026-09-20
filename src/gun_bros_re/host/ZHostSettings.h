@@ -7,6 +7,9 @@
 #include <cstdint>
 
 struct ZHostSettings {
+    std::string title = GameConfig::DefaultTitle;
+    // Host BGM dial: 3 preserves the original 0.3 gain before scene scaling.
+    int soundVolume = GameConfig::DefaultSoundVolume;
     bool drawFPS = true;
     // Session-only information toggle; DebugMode remains the master switch.
     bool drawDebugInfo = true;

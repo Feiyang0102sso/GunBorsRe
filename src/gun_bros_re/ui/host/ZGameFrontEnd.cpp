@@ -1,3 +1,4 @@
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gun_bros_re/debug/FrameRateOverlay.h"
@@ -55,7 +56,7 @@ int RunGameMenuSession(const std::string &bigDirectory, const std::string &scree
     std::vector<CArmor::Entry> armor;
     {
         ZWindow &loadingWindow = window;
-        if (!loadingWindow.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+        if (!loadingWindow.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
         if (!SetDebugFPS(loadingWindow, GameHostSettings().drawFPS, bigDirectory)) { return 1; }
         ZMovieRenderer loadingMovies;
         CResPackTOC *core = toc.GetPack(toc.GetCorePackIndex());

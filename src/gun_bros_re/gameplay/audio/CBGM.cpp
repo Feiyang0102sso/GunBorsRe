@@ -3,6 +3,7 @@
  * @brief CBGM::Play / NextTrack follow iOS :60102 / :60204.
  */
 #include "gun_bros_re/gameplay/audio/CBGM.h"
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "engine/platform/ZMediaDecoder.h"
 #include <cstdio>
 
@@ -48,7 +49,8 @@ void CBGM::Update() { m_audio.Update(); }
 void CBGM::SetEnabled(bool enabled) {
     m_enabled = enabled;
     float volume = 0;
-    if (enabled) { volume = 0.3f * m_volumeScale; }
+    // Host dial 3 preserves CBGM::SetVolume :59971's original 0.3 base gain.
+    if (enabled) { volume = GameHostSettings().soundVolume * 0.1f * m_volumeScale; }
     m_audio.SetVolume(volume);
 }
 void CBGM::SetVolume(float scale) {

@@ -1,3 +1,4 @@
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/profile/CPlayerProgress.h"
 /** CGame session host implementation; original ownership follows game.cpp.
  * SDL/GL submission and borrowed desktop resources are host adaptations.
@@ -68,7 +69,7 @@ int CGame::Run(const Launch &launch) {
     ZWindow *activeWindow = &ownedWindow;
     if (sharedWindow != nullptr) { activeWindow = sharedWindow; }
     ZWindow &window = *activeWindow;
-    if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    if (!window.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     if (!SetDebugFPS(window, GameHostSettings().drawFPS, bigDirectory)) { return 1; }
     window.SetEscapeCloses(false);
     // Both the retail frontend and standalone survival research use shortcuts.

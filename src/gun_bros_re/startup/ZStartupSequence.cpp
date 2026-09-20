@@ -29,7 +29,7 @@ int RunStartupSequence(const std::string &screenshotPath, unsigned advanceMs, ZW
     const std::filesystem::path logoDirectory = Paths::Root() / Paths::StartupDirectory;
     ZWindow ownedWindow;
     ZWindow &window = sharedWindow ? *sharedWindow : ownedWindow;
-    if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    if (!window.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     if (!SetDebugFPS(window, GameHostSettings().drawFPS)) { return 1; }
     ZMediaVideo video;
     ZMediaAudio decoded;

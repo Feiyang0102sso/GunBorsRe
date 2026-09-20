@@ -57,7 +57,7 @@ int RunApplication(int argc, char **argv) {
     ZAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
     // One native surface survives video, loading, menu and gameplay.
     ZWindow window;
-    if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    if (!window.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
     if (!SetDebugFPS(window, GameHostSettings().drawFPS, big)) { return 1; }
     if (!skipIntro && screenshot.empty()) {
         const int result = RunStartupSequence("", 0, &window);

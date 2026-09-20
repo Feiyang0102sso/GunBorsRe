@@ -7,6 +7,7 @@ using namespace ResearchDefaults;
 void PrintTestUsage() {
     std::printf(
         "usage: GunBrosTests [options]\n"
+        "  --host-settings-check    grouped config, title and BGM volume compatibility\n"
         "\n"
         "  --intro                   play original Glu video (space/click to skip)\n"
         "  --skip-intro              enter menus without the startup video\n"

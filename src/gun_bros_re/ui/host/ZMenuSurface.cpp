@@ -1,3 +1,4 @@
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/ui/host/ZMenuSurface.h"
 #include "gun_bros_re/ui/system/CMenuSystem.h"
 #include "gun_bros_re/ui/menus/CMenuStoreOption.h"
@@ -12,7 +13,7 @@ namespace MenuDetail {
     bool ZMenuSurface::Open(CResTOCManager &toc, CGunBros &tables, const CProfileManager *profile , bool startup , CBGM *music ) {
         particles.Bind(toc, tables, imageProgram);
         playerPreview.Bind(tables);
-        if (!window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return false; }
+        if (!window.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return false; }
         window.SetEscapeCloses(false);
         window.EnableCheats(true);
         const char *directory = Paths::Shaders().c_str();

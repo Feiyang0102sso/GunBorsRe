@@ -8,6 +8,7 @@
 #include "gameplay/DebugMapChecks.h"
 #include "TestOutput.h"
 int CheckDebugInput();
+int RunHostSettingsCheck();
 int RunDeathmatchDataCheck(const std::string &bigDirectory);
 int CheckViewerControls();
 int RunCoverScaleStudy(const std::string &bigDirectory);
@@ -26,6 +27,10 @@ int wmain(int argc, wchar_t **argv) {
         if (std::wstring(argv[index]) == L"--big") { sampleBigDirectory = Paths::Resolve(argv[index + 1]); }
     }
     for (int index = 1; index < argc; ++index) {
+        if (std::wstring(argv[index]) == L"--host-settings-check") {
+            ZAudioPlayer::SetMuted(true);
+            return RunHostSettingsCheck();
+        }
         if (std::wstring(argv[index]) == L"--haven-collision-check" || std::wstring(argv[index]) == L"--haven-artillery-check") {
             ZAudioPlayer::SetMuted(true);
             return RunHavenCollisionCheck(sampleBigDirectory.u8string(), std::wstring(argv[index]) == L"--haven-artillery-check");

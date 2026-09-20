@@ -1,3 +1,4 @@
+#include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/data/profile/CRefinementManager.h"
 #include "gun_bros_re/data/profile/CPlayerProgress.h"
 #include "gun_bros_re/ui/host/ZStorePurchase.h"
@@ -21,7 +22,7 @@ int ShowGameMenu(CResTOCManager &toc, CGunBros &tables, CProfileManager &profile
     const std::string &capturePath, const std::vector<ZMenuInputFrame> *inputFrames , bool originalProfile , ZWindow *sharedWindow , bool animateTransitions , ZMenuTransitionTrace *transitionTrace , CBGM *sharedMusic ) {
     // CGunBros owns CBGM across loading, gameplay and postgame menus.
     ZMenuSurface view(sharedWindow);
-    if (!view.window.Open("Gun Bros", kDefaultWindowWidth, kDefaultWindowHeight)) { return -3; }
+    if (!view.window.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return -3; }
     CBGM ownedMusic;
     if (sharedMusic == nullptr) { sharedMusic = &ownedMusic; }
     CBGM &music = *sharedMusic;

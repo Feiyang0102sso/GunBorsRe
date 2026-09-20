@@ -73,6 +73,7 @@ function Add-Check {
 
 foreach ($suite in ($Phase | Select-Object -Unique)) {
     if ($suite -eq 'Core') {
+        Add-Check 'host-settings' @('--host-settings-check')
         Add-Check 'debug-input' @('--debug-input-check')
         Add-Check 'fontbitmap' @('--fontbitmap')
         Add-Check 'viewer-controls' @('--viewer-controls-check')

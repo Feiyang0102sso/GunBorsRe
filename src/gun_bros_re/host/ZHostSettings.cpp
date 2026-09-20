@@ -12,13 +12,24 @@ ZHostSettings &GameHostSettings() {
 bool ZHostSettings::Load(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) {
         std::ofstream output(path);
-        output << GameConfig::EffectsVolume << "=" << effectsVolume << "\n";
-        output << GameConfig::DrawFPS << "=1\n";
+        output << "# Section headers are labels; keys are global and case-sensitive.\n";
+        output << "[common]\n# Game window title (UTF-8, no quotes).\n";
+        output << GameConfig::Title << "=" << title << "\n\n";
+        output << "[audio]\n# BGM volume: 0..10; 0=mute, 3=original volume.\n";
+        output << GameConfig::SoundVolume << "=" << soundVolume << "\n";
+        output << "# Sound effects volume: 0..10; 0=mute.\n";
+        output << GameConfig::EffectsVolume << "=" << effectsVolume << "\n\n";
+        output << "[game]\n# Local online-menu adapter: 0=off, 1=on; no remote connection.\n";
+        output << GameConfig::IsConnected << "=" << isConnected << "\n";
         output << "# Deathmatch bot: 1=Easy, 2=Normal, 3=Hard\n";
-        output << ZBotSettings::DifficultyKey << "=" << dmBotLevel << "\n";
+        output << ZBotSettings::DifficultyKey << "=" << dmBotLevel << "\n\n";
+        output << "[control]\n";
         output << "# Mouse fire: 1=screen aim, 2=right stick drag\n";
-        output << GameConfig::Control << "=" << control << "\n";
-        output << GameConfig::DebugMode << "=0\n" << GameConfig::IsConnected << "=0\n";
+        output << GameConfig::Control << "=" << control << "\n\n";
+        output << "[debug]\n# Debug information and debug hotkeys: 0=off, 1=on.\n";
+        output << GameConfig::DebugMode << "=" << debugMode << "\n";
+        output << "# FPS counter: 0=hidden, 1=visible.\n";
+        output << GameConfig::DrawFPS << "=" << drawFPS << "\n";
         return output.good();
     }
     std::ifstream input(path);
@@ -27,16 +38,30 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
         const auto comment = line.find_first_of("#;");
         if (comment != std::string::npos) { line.erase(comment); }
         const auto equals = line.find('=');
+        // Section headers are presentation labels, not key namespaces.
         if (equals == std::string::npos) { continue; }
+        const std::string keyText = line.substr(0, equals);
+        std::istringstream keyField(keyText);
+        std::string name;
+        keyField >> name;
+        if (name == GameConfig::Title) {
+            const auto first = line.find_first_not_of(" \t\r", equals + 1);
+            if (first == std::string::npos) {
+                std::printf("[config] Title must not be empty\n");
+                return false;
+            }
+            const auto last = line.find_last_not_of(" \t\r");
+            title = line.substr(first, last - first + 1);
+            continue;
+        }
         line[equals] = ' ';
         std::istringstream fields(line);
-        std::string name;
         int value = 0;
         if (!(fields >> name >> value)) {
             std::printf("[config] not a setting: %s\n", line.c_str());
             return false;
         }
-        // EffectsVolume runs 0..10; DMBotLevel runs 1..3; control runs 1..2.
+        // EffectsVolume and SoundVolume run 0..10; DMBotLevel runs 1..3; control runs 1..2.
         // Remaining settings are flags.
         if (name == GameConfig::Control) {
             if (value != 1 && value != 2) {
@@ -54,7 +79,7 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
             dmBotLevel = value;
             continue;
         }
-        const bool ranged = name == GameConfig::EffectsVolume;
+        const bool ranged = name == GameConfig::EffectsVolume || name == GameConfig::SoundVolume;
         if (!ranged && value != 0 && value != 1) {
             std::printf("[config] invalid boolean: %s\n", line.c_str());
             return false;
@@ -68,11 +93,13 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
         else
         if (name == GameConfig::DrawFPS) { drawFPS = value == 1; }
         else if (name == GameConfig::EffectsVolume) { effectsVolume = value; }
+        else if (name == GameConfig::SoundVolume) { soundVolume = value; }
         else { std::printf("[config] unknown setting: %s\n", name.c_str()); }
     }
     std::printf("[config] connected=%d debug=%d draw-fps=%d effects-volume=%d\n", isConnected, debugMode, drawFPS, effectsVolume);
     std::printf("[config] dm-bot-level=%d\n", dmBotLevel);
     std::printf("[config] control=%d\n", control);
+    std::printf("[config] title=%s sound-volume=%d\n", title.c_str(), soundVolume);
     return !input.bad();
 }
 
