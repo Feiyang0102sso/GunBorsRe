@@ -1,4 +1,4 @@
-# Close only the SDL game window owned by the test process, including hidden windows.
+# Close only a titled game window owned by the test process, including hidden windows.
 Add-Type @'
 using System;
 using System.Text;
@@ -23,7 +23,8 @@ public static class ZRuntimeTestWindow {
             if (owner != processId) { return true; }
             var title = new StringBuilder(256);
             GetWindowText(window, title, title.Capacity);
-            if (title.ToString() != "Gun Bros") { return true; }
+            // The host cfg owns the title; a fixed literal breaks custom-title tests.
+            if (title.Length == 0) { return true; }
             closed = PostMessage(window, 0x0010, IntPtr.Zero, IntPtr.Zero);
             return !closed;
         }, IntPtr.Zero);

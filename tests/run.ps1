@@ -303,7 +303,7 @@ try {
             $caseExe = $formalExe
             $imageDirectory = Join-Path $caseDirectory 'images'
             New-Item -ItemType Directory -Path $imageDirectory -Force | Out-Null
-            $arguments = @('--mute', '--profile', (Join-Path $caseDirectory 'saves'))
+            $arguments = @('--game', '--mute', '--profile', (Join-Path $caseDirectory 'saves'))
             if ($Configuration -eq 'Debug') {
                 $arguments += @('--screenshot', (Join-Path $imageDirectory 'menu.png'))
             }

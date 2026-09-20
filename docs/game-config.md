@@ -1,6 +1,6 @@
 # 游戏配置
 
-`GunBrosRe.exe` 同目录的 `GunBrosRe.cfg` 在启动时读取。以下列出全部 8 个支持的键及默认值；修改后重启生效。键名区分大小写，`control` 保持小写。
+`GunBrosRe.exe` 同目录的 `GunBrosRe.cfg` 在启动时读取。以下列出全部 11 个支持的键及默认值；修改后重启生效。键名区分大小写，`control` 保持小写。StartDialog=1 时普通启动先显示英文设置小窗；Launch game 保存后进入游戏，Cancel 或关闭窗口放弃本次编辑。界面分组标题是固定英文，不显示方括号标签。
 
 分类头只用于排版，键仍按全局名称读取；旧的无分类配置继续兼容，同名键最后一次赋值生效。支持 `#`、`;` 注释。文件使用 UTF-8；标题可包含空格，不加引号，`#`、`;` 保留为注释符。
 
@@ -9,6 +9,11 @@
 [common]
 # Game window title (UTF-8, no quotes).
 Title=GunBroRe
+# Show launch dialog at startup: 0=off, 1=on.
+StartDialog=1
+# Window client size; oversized windows fit the desktop automatically.
+ScreenX=1600
+ScreenY=1200
 
 [audio]
 # BGM volume: 0..10; 0=mute, 3=original volume.
@@ -33,7 +38,11 @@ DebugMode=0
 DrawFPS=1
 ```
 
-`Title` 控制启动、加载、菜单及战斗的游戏窗口标题，不改变 EXE 和配置文件名。`SoundVolume` 只调节 BGM，`EffectsVolume` 调节音效；游戏内音乐开关及自动测试的 `--mute` 仍然有效。
+`Title` 同时控制设置小窗和游戏窗口的标题，只能手动修改 cfg，小窗不提供标题编辑框，不改变 EXE 和配置文件名。`StartDialog` 位于 `[common]`，默认 1；设为 0 后下次启动直接进入游戏。要恢复小窗，手动改回 1。`SoundVolume` 只调节 BGM，`EffectsVolume` 调节音效；游戏内音乐开关及自动测试的 `--mute` 仍然有效。
+
+`ScreenX`、`ScreenY` 保存分辨率下拉框选中的窗口客户区宽高。预设为 640×480、800×600、1024×768、1280×960、1600×1200、1920×1440、2048×1536，全部保持 4:3。屏幕放不下时沿用原有自动等比缩小，但不回写缩小后的尺寸覆盖选择。旧 cfg 缺少两项时使用 1600×1200；手改的合法非预设尺寸会作为 saved 项显示。宿主尺寸范围为每轴 1～16384。
+
+小窗可修改尺寸、启动提示、音量、连接、难度、操作与调试选项；保存时保留 cfg 注释、分组、标题及未知行，不新增全屏或显示器选项。重复键仍按全局处理，保存时同步更新所有同名键。截图调用跳过小窗；已有命令行 `--game` 直接使用保存的设置进入游戏，自动检查使用该入口避免被小窗阻塞。Viewer、Tests 保持原入口。抬头图使用 `assets/startup/Gun_Bros_Header_Art.png`；界面文字、颜色、字体、间距、控件布局与分辨率预设集中在 `src/gun_bros_re/host/ZLaunchDialogConfig.h`。实现及验证记录见 [启动设置窗口](launch-dialog.md)。
 
 ## 本次方案与验收
 

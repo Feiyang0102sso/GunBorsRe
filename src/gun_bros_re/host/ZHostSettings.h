@@ -8,6 +8,9 @@
 
 struct ZHostSettings {
     std::string title = GameConfig::DefaultTitle;
+    bool startDialog = GameConfig::DefaultStartDialog;
+    int screenX = GameConfig::DefaultScreenX;
+    int screenY = GameConfig::DefaultScreenY;
     // Host BGM dial: 3 preserves the original 0.3 gain before scene scaling.
     int soundVolume = GameConfig::DefaultSoundVolume;
     bool drawFPS = true;
@@ -24,6 +27,8 @@ struct ZHostSettings {
     // Desktop controls: 1=screen aiming, 2=right-stick dragging.
     int control = 1;
     bool Load(const std::filesystem::path &path);
+    /** Save editable host values without discarding user comments or section labels. */
+    bool Save(const std::filesystem::path &path) const;
 };
 
 ZHostSettings &GameHostSettings();

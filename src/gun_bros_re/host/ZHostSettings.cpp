@@ -14,7 +14,12 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
         std::ofstream output(path);
         output << "# Section headers are labels; keys are global and case-sensitive.\n";
         output << "[common]\n# Game window title (UTF-8, no quotes).\n";
-        output << GameConfig::Title << "=" << title << "\n\n";
+        output << GameConfig::Title << "=" << title << "\n";
+        output << "# Show launch dialog at startup: 0=off, 1=on.\n";
+        output << GameConfig::StartDialog << "=" << startDialog << "\n";
+        output << "# Window client size; oversized windows fit the desktop automatically.\n";
+        output << GameConfig::ScreenX << "=" << screenX << "\n";
+        output << GameConfig::ScreenY << "=" << screenY << "\n\n";
         output << "[audio]\n# BGM volume: 0..10; 0=mute, 3=original volume.\n";
         output << GameConfig::SoundVolume << "=" << soundVolume << "\n";
         output << "# Sound effects volume: 0..10; 0=mute.\n";
@@ -35,6 +40,7 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
     std::ifstream input(path);
     std::string line;
     while (std::getline(input, line)) {
+        if (line.compare(0, 3, "\xEF\xBB\xBF") == 0) { line.erase(0, 3); }
         const auto comment = line.find_first_of("#;");
         if (comment != std::string::npos) { line.erase(comment); }
         const auto equals = line.find('=');
@@ -63,6 +69,25 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
         }
         // EffectsVolume and SoundVolume run 0..10; DMBotLevel runs 1..3; control runs 1..2.
         // Remaining settings are flags.
+        if (name == GameConfig::ScreenX || name == GameConfig::ScreenY) {
+            fields >> std::ws;
+            if (!fields.eof() || value < 1 || value > GameConfig::MaximumScreenSize) {
+                std::printf("[config] %s must be 1..%d\n", name.c_str(), GameConfig::MaximumScreenSize);
+                return false;
+            }
+            if (name == GameConfig::ScreenX) { screenX = value; }
+            else { screenY = value; }
+            continue;
+        }
+        if (name == GameConfig::StartDialog) {
+            fields >> std::ws;
+            if (!fields.eof() || (value != 0 && value != 1)) {
+                std::printf("[config] StartDialog must be 0 or 1\n");
+                return false;
+            }
+            startDialog = value == 1;
+            continue;
+        }
         if (name == GameConfig::Control) {
             if (value != 1 && value != 2) {
                 std::printf("[config] control must be 1 or 2\n");
@@ -100,6 +125,8 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
     std::printf("[config] dm-bot-level=%d\n", dmBotLevel);
     std::printf("[config] control=%d\n", control);
     std::printf("[config] title=%s sound-volume=%d\n", title.c_str(), soundVolume);
+    std::printf("[config] screen=%dx%d\n", screenX, screenY);
+    std::printf("[config] start-dialog=%d\n", startDialog);
     return !input.bad();
 }
 

@@ -20,6 +20,8 @@
 #include "engine/platform/ZWindow.h"
 #include "gun_bros_re/startup/ZStartupSequence.h"
 #include "gun_bros_re/host/ZHostSettings.h"
+#include "gun_bros_re/host/ZLaunchDialog.h"
+#include "gun_bros_re/host/ZLaunchDialogConfig.h"
 #include "engine/platform/ZAudioPlayer.h"
 
 namespace {
@@ -27,12 +29,13 @@ namespace {
 int RunApplication(int argc, char **argv) {
     GameCheats::Bind();
     bool skipIntro = false, originalProfile = false, unknown = false;
+    bool directGame = false;
     unsigned page = 0;
     std::string profile, screenshot;
     std::string big = (Paths::Root() / Paths::BigDirectory).u8string();
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
-        if (argument == "--game") { continue; }
+        if (argument == "--game") { directGame = true; continue; }
         if (argument == "--mute") { ZAudioPlayer::SetMuted(true); continue; }
         if (argument == "--skip-intro") { skipIntro = true; continue; }
         if (argument == "--original-profile") { originalProfile = true; continue; }
@@ -46,23 +49,32 @@ int RunApplication(int argc, char **argv) {
 #endif
         if (argument == "--help" || argument == "-h") {
             std::printf("Gun Bros Windows game\n  --game --mute --skip-intro\n  --profile <directory> --original-profile\n");
+            std::printf("  --game: launch directly with saved settings\n");
             return 0;
         }
         unknown = true;
     }
     if (unknown) { std::fprintf(stderr, "[application] unknown option; use --help\n"); return 2; }
     if (!GameHostSettings().Load(Paths::Root() / GameConfig::Filename)) { return 1; }
+    // Explicit game/capture calls remain noninteractive and never save launcher edits.
+    if (GameHostSettings().startDialog && !directGame && screenshot.empty()) {
+        const auto result = ShowLaunchDialog(GameHostSettings(), Paths::Root() / GameConfig::Filename,
+            Paths::Root() / ZLaunchDialogConfig::HeaderPath);
+        if (result == ZLaunchResult::Cancel) { return 0; }
+        if (result == ZLaunchResult::Error) { return 1; }
+    }
     // The original dial is 0..10 and a voice plays at dial x 0.1;
     // CAudioPlayer::SetEffectsGain documents the chain.
     ZAudioPlayer::SetEffectsGain(GameHostSettings().effectsVolume * 0.1f);
     // One native surface survives video, loading, menu and gameplay.
     ZWindow window;
-    if (!window.Open(GameHostSettings().title, kDefaultWindowWidth, kDefaultWindowHeight)) { return 1; }
+    if (!window.Open(GameHostSettings().title, GameHostSettings().screenX, GameHostSettings().screenY)) { return 1; }
     if (!SetDebugFPS(window, GameHostSettings().drawFPS, big)) { return 1; }
     if (!skipIntro && screenshot.empty()) {
         const int result = RunStartupSequence("", 0, &window);
         if (result != 0) { return result; }
     }
+    // Keep the selected preset in cfg; automatic desktop fitting is session-only.
     return RunGameMenuSession(big, screenshot, page, originalProfile, profile, &window);
 }
 }

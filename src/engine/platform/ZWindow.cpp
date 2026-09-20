@@ -16,6 +16,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 
 namespace {
 ZWindow::CommandMatcher commandMatcher = nullptr;
@@ -50,8 +51,8 @@ void FitWindowToUsableDisplay(int &width, int &height) {
     }
 
     if (scale < 1.0f) {
-        width = static_cast<int>(static_cast<float>(width) * scale);
-        height = static_cast<int>(static_cast<float>(height) * scale);
+        width = std::max(1, static_cast<int>(static_cast<float>(width) * scale));
+        height = std::max(1, static_cast<int>(static_cast<float>(height) * scale));
     }
 }
 
