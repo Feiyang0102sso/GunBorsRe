@@ -81,10 +81,27 @@ bool CInputPad::FindActionRegion(const ZInputPadState &state, ZInputPadAction ac
 
 bool CInputPad::CapturesPointer(const ZInputPadState &state, float x, float y) const {
     if (state.shopOpen || state.paused || state.dead || state.cleared) { return true; }
+    return ControlActionAt(state, x, y) != ZInputPadAction::None;
+}
+
+ZInputPadAction CInputPad::ControlActionAt(const ZInputPadState &state, float x, float y) const {
     for (const Button &button : Buttons(state)) {
-        if (button.rect.Contains(x, y)) { return true; }
+        if (button.rect.Contains(x, y)) { return button.action; }
     }
-    return false;
+    return ZInputPadAction::None;
+}
+
+bool CInputPad::FireStickGeometry(float &x, float &y, float &radius) const {
+    ZMovieRegion area, bounds;
+    const unsigned movie = m_resources.m_movies.Ordinal("GLU_MOVIE_HUD_PAD_IPAD");
+    // ui_movie.bt region 5 and sprite_archetype.bt animation 6;
+    // CInputPad::Bind :90846-90859 uses the left sprite width for both radii.
+    if (!m_resources.m_movies.Region(movie, 5, 0, area) ||
+        !m_resources.m_movies.SpriteBounds(1, 6, bounds)) { return false; }
+    x = area.x + int(area.width) / 2;
+    y = area.y + int(area.height) / 2;
+    radius = bounds.width * 0.42f;
+    return radius > 1;
 }
 
 bool CInputPad::DrawMeter(const ZMovieRegion &area, unsigned slot) {
@@ -231,7 +248,8 @@ bool CInputPad::DrawControls(const ZInputPadState &state) {
         if (slot == 1) { directionX = state.aimX; directionY = state.aimY; name = "GLU_MOVIE_GRENADE_BUTTON"; }
         // Windows keys/mouse supply the original normalized control vector.
         // Floating sticks remain hidden until their corresponding input is active.
-        if (!state.dockedSticks && directionX == 0 && directionY == 0) { continue; }
+        const bool mouseFireStick = state.mouseStickFire && slot == 1;
+        if (!mouseFireStick && !state.dockedSticks && directionX == 0 && directionY == 0) { continue; }
         if (!m_resources.m_movies.DrawSprite(1, 6 + slot, m_controlTime, x, y, 1, m_baseAlpha)) { return false; }
         const unsigned movie = m_resources.m_movies.Ordinal(name);
         unsigned start = 0, end = 0;

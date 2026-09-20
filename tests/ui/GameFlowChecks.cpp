@@ -185,6 +185,17 @@ int RunProfilePlayCheck(const std::string &bigDirectory) {
         std::abs(playback.volume - 0.3f) > 0.001f) { return 1; }
     std::printf("[profile-play-check] resumed=2 completed=4 xp=%llu xplodium=%llu failures=0\n",
         restored.experience, restored.xplodium);
+    // Mouse shooting gets a separate no-save session so its kills cannot alter
+    // the exact two-wave progression assertions above.
+    ProfilePlayDriver mouseControls(true);
+    CGameFlow mouseContext{profile, TestOutput::Path("mouse-input-unused.dat"), 0};
+    mouseContext.persistProgress = false;
+    mouseContext.music = &music;
+    if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0,
+        &mouseContext, false, false, nullptr, false, &window, false, false, false, &mouseControls) != 0) { return 1; }
+    ProfilePlayDriver screenControls(true, 1);
+    if (RunSurvivalStudy(bigDirectory, "pack2", 7, 0, -1, "", 0, false, false, false, 2, 0,
+        &mouseContext, false, false, nullptr, false, &window, false, false, false, &screenControls) != 0) { return 1; }
     return 0;
 }
 

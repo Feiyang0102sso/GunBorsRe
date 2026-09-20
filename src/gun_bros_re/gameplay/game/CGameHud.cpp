@@ -69,6 +69,7 @@ ZInputPadState CGame::Session::BuildHudState() {
     state.soundEnabled = pickupProfile->soundEnabled;
     state.musicEnabled = pickupProfile->musicEnabled;
     state.dockedSticks = pickupProfile->options.DockedSticks();
+    state.mouseStickFire = GameHostSettings().control == 2;
     state.powerupStatus.healthPercent = static_cast<int>(std::lround(vitals.health * 100 / vitals.maximum));
     state.powerupStatus.shield = player.IsShield();
     state.powerupStatus.frenzy = player.IsFrenzy();

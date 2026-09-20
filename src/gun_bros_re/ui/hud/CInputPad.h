@@ -53,8 +53,11 @@ public:
     }
     unsigned NoticeCount() const { return static_cast<unsigned>(m_notices.size()); }
     unsigned NoticeTime() const { if (m_notices.empty()) { return 0; } return m_notices.front().elapsed; }
-    ZInputPadAction Pointer(const ZInputPadState &state, float x, float y, bool down);
+    ZInputPadAction Pointer(const ZInputPadState &state, float x, float y, bool down, bool controlDrag = false);
+    /** Authored right-stick center and native radius, in HUD coordinates. */
+    bool FireStickGeometry(float &x, float &y, float &radius) const;
     bool CapturesPointer(const ZInputPadState &state, float x, float y) const;
+    ZInputPadAction ControlActionAt(const ZInputPadState &state, float x, float y) const;
     void Scroll(const ZInputPadState &state, float amount);
     void ScrollMenuInput(const ZInputPadState &state, float wheel, float dragX, float dragY);
     void AdvanceMenu(unsigned deltaMs);

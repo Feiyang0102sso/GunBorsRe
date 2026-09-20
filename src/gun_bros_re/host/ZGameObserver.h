@@ -76,6 +76,8 @@ class ZGameObserver {
         std::vector<ZKeyCode> inputs;
         float inputX = -1, inputY = -1;
         bool pointerDown = false;
+        // Resolved desktop gesture, consumed by the same simulation step.
+        bool pointerFire = false;
         bool forceFire = false;
         bool suppressFire = false;
         float moveX = 0, moveY = 0;

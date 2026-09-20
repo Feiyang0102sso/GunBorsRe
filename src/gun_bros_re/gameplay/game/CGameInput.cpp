@@ -93,7 +93,29 @@ int CGame::Session::ProcessInput() {
     pointerDown = frame.pointerDown;
 
     hudOwnsPointer = survivalHud.CapturesPointer(inputState, inputX, inputY);
-    ZInputPadAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown);
+    const bool combatPointer = !paused && !shopOpen && !vitals.dead && !inputState.inputHidden &&
+        !inputState.cleared && inputX >= 0 && inputY >= 0 &&
+        !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive();
+    ZInputPadAction screenClick = ZInputPadAction::None;
+    if (GameHostSettings().control == 1) {
+        screenClick = mouseScreenControl.Update(inputX, inputY, pointerDown,
+            survivalHud.ControlActionAt(inputState, inputX, inputY), combatPointer,
+            float(inputWidth) / 1024, float(inputHeight) / 768);
+    }
+    if (GameHostSettings().control == 2) {
+        ZMouseFireControl::Geometry geometry;
+        if (!survivalHud.FireStickGeometry(geometry.x, geometry.y, geometry.radius)) {
+            std::printf("[input] missing right-stick geometry: GLU_MOVIE_HUD_PAD_IPAD region=5\n");
+            return 1;
+        }
+        const bool enabled = !paused && !shopOpen && !vitals.dead && !inputState.inputHidden &&
+            !inputState.cleared && !inputState.transitioning && inputX >= 0 && inputY >= 0 &&
+            !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive();
+        mouseFireControl.Update(geometry, inputX, inputY, pointerDown, !hudOwnsPointer, enabled);
+    }
+    const bool combatDrag = mouseFireControl.Captured() || mouseScreenControl.Firing();
+    ZInputPadAction action = survivalHud.Pointer(inputState, inputX, inputY, pointerDown, combatDrag);
+    if (GameHostSettings().control == 1 && combatPointer) { action = screenClick; }
     // Input-pad controls cannot interrupt the active powerup presentation.
     if (powerups.GetPowerup().IsPresentationActive() || peerPowerups.GetPowerup().IsPresentationActive()) {
         action = ZInputPadAction::None;

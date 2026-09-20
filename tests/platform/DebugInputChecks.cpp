@@ -150,6 +150,13 @@ int CheckDebugInput() {
     ZHostSettings defaults;
     if (!defaults.Load(configPath) || !defaults.drawFPS || !defaults.drawDebugInfo) { ++failures; }
     if (defaults.dmBotLevel != 1) { ++failures; }
+    if (defaults.control != 1) { ++failures; }
+    for (int mode : {-1, 0, 1, 2, 3}) {
+        { std::ofstream config(configPath); config << "control = " << mode << " # mouse mode\n"; }
+        ZHostSettings settings;
+        const bool valid = mode == 1 || mode == 2;
+        if (settings.Load(configPath) != valid || (valid && settings.control != mode)) { ++failures; }
+    }
     for (int level : {-1, 0, 1, 2, 3, 4}) {
         { std::ofstream config(configPath); config << "DMBotLevel = " << level << " # DM only\n"; }
         ZHostSettings settings;

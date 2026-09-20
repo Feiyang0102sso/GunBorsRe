@@ -10,6 +10,8 @@
 #include "gun_bros_re/ui/controls/CTextBox.h"
 #include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/gameplay/powerup/CPowerup.h"
+#include "gun_bros_re/host/ZMouseFireControl.h"
+#include "gun_bros_re/host/ZMouseScreenControl.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
@@ -221,6 +223,91 @@ int RunOriginalHudCheck(const std::string &bigDirectory) {
     unsigned hits = 0;
     const auto buttons = hud.ControlButtons(state);
     if (buttons.size() != 5) { ++failures; }
+    // Screen aiming uses the same BIG buttons, but a complete click is required.
+    for (float scale : {1.0f, 1.5625f, 2.0f}) {
+        ZMouseScreenControl screen;
+        const auto pointer = [&](float x, float y, bool down, bool enabled = true) {
+            return screen.Update(x, y, down, hud.ControlActionAt(state, x, y), enabled, scale, scale);
+        };
+        pointer(512, 384, false);
+        pointer(512, 384, true);
+        for (const auto &button : buttons) {
+            const float x = button.rect.x + button.rect.width / 2;
+            const float y = button.rect.y + button.rect.height / 2;
+            if (pointer(x, y, true) != ZInputPadAction::None || !screen.Firing()) { ++failures; }
+            if (hud.Pointer(state, x, y, true, screen.Firing()) != ZInputPadAction::None) { ++failures; }
+        }
+        if (pointer(512, 384, false) != ZInputPadAction::None || screen.Firing()) { ++failures; }
+        for (const auto &button : buttons) {
+            const float x = button.rect.x + button.rect.width / 2;
+            const float y = button.rect.y + button.rect.height / 2;
+            if (pointer(x, y, true) != ZInputPadAction::None || screen.Firing()) { ++failures; }
+            if (pointer(x + 1 / scale, y, false) != button.action || screen.Firing()) { ++failures; }
+            pointer(x, y, true);
+            pointer(512, 384, true);
+            if (screen.Firing()) { ++failures; }
+            pointer(x, y, true);
+            if (pointer(x, y, false) != ZInputPadAction::None) { ++failures; }
+            pointer(x, y, true);
+            pointer(x + 8 / scale, y, true);
+            if (pointer(x, y, false) != ZInputPadAction::None) { ++failures; }
+        }
+        pointer(512, 384, true);
+        pointer(-1, -1, false, false);
+        pointer(512, 384, true);
+        if (screen.Firing()) { ++failures; }
+        pointer(512, 384, false);
+        pointer(512, 384, true);
+        if (!screen.Firing()) { ++failures; }
+    }
+    std::printf("[screen-fire-check] authored-buttons=%zu scales=3 failures=%u\n", buttons.size(), failures);
+    // Real BIG geometry drives acquisition, dead zone, UI crossing and release.
+    ZMouseFireControl stick;
+    ZMouseFireControl::Geometry geometry;
+    if (!hud.FireStickGeometry(geometry.x, geometry.y, geometry.radius)) { return 1; }
+    const auto drag = [&](float x, float y, bool down, bool enabled = true) {
+        stick.Update(geometry, x, y, down, !hud.CapturesPointer(state, x, y), enabled);
+        return hud.Pointer(state, x, y, down, stick.Captured());
+    };
+    drag(geometry.x, geometry.y, false);
+    drag(geometry.x, geometry.y, true);
+    if (!stick.Captured() || stick.Firing()) { ++failures; }
+    drag(geometry.x + 0.5f, geometry.y, true);
+    if (stick.Firing()) { ++failures; }
+    drag(geometry.x + geometry.radius * 2, geometry.y, true);
+    if (!stick.Firing() || std::abs(stick.X() - 1) > 0.001f || stick.Y() != 0) { ++failures; }
+    for (const auto &button : buttons) {
+        const float x = button.rect.x + button.rect.width / 2;
+        const float y = button.rect.y + button.rect.height / 2;
+        if (drag(x, y, true) != ZInputPadAction::None || !stick.Firing()) { ++failures; }
+    }
+    drag(geometry.x, geometry.y, false);
+    if (stick.Captured() || stick.Firing()) { ++failures; }
+    // A press outside cannot acquire by sliding into the stick while held.
+    drag(512, 384, true);
+    drag(geometry.x + 10, geometry.y, true);
+    if (stick.Captured()) { ++failures; }
+    drag(geometry.x, geometry.y, false);
+    drag(geometry.x, geometry.y, true);
+    drag(geometry.x + 10, geometry.y, true);
+    if (!stick.Firing()) { ++failures; }
+    drag(geometry.x + 10, geometry.y, true, false);
+    drag(geometry.x + 10, geometry.y, true);
+    if (stick.Captured()) { ++failures; }
+    drag(geometry.x, geometry.y, false);
+    drag(geometry.x, geometry.y, false, false);
+    drag(geometry.x + 10, geometry.y, true);
+    if (stick.Captured()) { ++failures; }
+    drag(geometry.x, geometry.y, false);
+    for (const auto &button : buttons) {
+        const float x = button.rect.x + button.rect.width / 2;
+        const float y = button.rect.y + button.rect.height / 2;
+        if (drag(x, y, true) != button.action || stick.Captured()) { ++failures; }
+        drag(geometry.x + 10, geometry.y, true);
+        if (stick.Captured()) { ++failures; }
+        drag(geometry.x, geometry.y, false);
+    }
+    std::printf("[mouse-stick-check] center=%.1f,%.1f radius=%.2f failures=%u\n", geometry.x, geometry.y, geometry.radius, failures);
     for (const auto &button : buttons) {
         const float x = button.rect.x + button.rect.width / 2, y = button.rect.y + button.rect.height / 2;
         hud.Pointer(state, x, y, false);

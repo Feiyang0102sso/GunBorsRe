@@ -18,6 +18,8 @@ struct ZHostSettings {
     int effectsVolume = GameConfig::DefaultEffectsVolume;
     // Local deathmatch only: 1=Easy, 2=Normal, 3=Hard; Easy keeps the life budget.
     int dmBotLevel = static_cast<int>(ZBotSettings::DefaultDifficulty);
+    // Desktop controls: 1=screen aiming, 2=right-stick dragging.
+    int control = 1;
     bool Load(const std::filesystem::path &path);
 };
 

@@ -104,7 +104,10 @@ int CGame::Session::Draw() {
     const float moveLength = std::max(1.0f, std::hypot(frame.moveX, frame.moveY));
     hudState.moveX = frame.moveX / moveLength;
     hudState.moveY = frame.moveY / moveLength;
-    if (window.IsLeftMouseDown() && !hudOwnsPointer) {
+    if (GameHostSettings().control == 2) {
+        hudState.aimX = mouseFireControl.X();
+        hudState.aimY = mouseFireControl.Y();
+    } else if (mouseScreenControl.Firing()) {
         hudState.aimX = std::sin(scene.GetPlayer().facing / kRadiansToDegrees);
         hudState.aimY = -std::cos(scene.GetPlayer().facing / kRadiansToDegrees);
     }

@@ -16,6 +16,8 @@
 #include "engine/graphics/ZShaderProgram.h"
 #include "engine/core/ZMatrix4d.h"
 #include "gun_bros_re/host/ZHostSettings.h"
+#include "gun_bros_re/host/ZMouseFireControl.h"
+#include "gun_bros_re/host/ZMouseScreenControl.h"
 #include "gun_bros_re/host/ZGameObserver.h"
 #include "gun_bros_re/gameplay/multiplayer/ZLiveShopSession.h"
 #include "gun_bros_re/gameplay/multiplayer/bot/ZLocalCoopBot.h"
@@ -114,6 +116,8 @@ struct CGame::Session {
     int width = 0, height = 0;
     float baselineZoom = 1;
     bool hudOwnsPointer = false;
+    ZMouseFireControl mouseFireControl;
+    ZMouseScreenControl mouseScreenControl;
 
     int Run();
     int UpdateShop();

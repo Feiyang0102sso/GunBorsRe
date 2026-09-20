@@ -17,7 +17,19 @@ int CGame::Session::Update() {
     scene.SetViewCenter(camera.x + width / camera.zoom * 0.5f, camera.y + height / camera.zoom * 0.5f);
     scene.SetTextView(camera.x, camera.y, camera.zoom * 1024 / width, camera.zoom * 768 / height);
     float mouseX = 0, mouseY = 0;
-    if (options.mouseAim && window.GetMousePosition(mouseX, mouseY) && !vitals.dead &&
+    // Re-check modal actions after keyboard processing in this same frame.
+    if (paused || shopOpen || vitals.dead || vitals.inputHidden ||
+        powerups.GetPowerup().IsPresentationActive() || peerPowerups.GetPowerup().IsPresentationActive()) {
+        mouseScreenControl.Cancel();
+    }
+    if (paused || shopOpen || vitals.dead || vitals.inputHidden || session.IsTransitioning() ||
+        powerups.GetPowerup().IsPresentationActive() || peerPowerups.GetPowerup().IsPresentationActive()) {
+        mouseFireControl.Cancel();
+    }
+    if (GameHostSettings().control == 2 && mouseFireControl.Firing()) {
+        scene.GetPlayer().facing = std::atan2(mouseFireControl.X(), -mouseFireControl.Y()) * kRadiansToDegrees;
+    }
+    if (GameHostSettings().control == 1 && options.mouseAim && window.GetMousePosition(mouseX, mouseY) && !vitals.dead &&
         !powerups.GetPowerup().IsPresentationActive() && !peerPowerups.GetPowerup().IsPresentationActive()) {
         scene.GetPlayer().facing = std::atan2(camera.y + mouseY / camera.zoom - scene.GetPlayer().y,
                                               camera.x + mouseX / camera.zoom - scene.GetPlayer().x) *
@@ -61,6 +73,8 @@ int CGame::Session::Update() {
     music.Update();
 
     frame.forceFire = false;
+    frame.pointerFire = mouseScreenControl.Firing();
+    if (GameHostSettings().control == 2) { frame.pointerFire = mouseFireControl.Firing(); }
     if (launch.observer != nullptr) {
         const int result = launch.observer->OnFrame(ZGameObserver::FramePhase::BeforeSimulation, frame);
         if (result >= 0) { return result; }
@@ -80,8 +94,7 @@ int CGame::Session::Update() {
             swapEventAccepted = player.OnSwapGun();
         }
         if (!vitals.dead || launch.localLive || launch.deathmatch) {
-            bool shoot =
-                pendingWeapon >= weapons.size() && (frame.forceFire || (window.IsLeftMouseDown() && !hudOwnsPointer));
+            bool shoot = pendingWeapon >= weapons.size() && (frame.forceFire || frame.pointerFire);
             if (frame.suppressFire) { shoot = false; }
             session.Update(16, moveX, moveY, shoot);
         } else {

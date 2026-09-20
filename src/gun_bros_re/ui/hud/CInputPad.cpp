@@ -62,7 +62,15 @@ std::vector<CInputPad::Button> CInputPad::Buttons(const ZInputPadState &state) c
     return buttons;
 }
 
-ZInputPadAction CInputPad::Pointer(const ZInputPadState &state, float x, float y, bool down) {
+ZInputPadAction CInputPad::Pointer(const ZInputPadState &state, float x, float y, bool down, bool controlDrag) {
+    // A desktop stick drag owns the entire press, including motion over buttons.
+    if (controlDrag) {
+        m_mouseX = -1;
+        m_mouseY = -1;
+        m_previousDown = down;
+        m_challengeHeld = false;
+        return ZInputPadAction::None;
+    }
     if (state.remoteShop) { m_previousDown = down; return ZInputPadAction::None; }
     m_mouseX = x;
     m_mouseY = y;

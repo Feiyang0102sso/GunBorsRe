@@ -16,6 +16,8 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
         output << GameConfig::DrawFPS << "=1\n";
         output << "# Deathmatch bot: 1=Easy, 2=Normal, 3=Hard\n";
         output << ZBotSettings::DifficultyKey << "=" << dmBotLevel << "\n";
+        output << "# Mouse fire: 1=screen aim, 2=right stick drag\n";
+        output << GameConfig::Control << "=" << control << "\n";
         output << GameConfig::DebugMode << "=0\n" << GameConfig::IsConnected << "=0\n";
         return output.good();
     }
@@ -34,7 +36,16 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
             std::printf("[config] not a setting: %s\n", line.c_str());
             return false;
         }
-        // EffectsVolume runs 0..10; DMBotLevel runs 1..3; other settings are flags.
+        // EffectsVolume runs 0..10; DMBotLevel runs 1..3; control runs 1..2.
+        // Remaining settings are flags.
+        if (name == GameConfig::Control) {
+            if (value != 1 && value != 2) {
+                std::printf("[config] control must be 1 or 2\n");
+                return false;
+            }
+            control = value;
+            continue;
+        }
         if (name == ZBotSettings::DifficultyKey) {
             if (!ZBotSettings::IsValidDifficulty(value)) {
                 std::printf("[config] DMBotLevel must be 1, 2 or 3\n");
@@ -61,6 +72,7 @@ bool ZHostSettings::Load(const std::filesystem::path &path) {
     }
     std::printf("[config] connected=%d debug=%d draw-fps=%d effects-volume=%d\n", isConnected, debugMode, drawFPS, effectsVolume);
     std::printf("[config] dm-bot-level=%d\n", dmBotLevel);
+    std::printf("[config] control=%d\n", control);
     return !input.bad();
 }
 

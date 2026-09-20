@@ -47,6 +47,7 @@ struct ZInputPadState {
     bool afterDeathShop = false;
     unsigned shopRemainingMs = 0;
     bool dockedSticks = true;
+    bool mouseStickFire = false;
     bool swapKeyDown = false;
     bool inputHidden = false;
     ZPowerupStatus powerupStatus;
