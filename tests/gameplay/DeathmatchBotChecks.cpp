@@ -32,6 +32,8 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             if (chosen[slot] == nullptr) { return 1; }
         }
         bot.Configure(42, *chosen[0], *chosen[1], difficulty);
+        ZBotSettings settings;
+        settings.difficulty = difficulty;
         unsigned allowed = 0, excluded = 0;
         for (const auto &entry : catalog) {
             const CStoreItem *rule = nullptr;
@@ -61,7 +63,17 @@ int CheckDeathmatchBotDifficulty(SurvivalDeathFixture fixture, CResTOCManager &t
             bot.vitals.health = 1;
             bot.UsePowerups(powerups);
             if (bot.vitals.health != 1) { return 1; }
-            for (unsigned elapsed = 0; elapsed < 512; elapsed += 16) { session.Update(16, 0, 0, false); }
+            // Every pack size and direct/random selector use share the host cooldown.
+            for (unsigned id : {1u, 8u, 9u}) {
+                GameObjectRef health; health.packHash = CStringToKey("pack5");
+                health.localIndex = static_cast<std::uint8_t>(id);
+                if (powerups.SelectResource(health)) { return 1; }
+            }
+            // Keep health full while advancing the real loop to avoid automatic healing.
+            bot.vitals.health = bot.vitals.maximum;
+            for (unsigned elapsed = 0; elapsed < settings.GetHealthPackIntervalMs() + 512; elapsed += 16) {
+                session.Update(16, 0, 0, false);
+            }
         }
         GameObjectRef grenade; grenade.packHash = CStringToKey("pack5"); grenade.localIndex = 13;
         for (unsigned use = 0; use < 3; ++use) {

@@ -79,6 +79,8 @@ void CMPMatch::Update(unsigned deltaMs) {
         return;
     }
     for (auto &life : m_lives) {
+        if (deltaMs >= life.healthPackCooldownMs) { life.healthPackCooldownMs = 0; }
+        else { life.healthPackCooldownMs -= deltaMs; }
         if (deltaMs >= life.respawnMs) { life.respawnMs = 0; }
         else { life.respawnMs -= deltaMs; }
     }
@@ -127,13 +129,19 @@ bool CMPMatch::EnterShop(unsigned peer) {
 bool CMPMatch::CanUse(unsigned peer, bool grenade) const {
     if (peer > 1 || m_result != Result::Playing || m_lives[peer].dead) { return false; }
     if (peer == 0) { return true; }
-    if (HasUnlimitedBotPowerups()) { return true; }
-    if (grenade) { return m_lives[peer].grenades < ZBotSettings::GrenadesPerLife; }
-    return m_lives[peer].healthPacks < ZBotSettings::HealthPacksPerLife;
+    if (grenade) {
+        if (HasUnlimitedBotPowerups()) { return true; }
+        return m_lives[peer].grenades < ZBotSettings::GrenadesPerLife;
+    }
+    return m_lives[peer].healthPackCooldownMs == 0 &&
+        m_lives[peer].healthPacks < m_botSettings.GetHealthPacksPerLife();
 }
 void CMPMatch::CommitUse(unsigned peer, bool grenade) {
     if (grenade) { ++m_lives[peer].grenades; }
-    else { ++m_lives[peer].healthPacks; }
+    else {
+        ++m_lives[peer].healthPacks;
+        if (peer == 1) { m_lives[peer].healthPackCooldownMs = m_botSettings.GetHealthPackIntervalMs(); }
+    }
 }
 int CMPMatch::ChoosePickup() {
     // Preserve original 0..100 cumulative comparisons, including weight sums

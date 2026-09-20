@@ -2,6 +2,10 @@
 
 打开 `gun_bro_re.slnx`，使用 Visual Studio 的 x64 配置构建。整个仓库只有 `GunBrosRe.vcxproj` 一个工程，它用 `GbProduct` 属性（`Game`／`Viewer`／`Tests`，默认 `Game`）产出 Re、Viewer、Tests 三个 EXE：Debug、Release 构建主程序时都会自动构建 Viewer 和 Tests。编译选项、源码清单和自动测试规则都写在这一个 `.vcxproj` 中。
 
+无需打开 VS：双击根目录的 `build.bat`，依次构建 Debug 和 Release 的全部三个程序，结束后按键关闭窗口。脚本自动查找已安装的 VS C++ 构建工具，沿用工程的增量构建及运行资源复制；需要已安装项目所用的 C++ 工具链。此 BAT 只编译，显式跳过自动检查，因此不依赖 PowerShell 7；`GunBrosTests.exe` 仍正常生成，VS 内的 Debug 自动检查规则保持不变。构建日志写入 `obj/build-Debug.log`、`obj/build-Release.log`，出错立即停止。
+
+命令行可用 `build.bat Debug` 或 `build.bat Release` 单独构建；自动调用可用 `build.bat All /nopause`，退出码为 0 表示成功。
+
 | 目录 | 用途 |
 | --- | --- |
 | `src/engine` | 通用资源、渲染、平台与 Glu Script/Movie/Sprite |

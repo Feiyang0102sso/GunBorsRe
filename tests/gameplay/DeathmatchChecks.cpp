@@ -90,15 +90,30 @@ int RunDeathmatchDataCheck(const std::string &bigDirectory) {
         for (const auto difficulty : {ZBotSettings::Difficulty::Normal, ZBotSettings::Difficulty::Hard}) {
             match.Bind(entry.data, 42);
             match.SetBotLevel(difficulty);
-            for (unsigned use = 0; use < 10; ++use) {
+            ZBotSettings settings;
+            settings.difficulty = difficulty;
+            const unsigned intervalMs = settings.GetHealthPackIntervalMs();
+            const unsigned limit = settings.GetHealthPacksPerLife();
+            for (unsigned use = 0; use < limit; ++use) {
                 if (match.CanShop(1) || match.EnterShop(1) || !match.CanShop(0) ||
                     !match.CanUse(1, true) || !match.CanUse(1, false)) { return 1; }
                 match.CommitUse(1, true); match.CommitUse(1, false);
+                // The exact boundary must reject a heal one millisecond early.
+                if (match.CanUse(1, false) || !match.CanUse(0, false) || !match.CanUse(1, true)) { return 1; }
+                match.Update(intervalMs - 1);
+                if (match.CanUse(1, false)) { return 1; }
+                match.Update(1);
             }
-            if (!match.Kill(1, 0) || match.CanUse(1, false) || !match.Respawn(1, true)) { return 1; }
+            if (match.GetLife(1).healthPacks != limit || match.CanUse(1, false) || !match.CanUse(1, true)) { return 1; }
+            if (!match.Kill(1, 0) || match.CanUse(1, false) || !match.Respawn(1, true) ||
+                !match.CanUse(1, false) || match.GetLife(1).healthPacks != 0) { return 1; }
+            match.CommitUse(1, false);
             match.Restart();
             if (!match.HasUnlimitedBotPowerups() || match.HasHardBot() != (difficulty == ZBotSettings::Difficulty::Hard) ||
-                match.CanShop(1) || !match.CanUse(1, true)) { return 1; }
+                match.CanShop(1) || !match.CanUse(1, true) || !match.CanUse(1, false) ||
+                match.GetLife(1).healthPacks != 0) { return 1; }
+            std::printf("[dm-health-budget] level=%u interval-ms=%u limit=%u boundary=1 respawn=1 restart=1\n",
+                static_cast<unsigned>(difficulty), intervalMs, limit);
         }
     }
     std::vector<MenuDetail::CMenuMission::PlanetEntry> planets;

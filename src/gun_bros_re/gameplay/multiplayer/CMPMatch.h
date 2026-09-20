@@ -28,6 +28,7 @@ public:
     struct Life {
         unsigned serial = 0, shops = 0, grenades = 0, healthPacks = 0;
         unsigned respawnMs = 0;
+        unsigned healthPackCooldownMs = 0; // Host PvP policy; reset with the life budget.
         bool dead = false;
     };
     enum class Result { Playing, PlayerWon, BotWon, Draw };

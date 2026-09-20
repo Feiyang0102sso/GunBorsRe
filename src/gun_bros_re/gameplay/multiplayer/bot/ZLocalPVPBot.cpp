@@ -204,7 +204,10 @@ void ZLocalPVPBot::Update(int deltaMs, CBrother &brother, ZBrotherAIWorld &world
 bool ZLocalPVPBot::AllowsPowerup(const CPowerUpSelector &selector, const CPowerup::Entry &entry) {
     if (selector.m_match == nullptr || selector.m_owner != Collision::Brother) { return true; }
     // Hard removes the host's item/life budget, never retail STORE mode rules.
-    if (selector.m_match->HasHardBot()) { return selector.m_match->CanUse(1, false) && entry.data.field112 == 0; }
+    // Health packs now retain their own budget and cooldown, including random selection.
+    if (selector.m_match->HasHardBot()) {
+        return selector.m_match->CanUse(1, !IsHealthPowerup(entry.resource)) && entry.data.field112 == 0;
+    }
     // Resource identities, not replacement effect data. Effects remain Flow-driven.
     if (!IsGrenadePowerup(entry.resource) && !IsHealthPowerup(entry.resource)) { return false; }
     return selector.m_match->CanUse(1, IsGrenadePowerup(entry.resource));
@@ -226,7 +229,8 @@ bool ZLocalPVPBot::HasUnlimitedInventory(const CPowerUpSelector &selector) {
 void ZLocalPVPBot::CommitPowerupBudget(CPowerUpSelector &selector, const GameObjectRef &resource) {
     if (selector.m_match == nullptr) { return; }
     if (selector.m_owner == Collision::Brother) {
-        // Only Easy's two budget categories belong in these counters.
+        // Only Easy's two budget categories belong in these counters; Normal/Hard
+        // now also enforce the health category while keeping other items unlimited.
         if (IsGrenadePowerup(resource)) { selector.m_match->CommitUse(1, true); }
         else if (IsHealthPowerup(resource)) { selector.m_match->CommitUse(1, false); }
     }

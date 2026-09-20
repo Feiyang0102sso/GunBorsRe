@@ -220,3 +220,11 @@ MP_MATCH 中间 i32 列仍按原值保留，其用途没有新证据，不参与
 五图均检查默认MAP坐标不被提前改写、12秒待选装视角保持不动、Bot先生成后的4秒仍不改变本地视角、确认后定位到原最远路径节点并恢复跟随。首次枪页截图`tests/out/Core/deathmatch/deathmatch-initial-guns.png`已目视确认选中GUNS和四张原枪卡；后续正常及死亡重开商店仍显示POWER UPS，标签间距和切换检查保持通过。测试工程构建日志`obj/deathmatch-entry-camera-build.log`退出0。
 
 Debug与Release游戏构建均退出0，日志分别为`obj/deathmatch-entry-camera-debug.log`和`obj/deathmatch-entry-camera-release.log`，两个运行版本已更新。`git -c core.safecrlf=false diff --check`通过。
+
+## PvP Bot 药包平衡（2026-09-19）
+
+用户要求普通每7.5秒、困难每5秒最多使用一个药包，两者上限暂设99，参数集中成常量供试玩调节。沿用现有每命预算，复活和重开重置，首次需要回血时可立即使用。
+
+方案与任务：在 `ZBotSettings.h` 集中四个参数；`CMPMatch` 统一检查每命额度和成功使用后的冷却；困难随机道具入口同样检查药包限制，其他道具规则保留。验收覆盖冷却结束前1毫秒、99次后拒绝、复活/重开恢复以及真实Flow药包入口。原资源仍由BIG加载；已核对 `mp_match_template.bt` 和 `CMPMatch::Template::Init` :395900–395903，这些本地Bot调节值不属于原资源字段。
+
+验证结果：`pwsh -NoProfile -File tests/run.ps1 -Configuration Debug -Case deathmatch-data,deathmatch -TimeoutSeconds 600` 退出0，2/2通过；`-NoBuild -Case deathmatch-feedback` 退出0，Bot普通/困难真实Flow与随机入口在五张地图通过。运行器统一传入 `--mute`，两轮均无受保护资源变更。日志为 `obj/pvp-health-balance-tests.log`、`obj/pvp-health-balance-feedback-tests.log`。Debug、Release的Game构建退出0，日志为 `obj/pvp-health-balance-debug-build.log`、`obj/pvp-health-balance-release-build.log`。首次沙箱内MSBuild受FileTracker访问限制，改为获准的沙箱外构建后通过。`git -c core.safecrlf=false diff --check` 通过。实际对战强度留待用户试玩调节。

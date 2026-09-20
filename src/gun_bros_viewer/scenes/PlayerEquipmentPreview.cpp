@@ -320,7 +320,8 @@ int RunPlayerEquipmentPreview(const std::string &bigDirectory, std::uint32_t gun
         glEnable(GL_DEPTH_TEST);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         character->Draw(program, base);
-        effects.Draw(screenMvp, worldToScreen, 1.0f, true);
+        // No render queue owns projectiles in this rotating equipment preview.
+        effects.Draw(screenMvp, worldToScreen, 1.0f);
 
         if (!controls.Draw()) { return 1; }
 
