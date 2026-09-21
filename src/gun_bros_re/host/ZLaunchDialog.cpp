@@ -36,7 +36,7 @@ public:
         type.lpfnWndProc = WindowProc;
         type.hInstance = GetModuleHandleW(nullptr);
         type.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-        type.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+        type.hIcon = LoadIconW(type.hInstance, MAKEINTRESOURCEW(AppIconId));
         type.lpszClassName = WindowClass;
         if (!RegisterClassW(&type) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) { return ZLaunchResult::Error; }
         // Scope DPI awareness to the launcher so SDL retains its own DPI policy.

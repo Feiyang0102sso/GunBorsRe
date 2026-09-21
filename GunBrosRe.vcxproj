@@ -71,6 +71,12 @@
       <RuntimeLibrary Condition="'$(Configuration)'=='Debug'">MultiThreadedDebugDLL</RuntimeLibrary>
       <RuntimeLibrary Condition="'$(Configuration)'=='Release'">MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
+    <ResourceCompile>
+      <!-- The .rc scripts pull the shared version macros from src\ZProductVersion.h,
+           and read _DEBUG to set the VS_FF_DEBUG file flag. -->
+      <AdditionalIncludeDirectories>$(RepoRoot)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(FeatureDefinitions);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
     <Link>
       <!-- The game owns a native window; both companions are console tools. -->
       <SubSystem Condition="'$(GbProduct)'=='Game'">Windows</SubSystem>
@@ -113,6 +119,12 @@
     <ClCompile Condition="'$(GbProduct)'=='Game'" Include="$(RepoRoot)src\gun_bros_re\main.cpp" />
     <ClCompile Condition="'$(GbProduct)'=='Viewer'" Include="$(RepoRoot)src\gun_bros_viewer\main.cpp" />
     <ClCompile Condition="'$(GbProduct)'=='Tests'" Include="$(RepoRoot)tests\main.cpp" />
+  </ItemGroup>
+  <!-- Executable artwork. Each script embeds its product's icon from
+       assets\icon; Tests stays iconless because nobody launches it by hand. -->
+  <ItemGroup>
+    <ResourceCompile Condition="'$(GbProduct)'=='Game'" Include="$(RepoRoot)src\gun_bros_re\GunBrosRe.rc" />
+    <ResourceCompile Condition="'$(GbProduct)'=='Viewer'" Include="$(RepoRoot)src\gun_bros_viewer\GunBrosViewer.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="ValidateProduct" BeforeTargets="PrepareForBuild">

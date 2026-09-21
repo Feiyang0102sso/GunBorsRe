@@ -82,7 +82,12 @@ saves/
 userdata/
 10-17-2011/
 big_360_out/
-assets/
+#  Runtime media stays local, but assets/icon holds the executable artwork the
+#  .rc scripts compile into the EXEs, so a fresh clone needs it to build. A file
+#  cannot be re-included while its parent directory is excluded, so the children
+#  have to be listed individually before the icon directory is let back in.
+assets/*
+!assets/icon/
 # User-selected launcher artwork remains a local runtime asset.
 asset/
 

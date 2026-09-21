@@ -1,4 +1,5 @@
 #pragma once
+#include "ZProductVersion.h"
 #include "gun_bros_re/host/ZScreenResolution.h"
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -8,6 +9,8 @@
 /** All launcher presentation settings. Geometry uses logical pixels at 96 DPI. */
 namespace ZLaunchDialogConfig {
 inline constexpr wchar_t WindowClass[] = L"GunBrosLaunchDialog";
+// Icon resource GunBrosRe.rc embeds; both sides read the same macro.
+inline constexpr WORD AppIconId = GB_ICON_ID;
 inline constexpr char HeaderPath[] = "assets/startup/Gun_Bros_Header_Art.png";
 inline constexpr DWORD WindowStyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 inline constexpr DWORD WindowExtendedStyle = WS_EX_CONTROLPARENT;
