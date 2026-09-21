@@ -1,5 +1,5 @@
 /** Windows friend identity. Original 1006 is an XP gift ring, not a roster.
- * See tests/live-friend-save-research.md; never manufacture NGS credentials A.
+ * See _prep/docs/live-friend-save-research.md; never manufacture NGS credentials A.
  */
 #pragma once
 #include "gun_bros_re/data/profile/CProfileManager.h"

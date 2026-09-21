@@ -93,7 +93,7 @@ void CBullet::Bind(const Template &data, bool alternate) {
     // Haven beam, but our BULLET104 path tiles the muzzle flare. Use the same
     // BIG sprite's body/source/end slots as Kraken, without changing the template.
     // The remaining original-runtime discrepancy is documented in
-    // docs/haven-boss-beam-investigation.md; this is not an original Bind rule.
+    // _prep/docs/haven-boss-beam-investigation.md; this is not an original Bind rule.
     const auto &sprite = data.GetSpriteRef();
     if (source.resource.packHash == kHavenBeamPackHash && source.resource.localIndex == kHavenBeamBulletIndex &&
         sprite.packHash == kHavenBeamPackHash && sprite.archetype == 139 && sprite.action == 0 &&

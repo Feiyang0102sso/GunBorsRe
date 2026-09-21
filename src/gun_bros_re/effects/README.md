@@ -14,4 +14,4 @@
 
 通用 Sprite 展开、批绘制和预览投影在 `engine`；弹体行为、弹体资源缓存及战斗音频在 `gameplay`。BIG 保持唯一资源事实来源，目录中没有人工维护的游戏资源表。
 
-原版依据、目录迁移范围及验证见 [目录归并记录](../../../docs/effects-directory-migration.md)；本目录名是本项目组织方式，不冒充原 iOS 目录或 BIG 包名。
+原版依据、目录迁移范围及验证见 [目录归并记录](../../../_prep/docs/effects-directory-migration.md)；本目录名是本项目组织方式，不冒充原 iOS 目录或 BIG 包名。
