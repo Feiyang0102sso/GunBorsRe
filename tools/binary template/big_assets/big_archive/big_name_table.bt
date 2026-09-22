@@ -1,0 +1,128 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: big_name_table.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read one .big archive's resource name-to-value table.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    This is one ordinary 0xF4E02223 resource selected by packTOC*.dat.
+    It is an index for one .big archive, not another archive.
+
+    The original names are not stored here. The game calculates nameKey with
+    CStringToKey and scans this table for the matching value.
+
+    Most values are resource handles. Some named *_COUNT values are ordinary
+    numbers, so the second field must not always be treated as a handle.
+
+    pack1_xga example:
+        packTOC_xga.dat gives logical ID 0x040E
+        table1 maps 0x040E to table2[318]
+        pack1_xga_0318_0xe04095.bin contains 518 entries
+            465 strings + 53 others
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_ENTRY_COUNT = 0xFF75C1;
+const int COLOR_NAME_KEY = 0xB8E0D2;
+const int COLOR_RESOURCE_ID = 0xFFE699;
+
+const int COLOR_LABEL_NULL = 0xD0D0D0;
+const int COLOR_LABEL_PNG = 0xFFDBF1;
+const int COLOR_LABEL_BIN = 0xC6FF77;
+const int COLOR_LABEL_KEYSET = 0x9B70FF;
+const int COLOR_LABEL_WAV = 0xE8B8DD;
+const int COLOR_LABEL_AGGREGATE = 0xE59866;
+const int COLOR_LABEL_UNKNOWN = 0x0000FF;
+
+
+// ------------------------------------------------
+// Header
+// ------------------------------------------------
+
+struct PackNameTableHeader {
+    // Number of 8-byte entries that follow.
+    uint32 entryCount <format=decimal, bgcolor=COLOR_ENTRY_COUNT>;
+};
+
+
+// ------------------------------------------------
+// Resource value
+// ------------------------------------------------
+
+/*
+    The label uses the same values as a keyset handle:
+        0x02   png
+        0x03   bin
+        0x05   keyset
+        0x09   wav
+        0x21   aggregate
+
+    Ordinary handles use 0x00 in the low byte of label. Aggregate handles use
+    that byte as the aggregate selector; 0xFF selects the current locale.
+*/
+
+int GetPackNameLabelColor(uint16 &label) {
+    switch (label >> 8) {
+        case 0x00:
+            return COLOR_LABEL_NULL;
+        case 0x02:
+            return COLOR_LABEL_PNG;
+        case 0x03:
+            return COLOR_LABEL_BIN;
+        case 0x05:
+            return COLOR_LABEL_KEYSET;
+        case 0x09:
+            return COLOR_LABEL_WAV;
+        case 0x21:
+            return COLOR_LABEL_AGGREGATE;
+        default:
+            return COLOR_LABEL_UNKNOWN;
+    }
+}
+
+struct PackNameValue {
+    // Logical resource ID, aggregate sub-resource ID, or a plain low value.
+    uint16 resourceIdOrScalar <format=hex, bgcolor=COLOR_RESOURCE_ID>;
+
+    // High byte is the resource type. A zero label can also mean a scalar.
+    uint16 label <format=hex, bgcolor=GetPackNameLabelColor>;
+};
+
+
+// ------------------------------------------------
+// Name entry
+// ------------------------------------------------
+
+struct PackNameTableEntry {
+    // CStringToKey of the resource name, for example "___INIT_DATA".
+    uint32 nameKey <format=hex, bgcolor=COLOR_NAME_KEY>;
+
+    // Same 32-bit layout used by keyset entries. With label 0, use the name
+    // and its consumer to decide whether this is a handle or a plain scalar.
+    PackNameValue value;
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+PackNameTableHeader header;
+PackNameTableEntry entries[header.entryCount] <optimize=false>;
+
+local uint64 expectedFileSize = 4 + (uint64)header.entryCount * 8;
+if (FileSize() != expectedFileSize) {
+    Warning("Pack Name Table size mismatch: expected " +
+            expectedFileSize + " bytes, got " + FileSize() + " bytes.");
+}

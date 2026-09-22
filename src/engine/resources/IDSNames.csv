@@ -1,0 +1,1073 @@
+name,name_hash,toc_file,pack,handle,string_id,value,status
+IDS_ABOUT_TEXT_FORMATTED,0x6DFF971A,packTOC_xga.dat,pack0_core_xga,0x21FF0298,0x0298,"
+Glu Mobile
+
+",resolved
+IDS_ABOUT_TEXT_PLAIN,0x87144EB5,packTOC_xga.dat,pack0_core_xga,0x21FF0295,0x0295,"
+Glu Mobile
+
+",resolved
+IDS_ABOUT_TITLE,0xBCB675EF,packTOC_xga.dat,pack0_core_xga,0x21FF017F,0x017F,About,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack0_core_xga,0x21FF0163,0x0163,Accept,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack1_xga,0x21FF0241,0x0241,Accept,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack3_xga,0x21FF025B,0x025B,Accept,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack4_xga,0x21FF0583,0x0583,Accept,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack5_xga,0x21FF03EC,0x03EC,Accept,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack7_xga,0x21FF01BA,0x01BA,Accept,resolved
+IDS_ACCEPT,0x6B577E85,packTOC_xga.dat,pack9_xga,0x21FF019D,0x019D,Accept,resolved
+IDS_ACCOUNT_CHANGE_DESC,0x3FAC02C0,packTOC_xga.dat,pack0_core_xga,0x21FF01CE,0x01CE,"Looks like you're using a different Gun Bros. account. We need to relaunch the game with your new account's data.
+
+Progress in the current play session may be lost.",resolved
+IDS_ACCOUNT_CHANGE_TITLE,0xFAD0EBB9,packTOC_xga.dat,pack0_core_xga,0x21FF01CD,0x01CD,Gun Bros. Account Change,resolved
+IDS_ACCOUNT_CONFLICT_DESC0,0x119CC147,packTOC_xga.dat,pack0_core_xga,0x21FF01DB,0x01DB,Your device's save is out of sync with your online save. Please select your latest save data below:,resolved
+IDS_ACCOUNT_CONFLICT_DESC1,0x119CC146,packTOC_xga.dat,pack0_core_xga,0x21FF01DC,0x01DC,"
+Online save
+
+Level: %i
+XP: %i
+Coins: Ω%i
+War Bucks: δ%i
+",resolved
+IDS_ACCOUNT_CONFLICT_DESC2,0x119CC145,packTOC_xga.dat,pack0_core_xga,0x21FF01DD,0x01DD,"
+Device's save
+
+Level: %i
+XP: %i
+Coins: Ω%i
+War Bucks: δ%i
+",resolved
+IDS_ACCOUNT_CONFLICT_TITLE,0x118C06C2,packTOC_xga.dat,pack0_core_xga,0x21FF01DA,0x01DA,SAVE SELECT,resolved
+IDS_ACCOUNT_LOGOUT_CONF_DESC,0x6663CBB4,packTOC_xga.dat,pack0_core_xga,0x21FF01D2,0x01D2,Are you sure you want to log out? Logging out could result in offline play which will make the brotherhood unaccessible.,resolved
+IDS_ACCOUNT_LOGOUT_CONF_TITLE,0x663C7CF3,packTOC_xga.dat,pack0_core_xga,0x21FF01D1,0x01D1,Gun Bros. Account Logout,resolved
+IDS_ACCOUNT_LOGOUT_DESC,0x3CBC0DB6,packTOC_xga.dat,pack0_core_xga,0x21FF01D0,0x01D0,"Looks like you've logged out. If you continue to play offline you may potentially lose progress.
+
+Would you kindly login again?",resolved
+IDS_ACCOUNT_LOGOUT_TITLE,0xCBD01CD9,packTOC_xga.dat,pack0_core_xga,0x21FF01CF,0x01CF,Gun Bros. Account Logout,resolved
+IDS_ACCOUNT_RECONNECT_DESC,0x672D1F13,packTOC_xga.dat,pack0_core_xga,0x21FF01E5,0x01E5,"We can try to get back online, but we will have to relaunch the app.
+
+Would you like to continue?",resolved
+IDS_ACCOUNT_RECONNECT_TITLE,0x72C12683,packTOC_xga.dat,pack0_core_xga,0x21FF01E4,0x01E4,Gun Bros. Reconnect,resolved
+IDS_ACHIEVEMENT_,0xD3724CC6,packTOC_xga.dat,,,,,not_found
+IDS_ADCOLONY_1_POINT_EARNED,0x62586462,packTOC_xga.dat,pack0_core_xga,0x21FF0488,0x0488,Thanks for watching the sponsored video. You earned %d War Bucks!,resolved
+IDS_ADCOLONY_NOT_READY_CAPTION,0x77B9CF48,packTOC_xga.dat,pack0_core_xga,0x21FF0482,0x0482,Currently Unavailable,resolved
+IDS_ADCOLONY_NOT_READY_MSG,0xC2F67C8B,packTOC_xga.dat,pack0_core_xga,0x21FF0483,0x0483,Sorry this feature is not available at the moment. Try again later.,resolved
+IDS_ADCOLONY_POINTS_EARNED,0xBCE0B2FF,packTOC_xga.dat,pack0_core_xga,0x21FF0487,0x0487,Thanks for watching the sponsored video. You earned %d War Bucks!,resolved
+IDS_ADCOLONY_POINTS_EARNED_CAPTION,0x0BA58744,packTOC_xga.dat,pack0_core_xga,0x21FF0486,0x0486,Free War Bucks Earned!,resolved
+IDS_ADCOLONY_WATCH_VIDEO_CAPTION,0x90302EBB,packTOC_xga.dat,pack0_core_xga,0x21FF0484,0x0484,Earn Free War Bucks!,resolved
+IDS_ADCOLONY_WATCH_VIDEO_MSG,0x23399F02,packTOC_xga.dat,pack0_core_xga,0x21FF0485,0x0485,Watch video and earn %d War Bucks!,resolved
+IDS_APPSTORE_GAME_EMAIL_URL,0x2AB8AD6D,packTOC_xga.dat,pack0_core_xga,0x21FF0170,0x0170,http://gcs.glu.com/gcs/iphone/iphone.jsp?t=gunbros&src=inviteemail&p=iphone,resolved
+IDS_APPSTORE_GAME_SMS_URL,0x1739C141,packTOC_xga.dat,pack0_core_xga,0x21FF0171,0x0171,http://gcs.glu.com/gcs/iphone/iphone.jsp?t=gunbros&src=inviteSMS&p=iphone,resolved
+IDS_APPSTORE_GAME_URL,0x61ED10D3,packTOC_xga.dat,pack0_core_xga,0x21FF016E,0x016E,http://gcs.glu.com/gcs/iphone/iphone.jsp?t=gunbros&src=forcedUpgrade&p=iphone,resolved
+IDS_APPSTORE_RATE_URL,0x307D10D2,packTOC_xga.dat,pack0_core_xga,0x21FF016F,0x016F,http://gcs.glu.com/gcs/iphone/iphone.jsp?t=gunbros&page=review&p=iphone,resolved
+IDS_BETA_COMING_SOON_BODY,0xD690C828,packTOC_xga.dat,pack0_core_xga,0x21FF021B,0x021B,The Brotherhood is currently not available. It will be available soon as a free update on the Android Market.,resolved
+IDS_BETA_COMING_SOON_TITLE,0x691AF098,packTOC_xga.dat,pack0_core_xga,0x21FF021C,0x021C,Coming Soon,resolved
+IDS_BRO_AUTOSEL_BODY,0x0720FA78,packTOC_xga.dat,pack0_core_xga,0x21FF017D,0x017D,"
+^f1Bro Auto Select
+^f0
+Automatically selects bros with brotherhood rewards available.
+
+ASK - Asks if you would like to switch bros.
+
+OFF - Does not ask, and does not switch bros.
+
+ON - Does not ask, and automatically switches bros to collect all available rewards.",resolved
+IDS_BRO_SELECT_BODY,0xA170B117,packTOC_xga.dat,pack0_core_xga,0x21FF0181,0x0181,"
+^f1Brother Select
+^f0
+Afraid of commitment?
+Change your Gun Brother here at any time.",resolved
+IDS_BRO_SELECT_TITLE,0x171A606F,packTOC_xga.dat,pack0_core_xga,0x21FF0180,0x0180,Bro Select,resolved
+IDS_BROTHER_AUTOSELECT_ASK,0x9157001B,packTOC_xga.dat,pack0_core_xga,0x21FF0384,0x0384,AutoBro Ask,resolved
+IDS_BROTHER_AUTOSELECT_BODY,0x15703D10,packTOC_xga.dat,pack0_core_xga,0x21FF0380,0x0380,"Automatically switch active brother to collect more brotherhood rewards?
+
+
+",resolved
+IDS_BROTHER_AUTOSELECT_OFF,0x91570F46,packTOC_xga.dat,pack0_core_xga,0x21FF0382,0x0382,AutoBro Off,resolved
+IDS_BROTHER_AUTOSELECT_ON,0x091570C8,packTOC_xga.dat,pack0_core_xga,0x21FF0383,0x0383,AutoBro On,resolved
+IDS_BROTHER_AUTOSELECT_TITLE,0x5712A014,packTOC_xga.dat,pack0_core_xga,0x21FF037F,0x037F,Brotherhood Rewards Available!,resolved
+IDS_BROTHER_AUTOSELECT_TOGGLE,0x713D3A90,packTOC_xga.dat,pack0_core_xga,0x21FF0381,0x0381,^f1Save Selection,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack0_core_xga,0x21FF0164,0x0164,Cancel,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack1_xga,0x21FF0242,0x0242,Cancel,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack3_xga,0x21FF025C,0x025C,Cancel,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack4_xga,0x21FF0584,0x0584,Cancel,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack5_xga,0x21FF03ED,0x03ED,Cancel,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack7_xga,0x21FF01BB,0x01BB,Cancel,resolved
+IDS_CANCEL,0x6B75A9CD,packTOC_xga.dat,pack9_xga,0x21FF019E,0x019E,Cancel,resolved
+IDS_CHALLENGE_PUSH_BODY,0xB2D7EC78,packTOC_xga.dat,pack0_core_xga,0x21FF017B,0x017B,"
+^f1Bro-Op Push Notifications
+^f0
+Turns the push notifications received with Bro-Op Challenge requests ON or OFF.",resolved
+IDS_CHALLENGE_PUSH_TOGGLE_OFF_GAME,0xDAFE23B3,packTOC_xga.dat,pack0_core_xga,0x21FF0161,0x0161,Bro-Op Off,resolved
+IDS_CHALLENGE_PUSH_TOGGLE_ON_GAME,0x6D3764C7,packTOC_xga.dat,pack0_core_xga,0x21FF0160,0x0160,Bro-Op On,resolved
+IDS_CHALLENGES_CATEGORY1,0x10DBDD52,packTOC_xga.dat,pack0_core_xga,0x21FF0244,0x0244,Challenges,resolved
+IDS_CHALLENGES_CATEGORY2,0x10DBDD51,packTOC_xga.dat,pack0_core_xga,0x21FF0245,0x0245,Recruit,resolved
+IDS_CHALLENGES_CATEGORY3,0x10DBDD50,packTOC_xga.dat,pack0_core_xga,0x21FF0246,0x0246,Requests,resolved
+IDS_CHALLENGES_DESC,0x87AFF57F,packTOC_xga.dat,pack0_core_xga,0x21FF0242,0x0242,"Complete Challenges Daily to Get Rewards.
+Recruit Bros to get Bigger Rewards!",resolved
+IDS_CHALLENGES_ENLIST_DESC,0x0E61F78B,packTOC_xga.dat,pack0_core_xga,0x21FF0262,0x0262,Login or create a Game Center or Facebook account to access Bro-Op Challenges.,resolved
+IDS_CHALLENGES_INVITE,0xAF4E2082,packTOC_xga.dat,pack0_core_xga,0x21FF0253,0x0253,Recruit Bros!,resolved
+IDS_CHALLENGES_INVITE_SENT,0x08708A56,packTOC_xga.dat,pack0_core_xga,0x21FF0254,0x0254,Invite Sent!,resolved
+IDS_CHALLENGES_NOTIF_COMPLETION,0x1B81B16A,packTOC_xga.dat,pack0_core_xga,0x21FF025B,0x025B,Bro-Op Solo Complete!,resolved
+IDS_CHALLENGES_NOTIF_FRIEND_COMPLETION,0x296A0D0C,packTOC_xga.dat,pack0_core_xga,0x21FF025C,0x025C,Bro-Op Completed by Bro!,resolved
+IDS_CHALLENGES_NOTIF_FRIEND_REQUEST,0x1A9E9EC4,packTOC_xga.dat,pack0_core_xga,0x21FF025D,0x025D,Bro-Op Request Received!,resolved
+IDS_CHALLENGES_OFFLINE_DESC,0x5DA4C757,packTOC_xga.dat,pack0_core_xga,0x21FF0263,0x0263,You must be connected to a network and logged into Game Center or Facebook to access Bro-Op Challenges.,resolved
+IDS_CHALLENGES_PROGRESS_KILLS,0xC8FC6674,packTOC_xga.dat,pack0_core_xga,0x21FF0247,0x0247, Kills,resolved
+IDS_CHALLENGES_PROMPT_COMPLETE_DESC1,0x6116B8CC,packTOC_xga.dat,pack0_core_xga,0x21FF025F,0x025F,"Congratulations. You completed:
+
+'%s'
+
+ Touch the challenge to see the reward info.",resolved
+IDS_CHALLENGES_PROMPT_COMPLETE_DESC2,0x6116B8CF,packTOC_xga.dat,pack0_core_xga,0x21FF0260,0x0260,"Congratulations. Your bros have helped you unlock more rewards for:
+
+'%s'
+
+ Touch the challenge to see the reward info.",resolved
+IDS_CHALLENGES_PROMPT_COMPLETE_DESC3,0x6116B8CE,packTOC_xga.dat,pack0_core_xga,0x21FF0261,0x0261,"
+Invite more bros to earn better rewards.",resolved
+IDS_CHALLENGES_PROMPT_COMPLETE_TITLE,0x61067F48,packTOC_xga.dat,pack0_core_xga,0x21FF025E,0x025E,Bro-Op Challenge Completed!,resolved
+IDS_CHALLENGES_PUSH_NOTIF,0x713D0ED3,packTOC_xga.dat,pack0_core_xga,0x21FF0255,0x0255,%s needs your help with the '%s' Bro-Op Challenge!,resolved
+IDS_CHALLENGES_REQUEST,0xEC54D81E,packTOC_xga.dat,pack0_core_xga,0x21FF0256,0x0256, needs help with this bro-op challenge!,resolved
+IDS_CHALLENGES_REQUEST_ANONYMOUS,0xFF65816C,packTOC_xga.dat,pack0_core_xga,0x21FF0259,0x0259,Your bros need help with this bro-op challenge!,resolved
+IDS_CHALLENGES_REQUEST_COMPLETE,0x2EC901B0,packTOC_xga.dat,pack0_core_xga,0x21FF025A,0x025A,You and your bros have completed this bro-op challenge.,resolved
+IDS_CHALLENGES_REQUESTS1,0x54D81BE3,packTOC_xga.dat,pack0_core_xga,0x21FF0257,0x0257, and %i bro need help with this bro-op challenge!,resolved
+IDS_CHALLENGES_REQUESTS2,0x54D81BE0,packTOC_xga.dat,pack0_core_xga,0x21FF0258,0x0258, and %i bros need help with this bro-op challenge!,resolved
+IDS_CHALLENGES_REWARD_COLLECTED,0xEDB9860D,packTOC_xga.dat,pack0_core_xga,0x21FF0251,0x0251,Completed!,resolved
+IDS_CHALLENGES_REWARD_SOLO,0x8E609BDC,packTOC_xga.dat,pack0_core_xga,0x21FF024D,0x024D,Solo Reward,resolved
+IDS_CHALLENGES_REWARD_TIER_COMPLETED,0xD89B542D,packTOC_xga.dat,pack0_core_xga,0x21FF0252,0x0252,Complete Solo Challenge,resolved
+IDS_CHALLENGES_REWARD_TIER1,0xE60EC529,packTOC_xga.dat,pack0_core_xga,0x21FF024E,0x024E,Complete for reward,resolved
+IDS_CHALLENGES_REWARD_TIER2,0xE60EC52A,packTOC_xga.dat,pack0_core_xga,0x21FF024F,0x024F,Recruit %i bros for reward,resolved
+IDS_CHALLENGES_SIDEBAR_TITLE,0x3D47405B,packTOC_xga.dat,pack0_core_xga,0x21FF0243,0x0243,Rewards,resolved
+IDS_CHALLENGES_TITLE,0x7AE8904D,packTOC_xga.dat,pack0_core_xga,0x21FF0241,0x0241,Bro-Op Challenges,resolved
+IDS_CONVERT_SOFT_TO_HARD_FAIL_BODY,0x875FAFDD,packTOC_xga.dat,pack0_core_xga,0x21FF049B,0x049B,You do not have enough coins to convert into War Bucks!,resolved
+IDS_CONVERT_SOFT_TO_HARD_FAIL_TITLE,0x75EC9CCD,packTOC_xga.dat,pack0_core_xga,0x21FF049A,0x049A,Insufficient Funds!,resolved
+IDS_COPYRIGHT_TEXT_FORMATTED,0xC6D07DF0,packTOC_xga.dat,pack0_core_xga,0x21FF0299,0x0299,"
+
+(C)2010-2011 Glu Mobile Inc. All Rights Reserved.
+
+Glu, the 'Gman' Logo and 'Gun Bros.' are trademarks or registered trademarks of Glu Mobile Inc. in the U.S. and/or other countries.
+
+Use of this software is subject to Glu's terms of use and privacy policy located at www.glu.com.
+For questions or support: we are here to help, please visit our support site http://www.glu.com/support to contact us",resolved
+IDS_COPYRIGHT_TEXT_PLAIN,0x6DF2E59E,packTOC_xga.dat,pack0_core_xga,0x21FF0296,0x0296,"
+
+(C)2010-2011 Glu Mobile Inc. All Rights Reserved.
+
+Glu, the 'Gman' Logo and 'Gun Bros.' are trademarks or registered trademarks of Glu Mobile Inc. in the U.S. and/or other countries.
+
+Use of this software is subject to Glu's terms of use and privacy policy located at www.glu.com.
+For questions or support: we are here to help, please visit our support site http://www.glu.com/support to contact us",resolved
+IDS_DISMISS,0xB0C76175,packTOC_xga.dat,pack0_core_xga,0x21FF0169,0x0169,Dismiss,resolved
+IDS_DOCKED_STICKS_BODY,0x13ABA61F,packTOC_xga.dat,pack0_core_xga,0x21FF017C,0x017C,"
+^f1Docked Sticks
+^f0
+Docks the control sticks at the bottom of the screen.",resolved
+IDS_DOCKED_STICKS_OFF_GAME,0x7F3D2A3E,packTOC_xga.dat,pack0_core_xga,0x21FF015D,0x015D,Stick Type B,resolved
+IDS_DOCKED_STICKS_ON_GAME,0xB76B545F,packTOC_xga.dat,pack0_core_xga,0x21FF015C,0x015C,Stick Type A,resolved
+IDS_EXIT_BODY,0xCC867DA9,packTOC_xga.dat,pack0_core_xga,0x21FF0185,0x0185,"
+^f1Surrender
+^f0
+Are you sure you want to take the coward's way out?
+
+Surrendering will reset your Xplodium multiplier and you will lose your progress in the current wave.",resolved
+IDS_EXIT_TITLE,0xCB71AB89,packTOC_xga.dat,pack0_core_xga,0x21FF0184,0x0184,Surrender,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack0_core_xga,0x21FF0167,0x0167,Experience,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack1_xga,0x21FF0244,0x0244,Experience,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack3_xga,0x21FF025E,0x025E,Experience,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack4_xga,0x21FF0586,0x0586,Experience,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack5_xga,0x21FF03EF,0x03EF,Experience,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack7_xga,0x21FF01BD,0x01BD,Experience,resolved
+IDS_EXPERIENCE,0x4ABC7178,packTOC_xga.dat,pack9_xga,0x21FF01A0,0x01A0,Experience,resolved
+IDS_FACEBOOK_LOGIN,0xD59DD464,packTOC_xga.dat,pack0_core_xga,0x21FF016B,0x016B,FB Login,resolved
+IDS_FACEBOOK_LOGIN_BODY,0x161632C4,packTOC_xga.dat,pack0_core_xga,0x21FF017E,0x017E,"
+^f1Facebook
+^f0
+Log IN or OUT of Facebook.",resolved
+IDS_FACEBOOK_LOGOUT,0x59DD51A9,packTOC_xga.dat,pack0_core_xga,0x21FF016C,0x016C,FB Logout,resolved
+IDS_FRIEND_ACTIVE_TITLE,0x07AD25E5,packTOC_xga.dat,pack0_core_xga,0x21FF01EE,0x01EE,On Duty Bro,resolved
+IDS_FRIEND_BUFFS_TITLE,0xF5D01CA1,packTOC_xga.dat,pack0_core_xga,0x21FF01F0,0x01F0,Bro Buffs,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack0_core_xga,0x21FF01EB,0x01EB,Brothers,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack1_xga,0x21FF026C,0x026C,PowerEnvelope,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack3_xga,0x21FF0286,0x0286,PowerEnvelope,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack4_xga,0x21FF05AE,0x05AE,PowerEnvelope,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack5_xga,0x21FF0417,0x0417,PowerEnvelope,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack7_xga,0x21FF01E5,0x01E5,PowerEnvelope,resolved
+IDS_FRIEND_CATEGORY1,0x76D2D77D,packTOC_xga.dat,pack9_xga,0x21FF01C8,0x01C8,PowerEnvelope,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack0_core_xga,0x21FF01EC,0x01EC,Bro-Buffs,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack1_xga,0x21FF026D,0x026D,LaserKatana,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack3_xga,0x21FF0287,0x0287,LaserKatana,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack4_xga,0x21FF05AF,0x05AF,LaserKatana,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack5_xga,0x21FF0418,0x0418,LaserKatana,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack7_xga,0x21FF01E6,0x01E6,LaserKatana,resolved
+IDS_FRIEND_CATEGORY2,0x76D2D77E,packTOC_xga.dat,pack9_xga,0x21FF01C9,0x01C9,LaserKatana,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack0_core_xga,0x21FF01ED,0x01ED,Rewards,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack1_xga,0x21FF026E,0x026E,Nomallonious,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack3_xga,0x21FF0288,0x0288,Nomallonious,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack4_xga,0x21FF05B0,0x05B0,Nomallonious,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack5_xga,0x21FF0419,0x0419,Nomallonious,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack7_xga,0x21FF01E7,0x01E7,Nomallonious,resolved
+IDS_FRIEND_CATEGORY3,0x76D2D77F,packTOC_xga.dat,pack9_xga,0x21FF01CA,0x01CA,Nomallonious,resolved
+IDS_FRIEND_DAILYBONUS,0xB5D1B6B5,packTOC_xga.dat,pack0_core_xga,0x21FF0202,0x0202,Gift Available,resolved
+IDS_FRIEND_DAILYBONUS_USED,0x6B01550F,packTOC_xga.dat,pack0_core_xga,0x21FF0203,0x0203,Next Gift In,resolved
+IDS_FRIEND_DEFAULT_BRO1,0x3E16C489,packTOC_xga.dat,pack0_core_xga,0x21FF01FF,0x01FF,Percy Gun,resolved
+IDS_FRIEND_DEFAULT_BRO2,0x3E16C48A,packTOC_xga.dat,pack0_core_xga,0x21FF0200,0x0200,Francis Gun,resolved
+IDS_FRIEND_ENLIST_DESC,0x056BDAED,packTOC_xga.dat,pack0_core_xga,0x21FF0207,0x0207,Invite your friends' brothers to fight by your side! Login or create a Game Center or Facebook account to access the Brotherhood.,resolved
+IDS_FRIEND_LEVEL,0x70D334D9,packTOC_xga.dat,pack0_core_xga,0x21FF01FD,0x01FD,Level ,resolved
+IDS_FRIEND_LIST_NEXT,0xF0DAD007,packTOC_xga.dat,pack0_core_xga,0x21FF01FB,0x01FB,Next Brothers,resolved
+IDS_FRIEND_LIST_PREV,0xF0DB26D5,packTOC_xga.dat,pack0_core_xga,0x21FF01FC,0x01FC,Previous Brothers,resolved
+IDS_FRIEND_OFFLINE,0xD0144AD5,packTOC_xga.dat,pack0_core_xga,0x21FF0205,0x0205,Offline,resolved
+IDS_FRIEND_OFFLINE_DESC,0xFD060137,packTOC_xga.dat,pack0_core_xga,0x21FF0208,0x0208,Invite your friends' brothers to fight by your side! You must be connected to a network and logged into Game Center or Facebook to access the Brotherhood.,resolved
+IDS_FRIEND_POWER_ARMOUR,0x5C4A635E,packTOC_xga.dat,pack0_core_xga,0x21FF01F4,0x01F4,Armor,resolved
+IDS_FRIEND_POWER_DAILY_BONUS,0x09787B91,packTOC_xga.dat,pack0_core_xga,0x21FF01FA,0x01FA,Daily Bonus,resolved
+IDS_FRIEND_POWER_DAMAGE,0x5C096C69,packTOC_xga.dat,pack0_core_xga,0x21FF01F3,0x01F3,Damage,resolved
+IDS_FRIEND_POWER_DROP_RATE,0xA5CFACC4,packTOC_xga.dat,pack0_core_xga,0x21FF01F7,0x01F7,Drop Rate,resolved
+IDS_FRIEND_POWER_EXPERIENCE,0xB9318674,packTOC_xga.dat,pack0_core_xga,0x21FF01F8,0x01F8,Experience,resolved
+IDS_FRIEND_POWER_FRIEND_COUNT_PLURAL,0x95A4BFE5,packTOC_xga.dat,pack0_core_xga,0x21FF01F1,0x01F1,%d Friends,resolved
+IDS_FRIEND_POWER_FRIEND_COUNT_SINGLE,0x95901A3C,packTOC_xga.dat,pack0_core_xga,0x21FF01F2,0x01F2,%d Friend,resolved
+IDS_FRIEND_POWER_REFINERY_OUTPUT,0x1D7D5AF1,packTOC_xga.dat,pack0_core_xga,0x21FF01F6,0x01F6,Refine Payout,resolved
+IDS_FRIEND_POWER_SPEED,0xC4D68E81,packTOC_xga.dat,pack0_core_xga,0x21FF01F5,0x01F5,Speed,resolved
+IDS_FRIEND_POWER_XPLODIUM,0xD87250A0,packTOC_xga.dat,pack0_core_xga,0x21FF01F9,0x01F9,Xplodium,resolved
+IDS_FRIEND_RESERVE_TITLE,0x506DF14F,packTOC_xga.dat,pack0_core_xga,0x21FF01EF,0x01EF,Reserve,resolved
+IDS_FRIEND_RETRY,0x70CD37BC,packTOC_xga.dat,pack0_core_xga,0x21FF0206,0x0206,Retry,resolved
+IDS_GREETING_BRO1,0xCC99169C,packTOC_xga.dat,pack0_core_xga,0x21FF023A,0x023A,%i Rewards Available,resolved
+IDS_GREETING_BRO2,0xCC99169F,packTOC_xga.dat,pack0_core_xga,0x21FF023B,0x023B,%i/%i Bro-Buffs,resolved
+IDS_GREETING_OFFLINE_BROTHERHOOD,0x5D6FE1C8,packTOC_xga.dat,pack0_core_xga,0x21FF023E,0x023E,Login or create a Game Center or Facebook account to access the Brotherhood.,resolved
+IDS_GREETING_OFFLINE_CHALLENGES,0xCD9731AD,packTOC_xga.dat,pack0_core_xga,0x21FF023D,0x023D,Login or create a Game Center or Facebook account for better Bro-Op rewards.,resolved
+IDS_GREETING_OFFLINE_TITLE,0x693DECD4,packTOC_xga.dat,pack0_core_xga,0x21FF023C,0x023C,Play Online for Rewards,resolved
+IDS_GREETING_OPS1,0xCC99C55C,packTOC_xga.dat,pack0_core_xga,0x21FF0238,0x0238,%i Bro Requests,resolved
+IDS_GREETING_OPS2,0xCC99C55F,packTOC_xga.dat,pack0_core_xga,0x21FF0239,0x0239,%i New Ops Available,resolved
+IDS_GREETING_TITLE1,0x986C75AD,packTOC_xga.dat,pack0_core_xga,0x21FF0235,0x0235,Play Gun Bros Every Day!,resolved
+IDS_GREETING_TITLE2,0x986C75AE,packTOC_xga.dat,pack0_core_xga,0x21FF0236,0x0236,Bro-Ops,resolved
+IDS_GREETING_TITLE3,0x986C75AF,packTOC_xga.dat,pack0_core_xga,0x21FF0237,0x0237,Brotherhood,resolved
+IDS_HELP_BODY,0x19C67DA5,packTOC_xga.dat,pack0_core_xga,0x21FF0188,0x0188,"
+^f1Help
+^f0
+Read up on how to play Gun Bros.
+
+Remember, knowledge is half the battle...
+The other half being ginormous guns.",resolved
+IDS_HELP_BRO_BUFFS_BODY,0x450B7C70,packTOC_xga.dat,pack0_core_xga,0x21FF01A0,0x01A0,"
+^f1Bro Buffs
+^f0
+- Add Friends to Increase your Buffs! Each time a Gamecenter or Facebook friend joins the game, you'll get a stat boost.",resolved
+IDS_HELP_BRO_BUFFS_TITLE,0x50A1B61E,packTOC_xga.dat,pack0_core_xga,0x21FF019F,0x019F,Bro Buffs,resolved
+IDS_HELP_BRO_OPS_BODY,0xBD2D0B0E,packTOC_xga.dat,pack0_core_xga,0x21FF019E,0x019E,"
+^f1Bro Ops
+^f0
+-  Complete a Bro Op Challenge on your own to earn the first reward.
+
+- Send invites to Bros in your Brotherhood. If 1 of your friends completes the challenge, you'll get the second reward. If two friends complete the challenge you'll get the third reward.
+
+- Check the Requests section to see which Bro Op Challenges your friends would like you to complete.
+
+- Bro Ops change Daily, check back for new challenges and new rewards!",resolved
+IDS_HELP_BRO_OPS_TITLE,0xD1C6C1FE,packTOC_xga.dat,pack0_core_xga,0x21FF019D,0x019D,Bro Ops,resolved
+IDS_HELP_BROHOOD_BODY,0xA35D0B19,packTOC_xga.dat,pack0_core_xga,0x21FF0190,0x0190,"
+^f1Brotherhood
+^f0
+- The brotherhood can be accessed from the Bros menu.
+
+- The Brotherhood is automatically populated by your social network friends who also play Gun Bros.
+
+- From the Bros menu you can select friends' bros to fight alongside you.
+
+-Select a friend's brother, then tap the make active button to bring that brother into your game.
+
+- Using a friend's brother in your game will earn them a small amount of experience. If your friend uses your brother in their game, you will earn a small amount of experience as well. 
+
+- Every day, each of your friend's brothers you use in gameplay will earn you a bonus reward. This reward is earned after a gameplay session. So use all of your friend's brothers in game, every day.
+
+-Your device must be connected to a network and logged into Game Center and/or facebook to access the Brotherhood.",resolved
+IDS_HELP_BROHOOD_TITLE,0x36C6C08F,packTOC_xga.dat,pack0_core_xga,0x21FF018F,0x018F,Brotherhood,resolved
+IDS_HELP_CONTROLS_BODY,0x3E0DBBCE,packTOC_xga.dat,pack0_core_xga,0x21FF018A,0x018A,"
+^f1Controls
+^f0
+-	The left control stick moves your Gun Bro.
+
+-	The right control stick fires your gun in the direction pressed.
+
+- The red panic button next to the left control stick opens your Smartillery menu. From here you can use your Smartillery power ups.
+
+- The blue toggle button next to the right control stick switches your guns.
+
+- The red pause button at the top left of the screen will bring up the pause menu options.",resolved
+IDS_HELP_CONTROLS_TITLE,0xF0CDCDF6,packTOC_xga.dat,pack0_core_xga,0x21FF0189,0x0189,Controls,resolved
+IDS_HELP_EXPERIENCE_BODY,0xC6B4AC41,packTOC_xga.dat,pack0_core_xga,0x21FF018C,0x018C,"
+^f1Experience
+^f0
+-	Each enemy kill earns you experience.
+
+- Experience levels up your character, which increases your health and unlocks items in the store.",resolved
+IDS_HELP_EXPERIENCE_TITLE,0x6B5CB519,packTOC_xga.dat,pack0_core_xga,0x21FF018B,0x018B,Experience,resolved
+IDS_HELP_MASTERED_BODY,0xE67346D8,packTOC_xga.dat,pack0_core_xga,0x21FF019A,0x019A,"
+^f1Weapon Upgrades
+^f0
+- Every weapon in the game earns XP as you use it in battle.
+
+- Upgrades can be purchased from the store.
+
+- Upgrading a weapon can yield increases in Damage, RPM, Speed and Critical Hit Damage.",resolved
+IDS_HELP_MASTERED_TITLE,0x77221C9B,packTOC_xga.dat,pack0_core_xga,0x21FF0199,0x0199,Upgrades,resolved
+IDS_HELP_MULTIPLAYER_BODY,0x4757B71B,packTOC_xga.dat,pack0_core_xga,0x21FF01A3,0x01A3,"
+^f1Multiplayer
+^f0
+- Login to Game Center to access Multiplayer 
+
+- After selecting a planet and wave, use select automatch to find a game.
+
+- You can also invite any of your GameCenter friends to start a match.",resolved
+IDS_HELP_MULTIPLAYER_TITLE,0x756D03A1,packTOC_xga.dat,pack0_core_xga,0x21FF01A2,0x01A2,Multiplayer,resolved
+IDS_HELP_PERFECT_BODY,0x0E5C3DC7,packTOC_xga.dat,pack0_core_xga,0x21FF0198,0x0198,"
+^f1Perfect Wave
+^f0
+- When you complete a wave without taking any damage, you will earn a perfect wave.
+
+- Each perfect wave earns you an additional 10 percent Xplodium for that wave.",resolved
+IDS_HELP_PERFECT_TITLE,0xE6D5AD65,packTOC_xga.dat,pack0_core_xga,0x21FF0197,0x0197,Perfect,resolved
+IDS_HELP_REFINE_BODY,0x1B8E1C60,packTOC_xga.dat,pack0_core_xga,0x21FF0195,0x0195,"
+^f1Refinement
+^f0
+-	The refinery processes all of the Xplodium ore you've earned in battle, and pays you coin for it.
+
+- You must refine all of your Xplodium after each battle.
+
+-	Tap a refinement chamber to deposit all of your Xplodium into that chamber.
+
+- Once the appropriate time has passed, tap the chamber again to collect your coin
+
+- The instant chamber will yield 100 percent of the Xplodium you deposit.
+
+- Additional permanent refinement chambers can be purchased to drastically increase your yield/payout, while taking more time to refine.
+
+-	Your device must be connected to a network and logged into Game Center and/or facebook to access all but the instant refinement chamber.",resolved
+IDS_HELP_REFINE_TITLE,0xB8E7B714,packTOC_xga.dat,pack0_core_xga,0x21FF0194,0x0194,Refinery,resolved
+IDS_HELP_STORE_BODY,0x1A134C6F,packTOC_xga.dat,pack0_core_xga,0x21FF0193,0x0193,"
+^f1Store
+^f0
+- The store contains guns, armor, Smartillery power ups, and the bank.
+
+-	Guns
+After purchasing a new gun, tap the equip button to equip that gun. You may have two guns equipped at a time.
+
+-	Armor
+Armors provide stat modifiers to defense, attack, and speed. After purchasing a new armor, tap the equip button to equip that armor. You can equip head, torso, and leg armors.
+
+-	Power Ups
+Smartillery power ups include health packs, shields, full screen attacks, and other powerful in-game consumables. These items can be used by pressing the red panic button during gameplay.
+
+- Bank
+From the bank, you can purchase coin and War Buck packages. Certain items in the store can only be purchased with War Bucks. While coin can be earned by refining Xplodium, War Bucks can only be obtained through the bank. The bank also has two options for converting your left over War Bucks into coin.",resolved
+IDS_HELP_STORE_TITLE,0xA125B7E4,packTOC_xga.dat,pack0_core_xga,0x21FF0192,0x0192,Store,resolved
+IDS_HELP_STREAK_BODY,0xD46E1C64,packTOC_xga.dat,pack0_core_xga,0x21FF01AB,0x01AB,"
+^f1Kill Streaks
+^f0
+- Consecutive Zombie kills without taking damage in Horde mode will multiply points earned for an enemy kill. ",resolved
+IDS_HELP_STREAK_TITLE,0x46E7B758,packTOC_xga.dat,pack0_core_xga,0x21FF01AA,0x01AA,Kill Streaks,resolved
+IDS_HELP_TIPSTRICKS_BODY,0x0FC5CBFD,packTOC_xga.dat,pack0_core_xga,0x21FF019C,0x019C,"
+^f1Tips and Tricks
+^f0
+- Keep moving around the map to avoid being surrounded by your enemies.
+
+- Some maps may have objects in the environment that can be used to your advantage.
+
+- Some enemies have weak points, or can only be hurt a certain way. You'll know you've found their weakness if they flash white when you attack them.
+
+-	Use your brotherhood. Your friends' upgraded brothers may help even the odds.
+
+- Stock up on Smartillery power ups before heading into battle.
+
+- Earn more Xplodium by completing consecutive waves. Each consecutive wave cleared increases the amount of Xplodium you'll earn.
+
+- Visit the store often to upgrade your guns, armor, and to purchase Smartillery power ups.",resolved
+IDS_HELP_TIPSTRICKS_TITLE,0xFC4ACED5,packTOC_xga.dat,pack0_core_xga,0x21FF019B,0x019B,Game Tips,resolved
+IDS_HELP_TITLE,0x9F71AB44,packTOC_xga.dat,pack0_core_xga,0x21FF0187,0x0187,Help,resolved
+IDS_HELP_VOICE_CHAT_BODY,0xB7CDDA27,packTOC_xga.dat,pack0_core_xga,0x21FF01A5,0x01A5,"
+^f1Voice Chat
+^f0
+- Voice Chat is only available with an active WiFi connection.
+
+- Tap the Microphone icon during Multiplayer gameplay to mute Voice Chat.",resolved
+IDS_HELP_VOICE_CHAT_TITLE,0x7CCBD37E,packTOC_xga.dat,pack0_core_xga,0x21FF01A4,0x01A4,Voice Chat,resolved
+IDS_HELP_XPLODIUM_BODY,0x46F74868,packTOC_xga.dat,pack0_core_xga,0x21FF018E,0x018E,"
+^f1Xplodium
+^f0
+-	Each enemy kill earns you Xplodium.
+
+- Xplodium ore earned in battle is refined, then traded for coin at the end of each play session.
+
+- The Xplodium multiplier at the top right of the screen details how much bonus Xplodium you are currently earning. Each consecutive wave completed increases this multiplier.",resolved
+IDS_HELP_XPLODIUM_TITLE,0x7F62F791,packTOC_xga.dat,pack0_core_xga,0x21FF018D,0x018D,Xplodium,resolved
+IDS_HOW_TO_GET_BROS_BODY,0xB1B3A098,packTOC_xga.dat,pack0_core_xga,0x21FF037A,0x037A,"Login to facebook to add your friends to your brotherhood!
+When your friends login to facebook through gun bros,
+they'll be automatically added to your brotherhood!",resolved
+IDS_HOW_TO_GET_BROS_TITLE,0x1B2C788E,packTOC_xga.dat,pack0_core_xga,0x21FF0379,0x0379,How to get Bros,resolved
+IDS_HUD_BOSS_WAVE_CLEAR,0xAB075666,packTOC_xga.dat,pack0_core_xga,0x21FF028A,0x028A,T.O.O.L Captain Defeated!,resolved
+IDS_HUD_BOSS_WAVE_START,0xAB16D350,packTOC_xga.dat,pack0_core_xga,0x21FF0289,0x0289,Danger Bro!,resolved
+IDS_HUD_CHALLENGE_UPDATE,0xA73754A1,packTOC_xga.dat,pack0_core_xga,0x21FF0293,0x0293,Bro-Op Update,resolved
+IDS_HUD_DEATH_MATCH_DEATH,0x7F00BD25,packTOC_xga.dat,pack0_core_xga,0x21FF0491,0x0491,Death  %d,resolved
+IDS_HUD_DEATH_MATCH_KILL,0xD7F0F71F,packTOC_xga.dat,pack0_core_xga,0x21FF0490,0x0490,Kill  %d,resolved
+IDS_HUD_DEATH_MATCH_START1,0xF16AD6A6,packTOC_xga.dat,pack0_core_xga,0x21FF0494,0x0494,%i Kills to Win!,resolved
+IDS_HUD_DEATH_MATCH_START2,0xF16AD6A5,packTOC_xga.dat,pack0_core_xga,0x21FF0495,0x0495,%i Mins to Kill!,resolved
+IDS_HUD_DEATH_MATCH_USE_POWERUP,0xE9DC17D9,packTOC_xga.dat,pack0_core_xga,0x21FF0493,0x0493,%s  used!,resolved
+IDS_HUD_DEATHS,0x11D02B02,packTOC_xga.dat,pack0_core_xga,0x21FF0292,0x0292, Deaths,resolved
+IDS_HUD_ENEMY_DAMAGE,0x1A0E5E46,packTOC_xga.dat,pack0_core_xga,0x21FF028B,0x028B,Enemy Damage ^,resolved
+IDS_HUD_ENEMY_HEALTH,0x1ACA927B,packTOC_xga.dat,pack0_core_xga,0x21FF028C,0x028C,Enemy Health ^,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack0_core_xga,0x21FF0273,0x0273,+%d xp,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack1_xga,0x21FF0258,0x0258,+%d xp,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack3_xga,0x21FF0272,0x0272,+%d xp,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack4_xga,0x21FF059A,0x059A,+%d xp,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack5_xga,0x21FF0403,0x0403,+%d xp,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack7_xga,0x21FF01D1,0x01D1,+%d xp,resolved
+IDS_HUD_EXPERIENCE_UP,0xC10AC8BB,packTOC_xga.dat,pack9_xga,0x21FF01B4,0x01B4,+%d xp,resolved
+IDS_HUD_HEALTH_UP,0x032DCAE1,packTOC_xga.dat,pack0_core_xga,0x21FF0276,0x0276,Health Up,resolved
+IDS_HUD_HORDE_CLEAR,0xBDA740F2,packTOC_xga.dat,pack0_core_xga,0x21FF0287,0x0287,Horde %i Cleared!,resolved
+IDS_HUD_HORDE_START,0xBDB6C5C4,packTOC_xga.dat,pack0_core_xga,0x21FF0286,0x0286,Horde %i Start!,resolved
+IDS_HUD_KILL_STREAK,0x2771A395,packTOC_xga.dat,pack0_core_xga,0x21FF028F,0x028F,Streak,resolved
+IDS_HUD_KILLS,0x1122CE2E,packTOC_xga.dat,pack0_core_xga,0x21FF0291,0x0291, Kills,resolved
+IDS_HUD_LEVEL_REACHED,0xB6B068B0,packTOC_xga.dat,pack0_core_xga,0x21FF0280,0x0280,Level %i!,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack0_core_xga,0x21FF0275,0x0275,Level Up,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack1_xga,0x21FF0259,0x0259,Level Up,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack3_xga,0x21FF0273,0x0273,Level Up,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack4_xga,0x21FF059B,0x059B,Level Up,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack5_xga,0x21FF0404,0x0404,Level Up,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack7_xga,0x21FF01D2,0x01D2,Level Up,resolved
+IDS_HUD_LEVEL_UP,0x514A4B0F,packTOC_xga.dat,pack9_xga,0x21FF01B5,0x01B5,Level Up,resolved
+IDS_HUD_POINTS_UP,0xAB0C7AF9,packTOC_xga.dat,pack0_core_xga,0x21FF0274,0x0274,+%d pts,resolved
+IDS_HUD_REV_CLEAR,0x150A91B9,packTOC_xga.dat,pack0_core_xga,0x21FF0285,0x0285,Revolution %i Cleared!,resolved
+IDS_HUD_SCORE,0x113A6CD8,packTOC_xga.dat,pack0_core_xga,0x21FF0290,0x0290, Score,resolved
+IDS_HUD_WAVE_CLEAR,0x4B668DA7,packTOC_xga.dat,pack0_core_xga,0x21FF0282,0x0282,Wave %i Cleared!,resolved
+IDS_HUD_WAVE_PERFECT,0x750CC42F,packTOC_xga.dat,pack0_core_xga,0x21FF0283,0x0283,Perfect Wave!,resolved
+IDS_HUD_WAVE_PERFECT_SUMMARY,0xD31D5053,packTOC_xga.dat,pack0_core_xga,0x21FF0284,0x0284,+%i%% Xplodium,resolved
+IDS_HUD_WAVE_START,0x4B770891,packTOC_xga.dat,pack0_core_xga,0x21FF0281,0x0281,Wave %i Start!,resolved
+IDS_HUD_WEAPON_MASTERED,0x0A62F0BF,packTOC_xga.dat,pack0_core_xga,0x21FF0277,0x0277,Weapon Mastered,resolved
+IDS_IAP_PLEASE_WAIT_BODY,0xC564CFFC,packTOC_xga.dat,pack0_core_xga,0x21FF03AE,0x03AE,Your store request is being processed.,resolved
+IDS_IAP_PLEASE_WAIT_TITLE,0x565A8EC9,packTOC_xga.dat,pack0_core_xga,0x21FF03AD,0x03AD,Please wait...,resolved
+IDS_INCENTIVE_COMMON,0xD11AF817,packTOC_xga.dat,pack0_core_xga,0x21FF041E,0x041E,Ω%i,resolved
+IDS_INCENTIVE_INSTALL_ANON1,0x14AEFBCE,packTOC_xga.dat,pack0_core_xga,0x21FF041A,0x041A,%i invited friends,resolved
+IDS_INCENTIVE_INSTALL_ANON2,0x14AEFBCD,packTOC_xga.dat,pack0_core_xga,0x21FF041B,0x041B,an invited friend,resolved
+IDS_INCENTIVE_INSTALL_BODY,0xF14ADF18,packTOC_xga.dat,pack0_core_xga,0x21FF0419,0x0419,Congratulations! You have received a bonus as a result of %s playing Gun Brothers!,resolved
+IDS_INCENTIVE_INSTALL_NAME1,0x14A1097E,packTOC_xga.dat,pack0_core_xga,0x21FF041C,0x041C, and %i invited friends,resolved
+IDS_INCENTIVE_INSTALL_NAME2,0x14A1097D,packTOC_xga.dat,pack0_core_xga,0x21FF041D,0x041D, and %i invited friend,resolved
+IDS_INCENTIVE_INVITE_ANON1,0xA9641F9C,packTOC_xga.dat,pack0_core_xga,0x21FF0415,0x0415,%i friends,resolved
+IDS_INCENTIVE_INVITE_ANON2,0xA9641F9F,packTOC_xga.dat,pack0_core_xga,0x21FF0416,0x0416,a friend,resolved
+IDS_INCENTIVE_INVITE_BODY,0xDA96706D,packTOC_xga.dat,pack0_core_xga,0x21FF0414,0x0414,Congratulations! You have received a bonus for inviting %s to play Gun Brothers!,resolved
+IDS_INCENTIVE_INVITE_NAME1,0xA96BED2C,packTOC_xga.dat,pack0_core_xga,0x21FF0417,0x0417, and %i friends,resolved
+IDS_INCENTIVE_INVITE_NAME2,0xA96BED2F,packTOC_xga.dat,pack0_core_xga,0x21FF0418,0x0418, and %i friend,resolved
+IDS_INCENTIVE_RARE,0xA9D00304,packTOC_xga.dat,pack0_core_xga,0x21FF041F,0x041F,δ%i,resolved
+IDS_INCENTIVE_TITLE,0x9D06A69F,packTOC_xga.dat,pack0_core_xga,0x21FF0413,0x0413,Friend Bonus Received!,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack0_core_xga,0x21FF0162,0x0162,Loading...,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack1_xga,0x21FF0240,0x0240,Loading...,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack3_xga,0x21FF025A,0x025A,Loading...,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack4_xga,0x21FF0582,0x0582,Loading...,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack5_xga,0x21FF03EB,0x03EB,Loading...,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack7_xga,0x21FF01B9,0x01B9,Loading...,resolved
+IDS_LOADING,0xB8B5F0B1,packTOC_xga.dat,pack9_xga,0x21FF019C,0x019C,Loading...,resolved
+IDS_LOCAL_NOTIFICATION_CHAMBER_ALERT,0x3A7A7B2E,packTOC_xga.dat,pack0_core_xga,0x21FF0436,0x0436,Go to Refinery,resolved
+IDS_LOCAL_NOTIFICATION_CHAMBER_BODY,0xA3A7E4AC,packTOC_xga.dat,pack0_core_xga,0x21FF0437,0x0437,Your coins are ready!,resolved
+IDS_LOCAL_NOTIFICATION_DAILY_BONUS_BODY,0x065E63AE,packTOC_xga.dat,pack0_core_xga,0x21FF0438,0x0438,"Your daily bonus is ready!
+
+Play Gun Bros to collect!",resolved
+IDS_LOGIN_CONFLICT_DESC,0x30BA02E9,packTOC_xga.dat,pack0_core_xga,0x21FF01DF,0x01DF,We can't connect this %s account with your brotherhood because it is already associated with another Gun Bros. user.,resolved
+IDS_LOGIN_CONFLICT_TITLE,0x0BB0E929,packTOC_xga.dat,pack0_core_xga,0x21FF01DE,0x01DE,ACCOUNT CONFLICT!!!,resolved
+IDS_LOGIN_DUPLICATE_DESC,0x2A70C385,packTOC_xga.dat,pack0_core_xga,0x21FF01E1,0x01E1,We can't connect this %s account with your brotherhood because you already have another account associated with it.,resolved
+IDS_LOGIN_DUPLICATE_TITLE,0xA71CFFF7,packTOC_xga.dat,pack0_core_xga,0x21FF01E0,0x01E0,ACCOUNT CONFLICT!!!,resolved
+IDS_LOGIN_FB_LINK_ERROR_DESC,0x59848138,packTOC_xga.dat,pack0_core_xga,0x21FF01E3,0x01E3,We can't connect your Facebook account with your brotherhood because you are not signed into Game Center.,resolved
+IDS_LOGIN_FB_LINK_ERROR_TITLE,0x9848D430,packTOC_xga.dat,pack0_core_xga,0x21FF01E2,0x01E2,LOGIN ERROR!!!,resolved
+IDS_LOTTERY_BUY,0xBD6A0FA8,packTOC_xga.dat,pack0_core_xga,0x21FF049F,0x049F,Buy,resolved
+IDS_LOTTERY_LEFT_TEXT_A,0x276AD102,packTOC_xga.dat,pack0_core_xga,0x21FF04A1,0x04A1,Try your luck with a BRO-BOX!  This bronze beauty contains 2 random items from the store!,resolved
+IDS_LOTTERY_LEFT_TEXT_B,0x276AD101,packTOC_xga.dat,pack0_core_xga,0x21FF04A3,0x04A3,Try your luck with a BRO-BOX!  This silver strongbox contains 3 random items from the store!,resolved
+IDS_LOTTERY_LEFT_TEXT_C,0x276AD100,packTOC_xga.dat,pack0_core_xga,0x21FF04A5,0x04A5,Try your luck with a BRO-BOX!  This radiant reliquary contains 7 random items from the store!,resolved
+IDS_LOTTERY_RIGHT_TEXT_A,0xCCA13680,packTOC_xga.dat,pack0_core_xga,0x21FF04A2,0x04A2,Try your luck with a Bro Box! Guns! Armor! Power-ups! Limited Edition Prizes!,resolved
+IDS_LOTTERY_RIGHT_TEXT_B,0xCCA13683,packTOC_xga.dat,pack0_core_xga,0x21FF04A4,0x04A4,Try your luck with a Bro Box! Guns! Armor! Power-ups! Limited Edition Prizes!,resolved
+IDS_LOTTERY_RIGHT_TEXT_C,0xCCA13682,packTOC_xga.dat,pack0_core_xga,0x21FF04A6,0x04A6,Try your luck with a Bro Box! Guns! Armor! Power-ups! Limited Edition Prizes!,resolved
+IDS_LOTTERY_TRY_AGAIN,0xDCA85FC7,packTOC_xga.dat,pack0_core_xga,0x21FF04A0,0x04A0,Try Again!,resolved
+IDS_MAP_EXP_MULT,0xDC3015DB,packTOC_xga.dat,pack0_core_xga,0x21FF027F,0x027F,XP: %d%%,resolved
+IDS_MAP_XPL_MULT,0x05F015DA,packTOC_xga.dat,pack0_core_xga,0x21FF027E,0x027E,XPL: %d%%,resolved
+IDS_MESSAGE_INVITE_FRIENDS_BODY_END,0x597BD8E2,packTOC_xga.dat,pack0_core_xga,0x21FF047B,0x047B, to join!,resolved
+IDS_MESSAGE_INVITE_FRIENDS_BODY_START,0x7BAF422D,packTOC_xga.dat,pack0_core_xga,0x21FF047A,0x047A,I'm playing Gun Bros on iPhone!  ,resolved
+IDS_MESSAGE_INVITE_FRIENDS_FB_ID,0x94615DA1,packTOC_xga.dat,pack0_core_xga,0x21FF047E,0x047E,"
+My FaceBook ID: ",resolved
+IDS_MESSAGE_INVITE_FRIENDS_GC_ID,0x94604DA1,packTOC_xga.dat,pack0_core_xga,0x21FF047D,0x047D,"
+My GameCenter ID: ",resolved
+IDS_MESSAGE_INVITE_FRIENDS_SUBJECT,0x753096F0,packTOC_xga.dat,pack0_core_xga,0x21FF0478,0x0478,Let's play some Gun Bros!,resolved
+IDS_MESSAGE_INVITE_FRIENDS_SUBJECT_DEATHMATCH,0x49561C2A,packTOC_xga.dat,pack0_core_xga,0x21FF0479,0x0479,Let's play some Gun Bros Death Match!,resolved
+IDS_MISSION_HIGH_SCORE,0x48ADAA34,packTOC_xga.dat,pack0_core_xga,0x21FF0333,0x0333,High Score ,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack0_core_xga,0x21FF032C,0x032C,Briefing,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack1_xga,0x21FF02D6,0x02D6,Briefing,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack3_xga,0x21FF02FC,0x02FC,Briefing,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack4_xga,0x21FF0618,0x0618,Briefing,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack5_xga,0x21FF048C,0x048C,Briefing,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack7_xga,0x21FF0249,0x0249,Briefing,resolved
+IDS_MISSION_INFO_BRIEFING,0xDBD548AC,packTOC_xga.dat,pack9_xga,0x21FF022C,0x022C,Briefing,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack0_core_xga,0x21FF032D,0x032D,Objectives,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack1_xga,0x21FF02D7,0x02D7,Objectives,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack3_xga,0x21FF02FD,0x02FD,Objectives,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack4_xga,0x21FF0619,0x0619,Objectives,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack5_xga,0x21FF048D,0x048D,Objectives,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack7_xga,0x21FF024A,0x024A,Objectives,resolved
+IDS_MISSION_INFO_OBJECTIVES,0xE505E918,packTOC_xga.dat,pack9_xga,0x21FF022D,0x022D,Objectives,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack0_core_xga,0x21FF0330,0x0330,Requirements,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack1_xga,0x21FF02D8,0x02D8,Requirements,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack3_xga,0x21FF02FE,0x02FE,Requirements,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack4_xga,0x21FF061A,0x061A,Requirements,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack5_xga,0x21FF048E,0x048E,Requirements,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack7_xga,0x21FF024B,0x024B,Requirements,resolved
+IDS_MISSION_INFO_REQUIREMENTS,0xA353D656,packTOC_xga.dat,pack9_xga,0x21FF022E,0x022E,Requirements,resolved
+IDS_MISSION_INFO_SURVIVAL,0xCD76A756,packTOC_xga.dat,pack0_core_xga,0x21FF032F,0x032F,Survival,resolved
+IDS_MISSION_INFO_WAVE_SELECT,0x4C2428F6,packTOC_xga.dat,pack0_core_xga,0x21FF032E,0x032E,Waves,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack0_core_xga,0x21FF032B,0x032B,Play,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack1_xga,0x21FF02D5,0x02D5,Play,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack3_xga,0x21FF02FB,0x02FB,Play,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack4_xga,0x21FF0617,0x0617,Play,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack5_xga,0x21FF048B,0x048B,Play,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack7_xga,0x21FF0248,0x0248,Play,resolved
+IDS_MISSION_PLAY,0x0AD1D43A,packTOC_xga.dat,pack9_xga,0x21FF022B,0x022B,Play,resolved
+IDS_MISSION_REQUIRED_ITEMS,0xC040394F,packTOC_xga.dat,pack0_core_xga,0x21FF0332,0x0332,"
+
+Required Items:
+",resolved
+IDS_MULTIPLAYER_ACTIVE,0xF943E374,packTOC_xga.dat,pack0_core_xga,0x21FF0392,0x0392,Multi-player,resolved
+IDS_MULTIPLAYER_ACTIVE_VERSUS,0x15044834,packTOC_xga.dat,pack0_core_xga,0x21FF0393,0x0393,Deathmatch,resolved
+IDS_MULTIPLAYER_DISABLED_TITLE,0xE0B95ABC,packTOC_xga.dat,pack0_core_xga,0x21FF03A6,0x03A6,Live Multi-player Offline!,resolved
+IDS_MULTIPLAYER_ENLIST_DESC,0x33044085,packTOC_xga.dat,pack0_core_xga,0x21FF03A7,0x03A7,Login or create a Game Center account to access Live Multi-player action.,resolved
+IDS_MULTIPLAYER_INACTIVE,0xCFB95DD2,packTOC_xga.dat,pack0_core_xga,0x21FF0394,0x0394,Single-player,resolved
+IDS_MULTIPLAYER_LOGIN_BODY,0xD2EA9E87,packTOC_xga.dat,pack0_core_xga,0x21FF0397,0x0397,You must be connected to a network. Login or create a Game Center account to access Multi-player.,resolved
+IDS_MULTIPLAYER_LOGIN_TITLE,0x2EBF8968,packTOC_xga.dat,pack0_core_xga,0x21FF0396,0x0396,,resolved
+IDS_MULTIPLAYER_LOST_CONNECTION_DEAD_BODY,0xFBF8B76A,packTOC_xga.dat,pack0_core_xga,0x21FF038E,0x038E,%s is no longer connected.,resolved
+IDS_MULTIPLAYER_LOST_CONNECTION_DEAD_TITLE,0xBF9D04BA,packTOC_xga.dat,pack0_core_xga,0x21FF038D,0x038D,BRO DOWN,resolved
+IDS_MULTIPLAYER_LOST_CONNECTION_OPTIONS_BODY,0x86A9F0FA,packTOC_xga.dat,pack0_core_xga,0x21FF038C,0x038C,"%s is no longer connected.
+
+",resolved
+IDS_MULTIPLAYER_LOST_CONNECTION_OPTIONS_TITLE,0x6A997EBD,packTOC_xga.dat,pack0_core_xga,0x21FF038B,0x038B,BRO DOWN,resolved
+IDS_MULTIPLAYER_NETWORK_ACTIVITY,0xE3F0DB3D,packTOC_xga.dat,pack0_core_xga,0x21FF0395,0x0395,"%d Recent
+Auto-Matches",resolved
+IDS_MULTIPLAYER_OFFLINE_DESC,0x8BF8A7B4,packTOC_xga.dat,pack0_core_xga,0x21FF03A8,0x03A8,You must be connected to a network and logged into Game Center to access Live Multi-player.,resolved
+IDS_MULTIPLAYER_PLAYER_DATA_EXCHANGE_BODY,0x7D9ECBAD,packTOC_xga.dat,pack0_core_xga,0x21FF0390,0x0390,Creating Bro to Bro Connection...,resolved
+IDS_MULTIPLAYER_PLAYER_DATA_EXCHANGE_TITLE,0xD9FAC8C2,packTOC_xga.dat,pack0_core_xga,0x21FF038F,0x038F,Multiplayer Loading,resolved
+IDS_MULTIPLAYER_SLOW_CONNECTION,0xBCC2D3DA,packTOC_xga.dat,pack0_core_xga,0x21FF03A3,0x03A3,SLOW CONNECTION,resolved
+IDS_MULTIPLAYER_SWITCH_TO_BROTHER_AI,0x8CAAA600,packTOC_xga.dat,pack0_core_xga,0x21FF0391,0x0391,Continue Offline,resolved
+IDS_MULTIPLAYER_SWITCH_TO_BROTHER_AI_PAUSE_MENU_BODY,0x33F1BDA5,packTOC_xga.dat,pack0_core_xga,0x21FF03A5,0x03A5,"
+^f1Play Offline
+^f0
+End multiplayer match but continue to play offline using brother AI.",resolved
+IDS_MULTIPLAYER_SWITCH_TO_BROTHER_AI_PAUSE_MENU_TITLE,0x3F1DAB46,packTOC_xga.dat,pack0_core_xga,0x21FF03A4,0x03A4,Play Offline,resolved
+IDS_MULTIPLAYER_UNAVAILABLE_DESC,0x67A60C38,packTOC_xga.dat,pack0_core_xga,0x21FF03A9,0x03A9,You must have a newer OS version with support for Game Center in order to access Live Multi-player.,resolved
+IDS_MULTIPLAYER_VERSION_CHANGE_DESC,0x2BAC64EF,packTOC_xga.dat,pack0_core_xga,0x21FF01D8,0x01D8,"Your friend wants to play multiplayer.
+
+You need the update to play! 
+
+ visit the App Store to update now?",resolved
+IDS_MULTIPLAYER_WRAPUP_ASSISTS,0x44546C47,packTOC_xga.dat,pack0_core_xga,0x21FF0399,0x0399,Assists,resolved
+IDS_MULTIPLAYER_WRAPUP_DEATHS,0x44327A76,packTOC_xga.dat,pack0_core_xga,0x21FF039C,0x039C,Deaths,resolved
+IDS_MULTIPLAYER_WRAPUP_KILLS,0x544DEB39,packTOC_xga.dat,pack0_core_xga,0x21FF0398,0x0398,Kills,resolved
+IDS_MULTIPLAYER_WRAPUP_TOTALXP,0x5093F384,packTOC_xga.dat,pack0_core_xga,0x21FF03A0,0x03A0,Total XP,resolved
+IDS_MULTIPLAYER_WRAPUP_WAVE_START_ENDLESS,0xABA3C255,packTOC_xga.dat,pack0_core_xga,0x21FF03A1,0x03A1,Next wave in ,resolved
+IDS_MULTIPLAYER_WRAPUP_WAVE_START_SURVIVAL,0xC046E237,packTOC_xga.dat,pack0_core_xga,0x21FF03A2,0x03A2,Next horde in ,resolved
+IDS_MULTIPLAYER_WRAPUP_XP,0x3AA545A3,packTOC_xga.dat,pack0_core_xga,0x21FF039B,0x039B,XP,resolved
+IDS_MULTIPLAYER_WRAPUP_XPLODIUM,0xC7B1A958,packTOC_xga.dat,pack0_core_xga,0x21FF039A,0x039A,Xplodium,resolved
+IDS_MUSIC_BODY,0x77BA0099,packTOC_xga.dat,pack0_core_xga,0x21FF017A,0x017A,"
+^f1Background Music
+^f0
+Turns background music ON or OFF.",resolved
+IDS_MUSIC_OFF_GAME,0xD9BB5E2F,packTOC_xga.dat,pack0_core_xga,0x21FF015B,0x015B,Music Off,resolved
+IDS_MUSIC_ON_GAME,0xAD03331E,packTOC_xga.dat,pack0_core_xga,0x21FF015A,0x015A,Music On,resolved
+IDS_NOTIF_TOGGLE_BODY,0x99C5DD10,packTOC_xga.dat,pack0_core_xga,0x21FF0186,0x0186,"
+^f1Alerts
+^f0
+Turns alerts ON or OFF.",resolved
+IDS_NOTIF_TOGGLE_OFF_GAME,0x0432AC90,packTOC_xga.dat,pack0_core_xga,0x21FF015F,0x015F,Alerts Off,resolved
+IDS_NOTIF_TOGGLE_ON_GAME,0x50DBAC04,packTOC_xga.dat,pack0_core_xga,0x21FF015E,0x015E,Alerts On,resolved
+IDS_OFFERS,0x6BB22EA2,packTOC_xga.dat,pack0_core_xga,0x21FF0168,0x0168,Earn,resolved
+IDS_PLANET_REQUIRED_LVL,0x5B1D7DE9,packTOC_xga.dat,pack0_core_xga,0x21FF0321,0x0321,Level %i required,resolved
+IDS_PLAYER_SELECT,0x6CD504E9,packTOC_xga.dat,pack0_core_xga,0x21FF01C8,0x01C8,Select Your Gun Brother,resolved
+IDS_POPUP_INCENTIVES_ADCOLONY,0xEFEF00D1,packTOC_xga.dat,pack0_core_xga,0x21FF0480,0x0480,WATCH A VIDEO TO EARN WARBUCKS,resolved
+IDS_POPUP_INCENTIVES_TAPJOY,0x69BBBA22,packTOC_xga.dat,pack0_core_xga,0x21FF0481,0x0481,COMPLETE AN ACTION TO EARN WARBUCKS,resolved
+IDS_POPUP_INCENTIVES_TITLE,0xB69B3ECD,packTOC_xga.dat,pack0_core_xga,0x21FF047F,0x047F,FREE WARBUCKS,resolved
+IDS_POPUP_INVITE_FRIENDS_BODY,0xC5F8F6DE,packTOC_xga.dat,pack0_core_xga,0x21FF0475,0x0475,"EARN δδδ WHEN INVITED FACEBOOK
+FRIENDS PLAY GUN BROS!",resolved
+IDS_POPUP_INVITE_FRIENDS_EQUALS,0xD899D256,packTOC_xga.dat,pack0_core_xga,0x21FF0472,0x0472,=,resolved
+IDS_POPUP_INVITE_FRIENDS_FRIENDS,0x8AB16671,packTOC_xga.dat,pack0_core_xga,0x21FF0471,0x0471,FRIENDS,resolved
+IDS_POPUP_INVITE_FRIENDS_GET_MORE,0xADDC5C5D,packTOC_xga.dat,pack0_core_xga,0x21FF0473,0x0473,GET MORE,resolved
+IDS_POPUP_INVITE_FRIENDS_INVITE_MORE,0xBC6D1E0B,packTOC_xga.dat,pack0_core_xga,0x21FF0470,0x0470,INVITE MORE,resolved
+IDS_POPUP_INVITE_FRIENDS_MAXED_BODY,0x06DD7310,packTOC_xga.dat,pack0_core_xga,0x21FF0477,0x0477,Invite more friends tomorrow and get more coins!,resolved
+IDS_POPUP_INVITE_FRIENDS_MAXED_TITLE,0x6DC64015,packTOC_xga.dat,pack0_core_xga,0x21FF0476,0x0476,Maximum Daily Bonus Reached,resolved
+IDS_POPUP_INVITE_FRIENDS_MONEY,0x5C806675,packTOC_xga.dat,pack0_core_xga,0x21FF0474,0x0474,LOOT,resolved
+IDS_RATE_APP_BODY,0x53FD2A4F,packTOC_xga.dat,pack0_core_xga,0x21FF03B0,0x03B0,"Enjoying the mayhem that is Gun Bros.?
+Please take a moment to tell the rest of the world what you think with a review.",resolved
+IDS_RATE_APP_TITLE,0x3FC4D6E0,packTOC_xga.dat,pack0_core_xga,0x21FF03AF,0x03AF,Thanks for Playing!,resolved
+IDS_RESMAN_CATEGORY1,0x207A2D7C,packTOC_xga.dat,pack0_core_xga,0x21FF026F,0x026F,Standard,resolved
+IDS_RESMAN_CATEGORY2,0x207A2D7F,packTOC_xga.dat,pack0_core_xga,0x21FF0270,0x0270,Premium,resolved
+IDS_RESMAN_COLLECT,0xDDD8EEEE,packTOC_xga.dat,pack0_core_xga,0x21FF0268,0x0268,Collect!,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack0_core_xga,0x21FF026A,0x026A,Xplodium: %i / %i,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack1_xga,0x21FF024B,0x024B,Xplodium: %i / %i,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack3_xga,0x21FF0265,0x0265,Xplodium: %i / %i,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack4_xga,0x21FF058D,0x058D,Xplodium: %i / %i,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack5_xga,0x21FF03F6,0x03F6,Xplodium: %i / %i,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack7_xga,0x21FF01C4,0x01C4,Xplodium: %i / %i,resolved
+IDS_RESMAN_COMMITMENT,0x9F483C69,packTOC_xga.dat,pack9_xga,0x21FF01A7,0x01A7,Xplodium: %i / %i,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack0_core_xga,0x21FF026C,0x026C,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack1_xga,0x21FF024D,0x024D,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack3_xga,0x21FF0267,0x0267,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack4_xga,0x21FF058F,0x058F,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack5_xga,0x21FF03F8,0x03F8,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack7_xga,0x21FF01C6,0x01C6,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_EFFICIENCY,0x2BF5B7DD,packTOC_xga.dat,pack9_xga,0x21FF01A9,0x01A9,Refinement Efficiency over %s is %i%.,resolved
+IDS_RESMAN_FACEBOOK_LINKED_BODY,0xB20850B4,packTOC_xga.dat,pack0_core_xga,0x21FF0421,0x0421,The F.R.A.G.G.E.D. bank has awarded you 5 War Bucks to aid in your fight against the T.O.O.L.,resolved
+IDS_RESMAN_FACEBOOK_LINKED_TITLE,0x20937A61,packTOC_xga.dat,pack0_core_xga,0x21FF0420,0x0420,Gun Brothers Linked To FaceBook!,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack0_core_xga,0x21FF0266,0x0266,Get Coins!,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack1_xga,0x21FF0245,0x0245,Instant,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack3_xga,0x21FF025F,0x025F,Instant,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack4_xga,0x21FF0587,0x0587,Instant,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack5_xga,0x21FF03F0,0x03F0,Instant,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack7_xga,0x21FF01BE,0x01BE,Instant,resolved
+IDS_RESMAN_INTERVAL0,0xD06EAF27,packTOC_xga.dat,pack9_xga,0x21FF01A1,0x01A1,Instant,resolved
+IDS_RESMAN_MOMONEY_BODY,0x08665684,packTOC_xga.dat,pack0_core_xga,0x21FF026E,0x026E,"The refinery you are trying to buy costs %s. You need an additional %s.
+
+Tap buy to get more!",resolved
+IDS_RESMAN_MOMONEY_TITLE,0x8673195A,packTOC_xga.dat,pack0_core_xga,0x21FF026D,0x026D,Insufficient Funds!,resolved
+IDS_RESMAN_READY,0x8ACC7574,packTOC_xga.dat,pack0_core_xga,0x21FF0267,0x0267,Touch!,resolved
+IDS_RESMAN_SIDEBARINFO,0x7DCC179F,packTOC_xga.dat,pack0_core_xga,0x21FF0269,0x0269,"To Continue, Click a refinery and convert xplodium into coins. 
+
+Unlock refineries by collecting from the previous refinery.",resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack0_core_xga,0x21FF026B,0x026B,Coins %i%,resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack1_xga,0x21FF024C,0x024C,Yield %i,resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack3_xga,0x21FF0266,0x0266,Yield %i,resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack4_xga,0x21FF058E,0x058E,Yield %i,resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack5_xga,0x21FF03F7,0x03F7,Yield %i,resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack7_xga,0x21FF01C5,0x01C5,Yield %i,resolved
+IDS_RESMAN_YIELD,0x8AC7B1E9,packTOC_xga.dat,pack9_xga,0x21FF01A8,0x01A8,Yield %i,resolved
+IDS_RESUME,0x6A606F44,packTOC_xga.dat,pack0_core_xga,0x21FF0165,0x0165,Resume,resolved
+IDS_RESUME_BODY,0xA41DCD1F,packTOC_xga.dat,pack0_core_xga,0x21FF0183,0x0183,"
+^f1Resume Game
+^f0
+There'll be plenty of time to do boring things later.
+
+Get back to the action!",resolved
+IDS_RESUME_TITLE,0x41CAA0F0,packTOC_xga.dat,pack0_core_xga,0x21FF0182,0x0182,Resume,resolved
+IDS_SAVE_STATUS_BODY1,0x45A1C747,packTOC_xga.dat,pack0_core_xga,0x21FF01A7,0x01A7,"
+^f1Saved on Device
+^f0
+Your most recent save data is currently stored only on your device.
+
+Sign in to a social network and play online for your save to be backed up online.
+
+You may have a save conflict the next time you are online and will have to choose which save data to use.",resolved
+IDS_SAVE_STATUS_BODY2,0x45A1C744,packTOC_xga.dat,pack0_core_xga,0x21FF01A9,0x01A9,"
+^f1Saved Online
+^f0
+Your most recent save data is currently stored online.
+
+Your device's save is in sync with your online save.",resolved
+IDS_SAVE_STATUS_TITLE,0x45B7B663,packTOC_xga.dat,pack0_core_xga,0x21FF01A6,0x01A6,Save Status,resolved
+IDS_SESSION_CHANGE_DESC,0xE3A610B1,packTOC_xga.dat,pack0_core_xga,0x21FF01D4,0x01D4,"Looks like another device has been used to play Gun Bros. with your Gun Bros. account. We have to relaunch the app to get any changes to your account made elsewhere.
+
+Progress in the current play session may be lost.",resolved
+IDS_SESSION_CHANGE_TITLE,0x3A71CCA4,packTOC_xga.dat,pack0_core_xga,0x21FF01D3,0x01D3,Gun Bros. Session Change,resolved
+IDS_SHOP_ASYNCHRONOUS_COINS_BODY_ANDROID,0xB16DB0EC,packTOC_xga.dat,pack0_core_xga,0x21FF022B,0x022B,Your previous purchase(s) totalling %i Coins have been awarded to you.,resolved
+IDS_SHOP_ASYNCHRONOUS_GIVE_TITLE_ANDROID,0x4AA61B37,packTOC_xga.dat,pack0_core_xga,0x21FF0229,0x0229,Previous Purchase,resolved
+IDS_SHOP_ASYNCHRONOUS_WB_AND_COINS_BODY_ANDROID,0x986A60A5,packTOC_xga.dat,pack0_core_xga,0x21FF022C,0x022C,Your previous purchases totalling δ%i War Bucks and %i Coins have been awarded to you.,resolved
+IDS_SHOP_ASYNCHRONOUS_WB_BODY_ANDROID,0xA3F7FAB3,packTOC_xga.dat,pack0_core_xga,0x21FF022A,0x022A,Your previous purchase(s) totalling δ%i War Bucks have been awarded to you.,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack0_core_xga,0x21FF029A,0x029A,Buy,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack1_xga,0x21FF0272,0x0272,Buy,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack3_xga,0x21FF028C,0x028C,Buy,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack4_xga,0x21FF05B4,0x05B4,Buy,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack5_xga,0x21FF041D,0x041D,Buy,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack7_xga,0x21FF01EB,0x01EB,Buy,resolved
+IDS_SHOP_BUY,0x7CAD6663,packTOC_xga.dat,pack9_xga,0x21FF01CE,0x01CE,Buy,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack0_core_xga,0x21FF02A4,0x02A4,Guns,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack1_xga,0x21FF0274,0x0274,Guns,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack3_xga,0x21FF028E,0x028E,Guns,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack4_xga,0x21FF05B6,0x05B6,Guns,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack5_xga,0x21FF041F,0x041F,Guns,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack7_xga,0x21FF01ED,0x01ED,Guns,resolved
+IDS_SHOP_CATEGORY1,0x2A6F14C7,packTOC_xga.dat,pack9_xga,0x21FF01D0,0x01D0,Guns,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack0_core_xga,0x21FF02A5,0x02A5,Armor,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack1_xga,0x21FF0275,0x0275,Armor,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack3_xga,0x21FF028F,0x028F,Armor,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack4_xga,0x21FF05B7,0x05B7,Armor,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack5_xga,0x21FF0420,0x0420,Armor,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack7_xga,0x21FF01EE,0x01EE,Armor,resolved
+IDS_SHOP_CATEGORY2,0x2A6F14C4,packTOC_xga.dat,pack9_xga,0x21FF01D1,0x01D1,Armor,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack0_core_xga,0x21FF02A6,0x02A6,Power Ups,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack1_xga,0x21FF0276,0x0276,Special,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack3_xga,0x21FF0290,0x0290,Special,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack4_xga,0x21FF05B8,0x05B8,Special,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack5_xga,0x21FF0421,0x0421,Special,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack7_xga,0x21FF01EF,0x01EF,Special,resolved
+IDS_SHOP_CATEGORY3,0x2A6F14C5,packTOC_xga.dat,pack9_xga,0x21FF01D2,0x01D2,Special,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack0_core_xga,0x21FF02A7,0x02A7,Bank,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack1_xga,0x21FF0277,0x0277,Power Ups,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack3_xga,0x21FF0291,0x0291,Power Ups,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack4_xga,0x21FF05B9,0x05B9,Power Ups,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack5_xga,0x21FF0422,0x0422,Power Ups,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack7_xga,0x21FF01F0,0x01F0,Power Ups,resolved
+IDS_SHOP_CATEGORY4,0x2A6F14C2,packTOC_xga.dat,pack9_xga,0x21FF01D3,0x01D3,Power Ups,resolved
+IDS_SHOP_COMMON,0xE66D3E74,packTOC_xga.dat,pack0_core_xga,0x21FF02A0,0x02A0,Ω%i,resolved
+IDS_SHOP_CONVERT,0x66D15CC5,packTOC_xga.dat,pack0_core_xga,0x21FF029E,0x029E,Convert,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack0_core_xga,0x21FF029B,0x029B,Equip,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack1_xga,0x21FF0273,0x0273,Equip,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack3_xga,0x21FF028D,0x028D,Equip,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack4_xga,0x21FF05B5,0x05B5,Equip,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack5_xga,0x21FF041E,0x041E,Equip,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack7_xga,0x21FF01EC,0x01EC,Equip,resolved
+IDS_SHOP_EQUIP,0xAF612BBC,packTOC_xga.dat,pack9_xga,0x21FF01CF,0x01CF,Equip,resolved
+IDS_SHOP_FILTER,0xE63B37C8,packTOC_xga.dat,pack0_core_xga,0x21FF02A3,0x02A3,Filter,resolved
+IDS_SHOP_FREE,0xCAC620B2,packTOC_xga.dat,pack0_core_xga,0x21FF029D,0x029D,Free!,resolved
+IDS_SHOP_GOOGLE_SERVICE_FAILED_BODY,0xB823586E,packTOC_xga.dat,pack0_core_xga,0x21FF022E,0x022E,Your device currently does not support in app billing. The latest version of Android Market is required for in app purchases.,resolved
+IDS_SHOP_GOOGLE_SERVICE_FAILED_TITLE,0x8224F7FE,packTOC_xga.dat,pack0_core_xga,0x21FF022D,0x022D,Unable to Purchase,resolved
+IDS_SHOP_LEVEL,0xAF696860,packTOC_xga.dat,pack0_core_xga,0x21FF02BE,0x02BE,Requires Level: ,resolved
+IDS_SHOP_MOMONEY_BODY,0x6B8DE625,packTOC_xga.dat,pack0_core_xga,0x21FF02C1,0x02C1,You cannot afford this item. Please visit the bank to purchase more currency.,resolved
+IDS_SHOP_MOMONEY_CONV_BODY,0x68FDDCC6,packTOC_xga.dat,pack0_core_xga,0x21FF02C3,0x02C3,You do not have enough War Bucks to convert into coins!,resolved
+IDS_SHOP_MOMONEY_CONV_TITLE,0x8FCBAD73,packTOC_xga.dat,pack0_core_xga,0x21FF02C2,0x02C2,Insufficient Funds!,resolved
+IDS_SHOP_MOMONEY_IAP_BODY,0x59670054,packTOC_xga.dat,pack0_core_xga,0x21FF02C0,0x02C0,"The item you are trying to buy costs %s. You need an additional %s.
+
+Tap buy to get more!",resolved
+IDS_SHOP_MOMONEY_TITLE,0xBBC81343,packTOC_xga.dat,pack0_core_xga,0x21FF02BF,0x02BF,Low Funds!,resolved
+IDS_SHOP_NOT_AVAILABLE_REGION_BODY_ANDROID,0xF3520868,packTOC_xga.dat,pack0_core_xga,0x21FF0228,0x0228,This item is currently not available for sale. Please try a different item.,resolved
+IDS_SHOP_NOT_AVAILABLE_REGION_TITLE_ANDROID,0xDA813150,packTOC_xga.dat,pack0_core_xga,0x21FF0227,0x0227,Item Not Available,resolved
+IDS_SHOP_OFFLINE_BODY,0x114DCF96,packTOC_xga.dat,pack0_core_xga,0x21FF02C5,0x02C5,"We were unable to complete your store request.
+Please make sure you have internet connectivity and try again later.",resolved
+IDS_SHOP_OFFLINE_TITLE,0x17CA8874,packTOC_xga.dat,pack0_core_xga,0x21FF02C4,0x02C4,Unable to Connect,resolved
+IDS_SHOP_ONSALE_DAY,0xD24B96E4,packTOC_xga.dat,pack0_core_xga,0x21FF02CE,0x02CE,%i day,resolved
+IDS_SHOP_ONSALE_DAYS,0x24BE6E1E,packTOC_xga.dat,pack0_core_xga,0x21FF02CF,0x02CF,%i days,resolved
+IDS_SHOP_ONSALE_FEATURED,0x4B9C22A6,packTOC_xga.dat,pack0_core_xga,0x21FF02CC,0x02CC,,resolved
+IDS_SHOP_ONSALE_FEATUREDD_PERCENTAGE_OFF,0x54ECFEAF,packTOC_xga.dat,,,,,not_found
+IDS_SHOP_ONSALE_HOUR,0x24BEA0DF,packTOC_xga.dat,pack0_core_xga,0x21FF02D0,0x02D0,%i hour,resolved
+IDS_SHOP_ONSALE_HOURS,0x4BFA0DA1,packTOC_xga.dat,pack0_core_xga,0x21FF02D1,0x02D1,%i hours,resolved
+IDS_SHOP_ONSALE_LIMITED,0xDE74125F,packTOC_xga.dat,pack0_core_xga,0x21FF02CA,0x02CA,On sale! %T left!,resolved
+IDS_SHOP_ONSALE_LIMITED_PERCENTAGE_OFF,0x93979D18,packTOC_xga.dat,pack0_core_xga,0x21FF02CB,0x02CB,%P off! %T left!,resolved
+IDS_SHOP_ONSALE_MINUTE,0xBCF76D21,packTOC_xga.dat,pack0_core_xga,0x21FF02D2,0x02D2,%i minute,resolved
+IDS_SHOP_ONSALE_MINUTES,0xDF76D248,packTOC_xga.dat,pack0_core_xga,0x21FF02D3,0x02D3,%i minutes,resolved
+IDS_SHOP_ONSALE_STANDARD,0x0A8720D7,packTOC_xga.dat,pack0_core_xga,0x21FF02C8,0x02C8,On sale!,resolved
+IDS_SHOP_ONSALE_STANDARD_PERCENTAGE_OFF,0xDFD8AE33,packTOC_xga.dat,pack0_core_xga,0x21FF02C9,0x02C9,On sale! %P off!,resolved
+IDS_SHOP_PREVIEW,0x740A51B6,packTOC_xga.dat,pack0_core_xga,0x21FF029F,0x029F,Preview,resolved
+IDS_SHOP_RARE,0xCAC772C2,packTOC_xga.dat,pack0_core_xga,0x21FF02A1,0x02A1,δ%i,resolved
+IDS_SHOP_SELL,0xCAC7672B,packTOC_xga.dat,pack0_core_xga,0x21FF049C,0x049C,Sell,resolved
+IDS_SHOP_SELL_PROMPT_BODY,0xE23505F5,packTOC_xga.dat,pack0_core_xga,0x21FF049E,0x049E,Are you sure you want to sell your %s for %d %s?,resolved
+IDS_SHOP_SELL_PROMPT_TITLE,0x23462D4B,packTOC_xga.dat,pack0_core_xga,0x21FF049D,0x049D,Selling Item,resolved
+IDS_SHOP_SORT0,0xAF76CD0C,packTOC_xga.dat,pack0_core_xga,0x21FF02BB,0x02BB,All,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack0_core_xga,0x21FF02B0,0x02B0,Torso,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack1_xga,0x21FF0281,0x0281,Legs,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack3_xga,0x21FF029B,0x029B,Legs,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack4_xga,0x21FF05C3,0x05C3,Legs,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack5_xga,0x21FF042C,0x042C,Legs,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack7_xga,0x21FF01FA,0x01FA,Legs,resolved
+IDS_SHOP_SORT10,0xE76CD0EA,packTOC_xga.dat,pack9_xga,0x21FF01DD,0x01DD,Legs,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack0_core_xga,0x21FF02B1,0x02B1,Legs,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack1_xga,0x21FF0282,0x0282,Attack,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack3_xga,0x21FF029C,0x029C,Attack,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack4_xga,0x21FF05C4,0x05C4,Attack,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack5_xga,0x21FF042D,0x042D,Attack,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack7_xga,0x21FF01FB,0x01FB,Attack,resolved
+IDS_SHOP_SORT11,0xE76CD0EB,packTOC_xga.dat,pack9_xga,0x21FF01DE,0x01DE,Attack,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack0_core_xga,0x21FF02B2,0x02B2,Attack,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack1_xga,0x21FF0283,0x0283,Buffs,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack3_xga,0x21FF029D,0x029D,Buffs,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack4_xga,0x21FF05C5,0x05C5,Buffs,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack5_xga,0x21FF042E,0x042E,Buffs,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack7_xga,0x21FF01FC,0x01FC,Buffs,resolved
+IDS_SHOP_SORT12,0xE76CD0E8,packTOC_xga.dat,pack9_xga,0x21FF01DF,0x01DF,Buffs,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack0_core_xga,0x21FF02B3,0x02B3,Health,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack1_xga,0x21FF0284,0x0284,Stats,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack3_xga,0x21FF029E,0x029E,Stats,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack4_xga,0x21FF05C6,0x05C6,Stats,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack5_xga,0x21FF042F,0x042F,Stats,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack7_xga,0x21FF01FD,0x01FD,Stats,resolved
+IDS_SHOP_SORT13,0xE76CD0E9,packTOC_xga.dat,pack9_xga,0x21FF01E0,0x01E0,Stats,resolved
+IDS_SHOP_SORT14,0xE76CD0EE,packTOC_xga.dat,pack0_core_xga,0x21FF02B4,0x02B4,Defense,resolved
+IDS_SHOP_SORT15,0xE76CD0EF,packTOC_xga.dat,pack0_core_xga,0x21FF02B6,0x02B6,Coin,resolved
+IDS_SHOP_SORT16,0xE76CD0EC,packTOC_xga.dat,pack0_core_xga,0x21FF02B7,0x02B7,Bucks,resolved
+IDS_SHOP_SORT17,0xE76CD0ED,packTOC_xga.dat,pack0_core_xga,0x21FF02B8,0x02B8,Convert,resolved
+IDS_SHOP_SORT18,0xE76CD0E2,packTOC_xga.dat,pack0_core_xga,0x21FF02AE,0x02AE,Laser,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack0_core_xga,0x21FF02B9,0x02B9,Owned,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack1_xga,0x21FF0279,0x0279,Owned,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack3_xga,0x21FF0293,0x0293,Owned,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack4_xga,0x21FF05BB,0x05BB,Owned,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack5_xga,0x21FF0424,0x0424,Owned,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack7_xga,0x21FF01F2,0x01F2,Owned,resolved
+IDS_SHOP_SORT2,0xAF76CD0E,packTOC_xga.dat,pack9_xga,0x21FF01D5,0x01D5,Owned,resolved
+IDS_SHOP_SORT21,0xE76CD0DB,packTOC_xga.dat,pack0_core_xga,0x21FF02BD,0x02BD,DM Only,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack0_core_xga,0x21FF02A8,0x02A8,Pistol,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack1_xga,0x21FF027A,0x027A,Rifle,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack3_xga,0x21FF0294,0x0294,Rifle,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack4_xga,0x21FF05BC,0x05BC,Rifle,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack5_xga,0x21FF0425,0x0425,Rifle,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack7_xga,0x21FF01F3,0x01F3,Rifle,resolved
+IDS_SHOP_SORT3,0xAF76CD0F,packTOC_xga.dat,pack9_xga,0x21FF01D6,0x01D6,Rifle,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack0_core_xga,0x21FF02A9,0x02A9,Rifle,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack1_xga,0x21FF027B,0x027B,Pistol,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack3_xga,0x21FF0295,0x0295,Pistol,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack4_xga,0x21FF05BD,0x05BD,Pistol,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack5_xga,0x21FF0426,0x0426,Pistol,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack7_xga,0x21FF01F4,0x01F4,Pistol,resolved
+IDS_SHOP_SORT4,0xAF76CD08,packTOC_xga.dat,pack9_xga,0x21FF01D7,0x01D7,Pistol,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack0_core_xga,0x21FF02AA,0x02AA,Shotgun,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack1_xga,0x21FF027C,0x027C,Spread,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack3_xga,0x21FF0296,0x0296,Spread,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack4_xga,0x21FF05BE,0x05BE,Spread,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack5_xga,0x21FF0427,0x0427,Spread,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack7_xga,0x21FF01F5,0x01F5,Spread,resolved
+IDS_SHOP_SORT5,0xAF76CD09,packTOC_xga.dat,pack9_xga,0x21FF01D8,0x01D8,Spread,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack0_core_xga,0x21FF02AB,0x02AB,Spread,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack1_xga,0x21FF027D,0x027D,Heavy,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack3_xga,0x21FF0297,0x0297,Heavy,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack4_xga,0x21FF05BF,0x05BF,Heavy,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack5_xga,0x21FF0428,0x0428,Heavy,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack7_xga,0x21FF01F6,0x01F6,Heavy,resolved
+IDS_SHOP_SORT6,0xAF76CD0A,packTOC_xga.dat,pack9_xga,0x21FF01D9,0x01D9,Heavy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack0_core_xga,0x21FF02AC,0x02AC,Heavy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack1_xga,0x21FF027E,0x027E,Energy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack3_xga,0x21FF0298,0x0298,Energy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack4_xga,0x21FF05C0,0x05C0,Energy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack5_xga,0x21FF0429,0x0429,Energy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack7_xga,0x21FF01F7,0x01F7,Energy,resolved
+IDS_SHOP_SORT7,0xAF76CD0B,packTOC_xga.dat,pack9_xga,0x21FF01DA,0x01DA,Energy,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack0_core_xga,0x21FF02AD,0x02AD,Special,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack1_xga,0x21FF027F,0x027F,Head,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack3_xga,0x21FF0299,0x0299,Head,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack4_xga,0x21FF05C1,0x05C1,Head,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack5_xga,0x21FF042A,0x042A,Head,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack7_xga,0x21FF01F8,0x01F8,Head,resolved
+IDS_SHOP_SORT8,0xAF76CD04,packTOC_xga.dat,pack9_xga,0x21FF01DB,0x01DB,Head,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack0_core_xga,0x21FF02AF,0x02AF,Head,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack1_xga,0x21FF0280,0x0280,Torso,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack3_xga,0x21FF029A,0x029A,Torso,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack4_xga,0x21FF05C2,0x05C2,Torso,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack5_xga,0x21FF042B,0x042B,Torso,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack7_xga,0x21FF01F9,0x01F9,Torso,resolved
+IDS_SHOP_SORT9,0xAF76CD05,packTOC_xga.dat,pack9_xga,0x21FF01DC,0x01DC,Torso,resolved
+IDS_SHOP_TIMEOUT_BODY_ANDROID,0xDE7D1BFE,packTOC_xga.dat,pack0_core_xga,0x21FF0226,0x0226,Your purchase is taking an unexpectedly long time to process. It will continue in the background and will be delivered when processing completes.,resolved
+IDS_SHOP_TIMEOUT_TITLE_ANDROID,0x0B701832,packTOC_xga.dat,pack0_core_xga,0x21FF0225,0x0225,Store Timeout,resolved
+IDS_SHOP_UNAVAILABLE_BODY,0x64EEFD1B,packTOC_xga.dat,pack0_core_xga,0x21FF02C7,0x02C7,"The store item you have selected is currently unavailable.
+Please try again later.",resolved
+IDS_SHOP_UNAVAILABLE_TITLE,0x4EF9A3A3,packTOC_xga.dat,pack0_core_xga,0x21FF02C6,0x02C6,Item Unavailable,resolved
+IDS_SHOP_UPGRADE,0x712819B4,packTOC_xga.dat,pack0_core_xga,0x21FF029C,0x029C,Upgrade,resolved
+IDS_SKUBONUS_ITEMNAME,0x206F0359,packTOC_xga.dat,pack0_core_xga,0x21FF0412,0x0412,War Bucks,resolved
+IDS_SKUBONUS_MSG,0x6A6CC675,packTOC_xga.dat,pack0_core_xga,0x21FF0411,0x0411,"The F.R.A.G.G.E.D. bank has awarded you 3 War Bucks to aid in your fight against the T.O.O.L.
+
+Now get out there and raise some hell!",resolved
+IDS_SKUBONUS_TITLE,0x6CDEC0EF,packTOC_xga.dat,pack0_core_xga,0x21FF0410,0x0410,Welcome to Gun Bros.,resolved
+IDS_SOUND_BODY,0x10CA0163,packTOC_xga.dat,pack0_core_xga,0x21FF0179,0x0179,"
+^f1Sound Effects
+^f0
+Turns sound effects ON or OFF.",resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack0_core_xga,0x21FF0159,0x0159,SFX Off,resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack1_xga,0x21FF023F,0x023F,Sound Off,resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack3_xga,0x21FF0259,0x0259,Sound Off,resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack4_xga,0x21FF0581,0x0581,Sound Off,resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack5_xga,0x21FF03EA,0x03EA,Sound Off,resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack7_xga,0x21FF01B8,0x01B8,Sound Off,resolved
+IDS_SOUND_OFF_GAME,0xD841395F,packTOC_xga.dat,pack9_xga,0x21FF019B,0x019B,Sound Off,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack0_core_xga,0x21FF0158,0x0158,SFX On,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack1_xga,0x21FF023E,0x023E,Sound On,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack3_xga,0x21FF0258,0x0258,Sound On,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack4_xga,0x21FF0580,0x0580,Sound On,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack5_xga,0x21FF03E9,0x03E9,Sound On,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack7_xga,0x21FF01B7,0x01B7,Sound On,resolved
+IDS_SOUND_ON_GAME,0xAD1C9569,packTOC_xga.dat,pack9_xga,0x21FF019A,0x019A,Sound On,resolved
+IDS_TAP_TO_DISMISS,0xDAC3D0B8,packTOC_xga.dat,pack0_core_xga,0x21FF016A,0x016A,Tap to Dismiss,resolved
+IDS_TAPJOY_FEATURED_APP_BODY,0x551D77DA,packTOC_xga.dat,pack0_core_xga,0x21FF0386,0x0386,"
+Get %d FREE War Bucks!
+
+Install and run %s to collect your FREE War Bucks.
+
+
+",resolved
+IDS_TAPJOY_FEATURED_APP_TITLE,0x51D10CB0,packTOC_xga.dat,pack0_core_xga,0x21FF0385,0x0385,FREE War Bucks!,resolved
+IDS_TAPJOY_FEATURED_APP_TOGGLE,0x1E17F0D0,packTOC_xga.dat,pack0_core_xga,0x21FF0387,0x0387,^f1Don't show this offer again,resolved
+IDS_TAPJOY_MSG,0x447DD273,packTOC_xga.dat,pack0_core_xga,0x21FF0423,0x0423,"You've been awarded δ%i War Bucks for completing special offers.
+
+Now go buy yourself something big and nasty!",resolved
+IDS_TAPJOY_TITLE,0x7DCAC4DF,packTOC_xga.dat,pack0_core_xga,0x21FF0422,0x0422,Offer Complete!,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack0_core_xga,0x21FF0156,0x0156,Mission Objective Complete,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack1_xga,0x21FF023C,0x023C,Mission Objective Complete,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack3_xga,0x21FF0256,0x0256,Mission Objective Complete,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack4_xga,0x21FF057E,0x057E,Mission Objective Complete,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack5_xga,0x21FF03E7,0x03E7,Mission Objective Complete,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack7_xga,0x21FF01B5,0x01B5,Mission Objective Complete,resolved
+IDS_TRANSITION_MISSION_OBJECTIVE_CLEARD,0xAB28D5C1,packTOC_xga.dat,pack9_xga,0x21FF0198,0x0198,Mission Objective Complete,resolved
+IDS_TUTORIAL_BROTHER_ACTIVE_BODY,0x723F793D,packTOC_xga.dat,pack0_core_xga,0x21FF036A,0x036A,"Your friend's brother will now fight alongside you.
+
+You earn a daily reward for each Bro used in battle.
+
+Grow your brotherhood, and play with all your friends' brothers every day.",resolved
+IDS_TUTORIAL_BROTHER_ACTIVE_TITLE,0x23E1E2D2,packTOC_xga.dat,pack0_core_xga,0x21FF0369,0x0369,Bro On Duty!,resolved
+IDS_TUTORIAL_BROTHERHOOD_BODY,0xCC80684F,packTOC_xga.dat,pack0_core_xga,0x21FF0366,0x0366,"Play alongside your friends.
+
+Add bros by logging into Game Center or Facebook!
+
+Get and give a free daily reward when you use them in battle!",resolved
+IDS_TUTORIAL_BROTHERHOOD_TITLE,0xCB10F5E9,packTOC_xga.dat,pack0_core_xga,0x21FF0365,0x0365,Welcome to the Brotherhood!,resolved
+IDS_TUTORIAL_CHALLENGES_BODY,0x97BC5F30,packTOC_xga.dat,pack0_core_xga,0x21FF0378,0x0378,"Tap a Bro-Op Challenge to view its requirements. 
+
+Completing challenges will earn you rewards. Invite your bros to complete challenges for even better rewards!",resolved
+IDS_TUTORIAL_CHALLENGES_TITLE,0x7BC3821C,packTOC_xga.dat,pack0_core_xga,0x21FF0377,0x0377,Bro-Op Challenges,resolved
+IDS_TUTORIAL_CONTROLS_BODY,0x8ACCC4B3,packTOC_xga.dat,pack0_core_xga,0x21FF0354,0x0354,"Use the left control stick to move your Gun Brother.
+
+Use the right control stick to fire your gun in the direction held.",resolved
+IDS_TUTORIAL_CONTROLS_TITLE,0xACDA2A2D,packTOC_xga.dat,pack0_core_xga,0x21FF0353,0x0353,Basic Controls,resolved
+IDS_TUTORIAL_DOCKED_CONTROLS_BODY,0x6BE6D98B,packTOC_xga.dat,pack0_core_xga,0x21FF0356,0x0356,"Touch the left side of the screen to move and the right side to fire.
+Change Control Type in the Pause Menu.",resolved
+IDS_TUTORIAL_DOCKED_CONTROLS_TITLE,0xBE7BEAA3,packTOC_xga.dat,pack0_core_xga,0x21FF0355,0x0355,Touch Controls,resolved
+IDS_TUTORIAL_EQUIP_GUNS_BODY,0xBB381298,packTOC_xga.dat,pack0_core_xga,0x21FF0370,0x0370,"Tap the equip button to equip your new gun.
+
+Equipping a gun will replace the weapon in the slot that is currently selected.
+
+tap your Gun Bro. or the blue number to equip other weapon slot",resolved
+IDS_TUTORIAL_EQUIP_GUNS_TITLE,0xB387589E,packTOC_xga.dat,pack0_core_xga,0x21FF036F,0x036F,Equipping Guns,resolved
+IDS_TUTORIAL_EXP_AND_XPL_BODY,0xD8FBF239,packTOC_xga.dat,pack0_core_xga,0x21FF035C,0x035C,"Each kill earns you XP and Xplodium.
+
+XP levels up your character, increasing health.
+
+Xplodium is refined and converted to coin.",resolved
+IDS_TUTORIAL_EXP_AND_XPL_TITLE,0x8CA95288,packTOC_xga.dat,pack0_core_xga,0x21FF035B,0x035B,Experience and Xplodium,resolved
+IDS_TUTORIAL_FACEBOOK_LINK_BODY,0xB043EF85,packTOC_xga.dat,pack0_core_xga,0x21FF0376,0x0376,Connect to FaceBook and get 5 FREE War Bucks!,resolved
+IDS_TUTORIAL_FACEBOOK_LINK_TITLE,0x04288971,packTOC_xga.dat,pack0_core_xga,0x21FF0375,0x0375,Get Free War Bucks!,resolved
+IDS_TUTORIAL_INVITE_FRIENDS_BODY,0xDD53F054,packTOC_xga.dat,pack0_core_xga,0x21FF037E,0x037E,Invite friends by FaceBook and get FREE War Bucks!,resolved
+IDS_TUTORIAL_INVITE_FRIENDS_TITLE,0xD5297448,packTOC_xga.dat,pack0_core_xga,0x21FF037D,0x037D,Get Free War Bucks!,resolved
+IDS_TUTORIAL_MAP_BODY,0x95E0A823,packTOC_xga.dat,pack0_core_xga,0x21FF036C,0x036C,"tap a planet to select, tap it again to bring up the available missions.
+
+Additional planets will be added soon!",resolved
+IDS_TUTORIAL_MAP_TITLE,0x5D1CF32C,packTOC_xga.dat,pack0_core_xga,0x21FF036B,0x036B,Welcome to the Map!,resolved
+IDS_TUTORIAL_MINIBOSS_BODY,0x95C2A573,packTOC_xga.dat,pack0_core_xga,0x21FF037C,0x037C,"When T.O.O.L. Captains show up, you better stock up on grenades from the Smartillery. ",resolved
+IDS_TUTORIAL_MINIBOSS_TITLE,0x5C3C362C,packTOC_xga.dat,pack0_core_xga,0x21FF037B,0x037B,T.O.O.L. Captain!,resolved
+IDS_TUTORIAL_NEW_GUN_BODY,0xE281CA49,packTOC_xga.dat,pack0_core_xga,0x21FF0372,0x0372,"Congratulations!
+
+You've earned the ER97E Elite assault rifle!
+
+Equip guns in the store",resolved
+IDS_TUTORIAL_NEW_GUN_TITLE,0x280AD68B,packTOC_xga.dat,pack0_core_xga,0x21FF0371,0x0371,New gun!,resolved
+IDS_TUTORIAL_PAYOUT_BODY,0x1C28DF42,packTOC_xga.dat,pack0_core_xga,0x21FF0364,0x0364,"The instant chamber converts  the Xplodium you deposit to coin.
+
+Unlock all other chambers by refining xplodium.
+
+tap the refinery chamber to collect your coin payout.",resolved
+IDS_TUTORIAL_PAYOUT_TITLE,0xC29B8524,packTOC_xga.dat,pack0_core_xga,0x21FF0363,0x0363,Collect your payout!,resolved
+IDS_TUTORIAL_PLANET_CLEARED_BODY,0x7D33A7A6,packTOC_xga.dat,pack0_core_xga,0x21FF0374,0x0374,"You've done the impossible!
+
+Your skill, determination, and abundance of free time have conquered all of the T.O.O.L. forces on this planet.
+
+The tales of your legendary accomplishment will no doubt spread across the galaxy.",resolved
+IDS_TUTORIAL_PLANET_CLEARED_TITLE,0xD32C0B62,packTOC_xga.dat,pack0_core_xga,0x21FF0373,0x0373,Planet Cleared!,resolved
+IDS_TUTORIAL_REFINERY_BODY,0x347D6D7F,packTOC_xga.dat,pack0_core_xga,0x21FF0362,0x0362,"Xplodium is an unstable ore that you collect on the battlefield.
+
+refine all xplodium after Battle.
+
+Premium Refineries pay out even more than standard.
+
+Fill all Refineries for maximum payout.",resolved
+IDS_TUTORIAL_REFINERY_TITLE,0x47C0B6E6,packTOC_xga.dat,pack0_core_xga,0x21FF0361,0x0361,Welcome to the Refinery!,resolved
+IDS_TUTORIAL_REV_CLEARED_BODY,0x001BD036,packTOC_xga.dat,pack0_core_xga,0x21FF0360,0x0360,"Congratulations! You've completed Revolution 1.
+
+new Revolutions increases enemy difficulty and the rewards.",resolved
+IDS_TUTORIAL_REV_CLEARED_TITLE,0x02AB7275,packTOC_xga.dat,pack0_core_xga,0x21FF035F,0x035F,Revolution Cleared!,resolved
+IDS_TUTORIAL_SELECT_BROTHER_BODY,0x6A53AA8F,packTOC_xga.dat,pack0_core_xga,0x21FF0368,0x0368,Tap a friend's Brother to use that brother in battle!,resolved
+IDS_TUTORIAL_SELECT_BROTHER_TITLE,0xA52CD9F3,packTOC_xga.dat,pack0_core_xga,0x21FF0367,0x0367,Select a Brother,resolved
+IDS_TUTORIAL_SMARTILLERY_BODY,0x7FB7A5AA,packTOC_xga.dat,pack0_core_xga,0x21FF0358,0x0358,"The red button opens the Smartillery menu.
+
+Tap an Icon to Equip or use grenades and powerups.",resolved
+IDS_TUTORIAL_SMARTILLERY_TITLE,0xF86C2BB2,packTOC_xga.dat,pack0_core_xga,0x21FF0357,0x0357,The Smartillery,resolved
+IDS_TUTORIAL_STORE_BODY,0x3DC85078,packTOC_xga.dat,pack0_core_xga,0x21FF036E,0x036E," upgrade and equip new guns, armor, and purchase Smartillery powerups!
+
+click on the Bank tab for big deals on coins and war bucks!",resolved
+IDS_TUTORIAL_STORE_TITLE,0xDC937699,packTOC_xga.dat,pack0_core_xga,0x21FF036D,0x036D,Welcome to the Store!,resolved
+IDS_TUTORIAL_SWITCH_WEAPON_BODY,0x9005F36F,packTOC_xga.dat,pack0_core_xga,0x21FF035A,0x035A,"The blue toggle button switches your guns.
+
+Buy More guns  from the guns tab in the store.",resolved
+IDS_TUTORIAL_SWITCH_WEAPON_TITLE,0x004947D3,packTOC_xga.dat,pack0_core_xga,0x21FF0359,0x0359,Switching Guns,resolved
+IDS_TUTORIAL_XPL_MULT_BODY,0x2AA6361D,packTOC_xga.dat,pack0_core_xga,0x21FF035E,0x035E,"Each wave completed increases your Xplodium multiplier.
+
+Stay alive to increase your multiplier.",resolved
+IDS_TUTORIAL_XPL_MULT_TITLE,0xAA7500C7,packTOC_xga.dat,pack0_core_xga,0x21FF035D,0x035D,Xplodium Multiplier,resolved
+IDS_UI_BRANCH_1,0xCB4CDC0A,packTOC_xga.dat,pack0_core_xga,0x21FF0172,0x0172,GAMES,resolved
+IDS_UI_BRANCH_2,0xCB4CDC09,packTOC_xga.dat,pack0_core_xga,0x21FF0173,0x0173,STORE,resolved
+IDS_UI_BRANCH_3,0xCB4CDC08,packTOC_xga.dat,pack0_core_xga,0x21FF0174,0x0174,PLAY,resolved
+IDS_UI_BRANCH_4,0xCB4CDC0F,packTOC_xga.dat,pack0_core_xga,0x21FF0175,0x0175,REFINERY,resolved
+IDS_UI_BRANCH_5,0xCB4CDC0E,packTOC_xga.dat,pack0_core_xga,0x21FF0176,0x0176,BROS,resolved
+IDS_UI_BRANCH_6,0xCB4CDC0D,packTOC_xga.dat,pack0_core_xga,0x21FF0177,0x0177,OPTIONS,resolved
+IDS_UI_BRANCH_7,0xCB4CDC0C,packTOC_xga.dat,pack0_core_xga,0x21FF0178,0x0178,BRO-OPS,resolved
+IDS_UPGRADE_BUY_BUCKS,0x4FCF01F4,packTOC_xga.dat,pack0_core_xga,0x21FF02DF,0x02DF,δ #BUCKS,resolved
+IDS_UPGRADE_CRIT,0x816162F6,packTOC_xga.dat,pack0_core_xga,0x21FF02DC,0x02DC,Critical Hit %,resolved
+IDS_UPGRADE_CRITICAL_CHANCE_HIGH,0xF133183F,packTOC_xga.dat,pack0_core_xga,0x21FF0435,0x0435,High,resolved
+IDS_UPGRADE_CRITICAL_CHANCE_LOW,0x8F1335F4,packTOC_xga.dat,pack0_core_xga,0x21FF0433,0x0433,Low,resolved
+IDS_UPGRADE_CRITICAL_CHANCE_MED,0x8F133447,packTOC_xga.dat,pack0_core_xga,0x21FF0434,0x0434,Med,resolved
+IDS_UPGRADE_CRITICAL_CHANCE_NONE,0xF1337EA2,packTOC_xga.dat,pack0_core_xga,0x21FF0432,0x0432,None,resolved
+IDS_UPGRADE_CURRENT_LEVEL_TITLE,0xA0076EC3,packTOC_xga.dat,pack0_core_xga,0x21FF02D5,0x02D5,Current,resolved
+IDS_UPGRADE_DAMAGE,0x6101A5B4,packTOC_xga.dat,pack0_core_xga,0x21FF02DA,0x02DA,Dmg,resolved
+IDS_UPGRADE_NEXT_LEVEL_TITLE_BRONZE,0x30A1B47B,packTOC_xga.dat,pack0_core_xga,0x21FF02D6,0x02D6,Next,resolved
+IDS_UPGRADE_NEXT_LEVEL_TITLE_GOLD,0x9E30ECAB,packTOC_xga.dat,pack0_core_xga,0x21FF02D8,0x02D8,Next,resolved
+IDS_UPGRADE_NEXT_LEVEL_TITLE_SILVER,0x31AA9D9C,packTOC_xga.dat,pack0_core_xga,0x21FF02D7,0x02D7,Next,resolved
+IDS_UPGRADE_POWER,0x1604E03A,packTOC_xga.dat,pack0_core_xga,0x21FF02D9,0x02D9,Power,resolved
+IDS_UPGRADE_RPM,0xD816070F,packTOC_xga.dat,pack0_core_xga,0x21FF02DB,0x02DB,RPM,resolved
+IDS_UPGRADE_SPEED,0x1606022C,packTOC_xga.dat,pack0_core_xga,0x21FF02DD,0x02DD,Speed,resolved
+IDS_UPGRADE_TITLE,0x160083BD,packTOC_xga.dat,pack0_core_xga,0x21FF02D4,0x02D4,Upgrade,resolved
+IDS_USE_NOW,0xA07047B1,packTOC_xga.dat,pack0_core_xga,0x21FF016D,0x016D,"Use
+Now",resolved
+IDS_VERSION_CHANGE_DESC,0xE3A615B0,packTOC_xga.dat,pack0_core_xga,0x21FF01D6,0x01D6,"There is an update to Gun Bros. that is required to access any online features.
+
+You may continue to play offline, but we recommend updating now to avoid any potential loss of data.
+
+Would you kindly visit the App Store to update now?",resolved
+IDS_VERSION_CHANGE_TITLE,0x3A719CB4,packTOC_xga.dat,pack0_core_xga,0x21FF01D5,0x01D5,New Gun Bros. Update Available!,resolved
+IDS_VERSION_TEXT_FORMATTED,0x76B4A8AC,packTOC_xga.dat,pack0_core_xga,0x21FF0297,0x0297,"
+^f1Gun Bros.
+^f0Version v",resolved
+IDS_VERSION_TEXT_PLAIN,0xB4AE55FE,packTOC_xga.dat,pack0_core_xga,0x21FF0294,0x0294,"
+Gun Bros.
+Version v",resolved
+IDS_WEAPONMASTERY_CRITICAL_HIT,0x8EF92455,packTOC_xga.dat,,,,,not_found
+IDS_WEAPONMASTERY_STORE_MASTERY_CRITICAL_CHANCE,0x1E4FB80A,packTOC_xga.dat,pack0_core_xga,0x21FF042A,0x042A,,resolved
+IDS_WEAPONMASTERY_STORE_MASTERY_CRITICAL_CHANCE_HIGH,0x80E129C3,packTOC_xga.dat,pack0_core_xga,0x21FF042E,0x042E,LVL 3,resolved
+IDS_WEAPONMASTERY_STORE_MASTERY_CRITICAL_CHANCE_LOW,0xB80E66E8,packTOC_xga.dat,pack0_core_xga,0x21FF042C,0x042C,LVL 1,resolved
+IDS_WEAPONMASTERY_STORE_MASTERY_CRITICAL_CHANCE_MED,0xB80E675B,packTOC_xga.dat,pack0_core_xga,0x21FF042D,0x042D,LVL 2,resolved
+IDS_WEAPONMASTERY_STORE_TITLE,0x750AD96A,packTOC_xga.dat,pack0_core_xga,0x21FF0429,0x0429,Upgrade Level,resolved
+IDS_WRAPUP_BEST_STREAK,0x4DB5BD7B,packTOC_xga.dat,pack0_core_xga,0x21FF0343,0x0343,Best Kill Streak,resolved
+IDS_WRAPUP_DEATH_MATCH_DRAW,0xA4FE609E,packTOC_xga.dat,pack0_core_xga,0x21FF0499,0x0499,The match is a draw!,resolved
+IDS_WRAPUP_DEATH_MATCH_LOSS,0xA4FEFCBA,packTOC_xga.dat,pack0_core_xga,0x21FF0497,0x0497,You've lost the match,resolved
+IDS_WRAPUP_DEATH_MATCH_QUIT,0xA4FF371D,packTOC_xga.dat,pack0_core_xga,0x21FF0498,0x0498,You've forfeit the match,resolved
+IDS_WRAPUP_DEATH_MATCH_WIN,0x9A4FF5B3,packTOC_xga.dat,pack0_core_xga,0x21FF0496,0x0496,You've won the match!,resolved
+IDS_WRAPUP_EXPERIENCE,0x252057DA,packTOC_xga.dat,pack0_core_xga,0x21FF033D,0x033D,Experience Earned,resolved
+IDS_WRAPUP_EXPERIENCE_BRO,0x57DF928F,packTOC_xga.dat,pack0_core_xga,0x21FF033E,0x033E,Brotherhood XP Sent,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack0_core_xga,0x21FF0336,0x0336,Casualties,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack1_xga,0x21FF02DA,0x02DA,Casualties,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack3_xga,0x21FF0300,0x0300,Casualties,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack4_xga,0x21FF061C,0x061C,Casualties,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack5_xga,0x21FF0490,0x0490,Casualties,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack7_xga,0x21FF024D,0x024D,Casualties,resolved
+IDS_WRAPUP_INFO_CASUALTIES,0xB6DDFDA3,packTOC_xga.dat,pack9_xga,0x21FF0230,0x0230,Casualties,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack0_core_xga,0x21FF0335,0x0335,Objectives,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack1_xga,0x21FF02D9,0x02D9,Objectives,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack3_xga,0x21FF02FF,0x02FF,Objectives,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack4_xga,0x21FF061B,0x061B,Objectives,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack5_xga,0x21FF048F,0x048F,Objectives,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack7_xga,0x21FF024C,0x024C,Objectives,resolved
+IDS_WRAPUP_INFO_OBJECTIVES,0x36E43261,packTOC_xga.dat,pack9_xga,0x21FF022F,0x022F,Objectives,resolved
+IDS_WRAPUP_INFO_OVERVIEW,0x76D0A9F5,packTOC_xga.dat,pack0_core_xga,0x21FF0334,0x0334,Overview,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack0_core_xga,0x21FF0337,0x0337,Kills: ,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack1_xga,0x21FF02DD,0x02DD,Kills:  ,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack3_xga,0x21FF0303,0x0303,Kills:  ,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack4_xga,0x21FF061F,0x061F,Kills:  ,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack5_xga,0x21FF0493,0x0493,Kills:  ,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack7_xga,0x21FF0250,0x0250,Kills:  ,resolved
+IDS_WRAPUP_KILLS,0xD4D5FEC2,packTOC_xga.dat,pack9_xga,0x21FF0233,0x0233,Kills:  ,resolved
+IDS_WRAPUP_LEADERBOARD,0x57B26657,packTOC_xga.dat,pack0_core_xga,0x21FF0350,0x0350,Leaderboards,resolved
+IDS_WRAPUP_MP_ADD_BRO,0xD04CFA48,packTOC_xga.dat,pack0_core_xga,0x21FF034F,0x034F,Add Bro!,resolved
+IDS_WRAPUP_MP_ASSISTS,0xD12A8B34,packTOC_xga.dat,pack0_core_xga,0x21FF0349,0x0349,Assists,resolved
+IDS_WRAPUP_MP_DEATHS,0x7D549401,packTOC_xga.dat,pack0_core_xga,0x21FF034A,0x034A,Deaths,resolved
+IDS_WRAPUP_MP_KILLS,0x27DAF5DE,packTOC_xga.dat,pack0_core_xga,0x21FF0348,0x0348,Kills,resolved
+IDS_WRAPUP_MP_REPLAY_EXIT,0xC9ECCF4D,packTOC_xga.dat,pack0_core_xga,0x21FF034D,0x034D,Exited the Match,resolved
+IDS_WRAPUP_MP_REPLAY_REQUESTED,0x3B8CFECE,packTOC_xga.dat,pack0_core_xga,0x21FF034E,0x034E,Ready for Rematch,resolved
+IDS_WRAPUP_MP_REPLAY1,0xC349C986,packTOC_xga.dat,pack0_core_xga,0x21FF034B,0x034B,Rematch?,resolved
+IDS_WRAPUP_MP_REPLAY2,0xC349C985,packTOC_xga.dat,pack0_core_xga,0x21FF034C,0x034C,Rematch,resolved
+IDS_WRAPUP_NEW_HIGH_SCORE,0x70A53425,packTOC_xga.dat,pack0_core_xga,0x21FF0341,0x0341,New High Score %u!!!,resolved
+IDS_WRAPUP_OBJECTIVES,0x842D8F17,packTOC_xga.dat,pack0_core_xga,0x21FF0347,0x0347,Objectives,resolved
+IDS_WRAPUP_OBJECTIVES_COMPLETED,0x35C71227,packTOC_xga.dat,pack0_core_xga,0x21FF0344,0x0344,Objectives Completed: %s,resolved
+IDS_WRAPUP_OBJECTIVES_FAILED,0x236E00E5,packTOC_xga.dat,pack0_core_xga,0x21FF0346,0x0346,Mission Failed!!!,resolved
+IDS_WRAPUP_OBJECTIVES_SUCCESS,0x22BAFF71,packTOC_xga.dat,pack0_core_xga,0x21FF0345,0x0345,Mission Accomplished!,resolved
+IDS_WRAPUP_PERFECT_WAVES,0xB56D627B,packTOC_xga.dat,pack0_core_xga,0x21FF033A,0x033A,Perfect Waves,resolved
+IDS_WRAPUP_REVOLUTION_WAVE,0x179ED6F1,packTOC_xga.dat,pack0_core_xga,0x21FF033B,0x033B,Revolution %i  Wave %i,resolved
+IDS_WRAPUP_SCORE,0xD4CD5C34,packTOC_xga.dat,pack0_core_xga,0x21FF033F,0x033F,Score %u,resolved
+IDS_WRAPUP_SURVIVAL_TIME,0xF1562CE0,packTOC_xga.dat,pack0_core_xga,0x21FF0342,0x0342,Survival Time: %s,resolved
+IDS_WRAPUP_TOTAL_KILLS,0x0E6B1215,packTOC_xga.dat,pack0_core_xga,0x21FF0338,0x0338,Targets Serviced:  ,resolved
+IDS_WRAPUP_WAVE_CLEARED,0xDACDD051,packTOC_xga.dat,pack0_core_xga,0x21FF0339,0x0339,%i Waves Cleared!,resolved
+IDS_WRAPUP_XPLODIUM,0x76EE2151,packTOC_xga.dat,pack0_core_xga,0x21FF033C,0x033C,Xplodium Earned,resolved
+IDS_XPLODIUM,0xD483DD77,packTOC_xga.dat,pack0_core_xga,0x21FF0166,0x0166,Xplodium,resolved

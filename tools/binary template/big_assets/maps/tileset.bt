@@ -1,0 +1,164 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: tileset.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read a Gun Bros TILESET resource (Section 25).
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    A TILESET does not contain a map. It tells CMap how tile IDs map to
+    rectangles cut from PNG atlas resources.
+
+    The two-byte value 00 00 is a valid empty placeholder:
+
+        imageCount = 0
+        tileCount  = 0
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_COUNT = 0x66E0FF;
+const int COLOR_PACK_HASH = 0xB8E0D2;
+const int COLOR_RESOURCE_INDEX = 0xD8F5E3;
+const int COLOR_IMAGE_INDEX = 0xFFE699;
+const int COLOR_POSITION = 0xC8B0FF;
+const int COLOR_SIZE = 0x90FF90;
+
+
+// ------------------------------------------------
+// Common references
+// ------------------------------------------------
+
+int packNumberFromHash(uint32 packHash) {
+    // pack0_core is not part of the numeric pack hash sequence.
+    if (packHash == 0x58595522) {
+        return 0;
+    }
+
+    // Hashes of "pack0" through "pack9".
+    if (packHash >= 0x00267580 && packHash <= 0x00267589) {
+        return packHash - 0x00267580;
+    }
+
+    // Hashes of "pack10" through "pack19".
+    if (packHash >= 0x01675820 && packHash <= 0x01675829) {
+        return 10 + packHash - 0x01675820;
+    }
+
+    return -1;
+}
+
+
+string packHashFormat(uint32 packHash) {
+    local int packNumber = packNumberFromHash(packHash);
+    local string result;
+
+    if (packHash == 0x58595522) {
+        return "pack0_core";
+    }
+
+    if (packNumber >= 0) {
+        SPrintf(result, "pack%d", packNumber);
+        return result;
+    }
+
+    SPrintf(result, "packHash 0x%08X", packHash);
+    return result;
+}
+
+
+string pngIndexFormat(int32 pngIndex) {
+    local string result;
+
+    SPrintf(result, "PNG %d", pngIndex);
+    return result;
+}
+
+
+typedef uint32 PackHash <format=hex, read=packHashFormat(this)>;
+
+
+// ------------------------------------------------
+// Part 1: PNG atlas references
+// ------------------------------------------------
+
+typedef struct {
+    PackHash packHash <bgcolor=COLOR_PACK_HASH>;
+
+    // Zero-based index inside the referenced pack's PNG Section.
+    int32 pngIndex <
+        format=decimal,
+        bgcolor=COLOR_RESOURCE_INDEX,
+        read=pngIndexFormat(this)
+    >;
+} AtlasReference <read=atlasReferenceFormat>;
+
+
+string atlasReferenceFormat(AtlasReference &reference) {
+    local string result;
+
+    SPrintf(result, "%s, PNG %d", packHashFormat(reference.packHash), reference.pngIndex);
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 2: tile rectangles
+// ------------------------------------------------
+
+typedef struct {
+    // Index into atlasReferences, not the PNG Section directly.
+    ubyte imageIndex <format=decimal, bgcolor=COLOR_IMAGE_INDEX>;
+
+    // Rectangle inside that PNG atlas, measured in pixels.
+    uint16 x <format=decimal, bgcolor=COLOR_POSITION>;
+    uint16 y <format=decimal, bgcolor=COLOR_POSITION>;
+    uint16 width <format=decimal, bgcolor=COLOR_SIZE>;
+    uint16 height <format=decimal, bgcolor=COLOR_SIZE>;
+} TileRectangle <read=tileRectangleFormat>;
+
+
+string tileRectangleFormat(TileRectangle &tile) {
+    local string result;
+
+    SPrintf(
+        result,
+        "atlas %d: (%d, %d), %d x %d",
+        tile.imageIndex,
+        tile.x,
+        tile.y,
+        tile.width,
+        tile.height
+    );
+    return result;
+}
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+ubyte imageCount <format=decimal, bgcolor=COLOR_COUNT>;
+if (imageCount > 0) {
+    AtlasReference atlasReferences[imageCount] <optimize=false>;
+}
+
+// tiles ID is the array index, not directly recorded in the bin
+ubyte tileCount <format=decimal, bgcolor=COLOR_COUNT>;
+if (tileCount > 0) {
+    TileRectangle tiles[tileCount] <optimize=false>;
+}
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

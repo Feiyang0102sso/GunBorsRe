@@ -1,0 +1,142 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: big_keyset.bt
+//   Authors: Feiyang
+//   Version: 1.1
+//   Purpose: Read the keyset from group hash 0x69E5D35C.
+//  Category: Game / Big Assets1
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_ENTRY_COUNT = 0xFF75C1;
+const int COLOR_ORDINARY_ID = 0xB8E0D2;
+
+const int COLOR_ORDINARY_LABEL_NULL = 0xD0D0D0;    
+const int COLOR_ORDINARY_LABEL_PNG = 0xFFDBF1;     
+const int COLOR_ORDINARY_LABEL_BIN = 0xC6FF77;     
+const int COLOR_ORDINARY_LABEL_KEYSET = 0x9B70FF;  
+const int COLOR_ORDINARY_LABEL_WAV = 0xE8B8DD;     
+const int COLOR_ORDINARY_LABEL_UNKNOWN = 0x0000FF; 
+
+const int COLOR_AGGREGATE_ID = 0xF5CBA7;
+const int COLOR_AGGREGATE_LABEL = 0xE59866;
+
+
+// ------------------------------------------------
+// Type labels
+// ------------------------------------------------
+
+/*
+    labels:
+        0x02   png            
+        0x03   bin           
+        0x05   keyset         
+        0x09   wav            
+        0x21   aggregate, see AggregateBigKeysetEntry below
+        0x00   not a handle: a null handle, or a plain number
+
+    0x01 never shows up on its own. 0x21 is 0x20 (aggregate flag) plus 0x01,
+    and every 0x21 handle points into the string pack, so 0x01 is most likely
+    the string type. A string is never a standalone resource, only an entry
+    inside a string pack, so it always carries the aggregate flag. Unproven.
+    
+    beside pack0, each packX have 2 keysets, 
+    the second one contains exact aggregate entries as the first one
+    And num of aggregate entries = num of strings entries
+    
+*/
+
+const uint32 AGGREGATE_HANDLE_FLAG = 0x20000000;
+
+
+// ------------------------------------------------
+// Header
+// ------------------------------------------------
+
+struct BigKeysetHeader {
+    // total entries
+    uint16 entryCount <format=decimal, bgcolor=COLOR_ENTRY_COUNT>;
+};
+
+
+// ------------------------------------------------
+// Resource handle
+// ------------------------------------------------
+struct OrdinaryBigKeysetEntry {
+    // Logical resource ID, in table1
+    uint16 resourceId <format=hex, bgcolor=COLOR_ORDINARY_ID>;
+
+    // Upper byte is the type label, lower byte is always 0x00 here.
+    uint16 label <format=hex, bgcolor=GetOrdinaryLabelColor>;
+};
+
+
+// Color only by the type byte; the lower byte is not part of the type.
+int GetOrdinaryLabelColor(uint16 &label) {
+    switch (label >> 8) {
+        case 0x00:
+            return COLOR_ORDINARY_LABEL_NULL;
+        case 0x02:
+            return COLOR_ORDINARY_LABEL_PNG;
+        case 0x03:
+            return COLOR_ORDINARY_LABEL_BIN;
+        case 0x05:
+            return COLOR_ORDINARY_LABEL_KEYSET;
+        case 0x09:
+            return COLOR_ORDINARY_LABEL_WAV;
+        default:
+            return COLOR_ORDINARY_LABEL_UNKNOWN;
+    }
+}
+
+// num of aggregates is same as string nums
+struct AggregateBigKeysetEntry {
+    // Entry ID inside the string pack
+    uint16 resourceId <format=hex, bgcolor=COLOR_AGGREGATE_ID>;
+
+    // 0x21 is the aggregate flag 0x20 plus type 0x01
+    // 0xFF in every sample, still unknown.
+    uint16 label <format=hex, bgcolor=COLOR_AGGREGATE_LABEL>;
+};
+
+struct BigKeysetEntries {
+    local uint32 rawHandle;
+
+    for (local uint entryIndex = 0; entryIndex < header.entryCount; entryIndex++) {
+        rawHandle = ReadUInt(FTell());
+
+        if ((rawHandle & AGGREGATE_HANDLE_FLAG) != 0) {
+            AggregateBigKeysetEntry aggregateEntry <optimize=false>;
+        }
+        else {
+            OrdinaryBigKeysetEntry ordinaryEntry <optimize=false>;
+        }
+    }
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+BigKeysetHeader header;
+
+BigKeysetEntries entries;
+
+local uint64 expectedFileSize = 2 + (uint64)header.entryCount * 4;
+if (FileSize() != expectedFileSize) {
+    Warning("0x69E5D35C size mismatch: expected " +
+            expectedFileSize + " bytes, got " + FileSize() + " bytes.");
+}

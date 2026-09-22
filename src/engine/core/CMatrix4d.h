@@ -1,5 +1,5 @@
 /**
- * @file ZMatrix4d.h
+ * @file CMatrix4d.h
  * @brief The 4x4 matrix operations the renderer needs.
  *
  * Named after platform/shared/math/src/CMatrix4d.cpp, but not a port of it --
@@ -10,8 +10,8 @@
  * matrix on paper, and glUniformMatrix4fv is told to transpose on upload.
  */
 
-#ifndef GUN_BROS_RE_ENGINE_ZMATRIX4D_H
-#define GUN_BROS_RE_ENGINE_ZMATRIX4D_H
+#ifndef GUN_BROS_RE_ENGINE_CMATRIX4D_H
+#define GUN_BROS_RE_ENGINE_CMATRIX4D_H
 
 // A 4x4 matrix is this many floats. Callers pass plain arrays.
 constexpr int kMatrix4dElements = 16;

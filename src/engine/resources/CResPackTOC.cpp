@@ -6,60 +6,12 @@
 #include "engine/resources/CResPackTOC.h"
 
 #include "engine/core/CStringToKey.h"
+#include "engine/resources/CArrayInputStream.h"
 
 #include <cstdio>
 #include <cstring>
 
 const char *const kInitDataResourceName = "___INIT_DATA";
-
-namespace {
-
-std::uint32_t ReadU32(const std::uint8_t *bytes) {
-    return static_cast<std::uint32_t>(bytes[0]) |
-           (static_cast<std::uint32_t>(bytes[1]) << 8) |
-           (static_cast<std::uint32_t>(bytes[2]) << 16) |
-           (static_cast<std::uint32_t>(bytes[3]) << 24);
-}
-
-/**
- * Sequential reader over a decompressed resource payload.
- * Reads past the end yield zero and latch an error flag.
- */
-class ZPayloadReader {
-public:
-    explicit ZPayloadReader(const std::vector<std::uint8_t> &data)
-        : m_data(data), m_position(0), m_overran(false) {}
-
-    std::uint32_t ReadU32() {
-        if (m_position + 4 > m_data.size()) {
-            m_overran = true;
-            return 0;
-        }
-        const std::uint32_t value = ::ReadU32(&m_data[m_position]);
-        m_position += 4;
-        return value;
-    }
-
-    /** Skip forward; used for the parts of ___INIT_DATA we do not consume. */
-    void Skip(std::size_t count) {
-        if (m_position + count > m_data.size()) {
-            m_overran = true;
-            m_position = m_data.size();
-            return;
-        }
-        m_position += count;
-    }
-
-    bool Overran() const { return m_overran; }
-    std::size_t Remaining() const { return m_data.size() - m_position; }
-
-private:
-    const std::vector<std::uint8_t> &m_data;
-    std::size_t m_position;
-    bool m_overran;
-};
-
-}  // namespace
 
 CResPackTOC::CResPackTOC(const std::string &fullName, const std::string &shortName)
     : m_fullName(fullName),
@@ -84,18 +36,20 @@ bool CResPackTOC::Bind(const std::string &bigDirectory, std::uint32_t tocResourc
         return false;
     }
 
-    ZPayloadReader reader(payload);
-    const std::uint32_t entryCount = reader.ReadU32();
-    if (entryCount * 8 > reader.Remaining()) {
+    // Sequential reader over a decompressed resource payload. Reads past the
+    // end yield zero and latch an error flag.
+    CArrayInputStream reader(payload);
+    const std::uint32_t entryCount = reader.ReadUInt32();
+    if (entryCount * 8 > reader.Available()) {
         std::printf("[pack] %s: TOC claims %u entries but holds %zu bytes\n",
-                    m_fullName.c_str(), entryCount, reader.Remaining());
+                    m_fullName.c_str(), entryCount, reader.Available());
         return false;
     }
 
     m_entries.resize(entryCount);
     for (std::uint32_t i = 0; i < entryCount; ++i) {
-        m_entries[i].nameKey = reader.ReadU32();
-        m_entries[i].handle = reader.ReadU32();
+        m_entries[i].nameKey = reader.ReadUInt32();
+        m_entries[i].handle = reader.ReadUInt32();
     }
     if (reader.Overran()) {
         std::printf("[pack] %s: TOC truncated\n", m_fullName.c_str());
@@ -131,22 +85,23 @@ bool CResPackTOC::LoadInitData() {
         return false;
     }
 
-    ZPayloadReader reader(payload);
+    CArrayInputStream reader(payload);
 
     // A leading uint32 array the engine keeps but never reads back.
-    const std::uint32_t leadingCount = reader.ReadU32();
+    const std::uint32_t leadingCount = reader.ReadUInt32();
+    // Skip forward over the parts of ___INIT_DATA we do not consume.
     reader.Skip(static_cast<std::size_t>(leadingCount) * 4);
 
     // --- locale table ---
-    const std::uint32_t localeCount = reader.ReadU32();
-    const std::uint32_t localeCodeLength = reader.ReadU32();
-    const std::uint32_t localeNameLength = reader.ReadU32();
+    const std::uint32_t localeCount = reader.ReadUInt32();
+    const std::uint32_t localeCodeLength = reader.ReadUInt32();
+    const std::uint32_t localeNameLength = reader.ReadUInt32();
 
     std::vector<std::uint32_t> localeIds;
     if (localeCount > 0 && localeCodeLength > 0) {
         localeIds.resize(localeCount);
         for (std::uint32_t i = 0; i < localeCount; ++i) {
-            localeIds[i] = reader.ReadU32();
+            localeIds[i] = reader.ReadUInt32();
         }
         // Then the language codes ("en") and display names ("ENGLISH"). The
         // game ships English only, so nothing needs them yet.
@@ -155,10 +110,10 @@ bool CResPackTOC::LoadInitData() {
     }
 
     // --- aggregate table ---
-    const std::uint32_t aggregateCount = reader.ReadU32();
+    const std::uint32_t aggregateCount = reader.ReadUInt32();
     std::vector<std::uint32_t> aggregateIds(aggregateCount);
     for (std::uint32_t i = 0; i < aggregateCount; ++i) {
-        aggregateIds[i] = reader.ReadU32();
+        aggregateIds[i] = reader.ReadUInt32();
     }
 
     if (reader.Overran()) {

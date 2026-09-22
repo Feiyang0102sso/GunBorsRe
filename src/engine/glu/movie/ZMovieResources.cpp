@@ -4,7 +4,7 @@
  */
 #define NOMINMAX
 #include "engine/glu/movie/ZMovieRenderer.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

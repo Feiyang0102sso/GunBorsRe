@@ -1,7 +1,7 @@
 #include "gun_bros_re/debug/FrameRateOverlay.h"
 #include "gun_bros_re/debug/DebugConfig.h"
 #include "engine/core/ZPaths.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/resources/CResTOCManager.h"
 #include <cstdio>
 

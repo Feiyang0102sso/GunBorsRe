@@ -1,9 +1,9 @@
 /**
- * @file ZMatrix4d.cpp
+ * @file CMatrix4d.cpp
  * @brief The 4x4 matrix operations the renderer needs.
  */
 
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 
 #include <cmath>
 

@@ -1,8 +1,11 @@
-#pragma once
-/** Original CImagePool used by CResourceLoader::LoadNext/RemoveImage.
+/**
+ * @file CImagePool.h
+ * @brief Original CImagePool used by CResourceLoader::LoadNext/RemoveImage.
+ *
  * Shared handles replace the original manual reference counts. The weak index
  * never keeps GPU objects alive after their last renderer has released them.
  */
+#pragma once
 #include "engine/graphics/ZTexture.h"
 #include "engine/resources/CResPackTOC.h"
 #include <map>

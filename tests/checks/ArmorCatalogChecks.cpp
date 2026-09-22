@@ -12,7 +12,7 @@
 #include "engine/graphics/CMesh.h"
 #include "gun_bros_re/gameplay/brother/CBrother.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 
 #include <cstdio>
 #include <filesystem>

@@ -8,7 +8,7 @@
 
 #include "gun_bros_re/gameplay/enemy/CEnemy.h"
 
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 
 #include <cstdio>

@@ -44,7 +44,7 @@
 #include "gun_bros_re/effects/CParticleEffect.h"
 
 #include "engine/resources/CArrayInputStream.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/graphics/ZMeshBuffer.h"
 #include "engine/graphics/ZPNG.h"
 #include "engine/graphics/ZShaderProgram.h"

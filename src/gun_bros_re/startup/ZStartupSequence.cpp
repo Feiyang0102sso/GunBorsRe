@@ -10,7 +10,7 @@
 #include "engine/platform/ZMediaDecoder.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/graphics/ZQuadBatch.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/platform/ZAudioPlayer.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"
 #include <algorithm>

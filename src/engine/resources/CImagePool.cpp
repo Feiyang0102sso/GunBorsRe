@@ -1,3 +1,11 @@
+/**
+ * @file CImagePool.cpp
+ * @brief Original CImagePool used by CResourceLoader::LoadNext/RemoveImage.
+ *
+ * Shared handles replace the original manual reference counts. The weak index
+ * never keeps GPU objects alive after their last renderer has released them.
+ */
+
 #include "engine/resources/CImagePool.h"
 #include <cstdio>
 std::shared_ptr<ZTexture> CImagePool::GetImage(CResPackTOC &pack, unsigned handle) {

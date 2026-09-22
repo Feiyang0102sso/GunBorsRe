@@ -1,8 +1,12 @@
+/** @file Zpaths.h
+ * @brief Runtime directory conventions. 
+	The platform layer resolves the directory from the executable path.
+ */
+
 #pragma once
 #include <filesystem>
 #include <string>
 
-/** Runtime directory conventions. The platform layer resolves the directory from the executable path. */
 namespace Paths {
 inline constexpr const char *GameName = "GunBrosRe";
 inline constexpr const char *ViewerName = "GunBrosViewer";

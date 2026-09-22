@@ -3,7 +3,7 @@
 /** Real BIG mine scripts, animated firing, and original map boundary regression. */
 #define NOMINMAX
 #include "engine/core/ZPaths.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/platform/ZGLLoader.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"

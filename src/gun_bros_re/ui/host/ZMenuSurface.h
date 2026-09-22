@@ -19,7 +19,7 @@
 #include "gun_bros_re/effects/CParticlePool.h"
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "engine/graphics/ZQuadBatch.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "gun_bros_re/gameplay/audio/CBGM.h"
 
 namespace MenuDetail {

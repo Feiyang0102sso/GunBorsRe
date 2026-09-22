@@ -1,0 +1,738 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: map.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read a Gun Bros TILELAYER / CMap resource (Section 24).
+//  Category: Game / Big Assets / Maps
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    One Section 24 resource is one CMap. The map references a Section 25
+    TILESET, then stores a sequence of heterogeneous map layers.
+
+    This layout was checked against 83 maps from 1.0.0, 1.2.0, 3.6.0 and PC.
+    Every checked sample was consumed exactly to the end of the file.
+
+    Layer type 3 (Movie) and the Region body in type 5 (PathLink) do not occur
+    in those samples. Their layouts come directly from the 3.6.0 engine code.
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Constants
+// ------------------------------------------------
+
+const ubyte LAYER_TILE = 0;
+const ubyte LAYER_COLLISION = 1;
+const ubyte LAYER_OBJECT = 2;
+const ubyte LAYER_MOVIE = 3;
+const ubyte LAYER_CAMERA = 4;
+const ubyte LAYER_PATH_LINK = 5;
+const ubyte LAYER_PATH_MESH = 6;
+
+const ubyte EMPTY_TILE = 255;
+const ubyte TILE_FLIP_X = 0x01;
+const ubyte TILE_FLIP_Y = 0x02;
+
+const ubyte OBJECT_TYPE_ENEMY = 5;
+const ubyte OBJECT_TYPE_PLATFORM = 14;
+const ubyte OBJECT_TYPE_PLAYER = 15;
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_COUNT = 0x66E0FF;
+const int COLOR_LAYER_TYPE = 0xFFD1DC;
+const int COLOR_PACK_HASH = 0xB8E0D2;
+const int COLOR_RESOURCE_INDEX = 0xD8F5E3;
+const int COLOR_OBJECT_TYPE = 0xFFB37C;
+const int COLOR_POSITION = 0xC8B0FF;
+const int COLOR_SIZE = 0x90FF90;
+const int COLOR_FLAGS = 0xFFE699;
+const int COLOR_TILE = 0xB3E5FC;
+const int COLOR_COLLISION = 0x6DA0FF;
+const int COLOR_PATH = 0xD7C6FF;
+
+
+// ------------------------------------------------
+// Display helpers
+// ------------------------------------------------
+
+int packNumberFromHash(uint32 packHash) {
+    // pack0_core is not part of the numeric pack hash sequence.
+    if (packHash == 0x58595522) {
+        return 0;
+    }
+
+    // Hashes of "pack0" through "pack9".
+    if (packHash >= 0x00267580 && packHash <= 0x00267589) {
+        return packHash - 0x00267580;
+    }
+
+    // Hashes of "pack10" through "pack19".
+    if (packHash >= 0x01675820 && packHash <= 0x01675829) {
+        return 10 + packHash - 0x01675820;
+    }
+
+    return -1;
+}
+
+
+string packHashFormat(uint32 packHash) {
+    local int packNumber = packNumberFromHash(packHash);
+    local string result;
+
+    if (packHash == 0x58595522) {
+        return "pack0_core";
+    }
+
+    if (packNumber >= 0) {
+        SPrintf(result, "pack%d", packNumber);
+        return result;
+    }
+
+    SPrintf(result, "packHash 0x%08X", packHash);
+    return result;
+}
+
+
+string layerTypeFormat(ubyte layerType) {
+    local string result;
+
+    if (layerType == LAYER_TILE) {
+        return "Tile";
+    }
+
+    if (layerType == LAYER_COLLISION) {
+        return "Collision";
+    }
+
+    if (layerType == LAYER_OBJECT) {
+        return "Object";
+    }
+
+    if (layerType == LAYER_MOVIE) {
+        return "Movie";
+    }
+
+    if (layerType == LAYER_CAMERA) {
+        return "Camera";
+    }
+
+    if (layerType == LAYER_PATH_LINK) {
+        return "PathLink";
+    }
+
+    if (layerType == LAYER_PATH_MESH) {
+        return "PathMesh";
+    }
+
+    SPrintf(result, "Unknown layer %d", layerType);
+    return result;
+}
+
+
+string objectTypeFormat(ubyte objectType) {
+    local string result;
+
+    switch (objectType) {
+        case 0:  return "ACHIEVEMENT";
+        case 1:  return "ACHIEVEMENTLIST";
+        case 2:  return "ARMOR";
+        case 3:  return "BULLET";
+        case 4:  return "DAILYBONUS";
+        case 5:  return "ENEMY";
+        case 6:  return "GUN";
+        case 7:  return "LEVEL";
+        case 8:  return "LEVELPROGRESSION";
+        case 9:  return "MISSION";
+        case 10: return "MISSIONOBJECTIVE";
+        case 11: return "PARTICLEEFFECT";
+        case 12: return "PICKUP";
+        case 13: return "PLANET";
+        case 14: return "PLATFORM";
+        case 15: return "PLAYER";
+        case 16: return "PLAYERPROGRESSION";
+        case 17: return "POWERUP";
+        case 18: return "PRIZE";
+        case 19: return "PROP";
+        case 20: return "REFINEMENT";
+        case 21: return "SOUNDEFFECT";
+        case 22: return "STORE";
+        case 23: return "TILELAYER";
+        case 24: return "TILESET";
+        case 25: return "TUTORIAL";
+        case 26: return "CHALLENGE";
+        case 27: return "MP_MATCH";
+    }
+
+    SPrintf(result, "Unknown object type %d", objectType);
+    return result;
+}
+
+
+string booleanFormat(ubyte value) {
+    if (value == 0) {
+        return "No";
+    }
+
+    return "Yes";
+}
+
+
+string spawnTagFormat(ubyte spawnTag) {
+    local string result;
+
+    if (spawnTag == 255) {
+        return "Default / untagged";
+    }
+
+    SPrintf(result, "Spawn tag %d", spawnTag);
+    return result;
+}
+
+
+typedef uint32 PackHash <format=hex, read=packHashFormat(this)>;
+
+
+// ------------------------------------------------
+// Part 1: TileSet reference
+// ------------------------------------------------
+
+typedef struct {
+    PackHash packHash <bgcolor=COLOR_PACK_HASH>;
+
+    // GameObjectRef only stores the local index when the hash is non-zero.
+    if (packHash != 0) {
+        ubyte localIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+    }
+} TileSetReference <read=tileSetReferenceFormat>;
+
+
+string tileSetReferenceFormat(TileSetReference &reference) {
+    local string result;
+
+    if (reference.packHash == 0) {
+        return "No TILESET";
+    }
+
+    SPrintf(
+        result,
+        "%s, TILESET %d",
+        packHashFormat(reference.packHash),
+        reference.localIndex
+    );
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 2: preload requirements
+// ------------------------------------------------
+
+typedef struct {
+    // Requirement references always include the local index. 255 is ignored
+    // by the engine but still occupies this byte in the file.
+    PackHash packHash <bgcolor=COLOR_PACK_HASH>;
+    ubyte localIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+} RequirementReference <read=requirementReferenceFormat>;
+
+
+string requirementReferenceFormat(RequirementReference &reference) {
+    local string result;
+
+    if (reference.localIndex == 255) {
+        return "Unused reference";
+    }
+
+    SPrintf(
+        result,
+        "%s, local index %d",
+        packHashFormat(reference.packHash),
+        reference.localIndex
+    );
+    return result;
+}
+
+
+struct RequirementGroup {
+    ubyte objectType <
+        format=decimal,
+        bgcolor=COLOR_OBJECT_TYPE,
+        read=objectTypeFormat(this)
+    >;
+
+    ubyte referenceCount <format=decimal, bgcolor=COLOR_COUNT>;
+    if (referenceCount > 0) {
+        RequirementReference references[referenceCount] <optimize=false>;
+    }
+};
+
+
+struct RequirementList {
+    ubyte groupCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (groupCount > 0) {
+        RequirementGroup groups[groupCount] <optimize=false>;
+    }
+};
+
+
+// ------------------------------------------------
+// Layer 0: tiles
+// ------------------------------------------------
+
+typedef struct {
+    ubyte tileId <format=decimal, bgcolor=COLOR_TILE>;
+    ubyte flags <format=hex, bgcolor=COLOR_FLAGS>;
+} TileCell <read=tileCellFormat>;
+
+
+string tileCellFormat(TileCell &cell) {
+    local string result;
+
+    if (cell.tileId == EMPTY_TILE) {
+        return "Empty";
+    }
+
+    if ((cell.flags & TILE_FLIP_X) && (cell.flags & TILE_FLIP_Y)) {
+        SPrintf(result, "tile %d, flip X + Y", cell.tileId);
+        return result;
+    }
+
+    if (cell.flags & TILE_FLIP_X) {
+        SPrintf(result, "tile %d, flip X", cell.tileId);
+        return result;
+    }
+
+    if (cell.flags & TILE_FLIP_Y) {
+        SPrintf(result, "tile %d, flip Y", cell.tileId);
+        return result;
+    }
+
+    SPrintf(result, "tile %d", cell.tileId);
+    return result;
+}
+
+
+struct TileLayer {
+    // CLayerTile::Init reads and discards this byte. It is 1 in all 150
+    // checked Tile layers.
+    ubyte discardedMarker <format=hex>;
+
+    uint16 width <format=decimal, bgcolor=COLOR_SIZE>;
+    uint16 height <format=decimal, bgcolor=COLOR_SIZE>;
+
+    if (width > 0 && height > 0) {
+        TileCell cells[width * height] <optimize=false>;
+    }
+};
+
+
+// ------------------------------------------------
+// Layer 1: collision geometry
+// ------------------------------------------------
+
+typedef struct {
+    int32 x <format=decimal, bgcolor=COLOR_POSITION>;
+    int32 y <format=decimal, bgcolor=COLOR_POSITION>;
+} CollisionPoint <read=collisionPointFormat>;
+
+
+string collisionPointFormat(CollisionPoint &point) {
+    local string result;
+
+    SPrintf(result, "(%d, %d)", point.x, point.y);
+    return result;
+}
+
+
+typedef struct {
+    ubyte partId <format=decimal, bgcolor=COLOR_COLLISION>;
+    uint16 firstPointIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+    uint16 secondPointIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+} CollisionSegment <read=collisionSegmentFormat>;
+
+
+string collisionSegmentFormat(CollisionSegment &segment) {
+    local string result;
+
+    SPrintf(
+        result,
+        "part %d: point %d -> %d",
+        segment.partId,
+        segment.firstPointIndex,
+        segment.secondPointIndex
+    );
+    return result;
+}
+
+
+struct CollisionLayer {
+    uint16 pointCount <format=decimal, bgcolor=COLOR_COUNT>;
+    if (pointCount > 0) {
+        CollisionPoint points[pointCount] <optimize=false>;
+    }
+
+    uint16 segmentCount <format=decimal, bgcolor=COLOR_COUNT>;
+    if (segmentCount > 0) {
+        CollisionSegment segments[segmentCount] <optimize=false>;
+    }
+};
+
+
+// ------------------------------------------------
+// Layer 2: placed game objects
+// ------------------------------------------------
+
+struct ObjectExtra(ubyte objectType) {
+    if (objectType == OBJECT_TYPE_PLAYER) {
+        uint16 playerValue <format=decimal>;
+    }
+    else if (objectType == OBJECT_TYPE_ENEMY) {
+        ubyte enemyValue <format=decimal>;
+        int16 enemyParameter <format=decimal>;
+    }
+    else if (objectType == OBJECT_TYPE_PLATFORM) {
+        ubyte platformValue <format=decimal>;
+    }
+    // Other object types set hasExtra in memory but serialize no extra bytes.
+};
+
+
+struct ObjectInstance(ubyte objectType) {
+    // Unlike GameObjectRef, object instances always store both fields.
+    PackHash packHash <bgcolor=COLOR_PACK_HASH>;
+    ubyte localIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+
+    ubyte hasExtra <
+        format=decimal,
+        bgcolor=COLOR_FLAGS,
+        read=booleanFormat(this)
+    >;
+
+    int16 x <format=decimal, bgcolor=COLOR_POSITION>;
+    int16 y <format=decimal, bgcolor=COLOR_POSITION>;
+
+    // Used by setSpawnMode and spawnTagGroup. 255 is the conventional
+    // untagged/default value; smaller values identify script-controlled groups.
+    ubyte spawnTag <
+        format=hex,
+        bgcolor=COLOR_FLAGS,
+        read=spawnTagFormat(this)
+    >;
+
+    if (hasExtra != 0) {
+        ObjectExtra extra(objectType);
+    }
+};
+
+
+struct ObjectInstances(ubyte objectType, uint16 objectCount) {
+    local uint16 objectIndex;
+
+    for (objectIndex = 0; objectIndex < objectCount; objectIndex++) {
+        ObjectInstance object(objectType) <optimize=false>;
+    }
+};
+
+
+struct ObjectGroup {
+    ubyte objectType <
+        format=decimal,
+        bgcolor=COLOR_OBJECT_TYPE,
+        read=objectTypeFormat(this)
+    >;
+
+    uint16 objectCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    // Used to allocate the object type's optional extra-data buffer.
+    uint16 extraAllocationCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    ObjectInstances objects(objectType, objectCount);
+};
+
+
+struct ObjectLayer {
+    uint16 totalObjectCount <format=decimal, bgcolor=COLOR_COUNT>;
+    ubyte groupCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    local uint16 countedObjects = 0;
+    local uint16 groupIndex;
+
+    for (groupIndex = 0; groupIndex < groupCount; groupIndex++) {
+        ObjectGroup group <optimize=false>;
+        countedObjects += group.objectCount;
+    }
+
+    if (countedObjects != totalObjectCount) {
+        Warning(
+            "Object layer declares %d objects but its groups contain %d.",
+            totalObjectCount,
+            countedObjects
+        );
+    }
+};
+
+
+// ------------------------------------------------
+// Layer 3: movie
+// ------------------------------------------------
+
+typedef struct {
+    // CGameAssetRef always occupies eight bytes.
+    PackHash packHash <bgcolor=COLOR_PACK_HASH>;
+    int32 assetIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+} AssetReference <read=assetReferenceFormat>;
+
+
+string assetReferenceFormat(AssetReference &reference) {
+    local string result;
+
+    SPrintf(
+        result,
+        "%s, asset %d",
+        packHashFormat(reference.packHash),
+        reference.assetIndex
+    );
+    return result;
+}
+
+
+struct MovieLayer {
+    // This branch is confirmed by CLayerMovie::Init but absent from samples.
+    AssetReference movieReference;
+    int16 x <format=decimal, bgcolor=COLOR_POSITION>;
+    int16 y <format=decimal, bgcolor=COLOR_POSITION>;
+};
+
+
+// ------------------------------------------------
+// Layer 4: camera bounds
+// ------------------------------------------------
+
+typedef struct {
+    int16 x <format=decimal, bgcolor=COLOR_POSITION>;
+    int16 y <format=decimal, bgcolor=COLOR_POSITION>;
+    int16 width <format=decimal, bgcolor=COLOR_SIZE>;
+    int16 height <format=decimal, bgcolor=COLOR_SIZE>;
+} Rectangle16 <read=rectangleFormat>;
+
+
+string rectangleFormat(Rectangle16 &rectangle) {
+    local string result;
+
+    SPrintf(
+        result,
+        "(%d, %d), %d x %d",
+        rectangle.x,
+        rectangle.y,
+        rectangle.width,
+        rectangle.height
+    );
+    return result;
+}
+
+
+struct CameraLayer {
+    Rectangle16 primaryBounds;
+    Rectangle16 secondaryBounds;
+};
+
+
+// ------------------------------------------------
+// Layer 5: linked path graph
+// ------------------------------------------------
+
+typedef struct {
+    int16 x <format=decimal, bgcolor=COLOR_POSITION>;
+    int16 y <format=decimal, bgcolor=COLOR_POSITION>;
+
+    // Link cost subtracts the radii of its two endpoint nodes.
+    int16 radius <format=decimal, bgcolor=COLOR_SIZE>;
+} PathLinkNode <read=pathLinkNodeFormat>;
+
+
+string pathLinkNodeFormat(PathLinkNode &node) {
+    local string result;
+
+    SPrintf(result, "(%d, %d), radius %d", node.x, node.y, node.radius);
+    return result;
+}
+
+
+typedef struct {
+    ubyte firstNodeIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+    ubyte secondNodeIndex <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+} PathLinkEdge <read=pathLinkEdgeFormat>;
+
+
+string pathLinkEdgeFormat(PathLinkEdge &edge) {
+    local string result;
+
+    SPrintf(result, "node %d <-> %d", edge.firstNodeIndex, edge.secondNodeIndex);
+    return result;
+}
+
+
+struct PathLinkRegion {
+    // No checked sample contains a Region. This body follows
+    // CLayerPathLink::Init exactly.
+    ubyte nodeIndexCount <format=decimal, bgcolor=COLOR_COUNT>;
+    if (nodeIndexCount > 0) {
+        ubyte nodeIndices[nodeIndexCount] <
+            format=decimal,
+            bgcolor=COLOR_RESOURCE_INDEX
+        >;
+    }
+
+    // The engine reads four unsigned values after the node list. Their exact
+    // geometric meaning cannot be verified without a sample containing one.
+    uint16 bounds[4] <format=decimal, bgcolor=COLOR_POSITION>;
+};
+
+
+struct PathLinkLayer {
+    ubyte nodeCount <format=decimal, bgcolor=COLOR_COUNT>;
+    ubyte linkCount <format=decimal, bgcolor=COLOR_COUNT>;
+    ubyte regionCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (nodeCount > 0) {
+        PathLinkNode nodes[nodeCount] <optimize=false>;
+    }
+
+    if (linkCount > 0) {
+        PathLinkEdge links[linkCount] <optimize=false>;
+    }
+
+    if (regionCount > 0) {
+        PathLinkRegion regions[regionCount] <optimize=false>;
+    }
+};
+
+
+// ------------------------------------------------
+// Layer 6: quadrilateral path mesh
+// ------------------------------------------------
+
+typedef struct {
+    int16 x <format=decimal, bgcolor=COLOR_POSITION>;
+    int16 y <format=decimal, bgcolor=COLOR_POSITION>;
+} PathMeshVertex <read=pathMeshVertexFormat>;
+
+
+string pathMeshVertexFormat(PathMeshVertex &vertex) {
+    local string result;
+
+    SPrintf(result, "(%d, %d)", vertex.x, vertex.y);
+    return result;
+}
+
+
+struct PathMeshNode {
+    // Zero in all 9,088 checked nodes. The engine stores it but its meaning is
+    // not established, so it intentionally remains unnamed beyond "flags".
+    ubyte flags <format=hex, bgcolor=COLOR_FLAGS>;
+
+    int16 vertexIndices[4] <format=decimal, bgcolor=COLOR_RESOURCE_INDEX>;
+
+    ubyte neighborCount <format=decimal, bgcolor=COLOR_COUNT>;
+    if (neighborCount > 0) {
+        uint16 neighborIndices[neighborCount] <
+            format=decimal,
+            bgcolor=COLOR_RESOURCE_INDEX
+        >;
+    }
+};
+
+
+struct PathMeshLayer {
+    uint16 vertexCount <format=decimal, bgcolor=COLOR_COUNT>;
+    uint16 nodeCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    // Exactly equals the sum of every node's neighborCount in all samples.
+    uint16 neighborReferenceCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (vertexCount > 0) {
+        PathMeshVertex vertices[vertexCount] <optimize=false>;
+    }
+
+    local uint32 countedNeighborReferences = 0;
+    local uint16 nodeIndex;
+
+    for (nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++) {
+        PathMeshNode node <optimize=false>;
+        countedNeighborReferences += node.neighborCount;
+    }
+
+    if (countedNeighborReferences != neighborReferenceCount) {
+        Warning(
+            "PathMesh declares %d neighbor references but contains %d.",
+            neighborReferenceCount,
+            countedNeighborReferences
+        );
+    }
+};
+
+
+// ------------------------------------------------
+// Layer dispatch
+// ------------------------------------------------
+
+struct MapLayer {
+    ubyte layerType <
+        format=decimal,
+        bgcolor=COLOR_LAYER_TYPE,
+        read=layerTypeFormat(this)
+    >;
+
+    if (layerType == LAYER_TILE) {
+        TileLayer tile;
+    }
+    else if (layerType == LAYER_COLLISION) {
+        CollisionLayer collision;
+    }
+    else if (layerType == LAYER_OBJECT) {
+        ObjectLayer objects;
+    }
+    else if (layerType == LAYER_MOVIE) {
+        MovieLayer movie;
+    }
+    else if (layerType == LAYER_CAMERA) {
+        CameraLayer camera;
+    }
+    else if (layerType == LAYER_PATH_LINK) {
+        PathLinkLayer pathLink;
+    }
+    else if (layerType == LAYER_PATH_MESH) {
+        PathMeshLayer pathMesh;
+    }
+    else {
+        Warning("Unknown map layer type %d.", layerType);
+    }
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+TileSetReference tileSetReference;
+RequirementList requirements;
+
+ubyte layerCount <format=decimal, bgcolor=COLOR_COUNT>;
+if (layerCount > 0) {
+    MapLayer layers[layerCount] <optimize=false>;
+}
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

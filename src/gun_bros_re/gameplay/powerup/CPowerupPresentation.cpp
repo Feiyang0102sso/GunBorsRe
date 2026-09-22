@@ -6,7 +6,7 @@
 #include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "gun_bros_re/gameplay/powerup/CPowerup.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/effects/CParticlePool.h"
 #include "gun_bros_re/ui/hud/CPowerUpSelector.h"

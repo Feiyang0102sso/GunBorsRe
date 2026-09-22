@@ -14,7 +14,7 @@
 #include "engine/graphics/ZMarkerBatch.h"
 #include "engine/graphics/ZQuadBatch.h"
 #include "engine/graphics/ZShaderProgram.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "gun_bros_re/host/ZHostSettings.h"
 #include "gun_bros_re/host/ZMouseFireControl.h"
 #include "gun_bros_re/host/ZMouseScreenControl.h"

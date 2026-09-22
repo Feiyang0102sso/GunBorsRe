@@ -1,0 +1,430 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: enemy_template.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Gun Bros enemy template.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_FLAG = 0xD0D0D0;
+const int COLOR_REFERENCE_TXT = 0xFFE0B2;
+const int COLOR_SCRIPT = 0xD7C6FF;
+const int COLOR_MESH_CONFIG = 0x28FF2F;
+const int COLOR_MOVE_SET = 0xC8E6C9;
+const int COLOR_REFERENCE_BULLET = 0xFFA3A4;
+const int COLOR_STATS = 0xB3E5FC;
+const int COLOR_COLLISION = 0x6DA0FF;
+
+
+// ------------------------------------------------
+// Common-refs
+// ------------------------------------------------
+
+/*
+    8X 75 26 00 Y
+
+    X = pack number [0,9]
+    Y = Yth type resource in this .big
+    Y varies from 1-4 bytes
+
+    2X 58 67 01 Y
+
+    X + 10 = pack number [10,19]
+*/
+
+int packNumberFromHash(uint32 packHash) {
+    local ubyte firstHashByte = packHash & 0xFF;
+    local int firstDigit = firstHashByte >> 4;
+    local int secondDigit = firstHashByte & 0x0F;
+
+    if (firstDigit == 8) {
+        return secondDigit;
+    }
+
+    if (firstDigit == 2) {
+        return secondDigit + 10;
+    }
+
+    return -1;
+}
+
+
+string packHashFormat(uint32 packHash) {
+    local int packNumber = packNumberFromHash(packHash);
+    local string result;
+
+    if (packNumber >= 0) {
+        SPrintf(result, "pack%d", packNumber);
+        return result;
+    }
+
+    SPrintf(result, "packHash 0x%08X", packHash);
+
+    return result;
+}
+
+
+string resourceIndexFormat(int resourceIndex, string resourceType) {
+    local string result;
+
+    SPrintf(result, "%s %d", resourceType, resourceIndex);
+
+    return result;
+}
+
+
+typedef uint32 PackHash <format=hex, read=packHashFormat(this)>;
+
+
+// ------------------------------------------------
+// Part 1: Template flag
+// ------------------------------------------------
+
+struct TemplateFlag{
+    ubyte debugScriptEnabled <format=decimal>;
+} ;
+
+
+// ------------------------------------------------
+// Part 2: string refs
+// ------------------------------------------------
+
+typedef struct {
+    PackHash stringPackHash;
+    int32 stringIndex <
+        format=hex,
+        read=resourceIndexFormat(this, "str")
+    >; // Zero-based. -1 means unused.
+} CommonStringRef;
+
+
+// ------------------------------------------------
+// Part 3: Compiled Flow Script
+// ------------------------------------------------
+
+/*
+
+    different script size. The size is not stored
+    anywhere, so it is recovered by walking the length prefixes CScript::Load
+    reads:
+
+        ubyte  scriptPresent            zero means the block is this byte alone
+        ubyte  discarded[6]
+        ubyte  n; ubyte  exportSlots[n]
+        ubyte  n; ubyte  unknown[n]
+        ubyte  n; entry[n]              9 bytes per entry
+        ubyte  n; dataBlock[n]          each: ubyte m + int16 values[m]
+        ubyte  n; int16  variables[n]
+        ubyte  n; state[n]              see below
+        ubyte  n; code[n]               each: ubyte m + ubyte bytecode[m]
+
+    One state is:
+
+        ubyte  parentStateIndex
+        ubyte  m; ubyte moveSequence[m]
+        ubyte  n; handler[n]            each: ubyte eventId + one code block
+        code                            on enter
+        code                            on exit
+*/
+
+// Total size of the script block that starts at startPos.
+int64 flowScriptSize(int64 startPos) {
+    local int64 pos = startPos;
+    local int tableCount;
+    local int handlerCount;
+    local int i;
+    local int j;
+
+    if (ReadUByte(pos) == 0) {
+        return 1;
+    }
+
+    pos += 1; // scriptPresent
+    pos += 6; // bytes the loader reads and throws away
+
+    // Export slots.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount;
+
+    // Second byte table, empty in every enemy template.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount;
+
+    // Resource table, 9 bytes per entry.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount * 9;
+
+    // Data blocks, each one a length prefixed int16 array.
+    tableCount = ReadUByte(pos);
+    pos += 1;
+    for (i = 0; i < tableCount; i++) {
+        pos += 1 + ReadUByte(pos) * 2;
+    }
+
+    // Initial values of the script variables.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount * 2;
+
+    // States.
+    tableCount = ReadUByte(pos);
+    pos += 1;
+    for (i = 0; i < tableCount; i++) {
+        pos += 1;                   // parent state index
+        pos += 1 + ReadUByte(pos);  // move sequence
+
+        handlerCount = ReadUByte(pos);
+        pos += 1;
+        for (j = 0; j < handlerCount; j++) {
+            pos += 1;                   // event id
+            pos += 1 + ReadUByte(pos);  // handler code
+        }
+
+        pos += 1 + ReadUByte(pos);  // on enter
+        pos += 1 + ReadUByte(pos);  // on exit
+    }
+
+    // Functions.
+    tableCount = ReadUByte(pos);
+    pos += 1;
+    for (i = 0; i < tableCount; i++) {
+        pos += 1 + ReadUByte(pos);
+    }
+
+    return pos - startPos;
+}
+
+
+struct CompiledFlowScript{
+    local int64 scriptSize = flowScriptSize(FTell());
+    ubyte data[scriptSize] <format=hex>;
+} ;
+
+
+// ------------------------------------------------
+// Part 4: Move set mesh configuration
+// ------------------------------------------------
+
+// how many meshes got involved in this enemy
+
+typedef struct {
+    ubyte meshIndex <format=decimal>;
+    ubyte textureIndex <format=decimal>;
+} MeshConfig <read=meshConfigFormat>;
+
+
+struct MoveSetMeshConfig{
+    PackHash meshPackHash;
+
+    ubyte meshConfigCount <format=decimal>;
+    if (meshConfigCount > 0) {
+        MeshConfig meshConfigs[meshConfigCount] <optimize=false>;
+    }
+} ;
+
+
+string meshConfigFormat(MeshConfig &config) {
+    local string result;
+    SPrintf(result, "mesh %d texture %d", config.meshIndex, config.textureIndex);
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 5: Moves
+// ------------------------------------------------
+
+/*
+    A move is one animation clip played on one of the configured meshes. Its
+    frame numbers index the mesh keyframe timeline, so a single mesh can carry
+    every move of the enemy.
+    Not every animation in mesh file is used.
+*/
+
+typedef struct {
+    uint16 frameNumber <format=decimal>;
+    ubyte soundIndex <format=decimal>;
+} MoveEvent <read=moveEventFormat>;
+
+
+typedef struct {
+    ubyte meshConfigIndex <format=decimal>;
+    uint16 firstFrame <format=decimal>;
+    uint16 lastFrame <format=decimal>;
+
+    // 1 restarts the clip when the same move is triggered again, 0 lets the
+    // running clip finish first.
+    ubyte restartOnRetrigger <format=decimal>;
+
+    // 16.16 fixed point, multiplied into the frame delta time.
+    int32 playbackSpeed;
+
+    // Not used. Zero in every
+    // enemy template, one in a few gun moves.
+    uint32 unusedField;
+
+    ubyte eventCount <format=decimal>;
+    if (eventCount > 0) {
+        MoveEvent events[eventCount] <optimize=false>;
+    }
+} MoveEntry <read=moveEntryFormat>;
+
+
+struct MoveSetMoves{
+    ubyte moveCount <format=decimal>;
+    if (moveCount > 0) {
+        MoveEntry moves[moveCount] <optimize=false>;
+    }
+} ;
+
+
+string moveEventFormat(MoveEvent &event) {
+    local string result;
+    SPrintf(result, "frame %d sound %d", event.frameNumber, event.soundIndex);
+    return result;
+}
+
+
+string moveEntryFormat(MoveEntry &move) {
+    local string result;
+    local double speed = move.playbackSpeed / 65536.0;
+
+    SPrintf(
+        result,
+        "config %d frames %d-%d speed %.2f events %d",
+        move.meshConfigIndex,
+        move.firstFrame,
+        move.lastFrame,
+        speed,
+        move.eventCount
+    );
+
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 6: Bullet reference
+// ------------------------------------------------
+
+// ref to a bullet
+// melee have no bullet (00 00 00 00)
+
+typedef struct {
+    PackHash bulletPackHash;
+    if (bulletPackHash != 0) {
+        ubyte bulletObjectId <
+            format=decimal,
+            read=resourceIndexFormat(this, "bullet")
+        >;
+    }
+} BulletReference;
+
+
+// ------------------------------------------------
+// Part 7: Stats
+// ------------------------------------------------
+
+struct EnemyStats{
+    //EXP Xplodium
+    uint16 experienceReward <format=decimal>;
+    uint16 xplodiumReward <format=decimal>;
+
+    // no reward enemy got 0 (eg pack1 0026) while others got 1
+    // some else got -1, unknown
+    ubyte isReward <format=decimal>;
+
+    // used when the collision data below is empty.
+    ubyte collisionRadius <format=decimal>;
+
+    // drawn percentages in game
+    uint16 drawScalePercent <format=decimal>;
+    // drawn percentages in UI/casualty page
+    uint16 uiScalePercent <format=decimal>;
+} ;
+
+
+// ------------------------------------------------
+// Part 8: Collision data
+// ------------------------------------------------
+
+// most doesnt use these field
+// one exception is pack1 0026, unused enemy, minitank
+
+typedef struct {
+    int32 x;
+    int32 y;
+} CollisionPoint <read=collisionPointFormat>;
+
+
+typedef struct {
+    ubyte partId <format=decimal>;
+    uint16 firstPointIndex <format=decimal>;
+    uint16 secondPointIndex <format=decimal>;
+} CollisionSegment <read=collisionSegmentFormat>;
+
+
+struct CollisionData{
+    uint16 pointCount <format=decimal>;
+    if (pointCount > 0) {
+        CollisionPoint points[pointCount] <optimize=false>;
+    }
+
+    uint16 segmentCount <format=decimal>;
+    if (segmentCount > 0) {
+        CollisionSegment segments[segmentCount] <optimize=false>;
+    }
+} ;
+
+
+string collisionPointFormat(CollisionPoint &point) {
+    local string result;
+    SPrintf(result, "%d, %d", point.x, point.y);
+    return result;
+}
+
+
+string collisionSegmentFormat(CollisionSegment &segment) {
+    local string result;
+
+    SPrintf(
+        result,
+        "part %d: point %d - point %d",
+        segment.partId,
+        segment.firstPointIndex,
+        segment.secondPointIndex
+    );
+
+    return result;
+}
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+TemplateFlag templateFlag <bgcolor=COLOR_FLAG>;
+CommonStringRef nameStringReference <bgcolor=COLOR_REFERENCE_TXT>;
+CompiledFlowScript compiledFlowScript <bgcolor=COLOR_SCRIPT>;
+MoveSetMeshConfig moveSetMeshConfig <bgcolor=COLOR_MESH_CONFIG>;
+MoveSetMoves moveSetMoves <bgcolor=COLOR_MOVE_SET>;
+BulletReference bulletReference <bgcolor=COLOR_REFERENCE_BULLET>;
+EnemyStats enemyStats <bgcolor=COLOR_STATS>;
+CollisionData collisionData <bgcolor=COLOR_COLLISION>;
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

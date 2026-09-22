@@ -1,0 +1,253 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: big_archive.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read the structure of a Gun Bros .big archive.
+//  Category: Game / Big Assets
+// File Mask: *.big
+//------------------------------------------------
+
+/*
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_MAGIC = 0xFFD1DC;
+const int COLOR_VERSION = 0xB0E0FF;
+const int COLOR_FLAGS = 0xB3E0FF;
+const int COLOR_TABLE1 = 0x70A0FF;
+const int COLOR_TABLE2 = 0xFF30DC;
+const int COLOR_DATA_BLOCK = 0xFFF0B3;
+
+const int COLOR_BASE_RESOURCE_ID = 0xC8B0FF;
+const int COLOR_RANGE_LENGTH = 0xE0C8FF;
+const int COLOR_TABLE2_START_INDEX = 0xF0DCFF;
+
+const int COLOR_GROUP_HASH = 0xB8E0D2;
+const int COLOR_RESOURCE_OFFSET = 0xD8F5E3;
+
+const int COLOR_FOOTER = 0x68FF9F;
+
+const int COLOR_BLOCK_MAGIC = 0xFFB37C;
+const int COLOR_COMPRESSION_FLAG = 0x66C9FF;
+const int COLOR_SIZE = 0xFFE699;
+const int COLOR_DATA_MAGIC = 0x9C6D00;
+const int COLOR_DATA = 0x223BC2;
+
+
+// ------------------------------------------------
+// Part 1: file header, fixed 0x20 bytes
+// ------------------------------------------------
+
+struct BigFileHeader {
+    // 'FGIB'
+    char magic[4] <bgcolor=COLOR_MAGIC>;
+
+    // 1 for the Gun Bros series, 2 for the Contract Killer series.
+    // The high byte is always zero.
+    uint16 version <format=decimal, bgcolor=COLOR_VERSION>;
+
+    // Always 80 00.
+    uint16 flags <format=hex, bgcolor=COLOR_FLAGS>;
+
+    // Start of table1. Always 0x20
+    uint32 table1Offset <format=hex, bgcolor=COLOR_TABLE1>;
+
+    // Number of table1 entries, logical IDs
+    uint32 table1EntryCount <format=decimal, bgcolor=COLOR_TABLE1>;
+
+    // Start of table2.
+    uint32 table2Offset <format=hex, bgcolor=COLOR_TABLE2>;
+
+    // Number of table2 entries, physical offsets in this archive.
+    uint32 table2EntryCount <format=decimal, bgcolor=COLOR_TABLE2>;
+
+    // Start of the data block, also the offset of resource 0.
+    uint32 dataBlockOffset <format=hex, bgcolor=COLOR_DATA_BLOCK>;
+
+    // Size of the data block in bytes.
+    uint32 dataBlockSize <format=hex, bgcolor=COLOR_DATA_BLOCK>;
+};
+
+
+// ------------------------------------------------
+// Part 2: table1, 8 bytes per entry
+// ------------------------------------------------
+
+/*
+sum(blank IDs in table1) == 254 + all strings nums
+
+table1[0] always 1 entry (pointer to string pack)
+
+ID 0x02 - 0xFF always leave blank
+
+table1[1] as shown in each file
+
+ID blank, left for the corrsponding string indexs
+
+table1[2] as shown in each file
+table1[3] extra for pack0, as its string pack use 2 parts of non-continous IDs
+
+pack0 always have extra entry as
+*/
+
+// logical IDs mapped onto table2 indexes.
+struct Table1Range {
+    // First logical ID covered by this range.
+    uint32 baseResourceId <format=hex, bgcolor=COLOR_BASE_RESOURCE_ID>;
+
+    // How many IDs in this range.
+    uint16 rangeLength <format=decimal, bgcolor=COLOR_RANGE_LENGTH>;
+
+    // Table2 index that baseResourceId maps to.
+    uint16 table2StartIndex <format=decimal, bgcolor=COLOR_TABLE2_START_INDEX>;
+};
+
+
+// mapping "ID 0x100..0x235 -> table2 1..310" 
+string table1RangeFormat(Table1Range &range) {
+    local uint32 lastResourceId = range.baseResourceId + range.rangeLength - 1;
+    local uint32 table2LastIndex = range.table2StartIndex + range.rangeLength - 1;
+    local string description;
+
+    SPrintf(description, "ID 0x%X..0x%X -> table2 %d..%d  (%d entries)",
+            range.baseResourceId,
+            lastResourceId,
+            range.table2StartIndex,
+            table2LastIndex,
+            range.rangeLength);
+
+    return description;
+}
+
+
+// ------------------------------------------------
+// Part 3: table2, 8 bytes per entry
+// ------------------------------------------------
+
+// physical offsets
+struct Table2Entry {
+    //
+    // Resource category (calculated by each CStringToKey). 
+    //
+    //     0x69E4C505  string_pack   (application/x-glu-pack)
+    //     0x69E5D35C  keysets       (application/x-glu-aggr)
+    //     0xB7178678  png           (image/png) 
+    //     0xF4E02223  bin           (application/octet-stream)  
+    //     0xF686AADC  manifest      (text/plain) 
+    //     0xFD8A7754  wav           (audio/x-wav) 
+    //
+    uint32 groupHash <format=hex, bgcolor=COLOR_GROUP_HASH>;
+
+    // offsets in file
+    uint32 resourceOffset <format=hex, bgcolor=COLOR_RESOURCE_OFFSET>;
+};
+
+
+// ------------------------------------------------
+// Part 4: table footer, fixed 8 bytes
+// ------------------------------------------------
+
+struct TableFooter {
+    // Always zero in every sample.
+    uint32 reserved <format=hex>;
+
+    // Total size of the .big file.
+    uint32 totalFileSize <format=hex>;
+};
+
+
+// ------------------------------------------------
+// Part 5: data block
+// ------------------------------------------------
+
+// blockSize is the distance to the next resource, taken from table2.
+struct ResourceBlock(uint32 blockSize) {
+    // Always 04 00.
+    ubyte magic <format=hex, bgcolor=COLOR_BLOCK_MAGIC>;
+    ubyte reserved <format=hex, bgcolor=COLOR_BLOCK_MAGIC>;
+
+    // 0x00 for raw data, 0x80 for zlib compressed data.
+    ubyte compressionFlag <format=hex, bgcolor=COLOR_COMPRESSION_FLAG>;
+    ubyte padding <format=hex, bgcolor=COLOR_BLOCK_MAGIC>;
+
+    if (compressionFlag == 0x80) {
+        // Size after inflating. 0 means the resource is empty.
+        uint32 originalSize <bgcolor=COLOR_SIZE>;
+
+        // Size of the zlib stream, always blockSize - 12.
+        uint32 compressedSize <bgcolor=COLOR_SIZE>;
+
+        // Starts with the zlib header 78 DA.
+        ubyte compressedData[compressedSize] <bgcolor=COLOR_DATA>;
+    }
+    else {
+        local int64 payloadPos = FTell();
+
+        // PNG: 89 50 4E 47
+        local int isPNG =
+            blockSize >= 8 &&
+            ReadUByte(payloadPos + 0) == 0x89 &&
+            ReadUByte(payloadPos + 1) == 0x50 &&
+            ReadUByte(payloadPos + 2) == 0x4E &&
+            ReadUByte(payloadPos + 3) == 0x47;
+
+        // RIFF: 52 49 46 46
+        local int isRIFF =
+            blockSize >= 8 &&
+            ReadUByte(payloadPos + 0) == 0x52 &&
+            ReadUByte(payloadPos + 1) == 0x49 &&
+            ReadUByte(payloadPos + 2) == 0x46 &&
+            ReadUByte(payloadPos + 3) == 0x46;
+
+        if (isPNG || isRIFF) {
+            char dataMagic[4] <bgcolor=COLOR_DATA_MAGIC>;
+            ubyte data[blockSize - 8] <bgcolor=COLOR_DATA>;
+        }
+        else {
+            // Unknown/raw binary: the entire payload is ordinary data.
+            ubyte data[blockSize - 4] <bgcolor=COLOR_DATA>;
+        }
+    }
+};
+
+struct DataBlock {
+    local uint32 entryIndex;
+    local uint32 blockSize;
+
+    for (entryIndex = 0; entryIndex < header.table2EntryCount; entryIndex++) {
+        // A resource ends where the next one starts; the last one ends at
+        // the end of the file.
+        if (entryIndex + 1 < header.table2EntryCount) {
+            blockSize = table2[entryIndex + 1].resourceOffset -
+                        table2[entryIndex].resourceOffset;
+        }
+        else {
+            blockSize = (uint32)FileSize() - table2[entryIndex].resourceOffset;
+        }
+
+        ResourceBlock resource(blockSize) <optimize=false>;
+    }
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+BigFileHeader header;
+Table1Range table1[header.table1EntryCount] <read=table1RangeFormat, optimize=false>;
+// table2 follows table1 directly, but seeking keeps this correct even if a
+// future archive puts padding between the two tables.
+FSeek(header.table2Offset);
+Table2Entry table2[header.table2EntryCount];
+TableFooter footer <bgcolor=COLOR_FOOTER>;
+FSeek(header.dataBlockOffset);
+DataBlock dataBlock;

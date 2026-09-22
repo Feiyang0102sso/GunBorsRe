@@ -1,8 +1,11 @@
-#pragma once
-/** Original resourceLoader.cpp: queued functions and images, 102097..102535.
+/**
+ * @file CResourceLoader.h
+ * @brief Original resourceLoader.cpp: queued functions and images, 102097..102535.
+ *
  * Game keyset resolution stays with the caller. GPU image ownership is scoped
  * to consumers; this loader retains only a weak pool index.
  */
+#pragma once
 #include "engine/resources/CImagePool.h"
 #include <deque>
 #include <functional>

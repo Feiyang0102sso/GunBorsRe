@@ -1,7 +1,7 @@
 /**
  * @file CAggregateResource.h
  * @brief Container resource that packs many small sub-resources into one blob.
- *
+ *		  eg read the whole string pack and return each single string bytes (do not interpter it)
  * Port of com::glu::platform::components::CAggregateResource.
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:355669 (LoadTOC), :355548 (GetSize),
  *            :355572 (GetOffset), :355603 (GetMimeKey)
@@ -32,6 +32,8 @@ constexpr std::uint8_t kResourceZlib = 0x80;
 // TOC header flags
 // ---------------------------------------------------------------------------
 
+
+// 0x8000 / 0x4000 / 0x2000 can be refer to string packs flags
 // Sub-resource IDs are consecutive: the header stores one uint16 base ID and
 // entry i covers base + i. When clear, every entry carries its own uint16 ID.
 constexpr std::uint16_t kAggregateFlagConsecutiveIds = 0x8000;
@@ -44,6 +46,20 @@ constexpr std::uint16_t kAggregateFlagHasMimeKeys = 0x2000;
 
 // Sub-resource IDs are only 15 bits wide; the upper bit of the handle's low
 // half is not part of the ID.
+
+/*
+eg refer to keysets as it store lots of handlers
+
+handle = 0x21FF0236
+mask   = 0x00007FFF
+         ----------
+result = 0x00000236
+
+handle = 0x03000100
+mask   = 0x00007FFF
+         ----------
+result = 0x00000100
+*/
 constexpr std::uint32_t kAggregateSubIdMask = 0x7FFF;
 
 /**

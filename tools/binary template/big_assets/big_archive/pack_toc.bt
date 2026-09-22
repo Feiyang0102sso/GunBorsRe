@@ -1,0 +1,75 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: pack_toc.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read packTOC.dat and packTOC_<artset>.dat.
+//  Category: Game / Big Assets
+// File Mask: packTOC*.dat
+//------------------------------------------------
+
+/*
+    This is the directory above all .big archives.
+
+    Each record names one archive and gives the logical resource ID of that
+    archive's Pack Name Table. Records continue to the end of the file; there
+    is no leading record count and no string terminator.
+
+    Example:
+        "pack1_xga:TABLEOFCONTENTS" -> logical ID 0x040E
+
+    The logical ID must still pass through table1 in pack1_xga.big. It is not
+    a table2 physical index or a file offset.
+*/
+
+BigEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_TEXT_LENGTH = 0xFF75C1;
+const int COLOR_RECORD_TEXT = 0xB8E0D2;
+const int COLOR_TOC_RESOURCE_ID = 0xFFE699;
+
+
+// ------------------------------------------------
+// Record
+// ------------------------------------------------
+
+
+/*
+
+table2Index =
+    table1Range.table2StartIndex +
+    (tocResourceId - table1Range.baseResourceId);
+
+*/
+
+struct PackTOCRecord {
+    // Number of ASCII bytes that follow. The text has no trailing zero.
+    uint16 textLength <format=decimal, bgcolor=COLOR_TEXT_LENGTH>;
+
+    // "<pack name>:<key>", for example "pack1_xga:TABLEOFCONTENTS".
+    char text[textLength] <bgcolor=COLOR_RECORD_TEXT>;
+
+    // Table1 logical ID of the named resource inside the corresponding .big file.
+    // This will point to corrsponding big's name_pack
+    // typically one file index after the "init data file"
+    uint32 tocResourceId <format=hex, bgcolor=COLOR_TOC_RESOURCE_ID>;
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+struct PackTOCRecords {
+    while (FTell() < FileSize()) {
+        PackTOCRecord record;
+    }
+};
+
+PackTOCRecords records;

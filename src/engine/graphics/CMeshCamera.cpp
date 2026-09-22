@@ -5,7 +5,7 @@
 
 #include "engine/graphics/CMeshCamera.h"
 
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 
 namespace {
 

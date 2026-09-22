@@ -29,7 +29,7 @@
 #include "engine/resources/CArrayInputStream.h"
 #include "engine/platform/ZAudioPlayer.h"
 #include "engine/graphics/ZMarkerBatch.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/graphics/ZPNG.h"
 #include "engine/graphics/ZQuadBatch.h"
 #include "engine/graphics/ZShaderProgram.h"

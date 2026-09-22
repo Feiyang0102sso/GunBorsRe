@@ -23,6 +23,8 @@
 
 // Name of the resource holding this pack's locale and aggregate tables. Read
 // during Bind, before any aggregate handle can be resolved.
+// refer to big_init_data.bt
+// the init data actually uses to locate string pack
 extern const char *const kInitDataResourceName;
 
 /** One entry of a pack TOC: a name hash and what it points at. */

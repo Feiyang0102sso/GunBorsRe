@@ -9,28 +9,12 @@
  */
 
 #include "engine/resources/CBigFileReader.h"
+#include "engine/resources/CArrayInputStream.h"
 
 #include <zlib.h>
 
 #include <cstdio>
 #include <cstring>
-
-namespace {
-
-/** Read a little-endian uint32 from a byte buffer. */
-std::uint32_t ReadU32(const std::uint8_t *bytes) {
-    return static_cast<std::uint32_t>(bytes[0]) |
-           (static_cast<std::uint32_t>(bytes[1]) << 8) |
-           (static_cast<std::uint32_t>(bytes[2]) << 16) |
-           (static_cast<std::uint32_t>(bytes[3]) << 24);
-}
-
-/** Read a little-endian uint16 from a byte buffer. */
-std::uint16_t ReadU16(const std::uint8_t *bytes) {
-    return static_cast<std::uint16_t>(bytes[0] | (bytes[1] << 8));
-}
-
-}  // namespace
 
 CBigFileReader::CBigFileReader()
     : m_fileSize(0),
@@ -111,7 +95,8 @@ bool CBigFileReader::ReadHeaderAndTables() {
         return false;
     }
 
-    const std::uint32_t magic = ReadU32(&header[0]);
+    CArrayInputStream headerStream(header, sizeof(header));
+    const std::uint32_t magic = headerStream.ReadUInt32();
     if (magic != kBigMagic) {
         std::printf("[big] bad magic 0x%08X\n", magic);
         return false;
@@ -119,7 +104,8 @@ bool CBigFileReader::ReadHeaderAndTables() {
 
     // The engine reads version as two separate bytes and only checks the low
     // one. Version 2 is the Contract Killer series and is rejected here.
-    const std::uint8_t version = header[4];
+    const std::uint8_t version = headerStream.ReadUInt8();
+    headerStream.Skip(1);
     if (version != kBigVersionGunBros) {
         std::printf("[big] unsupported version %u\n", version);
         return false;
@@ -130,15 +116,17 @@ bool CBigFileReader::ReadHeaderAndTables() {
     // test of bit 7, selecting the table1 entry width. This is the real meaning
     // of 0x80 -- it is not a compression flag, despite sharing the value with
     // the per-resource one.
-    m_flags = header[6];
+    m_flags = headerStream.ReadUInt8();
+    headerStream.Skip(1);
 
-    m_table1Offset = ReadU32(&header[8]);
-    m_table1EntryCount = ReadU32(&header[12]);
-    m_table2Offset = ReadU32(&header[16]);
-    m_table2EntryCount = ReadU32(&header[20]);
+    m_table1Offset = headerStream.ReadUInt32();
+    m_table1EntryCount = headerStream.ReadUInt32();
+    m_table2Offset = headerStream.ReadUInt32();
+    m_table2EntryCount = headerStream.ReadUInt32();
     // header[24] is dataBlockOffset and header[28] is dataBlockSize. Both are
     // fully derivable from the fields above; the engine reads and discards
     // them, so we do the same.
+    headerStream.Skip(8);
 
     if ((m_flags & kBigFlagWideTable1) == 0) {
         // 4-byte table1 entries. No sample in the Gun Bros packs uses this and
@@ -154,12 +142,12 @@ bool CBigFileReader::ReadHeaderAndTables() {
             std::printf("[big] table1 read failed\n");
             return false;
         }
+        CArrayInputStream table1Stream(raw);
         m_table1.resize(m_table1EntryCount);
         for (std::uint32_t i = 0; i < m_table1EntryCount; ++i) {
-            const std::uint8_t *entry = &raw[i * 8];
-            m_table1[i].baseResourceId = ReadU32(&entry[0]);
-            m_table1[i].rangeLength = ReadU16(&entry[4]);
-            m_table1[i].table2StartIndex = ReadU16(&entry[6]);
+            m_table1[i].baseResourceId = table1Stream.ReadUInt32();
+            m_table1[i].rangeLength = table1Stream.ReadUInt16();
+            m_table1[i].table2StartIndex = table1Stream.ReadUInt16();
         }
     }
 
@@ -171,15 +159,16 @@ bool CBigFileReader::ReadHeaderAndTables() {
             std::printf("[big] table2 read failed\n");
             return false;
         }
+        CArrayInputStream table2Stream(raw);
         m_table2.resize(m_table2EntryCount);
         for (std::uint32_t i = 0; i < m_table2EntryCount; ++i) {
-            const std::uint8_t *entry = &raw[i * 8];
-            m_table2[i].groupHash = ReadU32(&entry[0]);
-            m_table2[i].resourceOffset = ReadU32(&entry[4]);
+            m_table2[i].groupHash = table2Stream.ReadUInt32();
+            m_table2[i].resourceOffset = table2Stream.ReadUInt32();
         }
         // Footer is { uint32 zero, uint32 endOffset }. The second word closes
         // out the last resource, which has no following entry to bound it.
-        m_dataEndOffset = ReadU32(&raw[m_table2EntryCount * 8 + 4]);
+        table2Stream.Skip(4);
+        m_dataEndOffset = table2Stream.ReadUInt32();
     }
 
     return true;
@@ -293,8 +282,9 @@ bool CBigFileReader::GetResourceByIndex(std::uint32_t table2Index,
     if (!ReadAt(blockOffset + 4, sizes, sizeof(sizes))) {
         return false;
     }
-    const std::uint32_t originalSize = ReadU32(&sizes[0]);
-    const std::uint32_t compressedSize = ReadU32(&sizes[4]);
+    CArrayInputStream sizeStream(sizes, sizeof(sizes));
+    const std::uint32_t originalSize = sizeStream.ReadUInt32();
+    const std::uint32_t compressedSize = sizeStream.ReadUInt32();
 
     if (compressedSize > blockSize - 12) {
         std::printf("[big] resource %u: compressed size %u exceeds block\n",

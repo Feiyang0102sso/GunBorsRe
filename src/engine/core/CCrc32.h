@@ -1,5 +1,5 @@
 /** @file CCrc32.h
- * @brief Original non-reflected CRC, used by CProfileManager disk records.
+ * @brief non-reflected CRC, used by CProfileManager disk records.
  */
 #ifndef GUN_BROS_RE_CCRC32_H
 #define GUN_BROS_RE_CCRC32_H
@@ -17,7 +17,9 @@ public:
             for (unsigned bit = 0; bit < 8; ++bit) {
                 const bool high = (value & 0x80000000u) != 0;
                 value <<= 1;
-                if (high) { value ^= 0x04C11DB7u; }
+                if (high) { 
+					value ^= 0x04C11DB7u; 
+				}
             }
         }
         return ~value;

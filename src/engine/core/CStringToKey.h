@@ -6,8 +6,12 @@
  * Reference: _IDA_OUT/gunbros_3.6.0_IOS.c:370405
  *
  * Every name-based lookup in the engine goes through this function: pack
- * hashes, resource names inside a pack TOC, registry keys. It must stay
- * bit-exact -- a single wrong bit makes every lookup miss.
+ * hashes, resource names inside a pack TOC, registry keys.
+ * Examples: 
+ * 	 pack0_core -> 0x58595522
+ *   pack1  .. pack9   -> 0x00267581 .. 0x00267589
+ *   pack10 .. pack19  -> 0x01675820 .. 0x01675829 
+ 
  */
 
 #ifndef GUN_BROS_RE_ENGINE_CSTRINGTOKEY_H

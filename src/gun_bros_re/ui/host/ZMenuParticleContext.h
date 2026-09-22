@@ -4,7 +4,7 @@
 #include "gun_bros_re/effects/CParticlePool.h"
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "engine/glu/movie/ZMovieRenderer.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 namespace MenuDetail {
 /** Desktop resource lifetime only; menus own particle selection and playback. */
 class ZMenuParticleContext {

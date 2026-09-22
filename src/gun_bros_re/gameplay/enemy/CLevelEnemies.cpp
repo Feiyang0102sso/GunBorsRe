@@ -7,7 +7,7 @@
 #include "gun_bros_re/gameplay/level/CLevel.h"
 #include "gun_bros_re/debug/PerformanceProbe.h"
 #include "gun_bros_re/gameplay/collision/Collision.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 #include <algorithm>
 #include <cmath>

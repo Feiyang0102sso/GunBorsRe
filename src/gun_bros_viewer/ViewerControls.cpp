@@ -1,7 +1,7 @@
 /** Windows host UI only: cached system-font text, with no game UI resource data. */
 #include "gun_bros_viewer/ViewerControls.h"
 #include "gun_bros_re/gameplay/weapon/CGun.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/core/ZPaths.h"
 #define NOMINMAX
 #include <Windows.h>

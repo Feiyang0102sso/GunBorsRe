@@ -5,7 +5,7 @@
 #include "gun_bros_re/effects/ZEffectColors.h"
 #include "engine/glu/sprite/ZSpriteRenderer.h"
 #include "engine/graphics/ZEffectProjection.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include <algorithm>
 #include <cmath>
 namespace {

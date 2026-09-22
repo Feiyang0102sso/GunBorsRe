@@ -9,6 +9,11 @@
  *
  * packTOC_<artset>.dat lists every pack and the logical ID of its TOC
  * resource. It is BIG-endian, unlike everything inside a .big.
+ *
+ * eg, it will find each name table
+ * pack0_core_xga:TABLEOFCONTENTS → 0x05B3
+ * pack1_xga:TABLEOFCONTENTS      → 0x040E
+ * pack2_xga:TABLEOFCONTENTS      → 0x0264
  */
 
 #ifndef GUN_BROS_RE_GUN_BROS_CRESTOCMANAGER_H
@@ -39,7 +44,7 @@ extern const char *const kPackTOCKeyTableOfContents;
 struct ZPackTOCRecord {
     std::string fullName;         // "pack1_xga"
     std::string shortName;        // "pack1"
-    std::uint32_t tocResourceId;  // logical ID of the pack's TOC resource
+    std::uint32_t tocResourceId;  // logical ID of the pack's name table, refer to corresponding .bt
 };
 
 /**

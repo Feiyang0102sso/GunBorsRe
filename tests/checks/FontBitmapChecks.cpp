@@ -6,7 +6,7 @@
 #include "TestOutput.h"
 #include "engine/graphics/ZPNGEncode.h"
 #include "engine/core/ZPaths.h"
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/graphics/CBitmapFont.h"
 #include "engine/platform/ZWindow.h"
 #include "engine/resources/CResTOCManager.h"

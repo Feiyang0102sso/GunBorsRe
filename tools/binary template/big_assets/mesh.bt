@@ -1,0 +1,226 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: mesh.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read the structure of a Gun Bros 3D mesh (Section 31).
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Tunables
+// ------------------------------------------------
+
+// Fully expanding every frame is expensive: 413 frames x 912 verts is over
+// 370k structs and will hang the template engine. Frames past this limit are
+// skipped as a raw block. Raise it when inspecting a specific frame.
+const int MAX_EXPANDED_FRAMES = 3;
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_MAGIC = 0xFFD1DC;
+const int COLOR_INDEX_COUNT = 0x66E0FF;
+const int COLOR_BONE_COUNT = 0xFF9060;
+const int COLOR_FRAME_COUNT = 0x60B0FF;
+const int COLOR_VERTEX_COUNT = 0xE0FF60;
+
+const int COLOR_NAME_LENGTH = 0x90FF90;
+const int COLOR_NAME = 0x6060FF;
+
+const int COLOR_INDEX_BUFFER = 0xFFC8B0;
+const int COLOR_UV = 0xFFB0E8;
+
+const int COLOR_FRAME_TIME = 0x70FFD0;
+const int COLOR_BONE_POS = 0xC8B0FF;
+const int COLOR_BONE_ROT = 0xE8D8FF;
+const int COLOR_VERTEX = 0xB8E0D2;
+const int COLOR_SKIPPED = 0x808080;
+
+
+// ------------------------------------------------
+// Part 1: header
+// ------------------------------------------------
+
+struct MeshHeader {
+    // Always 0x03
+    ubyte magic <format=hex, bgcolor=COLOR_MAGIC>;
+
+    // Number of uint16 entries in the index buffer.
+    uint32 indexCount <format=decimal, bgcolor=COLOR_INDEX_COUNT>;
+
+    // Number of bones / parts. Also the number of names that follow.
+    // can be zero
+    ubyte boneCount <format=decimal, bgcolor=COLOR_BONE_COUNT>;
+
+    // Number of animation key frames.
+    uint16 frameCount <format=decimal, bgcolor=COLOR_FRAME_COUNT>;
+
+    // Number of vertices. Shared by the UV buffer and every frame.
+    uint16 vertexCount <format=decimal, bgcolor=COLOR_VERTEX_COUNT>;
+};
+
+
+// ------------------------------------------------
+// Part 2: bone names
+// ------------------------------------------------
+
+// Length-prefixed, NOT null terminated. The engine mallocs len + 1 and
+// terminates the string itself.
+struct BoneName {
+    ubyte length <format=decimal, bgcolor=COLOR_NAME_LENGTH>;
+    if ( length > 0 )
+        char name[length] <bgcolor=COLOR_NAME>;
+};
+
+string boneNameFormat(BoneName &bone) {
+    if ( bone.length == 0 )
+        return "(empty)";
+    return bone.name;
+}
+
+struct BoneNames(ubyte count) {
+    local uint32 boneIndex;
+
+    for ( boneIndex = 0; boneIndex < count; boneIndex++ )
+        BoneName bone <read=boneNameFormat>;
+};
+
+
+// ------------------------------------------------
+// Part 3: index buffer
+// ------------------------------------------------
+
+/*
+Every three vertices form a triangular face.
+If a set of points contains two or more duplicate vertices, 
+it forms a degenerate triangle.
+*/
+
+struct IndexBuffer(uint32 count) {
+    if ( count > 0 )
+        uint16 indices[count] <bgcolor=COLOR_INDEX_BUFFER>;
+};
+
+
+// ------------------------------------------------
+// Part 4: static UV buffer
+// ------------------------------------------------
+
+// One pair per vertex, shared across all frames. Only the UVs are static,
+// the positions change every frame.
+struct UVEntry {
+    float u <bgcolor=COLOR_UV>;
+    float v <bgcolor=COLOR_UV>;
+};
+
+string uvFormat(UVEntry &entry) {
+    local string description;
+    SPrintf(description, "u=%.4f  v=%.4f", entry.u, entry.v);
+    return description;
+}
+
+struct UVBuffer(uint16 count) {
+    if ( count > 0 )
+        UVEntry uvs[count] <optimize=false, read=uvFormat>;
+};
+
+
+// ------------------------------------------------
+// Part 5: frames
+// ------------------------------------------------
+
+// Position + quaternion, 28 bytes. Attachment point for this bone on this
+// frame, not a skinning matrix.
+struct BoneTransform {
+    float posX <bgcolor=COLOR_BONE_POS>;
+    float posY <bgcolor=COLOR_BONE_POS>;
+    float posZ <bgcolor=COLOR_BONE_POS>;
+    float rotX <bgcolor=COLOR_BONE_ROT>;
+    float rotY <bgcolor=COLOR_BONE_ROT>;
+    float rotZ <bgcolor=COLOR_BONE_ROT>;
+    float rotW <bgcolor=COLOR_BONE_ROT>;
+};
+
+string boneTransformFormat(BoneTransform &bone) {
+    local string description;
+    SPrintf(description, "pos(%.2f, %.2f, %.2f)  rot(%.3f, %.3f, %.3f, %.3f)",
+            bone.posX, bone.posY, bone.posZ,
+            bone.rotX, bone.rotY, bone.rotZ, bone.rotW);
+    return description;
+}
+
+struct Vertex {
+    float x <bgcolor=COLOR_VERTEX>;
+    float y <bgcolor=COLOR_VERTEX>;
+    float z <bgcolor=COLOR_VERTEX>;
+};
+
+string vertexFormat(Vertex &vertex) {
+    local string description;
+    SPrintf(description, "(%.3f, %.3f, %.3f)", vertex.x, vertex.y, vertex.z);
+    return description;
+}
+
+struct Frame(ubyte boneCount, uint16 vertexCount) {
+    // Key frame timestamp in milliseconds.
+    int32 frameTimeMs <format=decimal, bgcolor=COLOR_FRAME_TIME>;
+
+    BoneTransform bones[boneCount] <optimize=false, read=boneTransformFormat>;
+    Vertex vertices[vertexCount] <optimize=false, read=vertexFormat>;
+};
+
+string frameFormat(Frame &frame) {
+    local string description;
+    SPrintf(description, "t = %d ms", frame.frameTimeMs);
+    return description;
+}
+
+// Frames past MAX_EXPANDED_FRAMES are kept as one opaque block so the
+// template stays responsive on large meshes.
+struct SkippedFrames(uint32 byteSize, uint16 count) {
+    ubyte raw[byteSize] <bgcolor=COLOR_SKIPPED>;
+};
+
+struct Frames(ubyte boneCount, uint16 frameCount, uint16 vertexCount) {
+    // One frame's byte size, used both for the sanity check and for skipping.
+    local uint32 frameSize = 4 + 28 * boneCount + 12 * vertexCount;
+
+    local uint16 expandCount = frameCount;
+    if ( expandCount > MAX_EXPANDED_FRAMES )
+        expandCount = MAX_EXPANDED_FRAMES;
+
+    local uint16 frameIndex;
+    for ( frameIndex = 0; frameIndex < expandCount; frameIndex++ )
+        Frame frame(boneCount, vertexCount) <read=frameFormat>;
+
+    if ( frameCount > expandCount )
+        SkippedFrames skipped(frameSize * (frameCount - expandCount),
+                              frameCount - expandCount);
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+MeshHeader header;
+BoneNames boneNames(header.boneCount);
+IndexBuffer indexBuffer(header.indexCount);
+UVBuffer uvBuffer(header.vertexCount);
+Frames frames(header.boneCount, header.frameCount, header.vertexCount);
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

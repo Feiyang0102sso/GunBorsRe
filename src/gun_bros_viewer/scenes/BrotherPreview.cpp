@@ -1,7 +1,7 @@
 #include "gun_bros_viewer/scenes/ZMapViewer.h"
 #include "gun_bros_viewer/scenes/BrotherPreview.h"
 /** Bare mesh exploration belongs to the viewer, outside the actor lifecycle. */
-#include "engine/core/ZMatrix4d.h"
+#include "engine/core/CMatrix4d.h"
 #include "engine/graphics/CMeshCamera.h"
 #include <cstdio>
 #include "gun_bros_re/gameplay/map/CMapInternal.h"

@@ -1,0 +1,140 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: big_init_data.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Read the ___INIT_DATA resource from a Gun Bros .big archive.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    ___INIT_DATA initializes the resource manager. It is not the Pack Name
+    Table selected directly by packTOC*.dat.
+
+    Lookup path for pack1_xga:
+        packTOC_xga.dat -> logical ID 0x040E -> Pack Name Table
+        "___INIT_DATA" -> CStringToKey 0xAC12AEBC
+        Pack Name Table -> handle 0x0000040D
+        table1 -> table2[317] -> pack1_xga_0317_0xe0406a.bin
+
+    Reference:
+        CResourceManager_v1::Init
+        _prep/_IDA_OUT/gunbros_3.6.0_IOS.c:330862
+        
+    Note:
+        Only the resourceIds[0] = 0x08000001 matters in GB bigs,
+        as it determine the language setting and the corresponding string pack
+        But even the Chinese version keep the "en.ENGLISH"
+        so it is likly it is a metadata that doesnt matter
+        LeadingResources / Aggregates all 0 entry
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_COUNT = 0xFF75C1;
+const int COLOR_BYTE_LENGTH = 0xB0E0FF;
+const int COLOR_RESOURCE_ID = 0xFFE699;
+const int COLOR_LOCALE_CODE = 0xB8E0D2;
+const int COLOR_LOCALE_NAME = 0xC6FF77;
+
+
+// ------------------------------------------------
+// Leading resource table
+// ------------------------------------------------
+
+struct LeadingResourceTable {
+    // Number of uint32 values in the leading resource table.
+    uint32 entryCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (entryCount > 0) {
+        // CreateResource consumes these values in groups associated with an image
+        // stream and its palette. Current XGA samples contain one zero value.
+        uint32 values[entryCount] <format=hex, bgcolor=COLOR_RESOURCE_ID>;
+    }
+};
+
+
+// ------------------------------------------------
+// Locale table
+// ------------------------------------------------
+
+struct LocaleCode(uint32 byteCount) {
+    char text[byteCount] <bgcolor=COLOR_LOCALE_CODE>;
+};
+
+struct LocaleCodes(uint32 entryCount, uint32 byteCount) {
+    local uint32 entryIndex;
+
+    for (entryIndex = 0; entryIndex < entryCount; entryIndex++) {
+        LocaleCode code(byteCount) <optimize=false>;
+    }
+};
+
+struct LocaleName(uint32 byteCount) {
+    char text[byteCount] <bgcolor=COLOR_LOCALE_NAME>;
+};
+
+struct LocaleNames(uint32 entryCount, uint32 byteCount) {
+    local uint32 entryIndex;
+
+    for (entryIndex = 0; entryIndex < entryCount; entryIndex++) {
+        LocaleName name(byteCount) <optimize=false>;
+    }
+};
+
+struct LocaleTable {
+    // Number of locale entries.
+    uint32 entryCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    // Fixed byte width of one locale code, including its trailing zero.
+    uint32 codeBytes <format=decimal, bgcolor=COLOR_BYTE_LENGTH>;
+
+    // Fixed byte width of one locale display name, including its trailing zero.
+    uint32 nameBytes <format=decimal, bgcolor=COLOR_BYTE_LENGTH>;
+
+    if (entryCount > 0 && codeBytes > 0) {
+        // Resource selected for each locale.
+        uint32 resourceIds[entryCount]
+            <format=hex, bgcolor=COLOR_RESOURCE_ID>;
+
+        // All locale codes are stored before all locale names.
+        LocaleCodes codes(entryCount, codeBytes);
+        LocaleNames names(entryCount, nameBytes);
+    }
+};
+
+
+// ------------------------------------------------
+// Aggregate resource table
+// ------------------------------------------------
+
+struct AggregateResourceTable {
+    // Number of aggregate resource IDs used by the BIG reader.
+    uint32 entryCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (entryCount > 0) {
+        uint32 resourceIds[entryCount]
+            <format=hex, bgcolor=COLOR_RESOURCE_ID>;
+    }
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+LeadingResourceTable leadingResources;
+LocaleTable locales;
+AggregateResourceTable aggregates;
+
+if (FTell() != FileSize()) {
+    Warning("___INIT_DATA size mismatch: parsed " +
+            FTell() + " bytes, file has " + FileSize() + " bytes.");
+}

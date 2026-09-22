@@ -1,0 +1,159 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: string_pack.bt
+//   Authors: Feiyang 
+//   Version: 1.0
+//   Purpose: Read the header and entry index offsets of a string_pack.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+*/
+
+LittleEndian();
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_MAGIC = 0xFFD1DC;
+const int COLOR_ENTRY_COUNT = 0xD1FFD6;
+const int COLOR_FIRST_ENTRY_ID = 0xE226FF;
+const int COLOR_ENTRY_INDEX_OFFSET = 0xFFF0B3;
+const int COLOR_FINAL_END_OFFSET = 0xB0E0FF;
+const int COLOR_RESOURCE_TYPE = 0xE0B0FF;
+
+const int COLOR_STRING_PREFIX = 0x223BC2;
+const int COLOR_STRING_CONTENT = 0x9C6D00;
+const int COLOR_STRING_TERMINATOR = 0x007D5E;
+
+
+// ------------------------------------------------
+// Part 1: 4 or 6 bytes header
+// ------------------------------------------------
+
+struct StringPackHeader {
+    ubyte magic[2] <format=hex, bgcolor=COLOR_MAGIC>; // flags actually...
+    uint16 entryCount <bgcolor=COLOR_ENTRY_COUNT>;
+};
+
+
+// ------------------------------------------------
+// Part 2: index offset of every entry
+// ------------------------------------------------
+
+// entry 0 starts at file offset 0xXXXX.
+
+/*
+Bitmask Flags:
+0x8000 - Sequential ID
+0x4000 - 32-bit Offset
+0x2000 - MimeKeys, each entry have its own ID
+*/
+
+// 00 20: entry ID + 16-bit entry index offset.
+// why it is here? I suppose it can store non-continous IDs
+struct EntryIndex_0020 {
+    uint16 entryId <format=hex, bgcolor=COLOR_FIRST_ENTRY_ID>;
+    uint16 entryIndexOffset <format=hex, bgcolor=COLOR_ENTRY_INDEX_OFFSET>;
+};
+
+// 00 A0: standard 16-bit entry index offset.
+struct EntryOffset_00A0 {
+    uint16 entryIndexOffset <format=hex, bgcolor=COLOR_ENTRY_INDEX_OFFSET>;
+};
+
+// 00 E0: 
+// sequential IDs, 32-bit offsets, and a per-entry mime key table.
+struct EntryOffset_00E0 {
+    uint32 entryIndexOffset
+        <format=hex, bgcolor=COLOR_ENTRY_INDEX_OFFSET>;
+};
+
+// ------------------------------------------------
+// Part 3: Resource type for each entry
+// ------------------------------------------------
+
+// currently all seems to be UTF8
+const uint32 RESOURCE_TYPE_UTF8_STRING = 0xF686AADC;
+
+typedef struct {
+    // Current samples use 0xF686AADC for UTF-8 string resources.
+    // Keep this as a variable so future type values can be added later.
+    uint32 value <format=hex>;
+} EntryResourceType <read=resourceTypeDescription>;
+
+
+string resourceTypeDescription(EntryResourceType &resourceType) {
+    if (resourceType.value == RESOURCE_TYPE_UTF8_STRING) {
+        return "UTF-8 String Resource";
+    }
+
+    return "Unknown Resource Type";
+}
+
+
+// ------------------------------------------------
+// Part 4: string content
+// ------------------------------------------------
+struct StringEntry {
+    // prefix
+    uint32 prefix <format=hex, bgcolor=COLOR_STRING_PREFIX>;
+
+    // ReadStringLength includes the terminating 00 byte.
+    local int contentByteCount = ReadStringLength(FTell()) - 1;
+
+    if (contentByteCount > 0) {
+        char content[contentByteCount] <bgcolor=COLOR_STRING_CONTENT>;
+    }
+
+    // terminator.
+    ubyte terminator <format=hex, bgcolor=COLOR_STRING_TERMINATOR>;
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+StringPackHeader header;
+
+if (header.magic[1] == 0x20) {
+    EntryIndex_0020 entryIndexes[header.entryCount]
+        <optimize=false>;
+}
+else if (header.magic[1] == 0xA0) {
+    uint16 firstEntryId <format=hex, bgcolor=COLOR_FIRST_ENTRY_ID>;
+
+    EntryOffset_00A0 entryIndexOffsets[header.entryCount]
+        <optimize=false>;
+}
+else if (header.magic[1] == 0xE0) {
+    uint16 firstEntryId <format=hex, bgcolor=COLOR_FIRST_ENTRY_ID>;
+
+    EntryOffset_00E0 entryIndexOffsets[header.entryCount]
+        <optimize=false>;
+}
+else {
+    Warning("Unknown string_pack format.");
+}
+
+// Final end offset followed by a reserved 16-bit value.
+uint16 finalEndOffset <format=hex, bgcolor=COLOR_FINAL_END_OFFSET>;
+uint16 finalEndOffsetReserved <format=hex>;
+
+EntryResourceType entryResourceTypes[header.entryCount]
+    <bgcolor=COLOR_RESOURCE_TYPE, optimize=false>;
+
+
+// Read strings from the current position to the end of the file.
+struct StringEntries {
+    while (FTell() + 5 <= FileSize()) {
+        StringEntry stringEntry;
+    }
+};
+
+StringEntries stringEntries;
