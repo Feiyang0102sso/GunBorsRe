@@ -134,12 +134,17 @@
     <ItemGroup>
       <RuntimeBig Include="$(RepoRoot)big\**\*" />
       <RuntimeAssets Include="$(RepoRoot)assets\**\*" />
+      <!-- Keep Release portable on machines without the MSVC redistributable. -->
+      <RuntimeMsvc Include="$(VCToolsRedistInstallDir)x64\Microsoft.VC145.CRT\msvcp140.dll" Condition="'$(Configuration)'=='Release'" />
+      <RuntimeMsvc Include="$(VCToolsRedistInstallDir)x64\Microsoft.VC145.CRT\vcruntime140.dll" Condition="'$(Configuration)'=='Release'" />
+      <RuntimeMsvc Include="$(VCToolsRedistInstallDir)x64\Microsoft.VC145.CRT\vcruntime140_1.dll" Condition="'$(Configuration)'=='Release'" />
     </ItemGroup>
     <Error Condition="'@(RuntimeBig)'=='' or '@(RuntimeAssets)'==''" Text="Missing runtime inputs. Restore big/ and assets/ before building." />
     <Copy SourceFiles="@(RuntimeBig)" DestinationFiles="@(RuntimeBig->'$(OutDir)big\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(RuntimeAssets)" DestinationFiles="@(RuntimeAssets->'$(OutDir)assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <!-- SDL3 is a DLL; it has to sit next to the .exe to run. -->
     <Copy SourceFiles="$(RepoRoot)src\third_party\SDL3\lib\x64\SDL3.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(RuntimeMsvc)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="'$(Configuration)'=='Release'" />
   </Target>
   <!-- Building the game also builds the viewer and tests in both configurations. The
        recursive passes carry SkipCompanions so they do not recurse again, and
