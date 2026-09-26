@@ -1,0 +1,131 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template Include
+//
+//      File: display_helpers.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Shared Gun Bros display helpers.
+//  Category: Game / Big Assets / Common
+//------------------------------------------------
+
+#ifndef GUN_BROS_DISPLAY_HELPERS_BT
+#define GUN_BROS_DISPLAY_HELPERS_BT
+
+
+int packNumberFromHash(uint32 packHash) {
+    // pack0_core is not part of the numeric pack hash sequence.
+    if (packHash == 0x58595522) {
+        return 0;
+    }
+
+    // Hashes of "pack0" through "pack9".
+    if (packHash >= 0x00267580 && packHash <= 0x00267589) {
+        return packHash - 0x00267580;
+    }
+
+    // Hashes of "pack10" through "pack19".
+    if (packHash >= 0x01675820 && packHash <= 0x01675829) {
+        return 10 + packHash - 0x01675820;
+    }
+
+    return -1;
+}
+
+
+string packHashFormat(uint32 packHash) {
+    local int packNumber = packNumberFromHash(packHash);
+    local string result;
+
+    if (packHash == 0) {
+        return "No pack";
+    }
+
+    if (packHash == 0x58595522) {
+        return "pack0_core";
+    }
+
+    if (packNumber >= 0) {
+        SPrintf(result, "pack%d", packNumber);
+        return result;
+    }
+
+    SPrintf(result, "packHash 0x%08X", packHash);
+    return result;
+}
+
+
+string resourceIndexFormat(int resourceIndex, string resourceType) {
+    local string result;
+
+    SPrintf(result, "%s %d", resourceType, resourceIndex);
+    return result;
+}
+
+
+string objectTypeFormat(ubyte objectType) {
+    local string result;
+
+    switch (objectType) {
+        case 0:  return "ACHIEVEMENT";
+        case 1:  return "ACHIEVEMENTLIST";
+        case 2:  return "ARMOR";
+        case 3:  return "BULLET";
+        case 4:  return "DAILYBONUS";
+        case 5:  return "ENEMY";
+        case 6:  return "GUN";
+        case 7:  return "LEVEL";
+        case 8:  return "LEVELPROGRESSION";
+        case 9:  return "MISSION";
+        case 10: return "MISSIONOBJECTIVE";
+        case 11: return "PARTICLEEFFECT";
+        case 12: return "PICKUP";
+        case 13: return "PLANET";
+        case 14: return "PLATFORM";
+        case 15: return "PLAYER";
+        case 16: return "PLAYERPROGRESSION";
+        case 17: return "POWERUP";
+        case 18: return "PRIZE";
+        case 19: return "PROP";
+        case 20: return "REFINEMENT";
+        case 21: return "SOUNDEFFECT";
+        case 22: return "STORE";
+        case 23: return "TILELAYER";
+        case 24: return "TILESET";
+        case 25: return "TUTORIAL";
+        case 26: return "CHALLENGE";
+        case 27: return "MP_MATCH";
+    }
+
+    SPrintf(result, "Unknown object type %d", objectType);
+    return result;
+}
+
+
+string booleanFormat(ubyte value) {
+    if (value == 0) {
+        return "No";
+    }
+
+    return "Yes";
+}
+
+
+string fixedPoint16_16Format(int32 value) {
+    local string result;
+    local double decodedValue = value / 65536.0;
+
+    SPrintf(result, "%.4f", decodedValue);
+    return result;
+}
+
+
+string millisecondsFormat(uint16 value) {
+    local string result;
+    SPrintf(result, "%u ms", value);
+    return result;
+}
+
+
+typedef uint32 PackHash <format=hex, read=packHashFormat(this)>;
+
+#endif

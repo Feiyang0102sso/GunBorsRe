@@ -1,0 +1,176 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: powerup_template.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Gun Bros 3.6.0 power-up template.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    This template reads one object from Section 18 (POWERUP). Each entry
+    contains its displayed name, game UI references, one compiled Flow
+    behavior script, an optional selection effect, and a cooldown value.
+
+    The Flow script has a variable serialized size. All fields after it must
+    follow the parsed script rather than use fixed absolute offsets.
+
+    Examples:
+
+        pack5_xga_0365_0x124e5.bin  Air Strike; large 315-byte Flow script
+        pack5_xga_0366_0x125bc.bin  Small Health; selection effect pack5:72
+        pack5_xga_0372_0x1289d.bin  Revive; after-death usage category
+        pack5_xga_0378_0x12c1a.bin  Grenade; 3-second cooldown
+        pack5_xga_0377_0x12b82.bin  Auto Aim; 120-second cooldown
+        pack5_xga_0384_0x12f27.bin  Turret; short Flow script and 18-second cooldown
+
+    The selection effect uses a GameObjectRef. A zero pack hash is the complete
+    four-byte null reference; only a non-zero hash is followed by a local index.
+*/
+
+LittleEndian();
+
+#include "common/display_helpers.bt"
+#include "common/compiled_flow.bt"
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_REFERENCE_TEXT = 0xFFE0B2;
+const int COLOR_SPRITE = 0xB3E5FC;
+const int COLOR_GAME_UI_INDEX = 0x1EFF44;
+const int COLOR_UNKNOWN = 0xD0D0D0;
+const int COLOR_USAGE_CATEGORY = 0xC8E6C9;
+const int COLOR_REFERENCE_EFFECT = 0xFFA3A4;
+const int COLOR_COOLDOWN = 0xFFE699;
+
+
+// ------------------------------------------------
+// Display helpers
+// ------------------------------------------------
+
+string usageCategoryFormat(ubyte category) {
+    local string result;
+
+    switch (category) {
+        case 0: return "Before death";
+        case 1: return "After death";
+    }
+
+    SPrintf(result, "Unknown category %d", category);
+    return result;
+}
+
+
+string cooldownSecondsFormat(ubyte seconds) {
+    local string result;
+
+    if (seconds == 0) {
+        return "No configured cooldown";
+    }
+
+    SPrintf(result, "%d seconds", seconds);
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 1: Display name
+// ------------------------------------------------
+
+typedef struct {
+    PackHash stringPackHash;
+    int32 stringIndex <
+        format=decimal,
+        read=resourceIndexFormat(this, "STR")
+    >;
+} PowerupNameReference;
+
+
+// ------------------------------------------------
+// Part 2: Game UI reference
+// ------------------------------------------------
+
+typedef struct {
+    PackHash gameUIPackHash <bgcolor=COLOR_SPRITE>;
+    ubyte archetypeIndex <format=decimal, bgcolor=COLOR_SPRITE>;
+    ubyte uiCharacterIndex <format=decimal, bgcolor=COLOR_GAME_UI_INDEX>;
+
+    // Normal icon shown in the in-game power-up store.
+    ubyte inGameStoreUIAnimationIndex <
+        format=decimal,
+        bgcolor=COLOR_GAME_UI_INDEX
+    >;
+
+    // X overlay drawn when this item cannot currently be used.
+    // maybe the revive after death not tested yet
+    ubyte unavailableUIAnimationIndex <
+        format=decimal,
+        bgcolor=COLOR_GAME_UI_INDEX
+    >;
+
+    // Icon shown for this item on the in-game shortcut button.
+    ubyte shortcutButtonUIAnimationIndex <
+        format=decimal,
+        bgcolor=COLOR_GAME_UI_INDEX
+    >;
+} PowerupGameUIReference;
+
+
+// ------------------------------------------------
+// Part 3: Selection effect
+// ------------------------------------------------
+
+typedef struct {
+    PackHash effectPackHash;
+
+    // GameObjectRef omits this byte when the pack hash is zero.
+    if (effectPackHash != 0) {
+        ubyte particleEffectIndex <
+            format=decimal,
+            read=resourceIndexFormat(this, "PARTICLEEFFECT")
+        >;
+    }
+} PowerupSelectionEffectReference;
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+PowerupNameReference nameReference <bgcolor=COLOR_REFERENCE_TEXT>;
+PowerupGameUIReference gameUIReference;
+
+// Equip/use conditions, inventory consumption, and the gameplay effect are
+// implemented by this script rather than fixed numeric fields after it.
+CompiledFlowScript behaviorScript <bgcolor=COLOR_SCRIPT>;
+
+// Template member +30 in the original runtime. All 20 current samples contain
+// zero, but no reliable consumer has been identified, so retain it as unknown.
+ubyte unknownAfterScript <format=decimal, bgcolor=COLOR_UNKNOWN>;
+
+// 0 normal 1 after death
+// if it is after death, it will not shown in in-game shop
+ubyte usageCategory <
+    format=decimal,
+    bgcolor=COLOR_USAGE_CATEGORY,
+    read=usageCategoryFormat(this)
+>;
+
+// unknow... seems only medical have this field
+PowerupSelectionEffectReference selectionEffectReference <bgcolor=COLOR_REFERENCE_EFFECT>;
+
+ubyte cooldownSeconds <
+    format=decimal,
+    bgcolor=COLOR_COOLDOWN,
+    read=cooldownSecondsFormat(this)
+>;
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

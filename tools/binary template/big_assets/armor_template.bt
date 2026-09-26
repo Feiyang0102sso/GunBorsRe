@@ -1,0 +1,149 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: armor_template.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Gun Bros 3.6.0 armor template.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    This template reads one object from Section 3 (ARMOR). Each entry contains
+    an equipment slot, two interleaved mesh/image resource groups, two fallback
+    images, and one compiled Flow script executed when the armor is equipped.
+
+    The two resource groups are not simply "one per brother". A torso armor can
+    draw both mesh attachments while also replacing the existing torso texture,
+    producing three visible components in total. In the current 3.6.0 assets:
+
+        Legs:  one body texture replacement, no attachment mesh.
+        Torso: one body texture replacement plus zero, one, or two attachments.
+        Head:  one attachment mesh.
+
+    Examples:
+
+        pack4_xga_0011_0x637f.bin  torso texture plus two attachments
+        pack4_xga_0008_0x62b8.bin  torso texture only
+        pack4_xga_0232_0x9ed2.bin  legs texture only
+        pack4_xga_0230_0x9e3e.bin  one head attachment
+
+    Every resource reference is always eight bytes. An asset index of -1 means
+    unused; the pack hash does not make the following index conditional.
+*/
+
+LittleEndian();
+
+#include "common/display_helpers.bt"
+#include "common/compiled_flow.bt"
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_ARMOR_SLOT = 0xD0D0D0;
+const int COLOR_REFERENCE_MESH = 0x28FF2F;
+const int COLOR_REFERENCE_IMAGE = 0xFFE0B2;
+const int COLOR_ATTACHMENT_NODE = 0xB3E5FC;
+
+
+// ------------------------------------------------
+// Display helpers
+// ------------------------------------------------
+
+string armorSlotFormat(ubyte slot) {
+    local string result;
+
+    switch (slot) {
+        case 0: return "Legs";
+        case 1: return "Torso";
+        case 2: return "Head";
+    }
+
+    SPrintf(result, "Unknown slot %d", slot);
+    return result;
+}
+
+
+string armorMeshIndexFormat(int32 meshIndex) {
+    if (meshIndex == -1) {
+        return "Unused";
+    }
+
+    return resourceIndexFormat(meshIndex, "MESH");
+}
+
+
+string armorImageIndexFormat(int32 imageIndex) {
+    if (imageIndex == -1) {
+        return "Unused";
+    }
+
+    return resourceIndexFormat(imageIndex, "PNG");
+}
+
+
+// ------------------------------------------------
+// Resource references
+// ------------------------------------------------
+
+typedef struct {
+    PackHash meshPackHash;
+    int32 meshIndex <
+        format=decimal,
+        read=armorMeshIndexFormat(this)
+    >;
+} ArmorMeshReference;
+
+
+typedef struct {
+    PackHash imagePackHash;
+    int32 imageIndex <
+        format=decimal,
+        read=armorImageIndexFormat(this)
+    >;
+} ArmorImageReference;
+
+
+typedef struct {
+    ArmorMeshReference meshReference <bgcolor=COLOR_REFERENCE_MESH>;
+    ArmorImageReference imageReference <bgcolor=COLOR_REFERENCE_IMAGE>;
+
+    // Bone of the player's torso mesh used to place this attachment.
+    // When it is unused, it will show 0 as default
+    ubyte attachmentBoneIndex <format=decimal, bgcolor=COLOR_ATTACHMENT_NODE>;
+} ArmorPartReference;
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+ubyte slot <
+    format=decimal,
+    bgcolor=COLOR_ARMOR_SLOT,
+    read=armorSlotFormat(this)
+>;
+
+// The wire order is part 0 followed by part 1. Keep these groups interleaved.
+ArmorPartReference part0;
+ArmorPartReference part1;
+
+// The runtime loads a fallback instead of the matching image when that part
+// has no mesh. The loaded image selected for the current character is also
+// used as the torso or legs body texture where the slot requires it.
+// torso have 2 as there are 2 bro skins
+ArmorImageReference part0FallbackImage <bgcolor=COLOR_REFERENCE_IMAGE>;
+ArmorImageReference part1FallbackImage <bgcolor=COLOR_REFERENCE_IMAGE>;
+
+// Equip export 0 writes the five runtime attributes: defense, attack, speed,
+// experience and Xplodium percentages. They are script results, not fixed
+// fields following this block.
+CompiledFlowScript equipScript <bgcolor=COLOR_SCRIPT>;
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

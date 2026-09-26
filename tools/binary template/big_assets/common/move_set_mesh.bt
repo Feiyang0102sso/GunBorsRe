@@ -1,0 +1,123 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template Include
+//
+//      File: move_set_mesh.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Shared Gun Bros 3.6.0 mesh move set.
+//  Category: Game / Big Assets / Common
+//------------------------------------------------
+
+#ifndef GUN_BROS_MOVE_SET_MESH_BT
+#define GUN_BROS_MOVE_SET_MESH_BT
+
+// Caller must include common/display_helpers.bt first.
+
+
+const int COLOR_MESH_CONFIG = 0x28FF2F;
+const int COLOR_MOVE_SET = 0xC8E6C9;
+const int COLOR_MOVE_INDEX = 0xF8BBD0;
+const int COLOR_MOVE_COUNT = 0xFF3089;
+
+
+// ------------------------------------------------
+// Move set mesh configuration
+// ------------------------------------------------
+
+// how many meshes got involved in this enemy
+
+typedef struct {
+    ubyte meshIndex <
+        format=decimal,
+        read=resourceIndexFormat(this, "MESH")
+    >;
+    ubyte textureIndex <
+        format=decimal,
+        read=resourceIndexFormat(this, "PNG")
+    >;
+} MeshConfig;
+
+
+struct MoveSetMeshConfig{
+    PackHash meshPackHash;
+
+    ubyte meshConfigCount <format=decimal>;
+    if (meshConfigCount > 0) {
+        MeshConfig meshConfigs[meshConfigCount] <optimize=false>;
+    }
+} ;
+
+
+// ------------------------------------------------
+// Moves
+// ------------------------------------------------
+
+/*
+    A move is one animation clip played on one of the configured meshes. Its
+    frame numbers index the mesh keyframe timeline, so a single mesh can carry
+    every move of the enemy.
+    Not every animation in mesh file is used.
+*/
+
+typedef struct {
+    uint16 frameNumber <format=decimal>;
+    ubyte soundIndex <format=decimal>;
+} MoveEvent <read=moveEventFormat>;
+
+
+typedef struct {
+    ubyte meshConfigIndex <format=decimal, bgcolor=COLOR_MOVE_INDEX>;
+    uint16 firstFrame <format=decimal>;
+    uint16 lastFrame <format=decimal>;
+
+    // 1 restarts the clip when the same move is triggered again, 0 lets the
+    // running clip finish first.
+    ubyte restartOnRetrigger <format=decimal>;
+
+    // 16.16 fixed point, multiplied into the frame delta time.
+    int32 playbackSpeed;
+
+    // Not used. Zero in every
+    // enemy template, one in a few gun moves.
+    uint32 unusedField;
+
+    ubyte eventCount <format=decimal>;
+    if (eventCount > 0) {
+        MoveEvent events[eventCount] <optimize=false>;
+    }
+} MoveEntry <read=moveEntryFormat>;
+
+
+struct MoveSetMoves{
+    ubyte moveCount <format=decimal, bgcolor=COLOR_MOVE_COUNT>;
+    if (moveCount > 0) {
+        MoveEntry moves[moveCount] <optimize=false>;
+    }
+} ;
+
+
+string moveEventFormat(MoveEvent &event) {
+    local string result;
+    SPrintf(result, "frame %d sound %d", event.frameNumber, event.soundIndex);
+    return result;
+}
+
+
+string moveEntryFormat(MoveEntry &move) {
+    local string result;
+    local double speed = move.playbackSpeed / 65536.0;
+
+    SPrintf(
+        result,
+        "config %d frames %d-%d speed %.2f events %d",
+        move.meshConfigIndex,
+        move.firstFrame,
+        move.lastFrame,
+        speed,
+        move.eventCount
+    );
+
+    return result;
+}
+
+#endif

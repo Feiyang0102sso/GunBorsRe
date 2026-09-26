@@ -1,0 +1,119 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template Include
+//
+//      File: compiled_flow.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Shared Gun Bros 3.6.0 compiled Flow block.
+//  Category: Game / Big Assets / Common
+//------------------------------------------------
+
+#ifndef GUN_BROS_COMPILED_FLOW_BT
+#define GUN_BROS_COMPILED_FLOW_BT
+
+
+const int COLOR_SCRIPT = 0xD7C6FF;
+
+
+// ------------------------------------------------
+// Compiled Flow Script
+// ------------------------------------------------
+
+/*
+
+    different script size. The size is not stored
+    anywhere, so it is recovered by walking the length prefixes CScript::Load
+    reads:
+
+        ubyte  scriptPresent            zero means the block is this byte alone
+        ubyte  discarded[6]
+        ubyte  n; ubyte  exportSlots[n]
+        ubyte  n; ubyte  unknown[n]
+        ubyte  n; entry[n]              9 bytes per entry
+        ubyte  n; dataBlock[n]          each: ubyte m + int16 values[m]
+        ubyte  n; int16  variables[n]
+        ubyte  n; state[n]              see below
+        ubyte  n; code[n]               each: ubyte m + ubyte bytecode[m]
+
+    One state is:
+
+        ubyte  parentStateIndex
+        ubyte  m; ubyte moveSequence[m]
+        ubyte  n; handler[n]            each: ubyte eventId + one code block
+        code                            on enter
+        code                            on exit
+*/
+
+// Total size of the script block that starts at startPos.
+int64 flowScriptSize(int64 startPos) {
+    local int64 pos = startPos;
+    local int tableCount;
+    local int handlerCount;
+    local int i;
+    local int j;
+
+    if (ReadUByte(pos) == 0) {
+        return 1;
+    }
+
+    pos += 1; // scriptPresent
+    pos += 6; // bytes the loader reads and throws away
+
+    // Export slots.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount;
+
+    // Second byte table, empty in every enemy template.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount;
+
+    // Resource table, 9 bytes per entry.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount * 9;
+
+    // Data blocks, each one a length prefixed int16 array.
+    tableCount = ReadUByte(pos);
+    pos += 1;
+    for (i = 0; i < tableCount; i++) {
+        pos += 1 + ReadUByte(pos) * 2;
+    }
+
+    // Initial values of the script variables.
+    tableCount = ReadUByte(pos);
+    pos += 1 + tableCount * 2;
+
+    // States.
+    tableCount = ReadUByte(pos);
+    pos += 1;
+    for (i = 0; i < tableCount; i++) {
+        pos += 1;                   // parent state index
+        pos += 1 + ReadUByte(pos);  // move sequence
+
+        handlerCount = ReadUByte(pos);
+        pos += 1;
+        for (j = 0; j < handlerCount; j++) {
+            pos += 1;                   // event id
+            pos += 1 + ReadUByte(pos);  // handler code
+        }
+
+        pos += 1 + ReadUByte(pos);  // on enter
+        pos += 1 + ReadUByte(pos);  // on exit
+    }
+
+    // Functions.
+    tableCount = ReadUByte(pos);
+    pos += 1;
+    for (i = 0; i < tableCount; i++) {
+        pos += 1 + ReadUByte(pos);
+    }
+
+    return pos - startPos;
+}
+
+
+struct CompiledFlowScript{
+    local int64 scriptSize = flowScriptSize(FTell());
+    ubyte data[scriptSize] <format=hex>;
+} ;
+
+#endif

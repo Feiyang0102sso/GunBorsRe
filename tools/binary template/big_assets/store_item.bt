@@ -1,0 +1,434 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: store_item.bt
+//   Authors: Feiyang
+//   Version: 2.0
+//   Purpose: Gun Bros store item.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    This template reads one item from Section 23 (STORE). Weapons, armor,
+    power ups, bank offers and bundles all use this wire format. STORE records
+    are not fixed-size structures: object references and all eight value
+    tables must be followed by their counts.
+
+    Weapon:  pack3_xga_0100_0x60a7.bin Coronal Ejector
+    Armor:   pack4_xga_0261_0xa2da.bin
+    Power Up x10:          pack3_xga_0139_0x6cef.bin // 10x F.R.A.G. Grenade
+    War Buck IAP:          pack3_xga_0119_0x6776.bin // 5 War Bucks
+    Warbucks -> Coins:     pack3_xga_0130_0x6a0f.bin // 1 War Buck -> 500 Coins
+    Coins -> Warbucks:     pack3_xga_0132_0x6a85.bin // 10,000 Coins -> 5 War Bucks
+    Bundle:  pack3_xga_0152_0x722f.bin
+*/
+
+LittleEndian();
+
+#include "common/display_helpers.bt"
+
+
+// ------------------------------------------------
+// Constants
+// ------------------------------------------------
+
+const ubyte STORE_TYPE_PISTOL = 0;
+const ubyte STORE_TYPE_RIFLE = 1;
+const ubyte STORE_TYPE_SHOTGUN = 2;
+const ubyte STORE_TYPE_SPREAD = 3;
+const ubyte STORE_TYPE_HEAVY = 4;
+const ubyte STORE_TYPE_SPECIAL_OR_BUNDLE = 5;
+const ubyte STORE_TYPE_LASER = 6;
+const ubyte STORE_TYPE_HEAD = 7;
+const ubyte STORE_TYPE_TORSO = 8;
+const ubyte STORE_TYPE_LEGS = 9;
+const ubyte STORE_TYPE_ATTACK_POWER_UP = 10;
+const ubyte STORE_TYPE_HEALTH_POWER_UP = 11;
+const ubyte STORE_TYPE_DEFENSE_POWER_UP = 12;
+const ubyte STORE_TYPE_SPECIAL_POWER_UP = 13;
+const ubyte STORE_TYPE_COIN_PACKAGE = 14;
+const ubyte STORE_TYPE_WARBUCK_PACKAGE = 15;
+const ubyte STORE_TYPE_CURRENCY_CONVERSION = 16;
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_CATEGORY = 0xFFD1DC;
+const int COLOR_ITEM_CLASS = 0xD0D0D0;
+const int COLOR_GAME_MODE = 0xFFE699;
+const int COLOR_COUNT = 0x66E0FF;
+const int COLOR_OBJECT_TYPE = 0xFFB37C;
+const int COLOR_PACK_HASH = 0xB8E0D2;
+const int COLOR_RESOURCE_INDEX = 0xD8F5E3;
+const int COLOR_REQUIREMENT = 0xC8B0FF;
+const int COLOR_COMMON_PRICE = 0xFFB6D9;
+const int COLOR_RARE_PRICE = 0x66E0FF;
+const int COLOR_PRODUCT = 0xD0D0D0;
+const int COLOR_ICON = 0xFF99CC;
+const int COLOR_TEXT = 0xD7C6FF;
+const int COLOR_OFFENSIVE_STAT = 0xFFC4B8;
+const int COLOR_DEFENSIVE_STAT = 0xB9F6CA;
+const int COLOR_CURRENCY_STAT = 0xFFE699;
+const int COLOR_DISPLAY_ORDER = 0xC8A2FF;
+const int COLOR_FLAG = 0xC8E6C9;
+
+
+// ------------------------------------------------
+// Display helpers
+// ------------------------------------------------
+
+string storeTypeFormat(ubyte storeType) {
+    local string result;
+
+    switch (storeType) {
+        case STORE_TYPE_PISTOL:              return "Weapon / Pistol";
+        case STORE_TYPE_RIFLE:               return "Weapon / Rifle";
+        case STORE_TYPE_SHOTGUN:             return "Weapon / Shotgun";
+        case STORE_TYPE_SPREAD:              return "Weapon / Spread";
+        case STORE_TYPE_HEAVY:               return "Weapon / Heavy";
+        case STORE_TYPE_SPECIAL_OR_BUNDLE:   return "Special Weapon / Bundle";
+        case STORE_TYPE_LASER:               return "Weapon / Laser";
+        case STORE_TYPE_HEAD:                return "Armor / Head";
+        case STORE_TYPE_TORSO:               return "Armor / Torso";
+        case STORE_TYPE_LEGS:                return "Armor / Legs";
+        case STORE_TYPE_ATTACK_POWER_UP:     return "Power Up / Attack";
+        case STORE_TYPE_HEALTH_POWER_UP:     return "Power Up / Health";
+        case STORE_TYPE_DEFENSE_POWER_UP:    return "Power Up / Defense";
+        case STORE_TYPE_SPECIAL_POWER_UP:    return "Power Up / Special";
+        case STORE_TYPE_COIN_PACKAGE:        return "Bank / Coins";
+        case STORE_TYPE_WARBUCK_PACKAGE:     return "Bank / Warbucks";
+        case STORE_TYPE_CURRENCY_CONVERSION: return "Bank / Conversion";
+    }
+
+    SPrintf(result, "Unknown store type %d", storeType);
+    return result;
+}
+
+
+string gameModeExclusionsFormat(uint32 excludedGameModes) {
+    local string result;
+
+    switch (excludedGameModes) {
+        case 0: return "Available in every game mode";
+        case 1: return "Excluded from single-player";
+        case 2: return "Excluded from multiplayer";
+        case 3: return "Excluded from single-player and multiplayer";
+        case 4: return "Excluded from deathmatch";
+        case 5: return "Excluded from single-player and deathmatch";
+        case 6: return "Excluded from multiplayer and deathmatch";
+        case 7: return "Excluded from every known game mode";
+    }
+
+    SPrintf(result, "Unknown exclusion bits 0x%08X", excludedGameModes);
+    return result;
+}
+
+
+string storeObjectIndexFormat(int objectIndex, ubyte objectType) {
+    local string resourceType = objectTypeFormat(objectType);
+
+    return resourceIndexFormat(objectIndex, resourceType);
+}
+
+
+string currencyAmountFormat(uint32 amount, string currencyName) {
+    local string result;
+
+    SPrintf(result, "%s %u", currencyName, amount);
+    return result;
+}
+
+
+string purchaseModeFormat(ubyte value, ubyte storeType) {
+    if (storeType == STORE_TYPE_CURRENCY_CONVERSION) {
+        if (value == 0) {
+            return "Warbucks -> Coins";
+        }
+
+        return "Coins -> Warbucks";
+    }
+
+    if (value == 0) {
+        return "Not an in-app purchase";
+    }
+
+    return "In-app purchase";
+}
+
+
+string displayOrderFormat(int16 displayOrder) {
+    local string result;
+
+    if (displayOrder < 0) {
+        SPrintf(result, "Hidden (%d)", displayOrder);
+        return result;
+    }
+
+    SPrintf(result, "Order %d", displayOrder);
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 1: Store classification
+// ------------------------------------------------
+
+struct StoreClassification {
+    // 0..6 weapons, 7..9 armor, 10..13 power ups, 14..16 bank items.
+    ubyte storeType <
+        format=decimal,
+        bgcolor=COLOR_CATEGORY,
+        read=storeTypeFormat(this)
+    >;
+
+    // In previous version, it is used for weapon class, from class 0 to class XX
+    // now mainly used for auto weapon preview after each battle
+    // (based on your level)
+    ubyte itemClass <format=decimal, bgcolor=COLOR_ITEM_CLASS>;
+
+    // Bit N excludes this item from game mode N. The known mode indices are
+    // 0 single-player, 1 multiplayer and 2 deathmatch.
+    uint32 excludedGameModes <
+        format=hex,
+        bgcolor=COLOR_GAME_MODE,
+        read=gameModeExclusionsFormat(this)
+    >;
+};
+
+
+// ------------------------------------------------
+// Part 2: Referenced objects
+// ------------------------------------------------
+
+typedef struct {
+    ubyte objectType <
+        format=decimal,
+        bgcolor=COLOR_OBJECT_TYPE,
+        read=objectTypeFormat(this)
+    >;
+
+    // A GameObjectRef stores a four-byte pack hash followed by one local
+    // ordinal only when the hash is non-zero. The object type selects the
+    // target section, for example GUN, ARMOR or POWERUP.
+    PackHash packHash <bgcolor=COLOR_PACK_HASH>;
+    if (packHash != 0) {
+        ubyte localIndex <
+            format=decimal,
+            bgcolor=COLOR_RESOURCE_INDEX,
+            read=storeObjectIndexFormat(this, parentof(this).objectType)
+        >;
+    }
+} StoreObjectReference;
+
+
+struct ReferencedStoreObjects {
+    // Ordinary items usually contain one reference, bank entries contain
+    // none, and bundles can contain repeated references for item quantities.
+    // eg start pack / grenade pack
+    ubyte objectCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (objectCount > 0) {
+        StoreObjectReference objects[objectCount] <optimize=false>;
+    }
+};
+
+
+// ------------------------------------------------
+// Part 3: Purchase requirements and prices
+// ------------------------------------------------
+
+struct PurchaseData(ubyte storeType) {
+    // Read callbacks run after parsing, so retain the constructor argument.
+    local ubyte storeTypeForDisplay = storeType;
+
+    // Player level required to acquire the item. 
+    uint16 requiredPlayerLevel <format=decimal, bgcolor=COLOR_REQUIREMENT>;
+
+    // Ordinary items use these as prices. Bank packages use them as granted
+    // amounts, while conversions use them as the two sides of the exchange.
+    uint32 commonCurrency <
+        format=decimal,
+        bgcolor=COLOR_COMMON_PRICE,
+        read=currencyAmountFormat(this, "Coins")
+    >;
+    uint32 rareCurrency <
+        format=decimal,
+        bgcolor=COLOR_RARE_PRICE,
+        read=currencyAmountFormat(this, "Warbucks")
+    >;
+
+    // For ordinary items and currency packages, non-zero means IAP. For a
+    // category 16 conversion, zero spends Warbucks and non-zero spends Coins.
+    ubyte currencyDirectionOrPurchaseFlag <
+        format=decimal,
+        bgcolor=COLOR_FLAG,
+        read=purchaseModeFormat(this, parentof(this).storeTypeForDisplay)
+    >;
+};
+
+
+// ------------------------------------------------
+// Part 4: Store card resources
+// ------------------------------------------------
+
+struct StoreCardResources {
+    // String product identifier used by the in-app purchase path. Non-IAP
+    // entries normally use an invalid string index.
+    // eg com.glu.gunbros.BUCK_PACKAGE_1
+    PackHash productIdPackHash <bgcolor=COLOR_PRODUCT>;
+    int32 productIdStringIndex <
+        format=decimal,
+        bgcolor=COLOR_PRODUCT,
+        read=resourceIndexFormat(this, "STR")
+    >;
+
+    // PNG shown on the store card.
+    PackHash iconPackHash <bgcolor=COLOR_ICON>;
+    int32 iconPngIndex <
+        format=decimal,
+        bgcolor=COLOR_ICON,
+        read=resourceIndexFormat(this, "PNG")
+    >;
+
+    // Entries in a StringPack.
+    PackHash namePackHash <bgcolor=COLOR_TEXT>;
+    int32 nameStringIndex <
+        format=decimal,
+        bgcolor=COLOR_TEXT,
+        read=resourceIndexFormat(this, "STR")
+    >;
+    PackHash descriptionPackHash <bgcolor=COLOR_TEXT>;
+    int32 descriptionStringIndex <
+        format=decimal,
+        bgcolor=COLOR_TEXT,
+        read=resourceIndexFormat(this, "STR")
+    >;
+
+    // Expanded and folded text templates. They can contain ^fN font switches
+    // and any of the eight value-table tokens defined below.
+    
+    // eg ^f0DMG ^f2 #DMG\n^f0RPM ^f2 #RPM\n^f0SPD ^f2 #SPD
+    PackHash expandedTextPackHash <bgcolor=COLOR_TEXT>;
+    int32 expandedTextStringIndex <
+        format=decimal,
+        bgcolor=COLOR_TEXT,
+        read=resourceIndexFormat(this, "STR")
+    >;
+    
+    // eg ^f0Power\n^f4 #POWER
+    PackHash foldedTextPackHash <bgcolor=COLOR_TEXT>;
+    int32 foldedTextStringIndex <
+        format=decimal,
+        bgcolor=COLOR_TEXT,
+        read=resourceIndexFormat(this, "STR")
+    >;
+};
+
+
+// ------------------------------------------------
+// Part 5: Displayed store values
+// ------------------------------------------------
+
+typedef struct {
+    // Number of following signed 32-bit values. Most entries contain four
+    // columns, but every group must follow its own serialized count.
+    uint16 valueCount <format=decimal, bgcolor=COLOR_COUNT>;
+
+    if (valueCount > 0) {
+        int32 values[valueCount] <format=decimal>;
+    }
+} StoreValueTable <read=storeValueTableFormat>;
+
+
+string storeValueTableFormat(StoreValueTable &table) {
+    local string result;
+
+    SPrintf(result, "%d values", table.valueCount);
+    return result;
+}
+
+
+struct StoreDisplayValues {
+    // The fixed token order is POWER, DMG, RPM, SPD, DEF, ATK, COINS, BUCKS.
+    // These values drive store text and weapon upgrades. Entity templates and
+    // scripts remain authoritative for actual combat behavior.
+    
+    // 4 values per pack as it has 3 master levels
+    StoreValueTable power <bgcolor=COLOR_OFFENSIVE_STAT>;
+    StoreValueTable damage <bgcolor=COLOR_OFFENSIVE_STAT>;
+    StoreValueTable roundsPerMinute <bgcolor=COLOR_OFFENSIVE_STAT>;
+
+    // Signed percentage-style adjustment. Negative values are stored as
+    // ordinary little-endian int32 values, for example -32 = E0 FF FF FF.
+    StoreValueTable speed <bgcolor=COLOR_DEFENSIVE_STAT>;
+    StoreValueTable defense <bgcolor=COLOR_DEFENSIVE_STAT>;
+    StoreValueTable attack <bgcolor=COLOR_DEFENSIVE_STAT>;
+    
+    // upgrade master level cost
+    // only warbuck is used, coins is left for uknown reason
+    StoreValueTable coins <bgcolor=COLOR_CURRENCY_STAT>;
+    StoreValueTable warbucks <bgcolor=COLOR_CURRENCY_STAT>;
+};
+
+
+// ------------------------------------------------
+// Part 6: Listing state
+// ------------------------------------------------
+
+struct ListingState {
+    // Negative values are excluded from the ordinary sorted store list. -1 is
+    // the common hidden value; non-negative entries are sorted by this key.
+    int16 displayOrder <
+        format=decimal,
+        bgcolor=COLOR_DISPLAY_ORDER,
+        read=displayOrderFormat(this)
+    >;
+
+    // not show in shop, seems similar to displayOrder = -1,
+    // but it is stronger
+    ubyte disabledForNormalStore <
+        format=decimal,
+        bgcolor=COLOR_FLAG,
+        read=booleanFormat(this)
+    >;
+
+    // One-time package flag. It is not a general inventory quantity limit.
+    ubyte singlePurchase <
+        format=decimal,
+        bgcolor=COLOR_FLAG,
+        read=booleanFormat(this)
+    >;
+
+    // unknown as there is actually no lottery system
+    ubyte lotteryCandidate <
+        format=decimal,
+        bgcolor=COLOR_FLAG,
+        read=booleanFormat(this)
+    >;
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+StoreClassification classification;
+ReferencedStoreObjects referencedObjects;
+PurchaseData purchase(classification.storeType);
+StoreCardResources resources;
+StoreDisplayValues displayValues;
+ListingState listing;
+
+if (classification.storeType > STORE_TYPE_CURRENCY_CONVERSION) {
+    Warning(
+        "Unknown STORE type %d.",
+        classification.storeType
+    );
+}
+
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

@@ -107,7 +107,7 @@ struct AggregateBigKeysetEntry {
     uint16 resourceId <format=hex, bgcolor=COLOR_AGGREGATE_ID>;
 
     // 0x21 is the aggregate flag 0x20 plus type 0x01
-    // 0xFF in every sample, still unknown.
+    // 0xFF in every sample, still unknown (pointer to current language pack?).
     uint16 label <format=hex, bgcolor=COLOR_AGGREGATE_LABEL>;
 };
 

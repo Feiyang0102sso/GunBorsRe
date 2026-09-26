@@ -1,0 +1,229 @@
+//------------------------------------------------
+//--- 010 Editor v15.0.2 Binary Template
+//
+//      File: gun_template.bt
+//   Authors: Feiyang
+//   Version: 1.0
+//   Purpose: Gun Bros 3.6.0 gun template.
+//  Category: Game / Big Assets
+// File Mask: *.bin
+//------------------------------------------------
+
+/*
+    This template reads one object from Section 7 (GUN). A gun owns a weapon
+    mesh and atlas, a default bullet, one compiled Flow script, six variable
+    length mastery tables, and a trailing mesh move set.
+
+    Example: pack5_xga_0191_0xa9ad.bin (GUN[39], Coronal Ejector).
+
+    The six mastery tables each carry their own uint16 count. The runtime keeps
+    only three values from each table, but the file must be parsed using the
+    authored count so the trailing move set remains aligned.
+*/
+
+LittleEndian();
+
+#include "common/display_helpers.bt"
+#include "common/compiled_flow.bt"
+#include "common/move_set_mesh.bt"
+
+
+// ------------------------------------------------
+// Colors
+// ------------------------------------------------
+
+const int COLOR_CATEGORY = 0xD0D0D0;
+const int COLOR_REFERENCE_MESH = 0x28FF2F;
+const int COLOR_REFERENCE_IMAGE = 0xFFE0B2;
+const int COLOR_REFERENCE_BULLET = 0xFFA3A4;
+const int COLOR_WEAPON_CONFIG = 0xB3E5FC;
+const int COLOR_STATS = 0x66E0FF;
+
+
+// ------------------------------------------------
+// Display helpers
+// ------------------------------------------------
+
+string gunCategoryFormat(ubyte category) {
+    local string result;
+
+    switch (category) {
+        case 0: return "Pistol";
+        case 1: return "Rifle";
+        case 2: return "Shotgun";
+        case 3: return "Spread";
+        case 4: return "Heavy";
+        case 5: return "Special";
+        case 6: return "Laser";
+    }
+
+    SPrintf(result, "Unknown category %d", category);
+    return result;
+}
+
+
+string handednessFormat(ubyte handedness) {
+    local string result;
+
+    switch (handedness) {
+        case 0: return "Right hand";
+        case 1: return "Left hand";
+        case 2: return "Both hands";
+    }
+
+    SPrintf(result, "Unknown handedness %d", handedness);
+    return result;
+}
+
+
+string criticalDamageScaleFormat(uint16 value) {
+    local string result;
+
+    if (value == 0) {
+        return "Default x10";
+    }
+
+    SPrintf(result, "x%u", value);
+    return result;
+}
+
+
+// ------------------------------------------------
+// Part 1: Gun identity and references
+// ------------------------------------------------
+
+typedef struct {
+    PackHash meshPackHash;
+    int32 meshIndex <
+        format=decimal,
+        read=resourceIndexFormat(this, "MESH")
+    >;
+} GunMeshReference;
+
+
+typedef struct {
+    PackHash imagePackHash;
+    int32 imageIndex <
+        format=decimal,
+        read=resourceIndexFormat(this, "PNG")
+    >;
+} GunImageReference;
+
+
+typedef struct {
+    PackHash bulletPackHash;
+    if (bulletPackHash != 0) {
+        ubyte bulletIndex <
+            format=decimal,
+            read=resourceIndexFormat(this, "BULLET")
+        >;
+    }
+} GunBulletReference;
+
+
+struct GunIdentity {
+    ubyte category <
+        format=decimal,
+        bgcolor=COLOR_CATEGORY,
+        read=gunCategoryFormat(this)
+    >;
+
+    GunMeshReference weaponMeshReference <bgcolor=COLOR_REFERENCE_MESH>;
+    GunImageReference weaponImageReference <bgcolor=COLOR_REFERENCE_IMAGE>;
+    GunBulletReference defaultBulletReference <bgcolor=COLOR_REFERENCE_BULLET>;
+};
+
+
+// ------------------------------------------------
+// Part 2: Weapon configuration
+// ------------------------------------------------
+
+struct GunConfiguration {
+    
+    // reload between each shoot
+    // if it is 0, then it is handled to flow script 
+    uint16 fireIntervalMs <
+        format=decimal,
+        read=millisecondsFormat(this)
+    >;
+
+    // speed pertentage when equip this gun
+    int32 speedPercentage <
+        format=decimal,
+        read=fixedPoint16_16Format(this)
+    >;
+
+    // Zero means the runtime default multiplier of 10.
+    uint16 criticalDamageScale <
+        format=decimal,
+        read=criticalDamageScaleFormat(this)
+    >;
+
+    // 16.16 fixed point, used as the seeking target angle.
+    // auto seeking enemy when angle < seekAngle
+    int32 seekAngle <
+        format=decimal,
+        read=fixedPoint16_16Format(this)
+    >;
+
+    // fire from which side?
+    // change gun link side
+    ubyte handedness <
+        format=decimal,
+        read=handednessFormat(this)
+    >;
+};
+
+
+// ------------------------------------------------
+// Part 3: Mastery stat tables
+// ------------------------------------------------
+
+/*
+    Every table is independently length-prefixed. Runtime code later retains
+    three mastery tiers, but that truncation is gameplay logic rather than the
+    wire format.
+
+    Table order:
+        0 mastery experience thresholds
+        1 critical roll ranges
+        2 movement speed percentages
+        3 mastery experience percentage (gain part of total player exp)
+        4 damage percentages
+        5 fire intervals in milliseconds
+*/
+struct GunStatTable {
+    uint16 valueCount <format=decimal, bgcolor=COLOR_CATEGORY>;
+    if (valueCount > 0) {
+        uint32 values[valueCount] <format=decimal>;
+    }
+};
+
+
+// ------------------------------------------------
+// Main
+// ------------------------------------------------
+
+GunIdentity gunIdentity;
+GunConfiguration gunConfiguration <bgcolor=COLOR_WEAPON_CONFIG>;
+
+// Shared compiled Flow block.
+CompiledFlowScript compiledFlowScript <bgcolor=COLOR_SCRIPT>;
+
+GunStatTable masteryThresholds <bgcolor=COLOR_STATS>;
+GunStatTable criticalRollRanges <bgcolor=COLOR_STATS>;
+GunStatTable movementSpeedPercents <bgcolor=COLOR_STATS>;
+GunStatTable masteryLevelExperienceRewardPercents <bgcolor=COLOR_STATS>;
+GunStatTable damagePercents <bgcolor=COLOR_STATS>;
+GunStatTable fireIntervalsMs <bgcolor=COLOR_STATS>;
+
+// Shared mesh move-set block.
+// note thr config refer to the brother mesh / texture, not the gun itself
+// that is, the firing ani
+MoveSetMeshConfig moveSetMeshConfig <bgcolor=COLOR_MESH_CONFIG>;
+MoveSetMoves moveSetMoves <bgcolor=COLOR_MOVE_SET>;
+
+// A correct template ends on the last byte of the file.
+if (FTell() != FileSize()) {
+    Warning("Parsed %Ld of %Ld bytes.", FTell(), FileSize());
+}

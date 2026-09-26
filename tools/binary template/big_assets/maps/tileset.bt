@@ -21,6 +21,8 @@
 
 LittleEndian();
 
+#include "../common/display_helpers.bt"
+
 
 // ------------------------------------------------
 // Colors
@@ -35,59 +37,6 @@ const int COLOR_SIZE = 0x90FF90;
 
 
 // ------------------------------------------------
-// Common references
-// ------------------------------------------------
-
-int packNumberFromHash(uint32 packHash) {
-    // pack0_core is not part of the numeric pack hash sequence.
-    if (packHash == 0x58595522) {
-        return 0;
-    }
-
-    // Hashes of "pack0" through "pack9".
-    if (packHash >= 0x00267580 && packHash <= 0x00267589) {
-        return packHash - 0x00267580;
-    }
-
-    // Hashes of "pack10" through "pack19".
-    if (packHash >= 0x01675820 && packHash <= 0x01675829) {
-        return 10 + packHash - 0x01675820;
-    }
-
-    return -1;
-}
-
-
-string packHashFormat(uint32 packHash) {
-    local int packNumber = packNumberFromHash(packHash);
-    local string result;
-
-    if (packHash == 0x58595522) {
-        return "pack0_core";
-    }
-
-    if (packNumber >= 0) {
-        SPrintf(result, "pack%d", packNumber);
-        return result;
-    }
-
-    SPrintf(result, "packHash 0x%08X", packHash);
-    return result;
-}
-
-
-string pngIndexFormat(int32 pngIndex) {
-    local string result;
-
-    SPrintf(result, "PNG %d", pngIndex);
-    return result;
-}
-
-
-typedef uint32 PackHash <format=hex, read=packHashFormat(this)>;
-
-
-// ------------------------------------------------
 // Part 1: PNG atlas references
 // ------------------------------------------------
 
@@ -98,17 +47,9 @@ typedef struct {
     int32 pngIndex <
         format=decimal,
         bgcolor=COLOR_RESOURCE_INDEX,
-        read=pngIndexFormat(this)
+        read=resourceIndexFormat(this, "PNG")
     >;
-} AtlasReference <read=atlasReferenceFormat>;
-
-
-string atlasReferenceFormat(AtlasReference &reference) {
-    local string result;
-
-    SPrintf(result, "%s, PNG %d", packHashFormat(reference.packHash), reference.pngIndex);
-    return result;
-}
+} AtlasReference;
 
 
 // ------------------------------------------------
